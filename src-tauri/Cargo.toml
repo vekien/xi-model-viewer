@@ -1,6 +1,6 @@
 [package]
 name = "xi-model-viewer"
-version = "0.1.0"
+version = "1.0.1"
 description = "XI Model Viewer — FFXI model viewer, WebGL2 + Tauri"
 edition = "2021"
 
