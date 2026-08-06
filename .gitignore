@@ -1,0 +1,51 @@
+# ---- Rust / Tauri ---------------------------------------------------------
+/src-tauri/target/
+/src-tauri/gen/
+**/*.rs.bk
+*.pdb
+
+# ---- Node / Vite / frontend ----------------------------------------------
+/ui/node_modules/
+/ui/dist/
+/ui/dist-ssr/
+.vite/
+*.local
+
+# ---- Packaged output ------------------------------------------------------
+/dist/
+
+# ---- Dev / runtime artifacts ---------------------------------------------
+/dev/capture.jpg
+/dev/server.log
+/dev/vite.log
+
+# ---- Logs & debug ---------------------------------------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ---- Editor / IDE ---------------------------------------------------------
+.vs/
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*~
+
+# ---- OS --------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ---- Environment / secrets ------------------------------------------------
+.env
+.env.*
+!.env.example

@@ -1,0 +1,170 @@
+name: xi-model-viewer-release
+
+run-name: xi-model-viewer ${{ inputs.version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release, e.g. 0.1.0 (no leading v).
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: xi-model-viewer-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and release
+    # Build.bat produces a Windows exe via MSVC, so this cannot run on ubuntu.
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve version and tag
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version="${{ inputs.version }}"
+          version="${version#v}"
+
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([._-].+)?$ ]]; then
+            echo "::error::Invalid version '${version}'. Expected MAJOR.MINOR.PATCH."
+            exit 1
+          fi
+
+          tag_name="v${version}"
+
+          echo "version=${version}"                                >> "$GITHUB_OUTPUT"
+          echo "tag_name=${tag_name}"                              >> "$GITHUB_OUTPUT"
+
+      - name: Stamp version into the app
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = '${{ steps.release.outputs.version }}'
+
+          # tauri.conf.json is what the built exe reports, and Cargo.toml keeps the
+          # crate in step with it. Only touched on the runner -- nothing is committed
+          # back, so the repo stays on whatever version it had.
+          #
+          # Guard on the match, not on whether the text changed: releasing the
+          # version the repo already carries rewrites the field to itself, which is
+          # a no-op, not a missing field. The Cargo.toml pattern also avoids a `$`
+          # anchor, which never matches if the runner checks the file out with CRLF.
+          # Read/write through .NET so the bytes do not ride on the host shell's
+          # default encoding -- a BOM breaks serde_json, and Cargo.toml has non-ASCII.
+          $utf8 = [Text.UTF8Encoding]::new($false)
+
+          $conf = (Resolve-Path 'src-tauri/tauri.conf.json').Path
+          $raw = [IO.File]::ReadAllText($conf)
+          $rx = [regex]::new('("version"\s*:\s*")[^"]*(")')
+          if (-not $rx.IsMatch($raw)) { throw "Could not find a version field in $conf" }
+          [IO.File]::WriteAllText($conf, $rx.Replace($raw, "`${1}$version`${2}", 1), $utf8)
+
+          $toml = (Resolve-Path 'src-tauri/Cargo.toml').Path
+          $raw = [IO.File]::ReadAllText($toml)
+          $rx = [regex]::new('(?m)^(version\s*=\s*")[^"]*(")')
+          if (-not $rx.IsMatch($raw)) { throw "Could not find a version field in $toml" }
+          [IO.File]::WriteAllText($toml, $rx.Replace($raw, "`${1}$version`${2}", 1), $utf8)
+
+          Write-Host "Stamped version $version"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # Build.bat hunts for RC.EXE via vswhere/vcvars64 because tauri-winres needs
+      # it to embed the icon and version resources. This is the CI equivalent.
+      - name: Load MSVC environment (puts RC.EXE on PATH)
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install frontend dependencies
+        working-directory: ui
+        run: npm ci
+
+      # Build.bat runs `cargo tauri build`, which needs `cargo install tauri-cli`
+      # (several minutes, every run). The npm CLI is the same tool and installs in
+      # seconds. `tauri build` still runs beforeBuildCommand (npm run build) and
+      # embeds ui/dist, so the exe does not need a dev server -- the whole point of
+      # using tauri build over plain `cargo build`.
+      - name: Build release executable
+        working-directory: src-tauri
+        run: npx --yes @tauri-apps/cli@^2 build --no-bundle
+
+      # The exe ships on its own. vgmstream is compiled into it (include_bytes! in
+      # src-tauri/src/main.rs) and unpacks itself to %LOCALAPPDATA%\XiModelViewer
+      # on first use, so nothing needs to sit next to it -- and find_vgmstream()
+      # prefers a co-located vgmstream/ folder over the embedded copy, so shipping
+      # one would only shadow the self-extracting path.
+      - name: Verify build output
+        id: stage
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = 'src-tauri/target/release/xi-model-viewer.exe'
+          if (-not (Test-Path $exe)) { throw "Build did not produce $exe" }
+
+          $size = (Get-Item $exe).Length
+          "exe_path=$exe"   >> $env:GITHUB_OUTPUT
+          "exe_bytes=$size" >> $env:GITHUB_OUTPUT
+          Write-Host "Built $exe ($([math]::Round($size / 1MB, 1)) MB)"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xi-model-viewer-release
+          path: ${{ steps.stage.outputs.exe_path }}
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag_name }}
+          name: XI Model Viewer v${{ steps.release.outputs.version }}
+          files: ${{ steps.stage.outputs.exe_path }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+
+      - name: Write job summary
+        if: always()
+        shell: bash
+        run: |
+          release_url="${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.release.outputs.tag_name }}"
+          bytes="${{ steps.stage.outputs.exe_bytes }}"
+          {
+            echo "## XI Model Viewer v${{ steps.release.outputs.version }}"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Version | \`${{ steps.release.outputs.version }}\` |"
+            echo "| Tag | \`${{ steps.release.outputs.tag_name }}\` |"
+            echo "| Trigger | \`${{ github.event_name }}\` |"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            if [[ -n "$bytes" ]]; then
+              echo "| Asset | \`xi-model-viewer.exe\` ($((bytes / 1048576)) MB) |"
+            else
+              echo "| Asset | _not built_ |"
+            fi
+            echo ""
+            echo "[View release]($release_url)"
+          } >> "$GITHUB_STEP_SUMMARY"

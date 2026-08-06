@@ -1,0 +1,6282 @@
+{
+ "0": {
+  "name": "unknown",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "1": {
+  "name": "Phanauet Channel",
+  "day": {
+   "id": 229,
+   "root": "sound3",
+   "file": "music229.bgw",
+   "name": "Currents of Time"
+  },
+  "night": {
+   "id": 229,
+   "root": "sound3",
+   "file": "music229.bgw",
+   "name": "Currents of Time"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 219,
+   "root": "sound3",
+   "file": "music219.bgw",
+   "name": "Onslaught"
+  }
+ },
+ "2": {
+  "name": "Carpenters Landing",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 219,
+   "root": "sound3",
+   "file": "music219.bgw",
+   "name": "Onslaught"
+  }
+ },
+ "3": {
+  "name": "Manaclipper",
+  "day": {
+   "id": 229,
+   "root": "sound3",
+   "file": "music229.bgw",
+   "name": "Currents of Time"
+  },
+  "night": {
+   "id": 229,
+   "root": "sound3",
+   "file": "music229.bgw",
+   "name": "Currents of Time"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 219,
+   "root": "sound3",
+   "file": "music219.bgw",
+   "name": "Onslaught"
+  }
+ },
+ "4": {
+  "name": "Bibiki Bay",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 219,
+   "root": "sound3",
+   "file": "music219.bgw",
+   "name": "Onslaught"
+  }
+ },
+ "5": {
+  "name": "Uleguerand Range",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 219,
+   "root": "sound3",
+   "file": "music219.bgw",
+   "name": "Onslaught"
+  }
+ },
+ "6": {
+  "name": "Bearclaw Pinnacle",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 220,
+   "root": "sound3",
+   "file": "music220.bgw",
+   "name": "Turmoil"
+  },
+  "battleParty": {
+   "id": 220,
+   "root": "sound3",
+   "file": "music220.bgw",
+   "name": "Turmoil"
+  }
+ },
+ "7": {
+  "name": "Attohwa Chasm",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 219,
+   "root": "sound3",
+   "file": "music219.bgw",
+   "name": "Onslaught"
+  }
+ },
+ "8": {
+  "name": "Boneyard Gully",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 220,
+   "root": "sound3",
+   "file": "music220.bgw",
+   "name": "Turmoil"
+  },
+  "battleParty": {
+   "id": 220,
+   "root": "sound3",
+   "file": "music220.bgw",
+   "name": "Turmoil"
+  }
+ },
+ "9": {
+  "name": "PsoXja",
+  "day": {
+   "id": 225,
+   "root": "sound3",
+   "file": "music225.bgw",
+   "name": "Words Unspoken - Pso'Xja"
+  },
+  "night": {
+   "id": 225,
+   "root": "sound3",
+   "file": "music225.bgw",
+   "name": "Words Unspoken - Pso'Xja"
+  },
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 218,
+   "root": "sound3",
+   "file": "music218.bgw",
+   "name": "Depths of the Soul"
+  }
+ },
+ "10": {
+  "name": "The Shrouded Maw",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 220,
+   "root": "sound3",
+   "file": "music220.bgw",
+   "name": "Turmoil"
+  },
+  "battleParty": {
+   "id": 220,
+   "root": "sound3",
+   "file": "music220.bgw",
+   "name": "Turmoil"
+  }
+ },
+ "11": {
+  "name": "Oldton Movalpolos",
+  "day": {
+   "id": 221,
+   "root": "sound3",
+   "file": "music221.bgw",
+   "name": "Moblin Menagerie - Movalpolos"
+  },
+  "night": {
+   "id": 221,
+   "root": "sound3",
+   "file": "music221.bgw",
+   "name": "Moblin Menagerie - Movalpolos"
+  },
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 218,
+   "root": "sound3",
+   "file": "music218.bgw",
+   "name": "Depths of the Soul"
+  }
+ },
+ "12": {
+  "name": "Newton Movalpolos",
+  "day": {
+   "id": 221,
+   "root": "sound3",
+   "file": "music221.bgw",
+   "name": "Moblin Menagerie - Movalpolos"
+  },
+  "night": {
+   "id": 221,
+   "root": "sound3",
+   "file": "music221.bgw",
+   "name": "Moblin Menagerie - Movalpolos"
+  },
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 218,
+   "root": "sound3",
+   "file": "music218.bgw",
+   "name": "Depths of the Soul"
+  }
+ },
+ "13": {
+  "name": "Mine Shaft 2716",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 220,
+   "root": "sound3",
+   "file": "music220.bgw",
+   "name": "Turmoil"
+  },
+  "battleParty": {
+   "id": 220,
+   "root": "sound3",
+   "file": "music220.bgw",
+   "name": "Turmoil"
+  }
+ },
+ "14": {
+  "name": "Hall of Transference",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 218,
+   "root": "sound3",
+   "file": "music218.bgw",
+   "name": "Depths of the Soul"
+  }
+ },
+ "15": {
+  "name": "Abyssea-Konschtat",
+  "day": {
+   "id": 51,
+   "root": "sound",
+   "file": "music051.bgw",
+   "name": "\"Abyssea - Scarlet Skies, Shadowed Plains\""
+  },
+  "night": {
+   "id": 51,
+   "root": "sound",
+   "file": "music051.bgw",
+   "name": "\"Abyssea - Scarlet Skies, Shadowed Plains\""
+  },
+  "battleSolo": {
+   "id": 52,
+   "root": "sound",
+   "file": "music052.bgw",
+   "name": "Melodies Errant"
+  },
+  "battleParty": {
+   "id": 52,
+   "root": "sound",
+   "file": "music052.bgw",
+   "name": "Melodies Errant"
+  }
+ },
+ "16": {
+  "name": "Promyvion-Holla",
+  "day": {
+   "id": 222,
+   "root": "sound3",
+   "file": "music222.bgw",
+   "name": "Faded Memories - Promyvion"
+  },
+  "night": {
+   "id": 222,
+   "root": "sound3",
+   "file": "music222.bgw",
+   "name": "Faded Memories - Promyvion"
+  },
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 218,
+   "root": "sound3",
+   "file": "music218.bgw",
+   "name": "Depths of the Soul"
+  }
+ },
+ "17": {
+  "name": "Spire of Holla",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 220,
+   "root": "sound3",
+   "file": "music220.bgw",
+   "name": "Turmoil"
+  },
+  "battleParty": {
+   "id": 220,
+   "root": "sound3",
+   "file": "music220.bgw",
+   "name": "Turmoil"
+  }
+ },
+ "18": {
+  "name": "Promyvion-Dem",
+  "day": {
+   "id": 222,
+   "root": "sound3",
+   "file": "music222.bgw",
+   "name": "Faded Memories - Promyvion"
+  },
+  "night": {
+   "id": 222,
+   "root": "sound3",
+   "file": "music222.bgw",
+   "name": "Faded Memories - Promyvion"
+  },
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 218,
+   "root": "sound3",
+   "file": "music218.bgw",
+   "name": "Depths of the Soul"
+  }
+ },
+ "19": {
+  "name": "Spire of Dem",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 220,
+   "root": "sound3",
+   "file": "music220.bgw",
+   "name": "Turmoil"
+  },
+  "battleParty": {
+   "id": 220,
+   "root": "sound3",
+   "file": "music220.bgw",
+   "name": "Turmoil"
+  }
+ },
+ "20": {
+  "name": "Promyvion-Mea",
+  "day": {
+   "id": 222,
+   "root": "sound3",
+   "file": "music222.bgw",
+   "name": "Faded Memories - Promyvion"
+  },
+  "night": {
+   "id": 222,
+   "root": "sound3",
+   "file": "music222.bgw",
+   "name": "Faded Memories - Promyvion"
+  },
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 218,
+   "root": "sound3",
+   "file": "music218.bgw",
+   "name": "Depths of the Soul"
+  }
+ },
+ "21": {
+  "name": "Spire of Mea",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 220,
+   "root": "sound3",
+   "file": "music220.bgw",
+   "name": "Turmoil"
+  },
+  "battleParty": {
+   "id": 220,
+   "root": "sound3",
+   "file": "music220.bgw",
+   "name": "Turmoil"
+  }
+ },
+ "22": {
+  "name": "Promyvion-Vahzl",
+  "day": {
+   "id": 222,
+   "root": "sound3",
+   "file": "music222.bgw",
+   "name": "Faded Memories - Promyvion"
+  },
+  "night": {
+   "id": 222,
+   "root": "sound3",
+   "file": "music222.bgw",
+   "name": "Faded Memories - Promyvion"
+  },
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 218,
+   "root": "sound3",
+   "file": "music218.bgw",
+   "name": "Depths of the Soul"
+  }
+ },
+ "23": {
+  "name": "Spire of Vahzl",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 220,
+   "root": "sound3",
+   "file": "music220.bgw",
+   "name": "Turmoil"
+  },
+  "battleParty": {
+   "id": 220,
+   "root": "sound3",
+   "file": "music220.bgw",
+   "name": "Turmoil"
+  }
+ },
+ "24": {
+  "name": "Lufaise Meadows",
+  "day": {
+   "id": 230,
+   "root": "sound3",
+   "file": "music230.bgw",
+   "name": "A New Horizon - Tavnazian Archipelago"
+  },
+  "night": {
+   "id": 230,
+   "root": "sound3",
+   "file": "music230.bgw",
+   "name": "A New Horizon - Tavnazian Archipelago"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 219,
+   "root": "sound3",
+   "file": "music219.bgw",
+   "name": "Onslaught"
+  }
+ },
+ "25": {
+  "name": "Misareaux Coast",
+  "day": {
+   "id": 230,
+   "root": "sound3",
+   "file": "music230.bgw",
+   "name": "A New Horizon - Tavnazian Archipelago"
+  },
+  "night": {
+   "id": 230,
+   "root": "sound3",
+   "file": "music230.bgw",
+   "name": "A New Horizon - Tavnazian Archipelago"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 219,
+   "root": "sound3",
+   "file": "music219.bgw",
+   "name": "Onslaught"
+  }
+ },
+ "26": {
+  "name": "Tavnazian Safehold",
+  "day": {
+   "id": 245,
+   "root": "sound3",
+   "file": "music245.bgw",
+   "name": "The Forgotten City - Tavnazian Safehold"
+  },
+  "night": {
+   "id": 245,
+   "root": "sound3",
+   "file": "music245.bgw",
+   "name": "The Forgotten City - Tavnazian Safehold"
+  },
+  "battleSolo": {
+   "id": 245,
+   "root": "sound3",
+   "file": "music245.bgw",
+   "name": "The Forgotten City - Tavnazian Safehold"
+  },
+  "battleParty": {
+   "id": 245,
+   "root": "sound3",
+   "file": "music245.bgw",
+   "name": "The Forgotten City - Tavnazian Safehold"
+  }
+ },
+ "27": {
+  "name": "Phomiuna Aqueducts",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 218,
+   "root": "sound3",
+   "file": "music218.bgw",
+   "name": "Depths of the Soul"
+  }
+ },
+ "28": {
+  "name": "Sacrarium",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 218,
+   "root": "sound3",
+   "file": "music218.bgw",
+   "name": "Depths of the Soul"
+  }
+ },
+ "29": {
+  "name": "Riverne-Site B01",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 218,
+   "root": "sound3",
+   "file": "music218.bgw",
+   "name": "Depths of the Soul"
+  }
+ },
+ "30": {
+  "name": "Riverne-Site A01",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 218,
+   "root": "sound3",
+   "file": "music218.bgw",
+   "name": "Depths of the Soul"
+  }
+ },
+ "31": {
+  "name": "Monarch Linn",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 220,
+   "root": "sound3",
+   "file": "music220.bgw",
+   "name": "Turmoil"
+  },
+  "battleParty": {
+   "id": 220,
+   "root": "sound3",
+   "file": "music220.bgw",
+   "name": "Turmoil"
+  }
+ },
+ "32": {
+  "name": "Sealions Den",
+  "day": {
+   "id": 245,
+   "root": "sound3",
+   "file": "music245.bgw",
+   "name": "The Forgotten City - Tavnazian Safehold"
+  },
+  "night": {
+   "id": 245,
+   "root": "sound3",
+   "file": "music245.bgw",
+   "name": "The Forgotten City - Tavnazian Safehold"
+  },
+  "battleSolo": {
+   "id": 220,
+   "root": "sound3",
+   "file": "music220.bgw",
+   "name": "Turmoil"
+  },
+  "battleParty": {
+   "id": 220,
+   "root": "sound3",
+   "file": "music220.bgw",
+   "name": "Turmoil"
+  }
+ },
+ "33": {
+  "name": "AlTaieu",
+  "day": {
+   "id": 233,
+   "root": "sound3",
+   "file": "music233.bgw",
+   "name": "The Celestial Capital - Al'Taieu"
+  },
+  "night": {
+   "id": 233,
+   "root": "sound3",
+   "file": "music233.bgw",
+   "name": "The Celestial Capital - Al'Taieu"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 219,
+   "root": "sound3",
+   "file": "music219.bgw",
+   "name": "Onslaught"
+  }
+ },
+ "34": {
+  "name": "Grand Palace of HuXzoi",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 218,
+   "root": "sound3",
+   "file": "music218.bgw",
+   "name": "Depths of the Soul"
+  }
+ },
+ "35": {
+  "name": "The Garden of RuHmet",
+  "day": {
+   "id": 228,
+   "root": "sound3",
+   "file": "music228.bgw",
+   "name": "Gates of Paradise - The Garden of Ru'Hmet"
+  },
+  "night": {
+   "id": 228,
+   "root": "sound3",
+   "file": "music228.bgw",
+   "name": "Gates of Paradise - The Garden of Ru'Hmet"
+  },
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 218,
+   "root": "sound3",
+   "file": "music218.bgw",
+   "name": "Depths of the Soul"
+  }
+ },
+ "36": {
+  "name": "Empyreal Paradox",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 224,
+   "root": "sound3",
+   "file": "music224.bgw",
+   "name": "Dusk and Dawn"
+  },
+  "battleParty": {
+   "id": 224,
+   "root": "sound3",
+   "file": "music224.bgw",
+   "name": "Dusk and Dawn"
+  }
+ },
+ "37": {
+  "name": "Temenos",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 218,
+   "root": "sound3",
+   "file": "music218.bgw",
+   "name": "Depths of the Soul"
+  },
+  "battleParty": {
+   "id": 219,
+   "root": "sound3",
+   "file": "music219.bgw",
+   "name": "Onslaught"
+  }
+ },
+ "38": {
+  "name": "Apollyon",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 218,
+   "root": "sound3",
+   "file": "music218.bgw",
+   "name": "Depths of the Soul"
+  },
+  "battleParty": {
+   "id": 219,
+   "root": "sound3",
+   "file": "music219.bgw",
+   "name": "Onslaught"
+  }
+ },
+ "39": {
+  "name": "Dynamis-Valkurm",
+  "day": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "night": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "battleSolo": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "battleParty": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  }
+ },
+ "40": {
+  "name": "Dynamis-Buburimu",
+  "day": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "night": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "battleSolo": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "battleParty": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  }
+ },
+ "41": {
+  "name": "Dynamis-Qufim",
+  "day": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "night": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "battleSolo": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "battleParty": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  }
+ },
+ "42": {
+  "name": "Dynamis-Tavnazia",
+  "day": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "night": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "battleSolo": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "battleParty": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  }
+ },
+ "43": {
+  "name": "Diorama Abdhaljs-Ghelsba",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 218,
+   "root": "sound3",
+   "file": "music218.bgw",
+   "name": "Depths of the Soul"
+  },
+  "battleParty": {
+   "id": 219,
+   "root": "sound3",
+   "file": "music219.bgw",
+   "name": "Onslaught"
+  }
+ },
+ "44": {
+  "name": "Abdhaljs Isle-Purgonorgo",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 226,
+   "root": "sound3",
+   "file": "music226.bgw",
+   "name": "Conflict: You Want to Live Forever?"
+  },
+  "battleParty": {
+   "id": 226,
+   "root": "sound3",
+   "file": "music226.bgw",
+   "name": "Conflict: You Want to Live Forever?"
+  }
+ },
+ "45": {
+  "name": "Abyssea-Tahrongi",
+  "day": {
+   "id": 51,
+   "root": "sound",
+   "file": "music051.bgw",
+   "name": "\"Abyssea - Scarlet Skies, Shadowed Plains\""
+  },
+  "night": {
+   "id": 51,
+   "root": "sound",
+   "file": "music051.bgw",
+   "name": "\"Abyssea - Scarlet Skies, Shadowed Plains\""
+  },
+  "battleSolo": {
+   "id": 52,
+   "root": "sound",
+   "file": "music052.bgw",
+   "name": "Melodies Errant"
+  },
+  "battleParty": {
+   "id": 52,
+   "root": "sound",
+   "file": "music052.bgw",
+   "name": "Melodies Errant"
+  }
+ },
+ "46": {
+  "name": "Open sea route to Al Zahbi",
+  "day": {
+   "id": 147,
+   "root": "sound4",
+   "file": "music147.bgw",
+   "name": "Eastward Bound..."
+  },
+  "night": {
+   "id": 147,
+   "root": "sound4",
+   "file": "music147.bgw",
+   "name": "Eastward Bound..."
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 138,
+   "root": "sound4",
+   "file": "music138.bgw",
+   "name": "Mercenaries' Delight"
+  }
+ },
+ "47": {
+  "name": "Open sea route to Mhaura",
+  "day": {
+   "id": 147,
+   "root": "sound4",
+   "file": "music147.bgw",
+   "name": "Eastward Bound..."
+  },
+  "night": {
+   "id": 147,
+   "root": "sound4",
+   "file": "music147.bgw",
+   "name": "Eastward Bound..."
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 138,
+   "root": "sound4",
+   "file": "music138.bgw",
+   "name": "Mercenaries' Delight"
+  }
+ },
+ "48": {
+  "name": "Al Zahbi",
+  "day": {
+   "id": 178,
+   "root": "sound4",
+   "file": "music178.bgw",
+   "name": "Bustle of the Capital"
+  },
+  "night": {
+   "id": 178,
+   "root": "sound4",
+   "file": "music178.bgw",
+   "name": "Bustle of the Capital"
+  },
+  "battleSolo": {
+   "id": 178,
+   "root": "sound4",
+   "file": "music178.bgw",
+   "name": "Bustle of the Capital"
+  },
+  "battleParty": {
+   "id": 178,
+   "root": "sound4",
+   "file": "music178.bgw",
+   "name": "Bustle of the Capital"
+  }
+ },
+ "49": {
+  "name": "none",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "50": {
+  "name": "Aht Urhgan Whitegate",
+  "day": {
+   "id": 178,
+   "root": "sound4",
+   "file": "music178.bgw",
+   "name": "Bustle of the Capital"
+  },
+  "night": {
+   "id": 178,
+   "root": "sound4",
+   "file": "music178.bgw",
+   "name": "Bustle of the Capital"
+  },
+  "battleSolo": {
+   "id": 178,
+   "root": "sound4",
+   "file": "music178.bgw",
+   "name": "Bustle of the Capital"
+  },
+  "battleParty": {
+   "id": 178,
+   "root": "sound4",
+   "file": "music178.bgw",
+   "name": "Bustle of the Capital"
+  }
+ },
+ "51": {
+  "name": "Wajaom Woodlands",
+  "day": {
+   "id": 149,
+   "root": "sound4",
+   "file": "music149.bgw",
+   "name": "Jeweled Boughs"
+  },
+  "night": {
+   "id": 149,
+   "root": "sound4",
+   "file": "music149.bgw",
+   "name": "Jeweled Boughs"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 138,
+   "root": "sound4",
+   "file": "music138.bgw",
+   "name": "Mercenaries' Delight"
+  }
+ },
+ "52": {
+  "name": "Bhaflau Thickets",
+  "day": {
+   "id": 149,
+   "root": "sound4",
+   "file": "music149.bgw",
+   "name": "Jeweled Boughs"
+  },
+  "night": {
+   "id": 149,
+   "root": "sound4",
+   "file": "music149.bgw",
+   "name": "Jeweled Boughs"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 138,
+   "root": "sound4",
+   "file": "music138.bgw",
+   "name": "Mercenaries' Delight"
+  }
+ },
+ "53": {
+  "name": "Nashmau",
+  "day": {
+   "id": 175,
+   "root": "sound4",
+   "file": "music175.bgw",
+   "name": "Bandits' Market"
+  },
+  "night": {
+   "id": 175,
+   "root": "sound4",
+   "file": "music175.bgw",
+   "name": "Bandits' Market"
+  },
+  "battleSolo": {
+   "id": 175,
+   "root": "sound4",
+   "file": "music175.bgw",
+   "name": "Bandits' Market"
+  },
+  "battleParty": {
+   "id": 175,
+   "root": "sound4",
+   "file": "music175.bgw",
+   "name": "Bandits' Market"
+  }
+ },
+ "54": {
+  "name": "Arrapago Reef",
+  "day": {
+   "id": 150,
+   "root": "sound4",
+   "file": "music150.bgw",
+   "name": "Ululations from Beyond"
+  },
+  "night": {
+   "id": 150,
+   "root": "sound4",
+   "file": "music150.bgw",
+   "name": "Ululations from Beyond"
+  },
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 139,
+   "root": "sound4",
+   "file": "music139.bgw",
+   "name": "Delve"
+  }
+ },
+ "55": {
+  "name": "Ilrusi Atoll",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 144,
+   "root": "sound4",
+   "file": "music144.bgw",
+   "name": "Rapid Onslaught -Assault-"
+  },
+  "battleParty": {
+   "id": 144,
+   "root": "sound4",
+   "file": "music144.bgw",
+   "name": "Rapid Onslaught -Assault-"
+  }
+ },
+ "56": {
+  "name": "Periqia",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 144,
+   "root": "sound4",
+   "file": "music144.bgw",
+   "name": "Rapid Onslaught -Assault-"
+  },
+  "battleParty": {
+   "id": 144,
+   "root": "sound4",
+   "file": "music144.bgw",
+   "name": "Rapid Onslaught -Assault-"
+  }
+ },
+ "57": {
+  "name": "Talacca Cove",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 143,
+   "root": "sound4",
+   "file": "music143.bgw",
+   "name": "Hellriders"
+  },
+  "battleParty": {
+   "id": 143,
+   "root": "sound4",
+   "file": "music143.bgw",
+   "name": "Hellriders"
+  }
+ },
+ "58": {
+  "name": "Silver Sea route to Nashmau",
+  "day": {
+   "id": 147,
+   "root": "sound4",
+   "file": "music147.bgw",
+   "name": "Eastward Bound..."
+  },
+  "night": {
+   "id": 147,
+   "root": "sound4",
+   "file": "music147.bgw",
+   "name": "Eastward Bound..."
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 138,
+   "root": "sound4",
+   "file": "music138.bgw",
+   "name": "Mercenaries' Delight"
+  }
+ },
+ "59": {
+  "name": "Silver Sea route to Al Zahbi",
+  "day": {
+   "id": 147,
+   "root": "sound4",
+   "file": "music147.bgw",
+   "name": "Eastward Bound..."
+  },
+  "night": {
+   "id": 147,
+   "root": "sound4",
+   "file": "music147.bgw",
+   "name": "Eastward Bound..."
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 138,
+   "root": "sound4",
+   "file": "music138.bgw",
+   "name": "Mercenaries' Delight"
+  }
+ },
+ "60": {
+  "name": "The Ashu Talif",
+  "day": {
+   "id": 172,
+   "root": "sound4",
+   "file": "music172.bgw",
+   "name": "Black Coffin"
+  },
+  "night": {
+   "id": 172,
+   "root": "sound4",
+   "file": "music172.bgw",
+   "name": "Black Coffin"
+  },
+  "battleSolo": {
+   "id": 143,
+   "root": "sound4",
+   "file": "music143.bgw",
+   "name": "Hellriders"
+  },
+  "battleParty": {
+   "id": 143,
+   "root": "sound4",
+   "file": "music143.bgw",
+   "name": "Hellriders"
+  }
+ },
+ "61": {
+  "name": "Mount Zhayolm",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 138,
+   "root": "sound4",
+   "file": "music138.bgw",
+   "name": "Mercenaries' Delight"
+  }
+ },
+ "62": {
+  "name": "Halvung",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 139,
+   "root": "sound4",
+   "file": "music139.bgw",
+   "name": "Delve"
+  }
+ },
+ "63": {
+  "name": "Lebros Cavern",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 144,
+   "root": "sound4",
+   "file": "music144.bgw",
+   "name": "Rapid Onslaught -Assault-"
+  },
+  "battleParty": {
+   "id": 144,
+   "root": "sound4",
+   "file": "music144.bgw",
+   "name": "Rapid Onslaught -Assault-"
+  }
+ },
+ "64": {
+  "name": "Navukgo Execution Chamber",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 143,
+   "root": "sound4",
+   "file": "music143.bgw",
+   "name": "Hellriders"
+  },
+  "battleParty": {
+   "id": 143,
+   "root": "sound4",
+   "file": "music143.bgw",
+   "name": "Hellriders"
+  }
+ },
+ "65": {
+  "name": "Mamook",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 139,
+   "root": "sound4",
+   "file": "music139.bgw",
+   "name": "Delve"
+  }
+ },
+ "66": {
+  "name": "Mamool Ja Training Grounds",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 144,
+   "root": "sound4",
+   "file": "music144.bgw",
+   "name": "Rapid Onslaught -Assault-"
+  },
+  "battleParty": {
+   "id": 144,
+   "root": "sound4",
+   "file": "music144.bgw",
+   "name": "Rapid Onslaught -Assault-"
+  }
+ },
+ "67": {
+  "name": "Jade Sepulcher",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 143,
+   "root": "sound4",
+   "file": "music143.bgw",
+   "name": "Hellriders"
+  },
+  "battleParty": {
+   "id": 143,
+   "root": "sound4",
+   "file": "music143.bgw",
+   "name": "Hellriders"
+  }
+ },
+ "68": {
+  "name": "Aydeewa Subterrane",
+  "day": {
+   "id": 174,
+   "root": "sound4",
+   "file": "music174.bgw",
+   "name": "Whispers of the Gods"
+  },
+  "night": {
+   "id": 174,
+   "root": "sound4",
+   "file": "music174.bgw",
+   "name": "Whispers of the Gods"
+  },
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 139,
+   "root": "sound4",
+   "file": "music139.bgw",
+   "name": "Delve"
+  }
+ },
+ "69": {
+  "name": "Leujaoam Sanctum",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 144,
+   "root": "sound4",
+   "file": "music144.bgw",
+   "name": "Rapid Onslaught -Assault-"
+  },
+  "battleParty": {
+   "id": 144,
+   "root": "sound4",
+   "file": "music144.bgw",
+   "name": "Rapid Onslaught -Assault-"
+  }
+ },
+ "70": {
+  "name": "Chocobo Circuit",
+  "day": {
+   "id": 176,
+   "root": "sound4",
+   "file": "music176.bgw",
+   "name": "Circuit de Chocobo"
+  },
+  "night": {
+   "id": 176,
+   "root": "sound4",
+   "file": "music176.bgw",
+   "name": "Circuit de Chocobo"
+  },
+  "battleSolo": {
+   "id": 176,
+   "root": "sound4",
+   "file": "music176.bgw",
+   "name": "Circuit de Chocobo"
+  },
+  "battleParty": {
+   "id": 176,
+   "root": "sound4",
+   "file": "music176.bgw",
+   "name": "Circuit de Chocobo"
+  }
+ },
+ "71": {
+  "name": "The Colosseum",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 139,
+   "root": "sound4",
+   "file": "music139.bgw",
+   "name": "Delve"
+  },
+  "battleParty": {
+   "id": 139,
+   "root": "sound4",
+   "file": "music139.bgw",
+   "name": "Delve"
+  }
+ },
+ "72": {
+  "name": "Alzadaal Undersea Ruins",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 139,
+   "root": "sound4",
+   "file": "music139.bgw",
+   "name": "Delve"
+  }
+ },
+ "73": {
+  "name": "Zhayolm Remnants",
+  "day": {
+   "id": 148,
+   "root": "sound4",
+   "file": "music148.bgw",
+   "name": "Forbidden Seal"
+  },
+  "night": {
+   "id": 148,
+   "root": "sound4",
+   "file": "music148.bgw",
+   "name": "Forbidden Seal"
+  },
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 139,
+   "root": "sound4",
+   "file": "music139.bgw",
+   "name": "Delve"
+  }
+ },
+ "74": {
+  "name": "Arrapago Remnants",
+  "day": {
+   "id": 148,
+   "root": "sound4",
+   "file": "music148.bgw",
+   "name": "Forbidden Seal"
+  },
+  "night": {
+   "id": 148,
+   "root": "sound4",
+   "file": "music148.bgw",
+   "name": "Forbidden Seal"
+  },
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 139,
+   "root": "sound4",
+   "file": "music139.bgw",
+   "name": "Delve"
+  }
+ },
+ "75": {
+  "name": "Bhaflau Remnants",
+  "day": {
+   "id": 148,
+   "root": "sound4",
+   "file": "music148.bgw",
+   "name": "Forbidden Seal"
+  },
+  "night": {
+   "id": 148,
+   "root": "sound4",
+   "file": "music148.bgw",
+   "name": "Forbidden Seal"
+  },
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 139,
+   "root": "sound4",
+   "file": "music139.bgw",
+   "name": "Delve"
+  }
+ },
+ "76": {
+  "name": "Silver Sea Remnants",
+  "day": {
+   "id": 148,
+   "root": "sound4",
+   "file": "music148.bgw",
+   "name": "Forbidden Seal"
+  },
+  "night": {
+   "id": 148,
+   "root": "sound4",
+   "file": "music148.bgw",
+   "name": "Forbidden Seal"
+  },
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 139,
+   "root": "sound4",
+   "file": "music139.bgw",
+   "name": "Delve"
+  }
+ },
+ "77": {
+  "name": "Nyzul Isle",
+  "day": {
+   "id": 148,
+   "root": "sound4",
+   "file": "music148.bgw",
+   "name": "Forbidden Seal"
+  },
+  "night": {
+   "id": 148,
+   "root": "sound4",
+   "file": "music148.bgw",
+   "name": "Forbidden Seal"
+  },
+  "battleSolo": {
+   "id": 144,
+   "root": "sound4",
+   "file": "music144.bgw",
+   "name": "Rapid Onslaught -Assault-"
+  },
+  "battleParty": {
+   "id": 144,
+   "root": "sound4",
+   "file": "music144.bgw",
+   "name": "Rapid Onslaught -Assault-"
+  }
+ },
+ "78": {
+  "name": "Hazhalm Testing Grounds",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "79": {
+  "name": "Caedarva Mire",
+  "day": {
+   "id": 173,
+   "root": "sound4",
+   "file": "music173.bgw",
+   "name": "Illusions in the Mist"
+  },
+  "night": {
+   "id": 173,
+   "root": "sound4",
+   "file": "music173.bgw",
+   "name": "Illusions in the Mist"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 138,
+   "root": "sound4",
+   "file": "music138.bgw",
+   "name": "Mercenaries' Delight"
+  }
+ },
+ "80": {
+  "name": "Southern San dOria [S]",
+  "day": {
+   "id": 254,
+   "root": "sound5",
+   "file": "music254.bgw",
+   "name": "Griffons Never Die"
+  },
+  "night": {
+   "id": 254,
+   "root": "sound5",
+   "file": "music254.bgw",
+   "name": "Griffons Never Die"
+  },
+  "battleSolo": {
+   "id": 254,
+   "root": "sound5",
+   "file": "music254.bgw",
+   "name": "Griffons Never Die"
+  },
+  "battleParty": {
+   "id": 254,
+   "root": "sound5",
+   "file": "music254.bgw",
+   "name": "Griffons Never Die"
+  }
+ },
+ "81": {
+  "name": "East Ronfaure [S]",
+  "day": {
+   "id": 251,
+   "root": "sound5",
+   "file": "music251.bgw",
+   "name": "Autumn Footfalls"
+  },
+  "night": {
+   "id": 251,
+   "root": "sound5",
+   "file": "music251.bgw",
+   "name": "Autumn Footfalls"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 215,
+   "root": "sound5",
+   "file": "music215.bgw",
+   "name": "Clash of Standards"
+  }
+ },
+ "82": {
+  "name": "Jugner Forest [S]",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 215,
+   "root": "sound5",
+   "file": "music215.bgw",
+   "name": "Clash of Standards"
+  }
+ },
+ "83": {
+  "name": "Vunkerl Inlet [S]",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 215,
+   "root": "sound5",
+   "file": "music215.bgw",
+   "name": "Clash of Standards"
+  }
+ },
+ "84": {
+  "name": "Batallia Downs [S]",
+  "day": {
+   "id": 252,
+   "root": "sound5",
+   "file": "music252.bgw",
+   "name": "Flowers on the Battlefield"
+  },
+  "night": {
+   "id": 252,
+   "root": "sound5",
+   "file": "music252.bgw",
+   "name": "Flowers on the Battlefield"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 215,
+   "root": "sound5",
+   "file": "music215.bgw",
+   "name": "Clash of Standards"
+  }
+ },
+ "85": {
+  "name": "La Vaule [S]",
+  "day": {
+   "id": 44,
+   "root": "sound",
+   "file": "music044.bgw",
+   "name": "Where Lords Rule Not"
+  },
+  "night": {
+   "id": 44,
+   "root": "sound",
+   "file": "music044.bgw",
+   "name": "Where Lords Rule Not"
+  },
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 216,
+   "root": "sound5",
+   "file": "music216.bgw",
+   "name": "On this Blade"
+  }
+ },
+ "86": {
+  "name": "Everbloom Hollow",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 216,
+   "root": "sound5",
+   "file": "music216.bgw",
+   "name": "On this Blade"
+  },
+  "battleParty": {
+   "id": 216,
+   "root": "sound5",
+   "file": "music216.bgw",
+   "name": "On this Blade"
+  }
+ },
+ "87": {
+  "name": "Bastok Markets [S]",
+  "day": {
+   "id": 180,
+   "root": "sound5",
+   "file": "music180.bgw",
+   "name": "Thunder of the March"
+  },
+  "night": {
+   "id": 180,
+   "root": "sound5",
+   "file": "music180.bgw",
+   "name": "Thunder of the March"
+  },
+  "battleSolo": {
+   "id": 180,
+   "root": "sound5",
+   "file": "music180.bgw",
+   "name": "Thunder of the March"
+  },
+  "battleParty": {
+   "id": 180,
+   "root": "sound5",
+   "file": "music180.bgw",
+   "name": "Thunder of the March"
+  }
+ },
+ "88": {
+  "name": "North Gustaberg [S]",
+  "day": {
+   "id": 253,
+   "root": "sound5",
+   "file": "music253.bgw",
+   "name": "Echoes of a Zephyr"
+  },
+  "night": {
+   "id": 253,
+   "root": "sound5",
+   "file": "music253.bgw",
+   "name": "Echoes of a Zephyr"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 215,
+   "root": "sound5",
+   "file": "music215.bgw",
+   "name": "Clash of Standards"
+  }
+ },
+ "89": {
+  "name": "Grauberg [S]",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 215,
+   "root": "sound5",
+   "file": "music215.bgw",
+   "name": "Clash of Standards"
+  }
+ },
+ "90": {
+  "name": "Pashhow Marshlands [S]",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 215,
+   "root": "sound5",
+   "file": "music215.bgw",
+   "name": "Clash of Standards"
+  }
+ },
+ "91": {
+  "name": "Rolanberry Fields [S]",
+  "day": {
+   "id": 252,
+   "root": "sound5",
+   "file": "music252.bgw",
+   "name": "Flowers on the Battlefield"
+  },
+  "night": {
+   "id": 252,
+   "root": "sound5",
+   "file": "music252.bgw",
+   "name": "Flowers on the Battlefield"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 215,
+   "root": "sound5",
+   "file": "music215.bgw",
+   "name": "Clash of Standards"
+  }
+ },
+ "92": {
+  "name": "Beadeaux [S]",
+  "day": {
+   "id": 44,
+   "root": "sound",
+   "file": "music044.bgw",
+   "name": "Where Lords Rule Not"
+  },
+  "night": {
+   "id": 44,
+   "root": "sound",
+   "file": "music044.bgw",
+   "name": "Where Lords Rule Not"
+  },
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 216,
+   "root": "sound5",
+   "file": "music216.bgw",
+   "name": "On this Blade"
+  }
+ },
+ "93": {
+  "name": "Ruhotz Silvermines",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 216,
+   "root": "sound5",
+   "file": "music216.bgw",
+   "name": "On this Blade"
+  },
+  "battleParty": {
+   "id": 216,
+   "root": "sound5",
+   "file": "music216.bgw",
+   "name": "On this Blade"
+  }
+ },
+ "94": {
+  "name": "Windurst Waters [S]",
+  "day": {
+   "id": 182,
+   "root": "sound5",
+   "file": "music182.bgw",
+   "name": "Stargazing"
+  },
+  "night": {
+   "id": 182,
+   "root": "sound5",
+   "file": "music182.bgw",
+   "name": "Stargazing"
+  },
+  "battleSolo": {
+   "id": 182,
+   "root": "sound5",
+   "file": "music182.bgw",
+   "name": "Stargazing"
+  },
+  "battleParty": {
+   "id": 182,
+   "root": "sound5",
+   "file": "music182.bgw",
+   "name": "Stargazing"
+  }
+ },
+ "95": {
+  "name": "West Sarutabaruta [S]",
+  "day": {
+   "id": 141,
+   "root": "sound5",
+   "file": "music141.bgw",
+   "name": "The Cosmic Wheel"
+  },
+  "night": {
+   "id": 141,
+   "root": "sound5",
+   "file": "music141.bgw",
+   "name": "The Cosmic Wheel"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 215,
+   "root": "sound5",
+   "file": "music215.bgw",
+   "name": "Clash of Standards"
+  }
+ },
+ "96": {
+  "name": "Fort Karugo-Narugo [S]",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 215,
+   "root": "sound5",
+   "file": "music215.bgw",
+   "name": "Clash of Standards"
+  }
+ },
+ "97": {
+  "name": "Meriphataud Mountains [S]",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 215,
+   "root": "sound5",
+   "file": "music215.bgw",
+   "name": "Clash of Standards"
+  }
+ },
+ "98": {
+  "name": "Sauromugue Champaign [S]",
+  "day": {
+   "id": 252,
+   "root": "sound5",
+   "file": "music252.bgw",
+   "name": "Flowers on the Battlefield"
+  },
+  "night": {
+   "id": 252,
+   "root": "sound5",
+   "file": "music252.bgw",
+   "name": "Flowers on the Battlefield"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 215,
+   "root": "sound5",
+   "file": "music215.bgw",
+   "name": "Clash of Standards"
+  }
+ },
+ "99": {
+  "name": "Castle Oztroja [S]",
+  "day": {
+   "id": 44,
+   "root": "sound",
+   "file": "music044.bgw",
+   "name": "Where Lords Rule Not"
+  },
+  "night": {
+   "id": 44,
+   "root": "sound",
+   "file": "music044.bgw",
+   "name": "Where Lords Rule Not"
+  },
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 216,
+   "root": "sound5",
+   "file": "music216.bgw",
+   "name": "On this Blade"
+  }
+ },
+ "100": {
+  "name": "West Ronfaure",
+  "day": {
+   "id": 109,
+   "root": "sound",
+   "file": "music109.bgw",
+   "name": "Ronfaure"
+  },
+  "night": {
+   "id": 109,
+   "root": "sound",
+   "file": "music109.bgw",
+   "name": "Ronfaure"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "101": {
+  "name": "East Ronfaure",
+  "day": {
+   "id": 109,
+   "root": "sound",
+   "file": "music109.bgw",
+   "name": "Ronfaure"
+  },
+  "night": {
+   "id": 109,
+   "root": "sound",
+   "file": "music109.bgw",
+   "name": "Ronfaure"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "102": {
+  "name": "La Theine Plateau",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "103": {
+  "name": "Valkurm Dunes",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "104": {
+  "name": "Jugner Forest",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "105": {
+  "name": "Batallia Downs",
+  "day": {
+   "id": 114,
+   "root": "sound",
+   "file": "music114.bgw",
+   "name": "Batallia Downs"
+  },
+  "night": {
+   "id": 114,
+   "root": "sound",
+   "file": "music114.bgw",
+   "name": "Batallia Downs"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "106": {
+  "name": "North Gustaberg",
+  "day": {
+   "id": 116,
+   "root": "sound",
+   "file": "music116.bgw",
+   "name": "Gustaberg"
+  },
+  "night": {
+   "id": 116,
+   "root": "sound",
+   "file": "music116.bgw",
+   "name": "Gustaberg"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "107": {
+  "name": "South Gustaberg",
+  "day": {
+   "id": 116,
+   "root": "sound",
+   "file": "music116.bgw",
+   "name": "Gustaberg"
+  },
+  "night": {
+   "id": 116,
+   "root": "sound",
+   "file": "music116.bgw",
+   "name": "Gustaberg"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "108": {
+  "name": "Konschtat Highlands",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "109": {
+  "name": "Pashhow Marshlands",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "110": {
+  "name": "Rolanberry Fields",
+  "day": {
+   "id": 118,
+   "root": "sound",
+   "file": "music118.bgw",
+   "name": "Rolanberry Fields"
+  },
+  "night": {
+   "id": 118,
+   "root": "sound",
+   "file": "music118.bgw",
+   "name": "Rolanberry Fields"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "111": {
+  "name": "Beaucedine Glacier",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "112": {
+  "name": "Xarcabard",
+  "day": {
+   "id": 164,
+   "root": "sound",
+   "file": "music164.bgw",
+   "name": "Xarcabard"
+  },
+  "night": {
+   "id": 164,
+   "root": "sound",
+   "file": "music164.bgw",
+   "name": "Xarcabard"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "113": {
+  "name": "Cape Teriggan",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 191,
+   "root": "sound2",
+   "file": "music191.bgw",
+   "name": "Battle Theme #3"
+  }
+ },
+ "114": {
+  "name": "Eastern Altepa Desert",
+  "day": {
+   "id": 171,
+   "root": "sound2",
+   "file": "music171.bgw",
+   "name": "Altepa Desert"
+  },
+  "night": {
+   "id": 171,
+   "root": "sound2",
+   "file": "music171.bgw",
+   "name": "Altepa Desert"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 191,
+   "root": "sound2",
+   "file": "music191.bgw",
+   "name": "Battle Theme #3"
+  }
+ },
+ "115": {
+  "name": "West Sarutabaruta",
+  "day": {
+   "id": 113,
+   "root": "sound",
+   "file": "music113.bgw",
+   "name": "Sarutabaruta"
+  },
+  "night": {
+   "id": 113,
+   "root": "sound",
+   "file": "music113.bgw",
+   "name": "Sarutabaruta"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "116": {
+  "name": "East Sarutabaruta",
+  "day": {
+   "id": 113,
+   "root": "sound",
+   "file": "music113.bgw",
+   "name": "Sarutabaruta"
+  },
+  "night": {
+   "id": 113,
+   "root": "sound",
+   "file": "music113.bgw",
+   "name": "Sarutabaruta"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "117": {
+  "name": "Tahrongi Canyon",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "118": {
+  "name": "Buburimu Peninsula",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "119": {
+  "name": "Meriphataud Mountains",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "120": {
+  "name": "Sauromugue Champaign",
+  "day": {
+   "id": 158,
+   "root": "sound",
+   "file": "music158.bgw",
+   "name": "Sauromugue Champaign"
+  },
+  "night": {
+   "id": 158,
+   "root": "sound",
+   "file": "music158.bgw",
+   "name": "Sauromugue Champaign"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "121": {
+  "name": "The Sanctuary of ZiTah",
+  "day": {
+   "id": 190,
+   "root": "sound2",
+   "file": "music190.bgw",
+   "name": "The Sanctuary of Zi'Tah"
+  },
+  "night": {
+   "id": 190,
+   "root": "sound2",
+   "file": "music190.bgw",
+   "name": "The Sanctuary of Zi'Tah"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 191,
+   "root": "sound2",
+   "file": "music191.bgw",
+   "name": "Battle Theme #3"
+  }
+ },
+ "122": {
+  "name": "RoMaeve",
+  "day": {
+   "id": 211,
+   "root": "sound2",
+   "file": "music211.bgw",
+   "name": "Ro'Maeve"
+  },
+  "night": {
+   "id": 211,
+   "root": "sound2",
+   "file": "music211.bgw",
+   "name": "Ro'Maeve"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 191,
+   "root": "sound2",
+   "file": "music191.bgw",
+   "name": "Battle Theme #3"
+  }
+ },
+ "123": {
+  "name": "Yuhtunga Jungle",
+  "day": {
+   "id": 134,
+   "root": "sound2",
+   "file": "music134.bgw",
+   "name": "Yuhtunga Jungle"
+  },
+  "night": {
+   "id": 134,
+   "root": "sound2",
+   "file": "music134.bgw",
+   "name": "Yuhtunga Jungle"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 191,
+   "root": "sound2",
+   "file": "music191.bgw",
+   "name": "Battle Theme #3"
+  }
+ },
+ "124": {
+  "name": "Yhoator Jungle",
+  "day": {
+   "id": 134,
+   "root": "sound2",
+   "file": "music134.bgw",
+   "name": "Yuhtunga Jungle"
+  },
+  "night": {
+   "id": 134,
+   "root": "sound2",
+   "file": "music134.bgw",
+   "name": "Yuhtunga Jungle"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 191,
+   "root": "sound2",
+   "file": "music191.bgw",
+   "name": "Battle Theme #3"
+  }
+ },
+ "125": {
+  "name": "Western Altepa Desert",
+  "day": {
+   "id": 171,
+   "root": "sound2",
+   "file": "music171.bgw",
+   "name": "Altepa Desert"
+  },
+  "night": {
+   "id": 171,
+   "root": "sound2",
+   "file": "music171.bgw",
+   "name": "Altepa Desert"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 191,
+   "root": "sound2",
+   "file": "music191.bgw",
+   "name": "Battle Theme #3"
+  }
+ },
+ "126": {
+  "name": "Qufim Island",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "127": {
+  "name": "Behemoths Dominion",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "128": {
+  "name": "Valley of Sorrows",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 191,
+   "root": "sound2",
+   "file": "music191.bgw",
+   "name": "Battle Theme #3"
+  }
+ },
+ "129": {
+  "name": "Ghoyus Reverie",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 216,
+   "root": "sound5",
+   "file": "music216.bgw",
+   "name": "On this Blade"
+  },
+  "battleParty": {
+   "id": 216,
+   "root": "sound5",
+   "file": "music216.bgw",
+   "name": "On this Blade"
+  }
+ },
+ "130": {
+  "name": "RuAun Gardens",
+  "day": {
+   "id": 210,
+   "root": "sound2",
+   "file": "music210.bgw",
+   "name": "Tu'Lia"
+  },
+  "night": {
+   "id": 210,
+   "root": "sound2",
+   "file": "music210.bgw",
+   "name": "Tu'Lia"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 191,
+   "root": "sound2",
+   "file": "music191.bgw",
+   "name": "Battle Theme #3"
+  }
+ },
+ "131": {
+  "name": "Mordion Gaol",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "132": {
+  "name": "Abyssea-La Theine",
+  "day": {
+   "id": 51,
+   "root": "sound",
+   "file": "music051.bgw",
+   "name": "\"Abyssea - Scarlet Skies, Shadowed Plains\""
+  },
+  "night": {
+   "id": 51,
+   "root": "sound",
+   "file": "music051.bgw",
+   "name": "\"Abyssea - Scarlet Skies, Shadowed Plains\""
+  },
+  "battleSolo": {
+   "id": 52,
+   "root": "sound",
+   "file": "music052.bgw",
+   "name": "Melodies Errant"
+  },
+  "battleParty": {
+   "id": 52,
+   "root": "sound",
+   "file": "music052.bgw",
+   "name": "Melodies Errant"
+  }
+ },
+ "133": {
+  "name": "Outer RaKaznar [U2]",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "134": {
+  "name": "Dynamis-Beaucedine",
+  "day": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "night": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "battleSolo": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "battleParty": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  }
+ },
+ "135": {
+  "name": "Dynamis-Xarcabard",
+  "day": {
+   "id": 119,
+   "root": "sound",
+   "file": "music119.bgw",
+   "name": "Awakening"
+  },
+  "night": {
+   "id": 119,
+   "root": "sound",
+   "file": "music119.bgw",
+   "name": "Awakening"
+  },
+  "battleSolo": {
+   "id": 119,
+   "root": "sound",
+   "file": "music119.bgw",
+   "name": "Awakening"
+  },
+  "battleParty": {
+   "id": 119,
+   "root": "sound",
+   "file": "music119.bgw",
+   "name": "Awakening"
+  }
+ },
+ "136": {
+  "name": "Beaucedine Glacier [S]",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 215,
+   "root": "sound5",
+   "file": "music215.bgw",
+   "name": "Clash of Standards"
+  }
+ },
+ "137": {
+  "name": "Xarcabard [S]",
+  "day": {
+   "id": 42,
+   "root": "sound",
+   "file": "music042.bgw",
+   "name": "Snowdrift Waltz"
+  },
+  "night": {
+   "id": 42,
+   "root": "sound",
+   "file": "music042.bgw",
+   "name": "Snowdrift Waltz"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 215,
+   "root": "sound5",
+   "file": "music215.bgw",
+   "name": "Clash of Standards"
+  }
+ },
+ "138": {
+  "name": "Castle Zvahl Baileys [S]",
+  "day": {
+   "id": 43,
+   "root": "sound",
+   "file": "music043.bgw",
+   "name": "Troubled Shadows"
+  },
+  "night": {
+   "id": 43,
+   "root": "sound",
+   "file": "music043.bgw",
+   "name": "Troubled Shadows"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 215,
+   "root": "sound5",
+   "file": "music215.bgw",
+   "name": "Clash of Standards"
+  }
+ },
+ "139": {
+  "name": "Horlais Peak",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 125,
+   "root": "sound",
+   "file": "music125.bgw",
+   "name": "Tough Battle"
+  },
+  "battleParty": {
+   "id": 125,
+   "root": "sound",
+   "file": "music125.bgw",
+   "name": "Tough Battle"
+  }
+ },
+ "140": {
+  "name": "Ghelsba Outpost",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "141": {
+  "name": "Fort Ghelsba",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "142": {
+  "name": "Yughott Grotto",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "143": {
+  "name": "Palborough Mines",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "144": {
+  "name": "Waughroon Shrine",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 125,
+   "root": "sound",
+   "file": "music125.bgw",
+   "name": "Tough Battle"
+  },
+  "battleParty": {
+   "id": 125,
+   "root": "sound",
+   "file": "music125.bgw",
+   "name": "Tough Battle"
+  }
+ },
+ "145": {
+  "name": "Giddeus",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "146": {
+  "name": "Balgas Dais",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 125,
+   "root": "sound",
+   "file": "music125.bgw",
+   "name": "Tough Battle"
+  },
+  "battleParty": {
+   "id": 125,
+   "root": "sound",
+   "file": "music125.bgw",
+   "name": "Tough Battle"
+  }
+ },
+ "147": {
+  "name": "Beadeaux",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "148": {
+  "name": "Qulun Dome",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "149": {
+  "name": "Davoi",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "150": {
+  "name": "Monastic Cavern",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "151": {
+  "name": "Castle Oztroja",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "152": {
+  "name": "Altar Room",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "153": {
+  "name": "The Boyahda Tree",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 192,
+   "root": "sound2",
+   "file": "music192.bgw",
+   "name": "Battle in the Dungeon #3"
+  }
+ },
+ "154": {
+  "name": "Dragons Aery",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 192,
+   "root": "sound2",
+   "file": "music192.bgw",
+   "name": "Battle in the Dungeon #3"
+  }
+ },
+ "155": {
+  "name": "Castle Zvahl Keep [S]",
+  "day": {
+   "id": 43,
+   "root": "sound",
+   "file": "music043.bgw",
+   "name": "Troubled Shadows"
+  },
+  "night": {
+   "id": 43,
+   "root": "sound",
+   "file": "music043.bgw",
+   "name": "Troubled Shadows"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 215,
+   "root": "sound5",
+   "file": "music215.bgw",
+   "name": "Clash of Standards"
+  }
+ },
+ "156": {
+  "name": "Throne Room [S]",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "157": {
+  "name": "Middle Delkfutts Tower",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "158": {
+  "name": "Upper Delkfutts Tower",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "159": {
+  "name": "Temple of Uggalepih",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 192,
+   "root": "sound2",
+   "file": "music192.bgw",
+   "name": "Battle in the Dungeon #3"
+  }
+ },
+ "160": {
+  "name": "Den of Rancor",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 192,
+   "root": "sound2",
+   "file": "music192.bgw",
+   "name": "Battle in the Dungeon #3"
+  }
+ },
+ "161": {
+  "name": "Castle Zvahl Baileys",
+  "day": {
+   "id": 155,
+   "root": "sound",
+   "file": "music155.bgw",
+   "name": "Castle Zvahl"
+  },
+  "night": {
+   "id": 155,
+   "root": "sound",
+   "file": "music155.bgw",
+   "name": "Castle Zvahl"
+  },
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "162": {
+  "name": "Castle Zvahl Keep",
+  "day": {
+   "id": 155,
+   "root": "sound",
+   "file": "music155.bgw",
+   "name": "Castle Zvahl"
+  },
+  "night": {
+   "id": 155,
+   "root": "sound",
+   "file": "music155.bgw",
+   "name": "Castle Zvahl"
+  },
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "163": {
+  "name": "Sacrificial Chamber",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 193,
+   "root": "sound2",
+   "file": "music193.bgw",
+   "name": "Tough Battle #2"
+  },
+  "battleParty": {
+   "id": 193,
+   "root": "sound2",
+   "file": "music193.bgw",
+   "name": "Tough Battle #2"
+  }
+ },
+ "164": {
+  "name": "Garlaige Citadel [S]",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 216,
+   "root": "sound5",
+   "file": "music216.bgw",
+   "name": "On this Blade"
+  }
+ },
+ "165": {
+  "name": "Throne Room",
+  "day": {
+   "id": 155,
+   "root": "sound",
+   "file": "music155.bgw",
+   "name": "Castle Zvahl"
+  },
+  "night": {
+   "id": 155,
+   "root": "sound",
+   "file": "music155.bgw",
+   "name": "Castle Zvahl"
+  },
+  "battleSolo": {
+   "id": 119,
+   "root": "sound",
+   "file": "music119.bgw",
+   "name": "Awakening"
+  },
+  "battleParty": {
+   "id": 119,
+   "root": "sound",
+   "file": "music119.bgw",
+   "name": "Awakening"
+  }
+ },
+ "166": {
+  "name": "Ranguemont Pass",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "167": {
+  "name": "Bostaunieux Oubliette",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "168": {
+  "name": "Chamber of Oracles",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 193,
+   "root": "sound2",
+   "file": "music193.bgw",
+   "name": "Tough Battle #2"
+  },
+  "battleParty": {
+   "id": 193,
+   "root": "sound2",
+   "file": "music193.bgw",
+   "name": "Tough Battle #2"
+  }
+ },
+ "169": {
+  "name": "Toraimarai Canal",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "170": {
+  "name": "Full Moon Fountain",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 193,
+   "root": "sound2",
+   "file": "music193.bgw",
+   "name": "Tough Battle #2"
+  },
+  "battleParty": {
+   "id": 193,
+   "root": "sound2",
+   "file": "music193.bgw",
+   "name": "Tough Battle #2"
+  }
+ },
+ "171": {
+  "name": "Crawlers Nest [S]",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 216,
+   "root": "sound5",
+   "file": "music216.bgw",
+   "name": "On this Blade"
+  }
+ },
+ "172": {
+  "name": "Zeruhn Mines",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "173": {
+  "name": "Korroloka Tunnel",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 192,
+   "root": "sound2",
+   "file": "music192.bgw",
+   "name": "Battle in the Dungeon #3"
+  }
+ },
+ "174": {
+  "name": "Kuftal Tunnel",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 192,
+   "root": "sound2",
+   "file": "music192.bgw",
+   "name": "Battle in the Dungeon #3"
+  }
+ },
+ "175": {
+  "name": "The Eldieme Necropolis [S]",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 216,
+   "root": "sound5",
+   "file": "music216.bgw",
+   "name": "On this Blade"
+  }
+ },
+ "176": {
+  "name": "Sea Serpent Grotto",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 192,
+   "root": "sound2",
+   "file": "music192.bgw",
+   "name": "Battle in the Dungeon #3"
+  }
+ },
+ "177": {
+  "name": "VeLugannon Palace",
+  "day": {
+   "id": 207,
+   "root": "sound2",
+   "file": "music207.bgw",
+   "name": "Ve'Lugannon Palace"
+  },
+  "night": {
+   "id": 207,
+   "root": "sound2",
+   "file": "music207.bgw",
+   "name": "Ve'Lugannon Palace"
+  },
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 192,
+   "root": "sound2",
+   "file": "music192.bgw",
+   "name": "Battle in the Dungeon #3"
+  }
+ },
+ "178": {
+  "name": "The Shrine of RuAvitau",
+  "day": {
+   "id": 207,
+   "root": "sound2",
+   "file": "music207.bgw",
+   "name": "Ve'Lugannon Palace"
+  },
+  "night": {
+   "id": 207,
+   "root": "sound2",
+   "file": "music207.bgw",
+   "name": "Ve'Lugannon Palace"
+  },
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 192,
+   "root": "sound2",
+   "file": "music192.bgw",
+   "name": "Battle in the Dungeon #3"
+  }
+ },
+ "179": {
+  "name": "Stellar Fulcrum",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 193,
+   "root": "sound2",
+   "file": "music193.bgw",
+   "name": "Tough Battle #2"
+  },
+  "battleParty": {
+   "id": 193,
+   "root": "sound2",
+   "file": "music193.bgw",
+   "name": "Tough Battle #2"
+  }
+ },
+ "180": {
+  "name": "LaLoff Amphitheater",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 196,
+   "root": "sound2",
+   "file": "music196.bgw",
+   "name": "Fighters of the Crystal"
+  },
+  "battleParty": {
+   "id": 196,
+   "root": "sound2",
+   "file": "music196.bgw",
+   "name": "Fighters of the Crystal"
+  }
+ },
+ "181": {
+  "name": "The Celestial Nexus",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 198,
+   "root": "sound2",
+   "file": "music198.bgw",
+   "name": "Eald'narche"
+  },
+  "battleParty": {
+   "id": 198,
+   "root": "sound2",
+   "file": "music198.bgw",
+   "name": "Eald'narche"
+  }
+ },
+ "182": {
+  "name": "Walk of Echoes",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 215,
+   "root": "sound5",
+   "file": "music215.bgw",
+   "name": "Clash of Standards"
+  },
+  "battleParty": {
+   "id": 215,
+   "root": "sound5",
+   "file": "music215.bgw",
+   "name": "Clash of Standards"
+  }
+ },
+ "183": {
+  "name": "Maquette Abdhaljs-Legion A",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 143,
+   "root": "sound4",
+   "file": "music143.bgw",
+   "name": "Hellriders"
+  },
+  "battleParty": {
+   "id": 143,
+   "root": "sound4",
+   "file": "music143.bgw",
+   "name": "Hellriders"
+  }
+ },
+ "184": {
+  "name": "Lower Delkfutts Tower",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "185": {
+  "name": "Dynamis-San dOria",
+  "day": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "night": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "battleSolo": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "battleParty": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  }
+ },
+ "186": {
+  "name": "Dynamis-Bastok",
+  "day": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "night": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "battleSolo": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "battleParty": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  }
+ },
+ "187": {
+  "name": "Dynamis-Windurst",
+  "day": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "night": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "battleSolo": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "battleParty": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  }
+ },
+ "188": {
+  "name": "Dynamis-Jeuno",
+  "day": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "night": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "battleSolo": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  },
+  "battleParty": {
+   "id": 121,
+   "root": "sound",
+   "file": "music121.bgw",
+   "name": "Shadow Lord"
+  }
+ },
+ "189": {
+  "name": "Outer RaKaznar [U3]",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "190": {
+  "name": "King Ranperres Tomb",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "191": {
+  "name": "Dangruf Wadi",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "192": {
+  "name": "Inner Horutoto Ruins",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "193": {
+  "name": "Ordelles Caves",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "194": {
+  "name": "Outer Horutoto Ruins",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "195": {
+  "name": "The Eldieme Necropolis",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "196": {
+  "name": "Gusgen Mines",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "197": {
+  "name": "Crawlers Nest",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "198": {
+  "name": "Maze of Shakhrami",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "199": {
+  "name": "Residential Area",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "200": {
+  "name": "Garlaige Citadel",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "201": {
+  "name": "Cloister of Gales",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "202": {
+  "name": "Cloister of Storms",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "203": {
+  "name": "Cloister of Frost",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "204": {
+  "name": "FeiYin",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 102,
+   "root": "sound",
+   "file": "music102.bgw",
+   "name": "Battle in the Dungeon"
+  }
+ },
+ "205": {
+  "name": "Ifrits Cauldron",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 192,
+   "root": "sound2",
+   "file": "music192.bgw",
+   "name": "Battle in the Dungeon #3"
+  }
+ },
+ "206": {
+  "name": "QuBia Arena",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 125,
+   "root": "sound",
+   "file": "music125.bgw",
+   "name": "Tough Battle"
+  },
+  "battleParty": {
+   "id": 125,
+   "root": "sound",
+   "file": "music125.bgw",
+   "name": "Tough Battle"
+  }
+ },
+ "207": {
+  "name": "Cloister of Flames",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "208": {
+  "name": "Quicksand Caves",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 192,
+   "root": "sound2",
+   "file": "music192.bgw",
+   "name": "Battle in the Dungeon #3"
+  }
+ },
+ "209": {
+  "name": "Cloister of Tremors",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "210": {
+  "name": "GM Home",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "211": {
+  "name": "Cloister of Tides",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "212": {
+  "name": "Gustav Tunnel",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 192,
+   "root": "sound2",
+   "file": "music192.bgw",
+   "name": "Battle in the Dungeon #3"
+  }
+ },
+ "213": {
+  "name": "Labyrinth of Onzozo",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 115,
+   "root": "sound",
+   "file": "music115.bgw",
+   "name": "Battle in the Dungeon #2"
+  },
+  "battleParty": {
+   "id": 192,
+   "root": "sound2",
+   "file": "music192.bgw",
+   "name": "Battle in the Dungeon #3"
+  }
+ },
+ "214": {
+  "name": "Residential Area",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "215": {
+  "name": "Abyssea-Attohwa",
+  "day": {
+   "id": 51,
+   "root": "sound",
+   "file": "music051.bgw",
+   "name": "\"Abyssea - Scarlet Skies, Shadowed Plains\""
+  },
+  "night": {
+   "id": 51,
+   "root": "sound",
+   "file": "music051.bgw",
+   "name": "\"Abyssea - Scarlet Skies, Shadowed Plains\""
+  },
+  "battleSolo": {
+   "id": 52,
+   "root": "sound",
+   "file": "music052.bgw",
+   "name": "Melodies Errant"
+  },
+  "battleParty": {
+   "id": 52,
+   "root": "sound",
+   "file": "music052.bgw",
+   "name": "Melodies Errant"
+  }
+ },
+ "216": {
+  "name": "Abyssea-Misareaux",
+  "day": {
+   "id": 51,
+   "root": "sound",
+   "file": "music051.bgw",
+   "name": "\"Abyssea - Scarlet Skies, Shadowed Plains\""
+  },
+  "night": {
+   "id": 51,
+   "root": "sound",
+   "file": "music051.bgw",
+   "name": "\"Abyssea - Scarlet Skies, Shadowed Plains\""
+  },
+  "battleSolo": {
+   "id": 52,
+   "root": "sound",
+   "file": "music052.bgw",
+   "name": "Melodies Errant"
+  },
+  "battleParty": {
+   "id": 52,
+   "root": "sound",
+   "file": "music052.bgw",
+   "name": "Melodies Errant"
+  }
+ },
+ "217": {
+  "name": "Abyssea-Vunkerl",
+  "day": {
+   "id": 51,
+   "root": "sound",
+   "file": "music051.bgw",
+   "name": "\"Abyssea - Scarlet Skies, Shadowed Plains\""
+  },
+  "night": {
+   "id": 51,
+   "root": "sound",
+   "file": "music051.bgw",
+   "name": "\"Abyssea - Scarlet Skies, Shadowed Plains\""
+  },
+  "battleSolo": {
+   "id": 52,
+   "root": "sound",
+   "file": "music052.bgw",
+   "name": "Melodies Errant"
+  },
+  "battleParty": {
+   "id": 52,
+   "root": "sound",
+   "file": "music052.bgw",
+   "name": "Melodies Errant"
+  }
+ },
+ "218": {
+  "name": "Abyssea-Altepa",
+  "day": {
+   "id": 51,
+   "root": "sound",
+   "file": "music051.bgw",
+   "name": "\"Abyssea - Scarlet Skies, Shadowed Plains\""
+  },
+  "night": {
+   "id": 51,
+   "root": "sound",
+   "file": "music051.bgw",
+   "name": "\"Abyssea - Scarlet Skies, Shadowed Plains\""
+  },
+  "battleSolo": {
+   "id": 52,
+   "root": "sound",
+   "file": "music052.bgw",
+   "name": "Melodies Errant"
+  },
+  "battleParty": {
+   "id": 52,
+   "root": "sound",
+   "file": "music052.bgw",
+   "name": "Melodies Errant"
+  }
+ },
+ "219": {
+  "name": "Residential Area",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "220": {
+  "name": "Ship bound for Selbina",
+  "day": {
+   "id": 106,
+   "root": "sound",
+   "file": "music106.bgw",
+   "name": "Voyager"
+  },
+  "night": {
+   "id": 106,
+   "root": "sound",
+   "file": "music106.bgw",
+   "name": "Voyager"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "221": {
+  "name": "Ship bound for Mhaura",
+  "day": {
+   "id": 106,
+   "root": "sound",
+   "file": "music106.bgw",
+   "name": "Voyager"
+  },
+  "night": {
+   "id": 106,
+   "root": "sound",
+   "file": "music106.bgw",
+   "name": "Voyager"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "222": {
+  "name": "Provenance",
+  "day": {
+   "id": 56,
+   "root": "sound",
+   "file": "music056.bgw",
+   "name": "Where it All Begins"
+  },
+  "night": {
+   "id": 56,
+   "root": "sound",
+   "file": "music056.bgw",
+   "name": "Where it All Begins"
+  },
+  "battleSolo": {
+   "id": 56,
+   "root": "sound",
+   "file": "music056.bgw",
+   "name": "Where it All Begins"
+  },
+  "battleParty": {
+   "id": 56,
+   "root": "sound",
+   "file": "music056.bgw",
+   "name": "Where it All Begins"
+  }
+ },
+ "223": {
+  "name": "San dOria-Jeuno Airship",
+  "day": {
+   "id": 128,
+   "root": "sound",
+   "file": "music128.bgw",
+   "name": "Airship"
+  },
+  "night": {
+   "id": 128,
+   "root": "sound",
+   "file": "music128.bgw",
+   "name": "Airship"
+  },
+  "battleSolo": {
+   "id": 128,
+   "root": "sound",
+   "file": "music128.bgw",
+   "name": "Airship"
+  },
+  "battleParty": {
+   "id": 128,
+   "root": "sound",
+   "file": "music128.bgw",
+   "name": "Airship"
+  }
+ },
+ "224": {
+  "name": "Bastok-Jeuno Airship",
+  "day": {
+   "id": 128,
+   "root": "sound",
+   "file": "music128.bgw",
+   "name": "Airship"
+  },
+  "night": {
+   "id": 128,
+   "root": "sound",
+   "file": "music128.bgw",
+   "name": "Airship"
+  },
+  "battleSolo": {
+   "id": 128,
+   "root": "sound",
+   "file": "music128.bgw",
+   "name": "Airship"
+  },
+  "battleParty": {
+   "id": 128,
+   "root": "sound",
+   "file": "music128.bgw",
+   "name": "Airship"
+  }
+ },
+ "225": {
+  "name": "Windurst-Jeuno Airship",
+  "day": {
+   "id": 128,
+   "root": "sound",
+   "file": "music128.bgw",
+   "name": "Airship"
+  },
+  "night": {
+   "id": 128,
+   "root": "sound",
+   "file": "music128.bgw",
+   "name": "Airship"
+  },
+  "battleSolo": {
+   "id": 128,
+   "root": "sound",
+   "file": "music128.bgw",
+   "name": "Airship"
+  },
+  "battleParty": {
+   "id": 128,
+   "root": "sound",
+   "file": "music128.bgw",
+   "name": "Airship"
+  }
+ },
+ "226": {
+  "name": "Kazham-Jeuno Airship",
+  "day": {
+   "id": 128,
+   "root": "sound",
+   "file": "music128.bgw",
+   "name": "Airship"
+  },
+  "night": {
+   "id": 128,
+   "root": "sound",
+   "file": "music128.bgw",
+   "name": "Airship"
+  },
+  "battleSolo": {
+   "id": 128,
+   "root": "sound",
+   "file": "music128.bgw",
+   "name": "Airship"
+  },
+  "battleParty": {
+   "id": 128,
+   "root": "sound",
+   "file": "music128.bgw",
+   "name": "Airship"
+  }
+ },
+ "227": {
+  "name": "Ship bound for Selbina Pirates",
+  "day": {
+   "id": 106,
+   "root": "sound",
+   "file": "music106.bgw",
+   "name": "Voyager"
+  },
+  "night": {
+   "id": 106,
+   "root": "sound",
+   "file": "music106.bgw",
+   "name": "Voyager"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "228": {
+  "name": "Ship bound for Mhaura Pirates",
+  "day": {
+   "id": 106,
+   "root": "sound",
+   "file": "music106.bgw",
+   "name": "Voyager"
+  },
+  "night": {
+   "id": 106,
+   "root": "sound",
+   "file": "music106.bgw",
+   "name": "Voyager"
+  },
+  "battleSolo": {
+   "id": 101,
+   "root": "sound",
+   "file": "music101.bgw",
+   "name": "Battle Theme"
+  },
+  "battleParty": {
+   "id": 103,
+   "root": "sound",
+   "file": "music103.bgw",
+   "name": "Battle Theme #2 (Party)"
+  }
+ },
+ "229": {
+  "name": "Throne Room [V]",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "230": {
+  "name": "Southern San dOria",
+  "day": {
+   "id": 107,
+   "root": "sound",
+   "file": "music107.bgw",
+   "name": "The Kingdom of San d'Oria"
+  },
+  "night": {
+   "id": 107,
+   "root": "sound",
+   "file": "music107.bgw",
+   "name": "The Kingdom of San d'Oria"
+  },
+  "battleSolo": {
+   "id": 107,
+   "root": "sound",
+   "file": "music107.bgw",
+   "name": "The Kingdom of San d'Oria"
+  },
+  "battleParty": {
+   "id": 107,
+   "root": "sound",
+   "file": "music107.bgw",
+   "name": "The Kingdom of San d'Oria"
+  }
+ },
+ "231": {
+  "name": "Northern San dOria",
+  "day": {
+   "id": 107,
+   "root": "sound",
+   "file": "music107.bgw",
+   "name": "The Kingdom of San d'Oria"
+  },
+  "night": {
+   "id": 107,
+   "root": "sound",
+   "file": "music107.bgw",
+   "name": "The Kingdom of San d'Oria"
+  },
+  "battleSolo": {
+   "id": 107,
+   "root": "sound",
+   "file": "music107.bgw",
+   "name": "The Kingdom of San d'Oria"
+  },
+  "battleParty": {
+   "id": 107,
+   "root": "sound",
+   "file": "music107.bgw",
+   "name": "The Kingdom of San d'Oria"
+  }
+ },
+ "232": {
+  "name": "Port San dOria",
+  "day": {
+   "id": 107,
+   "root": "sound",
+   "file": "music107.bgw",
+   "name": "The Kingdom of San d'Oria"
+  },
+  "night": {
+   "id": 107,
+   "root": "sound",
+   "file": "music107.bgw",
+   "name": "The Kingdom of San d'Oria"
+  },
+  "battleSolo": {
+   "id": 107,
+   "root": "sound",
+   "file": "music107.bgw",
+   "name": "The Kingdom of San d'Oria"
+  },
+  "battleParty": {
+   "id": 107,
+   "root": "sound",
+   "file": "music107.bgw",
+   "name": "The Kingdom of San d'Oria"
+  }
+ },
+ "233": {
+  "name": "Chateau dOraguille",
+  "day": {
+   "id": 156,
+   "root": "sound",
+   "file": "music156.bgw",
+   "name": "Chateau d'Oraguille"
+  },
+  "night": {
+   "id": 156,
+   "root": "sound",
+   "file": "music156.bgw",
+   "name": "Chateau d'Oraguille"
+  },
+  "battleSolo": {
+   "id": 156,
+   "root": "sound",
+   "file": "music156.bgw",
+   "name": "Chateau d'Oraguille"
+  },
+  "battleParty": {
+   "id": 156,
+   "root": "sound",
+   "file": "music156.bgw",
+   "name": "Chateau d'Oraguille"
+  }
+ },
+ "234": {
+  "name": "Bastok Mines",
+  "day": {
+   "id": 152,
+   "root": "sound",
+   "file": "music152.bgw",
+   "name": "The Republic of Bastok"
+  },
+  "night": {
+   "id": 152,
+   "root": "sound",
+   "file": "music152.bgw",
+   "name": "The Republic of Bastok"
+  },
+  "battleSolo": {
+   "id": 152,
+   "root": "sound",
+   "file": "music152.bgw",
+   "name": "The Republic of Bastok"
+  },
+  "battleParty": {
+   "id": 152,
+   "root": "sound",
+   "file": "music152.bgw",
+   "name": "The Republic of Bastok"
+  }
+ },
+ "235": {
+  "name": "Bastok Markets",
+  "day": {
+   "id": 152,
+   "root": "sound",
+   "file": "music152.bgw",
+   "name": "The Republic of Bastok"
+  },
+  "night": {
+   "id": 152,
+   "root": "sound",
+   "file": "music152.bgw",
+   "name": "The Republic of Bastok"
+  },
+  "battleSolo": {
+   "id": 152,
+   "root": "sound",
+   "file": "music152.bgw",
+   "name": "The Republic of Bastok"
+  },
+  "battleParty": {
+   "id": 152,
+   "root": "sound",
+   "file": "music152.bgw",
+   "name": "The Republic of Bastok"
+  }
+ },
+ "236": {
+  "name": "Port Bastok",
+  "day": {
+   "id": 152,
+   "root": "sound",
+   "file": "music152.bgw",
+   "name": "The Republic of Bastok"
+  },
+  "night": {
+   "id": 152,
+   "root": "sound",
+   "file": "music152.bgw",
+   "name": "The Republic of Bastok"
+  },
+  "battleSolo": {
+   "id": 152,
+   "root": "sound",
+   "file": "music152.bgw",
+   "name": "The Republic of Bastok"
+  },
+  "battleParty": {
+   "id": 152,
+   "root": "sound",
+   "file": "music152.bgw",
+   "name": "The Republic of Bastok"
+  }
+ },
+ "237": {
+  "name": "Metalworks",
+  "day": {
+   "id": 154,
+   "root": "sound",
+   "file": "music154.bgw",
+   "name": "Metalworks"
+  },
+  "night": {
+   "id": 154,
+   "root": "sound",
+   "file": "music154.bgw",
+   "name": "Metalworks"
+  },
+  "battleSolo": {
+   "id": 154,
+   "root": "sound",
+   "file": "music154.bgw",
+   "name": "Metalworks"
+  },
+  "battleParty": {
+   "id": 154,
+   "root": "sound",
+   "file": "music154.bgw",
+   "name": "Metalworks"
+  }
+ },
+ "238": {
+  "name": "Windurst Waters",
+  "day": {
+   "id": 151,
+   "root": "sound",
+   "file": "music151.bgw",
+   "name": "The Federation of Windurst"
+  },
+  "night": {
+   "id": 151,
+   "root": "sound",
+   "file": "music151.bgw",
+   "name": "The Federation of Windurst"
+  },
+  "battleSolo": {
+   "id": 151,
+   "root": "sound",
+   "file": "music151.bgw",
+   "name": "The Federation of Windurst"
+  },
+  "battleParty": {
+   "id": 151,
+   "root": "sound",
+   "file": "music151.bgw",
+   "name": "The Federation of Windurst"
+  }
+ },
+ "239": {
+  "name": "Windurst Walls",
+  "day": {
+   "id": 151,
+   "root": "sound",
+   "file": "music151.bgw",
+   "name": "The Federation of Windurst"
+  },
+  "night": {
+   "id": 151,
+   "root": "sound",
+   "file": "music151.bgw",
+   "name": "The Federation of Windurst"
+  },
+  "battleSolo": {
+   "id": 151,
+   "root": "sound",
+   "file": "music151.bgw",
+   "name": "The Federation of Windurst"
+  },
+  "battleParty": {
+   "id": 151,
+   "root": "sound",
+   "file": "music151.bgw",
+   "name": "The Federation of Windurst"
+  }
+ },
+ "240": {
+  "name": "Port Windurst",
+  "day": {
+   "id": 151,
+   "root": "sound",
+   "file": "music151.bgw",
+   "name": "The Federation of Windurst"
+  },
+  "night": {
+   "id": 151,
+   "root": "sound",
+   "file": "music151.bgw",
+   "name": "The Federation of Windurst"
+  },
+  "battleSolo": {
+   "id": 151,
+   "root": "sound",
+   "file": "music151.bgw",
+   "name": "The Federation of Windurst"
+  },
+  "battleParty": {
+   "id": 151,
+   "root": "sound",
+   "file": "music151.bgw",
+   "name": "The Federation of Windurst"
+  }
+ },
+ "241": {
+  "name": "Windurst Woods",
+  "day": {
+   "id": 151,
+   "root": "sound",
+   "file": "music151.bgw",
+   "name": "The Federation of Windurst"
+  },
+  "night": {
+   "id": 151,
+   "root": "sound",
+   "file": "music151.bgw",
+   "name": "The Federation of Windurst"
+  },
+  "battleSolo": {
+   "id": 151,
+   "root": "sound",
+   "file": "music151.bgw",
+   "name": "The Federation of Windurst"
+  },
+  "battleParty": {
+   "id": 151,
+   "root": "sound",
+   "file": "music151.bgw",
+   "name": "The Federation of Windurst"
+  }
+ },
+ "242": {
+  "name": "Heavens Tower",
+  "day": {
+   "id": 162,
+   "root": "sound",
+   "file": "music162.bgw",
+   "name": "Heavens Tower"
+  },
+  "night": {
+   "id": 162,
+   "root": "sound",
+   "file": "music162.bgw",
+   "name": "Heavens Tower"
+  },
+  "battleSolo": {
+   "id": 151,
+   "root": "sound",
+   "file": "music151.bgw",
+   "name": "The Federation of Windurst"
+  },
+  "battleParty": {
+   "id": 151,
+   "root": "sound",
+   "file": "music151.bgw",
+   "name": "The Federation of Windurst"
+  }
+ },
+ "243": {
+  "name": "RuLude Gardens",
+  "day": {
+   "id": 117,
+   "root": "sound",
+   "file": "music117.bgw",
+   "name": "Ru'Lude Gardens"
+  },
+  "night": {
+   "id": 117,
+   "root": "sound",
+   "file": "music117.bgw",
+   "name": "Ru'Lude Gardens"
+  },
+  "battleSolo": {
+   "id": 117,
+   "root": "sound",
+   "file": "music117.bgw",
+   "name": "Ru'Lude Gardens"
+  },
+  "battleParty": {
+   "id": 117,
+   "root": "sound",
+   "file": "music117.bgw",
+   "name": "Ru'Lude Gardens"
+  }
+ },
+ "244": {
+  "name": "Upper Jeuno",
+  "day": {
+   "id": 110,
+   "root": "sound",
+   "file": "music110.bgw",
+   "name": "The Grand Duchy of Jeuno"
+  },
+  "night": {
+   "id": 110,
+   "root": "sound",
+   "file": "music110.bgw",
+   "name": "The Grand Duchy of Jeuno"
+  },
+  "battleSolo": {
+   "id": 110,
+   "root": "sound",
+   "file": "music110.bgw",
+   "name": "The Grand Duchy of Jeuno"
+  },
+  "battleParty": {
+   "id": 110,
+   "root": "sound",
+   "file": "music110.bgw",
+   "name": "The Grand Duchy of Jeuno"
+  }
+ },
+ "245": {
+  "name": "Lower Jeuno",
+  "day": {
+   "id": 110,
+   "root": "sound",
+   "file": "music110.bgw",
+   "name": "The Grand Duchy of Jeuno"
+  },
+  "night": {
+   "id": 110,
+   "root": "sound",
+   "file": "music110.bgw",
+   "name": "The Grand Duchy of Jeuno"
+  },
+  "battleSolo": {
+   "id": 110,
+   "root": "sound",
+   "file": "music110.bgw",
+   "name": "The Grand Duchy of Jeuno"
+  },
+  "battleParty": {
+   "id": 110,
+   "root": "sound",
+   "file": "music110.bgw",
+   "name": "The Grand Duchy of Jeuno"
+  }
+ },
+ "246": {
+  "name": "Port Jeuno",
+  "day": {
+   "id": 110,
+   "root": "sound",
+   "file": "music110.bgw",
+   "name": "The Grand Duchy of Jeuno"
+  },
+  "night": {
+   "id": 110,
+   "root": "sound",
+   "file": "music110.bgw",
+   "name": "The Grand Duchy of Jeuno"
+  },
+  "battleSolo": {
+   "id": 110,
+   "root": "sound",
+   "file": "music110.bgw",
+   "name": "The Grand Duchy of Jeuno"
+  },
+  "battleParty": {
+   "id": 110,
+   "root": "sound",
+   "file": "music110.bgw",
+   "name": "The Grand Duchy of Jeuno"
+  }
+ },
+ "247": {
+  "name": "Rabao",
+  "day": {
+   "id": 208,
+   "root": "sound2",
+   "file": "music208.bgw",
+   "name": "Rabao"
+  },
+  "night": {
+   "id": 208,
+   "root": "sound2",
+   "file": "music208.bgw",
+   "name": "Rabao"
+  },
+  "battleSolo": {
+   "id": 208,
+   "root": "sound2",
+   "file": "music208.bgw",
+   "name": "Rabao"
+  },
+  "battleParty": {
+   "id": 208,
+   "root": "sound2",
+   "file": "music208.bgw",
+   "name": "Rabao"
+  }
+ },
+ "248": {
+  "name": "Selbina",
+  "day": {
+   "id": 112,
+   "root": "sound",
+   "file": "music112.bgw",
+   "name": "Selbina"
+  },
+  "night": {
+   "id": 112,
+   "root": "sound",
+   "file": "music112.bgw",
+   "name": "Selbina"
+  },
+  "battleSolo": {
+   "id": 112,
+   "root": "sound",
+   "file": "music112.bgw",
+   "name": "Selbina"
+  },
+  "battleParty": {
+   "id": 112,
+   "root": "sound",
+   "file": "music112.bgw",
+   "name": "Selbina"
+  }
+ },
+ "249": {
+  "name": "Mhaura",
+  "day": {
+   "id": 105,
+   "root": "sound",
+   "file": "music105.bgw",
+   "name": "Mhaura"
+  },
+  "night": {
+   "id": 105,
+   "root": "sound",
+   "file": "music105.bgw",
+   "name": "Mhaura"
+  },
+  "battleSolo": {
+   "id": 105,
+   "root": "sound",
+   "file": "music105.bgw",
+   "name": "Mhaura"
+  },
+  "battleParty": {
+   "id": 105,
+   "root": "sound",
+   "file": "music105.bgw",
+   "name": "Mhaura"
+  }
+ },
+ "250": {
+  "name": "Kazham",
+  "day": {
+   "id": 135,
+   "root": "sound2",
+   "file": "music135.bgw",
+   "name": "Kazham"
+  },
+  "night": {
+   "id": 135,
+   "root": "sound2",
+   "file": "music135.bgw",
+   "name": "Kazham"
+  },
+  "battleSolo": {
+   "id": 135,
+   "root": "sound2",
+   "file": "music135.bgw",
+   "name": "Kazham"
+  },
+  "battleParty": {
+   "id": 135,
+   "root": "sound2",
+   "file": "music135.bgw",
+   "name": "Kazham"
+  }
+ },
+ "251": {
+  "name": "Hall of the Gods",
+  "day": {
+   "id": 213,
+   "root": "sound2",
+   "file": "music213.bgw",
+   "name": "Hall of the Gods"
+  },
+  "night": {
+   "id": 213,
+   "root": "sound2",
+   "file": "music213.bgw",
+   "name": "Hall of the Gods"
+  },
+  "battleSolo": {
+   "id": 213,
+   "root": "sound2",
+   "file": "music213.bgw",
+   "name": "Hall of the Gods"
+  },
+  "battleParty": {
+   "id": 213,
+   "root": "sound2",
+   "file": "music213.bgw",
+   "name": "Hall of the Gods"
+  }
+ },
+ "252": {
+  "name": "Norg",
+  "day": {
+   "id": 209,
+   "root": "sound2",
+   "file": "music209.bgw",
+   "name": "Norg"
+  },
+  "night": {
+   "id": 209,
+   "root": "sound2",
+   "file": "music209.bgw",
+   "name": "Norg"
+  },
+  "battleSolo": {
+   "id": 209,
+   "root": "sound2",
+   "file": "music209.bgw",
+   "name": "Norg"
+  },
+  "battleParty": {
+   "id": 209,
+   "root": "sound2",
+   "file": "music209.bgw",
+   "name": "Norg"
+  }
+ },
+ "253": {
+  "name": "Abyssea-Uleguerand",
+  "day": {
+   "id": 51,
+   "root": "sound",
+   "file": "music051.bgw",
+   "name": "\"Abyssea - Scarlet Skies, Shadowed Plains\""
+  },
+  "night": {
+   "id": 51,
+   "root": "sound",
+   "file": "music051.bgw",
+   "name": "\"Abyssea - Scarlet Skies, Shadowed Plains\""
+  },
+  "battleSolo": {
+   "id": 52,
+   "root": "sound",
+   "file": "music052.bgw",
+   "name": "Melodies Errant"
+  },
+  "battleParty": {
+   "id": 52,
+   "root": "sound",
+   "file": "music052.bgw",
+   "name": "Melodies Errant"
+  }
+ },
+ "254": {
+  "name": "Abyssea-Grauberg",
+  "day": {
+   "id": 51,
+   "root": "sound",
+   "file": "music051.bgw",
+   "name": "\"Abyssea - Scarlet Skies, Shadowed Plains\""
+  },
+  "night": {
+   "id": 51,
+   "root": "sound",
+   "file": "music051.bgw",
+   "name": "\"Abyssea - Scarlet Skies, Shadowed Plains\""
+  },
+  "battleSolo": {
+   "id": 52,
+   "root": "sound",
+   "file": "music052.bgw",
+   "name": "Melodies Errant"
+  },
+  "battleParty": {
+   "id": 52,
+   "root": "sound",
+   "file": "music052.bgw",
+   "name": "Melodies Errant"
+  }
+ },
+ "255": {
+  "name": "Abyssea-Empyreal Paradox",
+  "day": {
+   "id": 51,
+   "root": "sound",
+   "file": "music051.bgw",
+   "name": "\"Abyssea - Scarlet Skies, Shadowed Plains\""
+  },
+  "night": {
+   "id": 51,
+   "root": "sound",
+   "file": "music051.bgw",
+   "name": "\"Abyssea - Scarlet Skies, Shadowed Plains\""
+  },
+  "battleSolo": {
+   "id": 52,
+   "root": "sound",
+   "file": "music052.bgw",
+   "name": "Melodies Errant"
+  },
+  "battleParty": {
+   "id": 52,
+   "root": "sound",
+   "file": "music052.bgw",
+   "name": "Melodies Errant"
+  }
+ },
+ "256": {
+  "name": "Western Adoulin",
+  "day": {
+   "id": 59,
+   "root": "sound9",
+   "file": "music059.bgw",
+   "name": "The Pioneers"
+  },
+  "night": {
+   "id": 59,
+   "root": "sound9",
+   "file": "music059.bgw",
+   "name": "The Pioneers"
+  },
+  "battleSolo": {
+   "id": 59,
+   "root": "sound9",
+   "file": "music059.bgw",
+   "name": "The Pioneers"
+  },
+  "battleParty": {
+   "id": 59,
+   "root": "sound9",
+   "file": "music059.bgw",
+   "name": "The Pioneers"
+  }
+ },
+ "257": {
+  "name": "Eastern Adoulin",
+  "day": {
+   "id": 63,
+   "root": "sound9",
+   "file": "music063.bgw",
+   "name": "The Sacred City of Adoulin"
+  },
+  "night": {
+   "id": 63,
+   "root": "sound9",
+   "file": "music063.bgw",
+   "name": "The Sacred City of Adoulin"
+  },
+  "battleSolo": {
+   "id": 63,
+   "root": "sound9",
+   "file": "music063.bgw",
+   "name": "The Sacred City of Adoulin"
+  },
+  "battleParty": {
+   "id": 63,
+   "root": "sound9",
+   "file": "music063.bgw",
+   "name": "The Sacred City of Adoulin"
+  }
+ },
+ "258": {
+  "name": "Rala Waterways",
+  "day": {
+   "id": 61,
+   "root": "sound9",
+   "file": "music061.bgw",
+   "name": "Water's Umbral Knell"
+  },
+  "night": {
+   "id": 61,
+   "root": "sound9",
+   "file": "music061.bgw",
+   "name": "Water's Umbral Knell"
+  },
+  "battleSolo": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  },
+  "battleParty": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  }
+ },
+ "259": {
+  "name": "Rala Waterways U",
+  "day": {
+   "id": 61,
+   "root": "sound9",
+   "file": "music061.bgw",
+   "name": "Water's Umbral Knell"
+  },
+  "night": {
+   "id": 61,
+   "root": "sound9",
+   "file": "music061.bgw",
+   "name": "Water's Umbral Knell"
+  },
+  "battleSolo": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  },
+  "battleParty": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  }
+ },
+ "260": {
+  "name": "Yahse Hunting Grounds",
+  "day": {
+   "id": 60,
+   "root": "sound9",
+   "file": "music060.bgw",
+   "name": "Into Lands Primeval - Ulbuka"
+  },
+  "night": {
+   "id": 60,
+   "root": "sound9",
+   "file": "music060.bgw",
+   "name": "Into Lands Primeval - Ulbuka"
+  },
+  "battleSolo": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  },
+  "battleParty": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  }
+ },
+ "261": {
+  "name": "Ceizak Battlegrounds",
+  "day": {
+   "id": 60,
+   "root": "sound9",
+   "file": "music060.bgw",
+   "name": "Into Lands Primeval - Ulbuka"
+  },
+  "night": {
+   "id": 60,
+   "root": "sound9",
+   "file": "music060.bgw",
+   "name": "Into Lands Primeval - Ulbuka"
+  },
+  "battleSolo": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  },
+  "battleParty": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  }
+ },
+ "262": {
+  "name": "Foret de Hennetiel",
+  "day": {
+   "id": 60,
+   "root": "sound9",
+   "file": "music060.bgw",
+   "name": "Into Lands Primeval - Ulbuka"
+  },
+  "night": {
+   "id": 60,
+   "root": "sound9",
+   "file": "music060.bgw",
+   "name": "Into Lands Primeval - Ulbuka"
+  },
+  "battleSolo": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  },
+  "battleParty": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  }
+ },
+ "263": {
+  "name": "Yorcia Weald",
+  "day": {
+   "id": 61,
+   "root": "sound9",
+   "file": "music061.bgw",
+   "name": "Water's Umbral Knell"
+  },
+  "night": {
+   "id": 61,
+   "root": "sound9",
+   "file": "music061.bgw",
+   "name": "Water's Umbral Knell"
+  },
+  "battleSolo": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  },
+  "battleParty": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  }
+ },
+ "264": {
+  "name": "Yorcia Weald U",
+  "day": {
+   "id": 62,
+   "root": "sound9",
+   "file": "music062.bgw",
+   "name": "Keepers of the Wild"
+  },
+  "night": {
+   "id": 62,
+   "root": "sound9",
+   "file": "music062.bgw",
+   "name": "Keepers of the Wild"
+  },
+  "battleSolo": {
+   "id": 62,
+   "root": "sound9",
+   "file": "music062.bgw",
+   "name": "Keepers of the Wild"
+  },
+  "battleParty": {
+   "id": 62,
+   "root": "sound9",
+   "file": "music062.bgw",
+   "name": "Keepers of the Wild"
+  }
+ },
+ "265": {
+  "name": "Morimar Basalt Fields",
+  "day": {
+   "id": 60,
+   "root": "sound9",
+   "file": "music060.bgw",
+   "name": "Into Lands Primeval - Ulbuka"
+  },
+  "night": {
+   "id": 60,
+   "root": "sound9",
+   "file": "music060.bgw",
+   "name": "Into Lands Primeval - Ulbuka"
+  },
+  "battleSolo": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  },
+  "battleParty": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  }
+ },
+ "266": {
+  "name": "Marjami Ravine",
+  "day": {
+   "id": 60,
+   "root": "sound9",
+   "file": "music060.bgw",
+   "name": "Into Lands Primeval - Ulbuka"
+  },
+  "night": {
+   "id": 60,
+   "root": "sound9",
+   "file": "music060.bgw",
+   "name": "Into Lands Primeval - Ulbuka"
+  },
+  "battleSolo": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  },
+  "battleParty": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  }
+ },
+ "267": {
+  "name": "Kamihr Drifts",
+  "day": {
+   "id": 72,
+   "root": "sound",
+   "file": "music072.bgw",
+   "name": "The Serpentine Labyrinth"
+  },
+  "night": {
+   "id": 72,
+   "root": "sound",
+   "file": "music072.bgw",
+   "name": "The Serpentine Labyrinth"
+  },
+  "battleSolo": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  },
+  "battleParty": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  }
+ },
+ "268": {
+  "name": "Sih Gates",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  },
+  "battleParty": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  }
+ },
+ "269": {
+  "name": "Moh Gates",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  },
+  "battleParty": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  }
+ },
+ "270": {
+  "name": "Cirdas Caverns",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  },
+  "battleParty": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  }
+ },
+ "271": {
+  "name": "Cirdas Caverns U",
+  "day": {
+   "id": 62,
+   "root": "sound9",
+   "file": "music062.bgw",
+   "name": "Keepers of the Wild"
+  },
+  "night": {
+   "id": 62,
+   "root": "sound9",
+   "file": "music062.bgw",
+   "name": "Keepers of the Wild"
+  },
+  "battleSolo": {
+   "id": 62,
+   "root": "sound9",
+   "file": "music062.bgw",
+   "name": "Keepers of the Wild"
+  },
+  "battleParty": {
+   "id": 62,
+   "root": "sound9",
+   "file": "music062.bgw",
+   "name": "Keepers of the Wild"
+  }
+ },
+ "272": {
+  "name": "Dho Gates",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  },
+  "battleParty": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  }
+ },
+ "273": {
+  "name": "Woh Gates",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  },
+  "battleParty": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  }
+ },
+ "274": {
+  "name": "Outer RaKaznar",
+  "day": {
+   "id": 73,
+   "root": "sound",
+   "file": "music073.bgw",
+   "name": "The Divine"
+  },
+  "night": {
+   "id": 73,
+   "root": "sound",
+   "file": "music073.bgw",
+   "name": "The Divine"
+  },
+  "battleSolo": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  },
+  "battleParty": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  }
+ },
+ "275": {
+  "name": "Outer RaKaznar [U1]",
+  "day": {
+   "id": 62,
+   "root": "sound9",
+   "file": "music062.bgw",
+   "name": "Keepers of the Wild"
+  },
+  "night": {
+   "id": 62,
+   "root": "sound9",
+   "file": "music062.bgw",
+   "name": "Keepers of the Wild"
+  },
+  "battleSolo": {
+   "id": 62,
+   "root": "sound9",
+   "file": "music062.bgw",
+   "name": "Keepers of the Wild"
+  },
+  "battleParty": {
+   "id": 62,
+   "root": "sound9",
+   "file": "music062.bgw",
+   "name": "Keepers of the Wild"
+  }
+ },
+ "276": {
+  "name": "RaKaznar Inner Court",
+  "day": {
+   "id": 73,
+   "root": "sound",
+   "file": "music073.bgw",
+   "name": "The Divine"
+  },
+  "night": {
+   "id": 73,
+   "root": "sound",
+   "file": "music073.bgw",
+   "name": "The Divine"
+  },
+  "battleSolo": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  },
+  "battleParty": {
+   "id": 57,
+   "root": "sound9",
+   "file": "music057.bgw",
+   "name": "\"Steel Sings, Blades Dance\""
+  }
+ },
+ "277": {
+  "name": "RaKaznar Turris",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "278": {
+  "name": "Gwora-Corridor",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "279": {
+  "name": "Walk of Echoes [P2]",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "280": {
+  "name": "Mog Garden",
+  "day": {
+   "id": 67,
+   "root": "sound9",
+   "file": "music067.bgw",
+   "name": "Mog Resort"
+  },
+  "night": {
+   "id": 67,
+   "root": "sound9",
+   "file": "music067.bgw",
+   "name": "Mog Resort"
+  },
+  "battleSolo": {
+   "id": 67,
+   "root": "sound9",
+   "file": "music067.bgw",
+   "name": "Mog Resort"
+  },
+  "battleParty": {
+   "id": 67,
+   "root": "sound9",
+   "file": "music067.bgw",
+   "name": "Mog Resort"
+  }
+ },
+ "281": {
+  "name": "Leafallia",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "282": {
+  "name": "Mount Kamihr",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "283": {
+  "name": "Silver Knife",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "284": {
+  "name": "Celennia Memorial Library",
+  "day": {
+   "id": 63,
+   "root": "sound9",
+   "file": "music063.bgw",
+   "name": "The Sacred City of Adoulin"
+  },
+  "night": {
+   "id": 63,
+   "root": "sound9",
+   "file": "music063.bgw",
+   "name": "The Sacred City of Adoulin"
+  },
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "285": {
+  "name": "Feretory",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "286": {
+  "name": "286",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "287": {
+  "name": "Maquette Abdhaljs-Legion B",
+  "day": null,
+  "night": null,
+  "battleSolo": {
+   "id": 143,
+   "root": "sound4",
+   "file": "music143.bgw",
+   "name": "Hellriders"
+  },
+  "battleParty": {
+   "id": 143,
+   "root": "sound4",
+   "file": "music143.bgw",
+   "name": "Hellriders"
+  }
+ },
+ "288": {
+  "name": "Escha ZiTah",
+  "day": {
+   "id": 80,
+   "root": "sound",
+   "file": "music080.bgw",
+   "name": "The Boundless Black"
+  },
+  "night": {
+   "id": 80,
+   "root": "sound",
+   "file": "music080.bgw",
+   "name": "The Boundless Black"
+  },
+  "battleSolo": {
+   "id": 80,
+   "root": "sound",
+   "file": "music080.bgw",
+   "name": "The Boundless Black"
+  },
+  "battleParty": {
+   "id": 80,
+   "root": "sound",
+   "file": "music080.bgw",
+   "name": "The Boundless Black"
+  }
+ },
+ "289": {
+  "name": "Escha RuAun",
+  "day": {
+   "id": 80,
+   "root": "sound",
+   "file": "music080.bgw",
+   "name": "The Boundless Black"
+  },
+  "night": {
+   "id": 80,
+   "root": "sound",
+   "file": "music080.bgw",
+   "name": "The Boundless Black"
+  },
+  "battleSolo": {
+   "id": 80,
+   "root": "sound",
+   "file": "music080.bgw",
+   "name": "The Boundless Black"
+  },
+  "battleParty": {
+   "id": 80,
+   "root": "sound",
+   "file": "music080.bgw",
+   "name": "The Boundless Black"
+  }
+ },
+ "290": {
+  "name": "Desuetia Empyreal Paradox",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "291": {
+  "name": "Reisenjima",
+  "day": {
+   "id": 79,
+   "root": "sound",
+   "file": "music079.bgw",
+   "name": "Iroha"
+  },
+  "night": {
+   "id": 79,
+   "root": "sound",
+   "file": "music079.bgw",
+   "name": "Iroha"
+  },
+  "battleSolo": {
+   "id": 79,
+   "root": "sound",
+   "file": "music079.bgw",
+   "name": "Iroha"
+  },
+  "battleParty": {
+   "id": 79,
+   "root": "sound",
+   "file": "music079.bgw",
+   "name": "Iroha"
+  }
+ },
+ "292": {
+  "name": "Reisenjima Henge",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "293": {
+  "name": "Reisenjima Sanctorium",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ },
+ "294": {
+  "name": "Dynamis-San dOria [D]",
+  "day": {
+   "id": 88,
+   "root": "sound",
+   "file": "music088.bgw",
+   "name": "Between Dreams and Reality"
+  },
+  "night": {
+   "id": 88,
+   "root": "sound",
+   "file": "music088.bgw",
+   "name": "Between Dreams and Reality"
+  },
+  "battleSolo": {
+   "id": 88,
+   "root": "sound",
+   "file": "music088.bgw",
+   "name": "Between Dreams and Reality"
+  },
+  "battleParty": {
+   "id": 88,
+   "root": "sound",
+   "file": "music088.bgw",
+   "name": "Between Dreams and Reality"
+  }
+ },
+ "295": {
+  "name": "Dynamis-Bastok [D]",
+  "day": {
+   "id": 88,
+   "root": "sound",
+   "file": "music088.bgw",
+   "name": "Between Dreams and Reality"
+  },
+  "night": {
+   "id": 88,
+   "root": "sound",
+   "file": "music088.bgw",
+   "name": "Between Dreams and Reality"
+  },
+  "battleSolo": {
+   "id": 88,
+   "root": "sound",
+   "file": "music088.bgw",
+   "name": "Between Dreams and Reality"
+  },
+  "battleParty": {
+   "id": 88,
+   "root": "sound",
+   "file": "music088.bgw",
+   "name": "Between Dreams and Reality"
+  }
+ },
+ "296": {
+  "name": "Dynamis-Windurst [D]",
+  "day": {
+   "id": 88,
+   "root": "sound",
+   "file": "music088.bgw",
+   "name": "Between Dreams and Reality"
+  },
+  "night": {
+   "id": 88,
+   "root": "sound",
+   "file": "music088.bgw",
+   "name": "Between Dreams and Reality"
+  },
+  "battleSolo": {
+   "id": 88,
+   "root": "sound",
+   "file": "music088.bgw",
+   "name": "Between Dreams and Reality"
+  },
+  "battleParty": {
+   "id": 88,
+   "root": "sound",
+   "file": "music088.bgw",
+   "name": "Between Dreams and Reality"
+  }
+ },
+ "297": {
+  "name": "Dynamis-Jeuno [D]",
+  "day": {
+   "id": 88,
+   "root": "sound",
+   "file": "music088.bgw",
+   "name": "Between Dreams and Reality"
+  },
+  "night": {
+   "id": 88,
+   "root": "sound",
+   "file": "music088.bgw",
+   "name": "Between Dreams and Reality"
+  },
+  "battleSolo": {
+   "id": 88,
+   "root": "sound",
+   "file": "music088.bgw",
+   "name": "Between Dreams and Reality"
+  },
+  "battleParty": {
+   "id": 88,
+   "root": "sound",
+   "file": "music088.bgw",
+   "name": "Between Dreams and Reality"
+  }
+ },
+ "298": {
+  "name": "Walk of Echoes [P1]",
+  "day": {
+   "id": 186,
+   "root": "sound4",
+   "file": "music186.bgw",
+   "name": "Iron Colossus"
+  },
+  "night": {
+   "id": 186,
+   "root": "sound4",
+   "file": "music186.bgw",
+   "name": "Iron Colossus"
+  },
+  "battleSolo": {
+   "id": 186,
+   "root": "sound4",
+   "file": "music186.bgw",
+   "name": "Iron Colossus"
+  },
+  "battleParty": {
+   "id": 186,
+   "root": "sound4",
+   "file": "music186.bgw",
+   "name": "Iron Colossus"
+  }
+ },
+ "299": {
+  "name": "Gwora-Throne Room",
+  "day": null,
+  "night": null,
+  "battleSolo": null,
+  "battleParty": null
+ }
+}

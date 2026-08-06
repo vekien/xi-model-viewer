@@ -1,0 +1,2897 @@
+[
+{
+"id": 44,
+"name": "Abdhaljs Isle-Purgonorgo",
+"path": "game/ROM3/5/7.DAT"
+},
+{
+"id": 218,
+"name": "Abyssea - Altepa",
+"path": "game/ROM/258/110.DAT"
+},
+{
+"id": 215,
+"name": "Abyssea - Attohwa",
+"path": "game/ROM/254/7.DAT"
+},
+{
+"id": 255,
+"name": "Abyssea - Empyreal Paradox",
+"path": "game/ROM/258/113.DAT"
+},
+{
+"id": 254,
+"name": "Abyssea - Grauberg",
+"path": "game/ROM/258/112.DAT"
+},
+{
+"id": 15,
+"name": "Abyssea - Konschtat",
+"path": "game/ROM/240/106.DAT"
+},
+{
+"id": 132,
+"name": "Abyssea - La Theine",
+"path": "game/ROM/240/108.DAT"
+},
+{
+"id": 216,
+"name": "Abyssea - Misareaux",
+"path": "game/ROM/254/8.DAT"
+},
+{
+"id": 45,
+"name": "Abyssea - Tahrongi",
+"path": "game/ROM/240/107.DAT"
+},
+{
+"id": 253,
+"name": "Abyssea - Uleguerand",
+"path": "game/ROM/258/111.DAT"
+},
+{
+"id": 217,
+"name": "Abyssea - Vunkerl",
+"path": "game/ROM/254/9.DAT"
+},
+{
+"id": 50,
+"name": "Aht Urhgan Whitegate",
+"path": "game/ROM4/0/3.DAT"
+},
+{
+"id": 48,
+"name": "Al Zahbi",
+"path": "game/ROM4/0/2.DAT"
+},
+{
+"id": 33,
+"name": "Al'Taieu",
+"path": "game/ROM3/0/32.DAT"
+},
+{
+"id": 152,
+"name": "Altar Room",
+"path": "game/ROM/0/64.DAT"
+},
+{
+"id": 72,
+"name": "Alzadaal Undersea Ruins",
+"path": "game/ROM4/0/25.DAT"
+},
+{
+"id": 38,
+"name": "Apollyon",
+"path": "game/ROM3/5/1.DAT"
+},
+{
+"id": 54,
+"name": "Arrapago Reef",
+"path": "game/ROM4/0/7.DAT"
+},
+{
+"id": 74,
+"name": "Arrapago Remnants",
+"path": "game/ROM4/0/27.DAT"
+},
+{
+"id": 7,
+"name": "Attohwa Chasm",
+"path": "game/ROM3/0/6.DAT"
+},
+{
+"id": 68,
+"name": "Aydeewa Subterrane",
+"path": "game/ROM4/0/21.DAT"
+},
+{
+"id": 146,
+"name": "Balga's Dais",
+"path": "game/ROM/0/105.DAT"
+},
+{
+"id": 235,
+"name": "Bastok Markets",
+"path": "game/ROM/1/35.DAT"
+},
+{
+"id": 87,
+"name": "Bastok Markets [S]",
+"path": "game/ROM5/0/7.DAT"
+},
+{
+"id": 234,
+"name": "Bastok Mines",
+"path": "game/ROM/1/34.DAT"
+},
+{
+"id": 224,
+"name": "Bastok-Jeuno Airship",
+"path": "game/ROM/1/27.DAT"
+},
+{
+"id": 105,
+"name": "Batallia Downs",
+"path": "game/ROM/0/122.DAT"
+},
+{
+"id": 84,
+"name": "Batallia Downs [S]",
+"path": "game/ROM5/0/4.DAT"
+},
+{
+"id": 147,
+"name": "Beadeaux",
+"path": "game/ROM/0/61.DAT"
+},
+{
+"id": 92,
+"name": "Beadeaux [S]",
+"path": "game/ROM5/0/12.DAT"
+},
+{
+"id": 6,
+"name": "Bearclaw Pinnacle",
+"path": "game/ROM3/0/5.DAT"
+},
+{
+"id": 111,
+"name": "Beaucedine Glacier",
+"path": "game/ROM/0/72.DAT"
+},
+{
+"id": 136,
+"name": "Beaucedine Glacier [S]",
+"path": "game/ROM5/0/21.DAT"
+},
+{
+"id": 127,
+"name": "Behemoth's Dominion",
+"path": "game/ROM/1/3.DAT"
+},
+{
+"id": 75,
+"name": "Bhaflau Remnants",
+"path": "game/ROM4/0/28.DAT"
+},
+{
+"id": 52,
+"name": "Bhaflau Thickets",
+"path": "game/ROM4/7/55.DAT"
+},
+{
+"id": 4,
+"name": "Bibiki Bay",
+"path": "game/ROM3/0/3.DAT"
+},
+{
+"id": 8,
+"name": "Boneyard Gully",
+"path": "game/ROM3/0/7.DAT"
+},
+{
+"id": 167,
+"name": "Bostaunieux Oubliette",
+"path": "game/ROM/0/108.DAT"
+},
+{
+"id": 118,
+"name": "Buburimu Peninsula",
+"path": "game/ROM/0/71.DAT"
+},
+{
+"id": 79,
+"name": "Caedarva Mire",
+"path": "game/ROM4/0/32.DAT"
+},
+{
+"id": 113,
+"name": "Cape Teriggan",
+"path": "game/ROM2/0/0.DAT"
+},
+{
+"id": 2,
+"name": "Carpenters' Landing",
+"path": "game/ROM3/0/1.DAT"
+},
+{
+"id": 151,
+"name": "Castle Oztroja",
+"path": "game/ROM/0/63.DAT"
+},
+{
+"id": 99,
+"name": "Castle Oztroja [S]",
+"path": "game/ROM5/0/19.DAT"
+},
+{
+"id": 161,
+"name": "Castle Zvahl Baileys",
+"path": "game/ROM/0/60.DAT"
+},
+{
+"id": 138,
+"name": "Castle Zvahl Baileys [S]",
+"path": "game/ROM5/0/23.DAT"
+},
+{
+"id": 162,
+"name": "Castle Zvahl Keep",
+"path": "game/ROM/0/73.DAT"
+},
+{
+"id": 155,
+"name": "Castle Zvahl Keep [S]",
+"path": "game/ROM5/0/24.DAT"
+},
+{
+"id": 261,
+"name": "Ceizak Battlegrounds",
+"path": "game/ROM9/0/8.DAT"
+},
+{
+"id": 284,
+"name": "Celennia Memorial Library",
+"path": "game/ROM/303/26.DAT"
+},
+{
+"id": 168,
+"name": "Chamber of Oracles",
+"path": "game/ROM2/0/11.DAT"
+},
+{
+"id": 233,
+"name": "Chateau d'Oraguille",
+"path": "game/ROM/1/33.DAT"
+},
+{
+"id": 70,
+"name": "Chocobo Circuit",
+"path": "game/ROM4/5/106.DAT"
+},
+{
+"id": 270,
+"name": "Cirdas Caverns",
+"path": "game/ROM9/0/17.DAT"
+},
+{
+"id": 271,
+"name": "Cirdas Caverns [U]",
+"path": "game/ROM9/0/18.DAT"
+},
+{
+"id": 207,
+"name": "Cloister of Flames",
+"path": "game/ROM2/0/21.DAT"
+},
+{
+"id": 203,
+"name": "Cloister of Frost",
+"path": "game/ROM2/0/19.DAT"
+},
+{
+"id": 201,
+"name": "Cloister of Gales",
+"path": "game/ROM2/0/17.DAT"
+},
+{
+"id": 202,
+"name": "Cloister of Storms",
+"path": "game/ROM2/0/18.DAT"
+},
+{
+"id": 211,
+"name": "Cloister of Tides",
+"path": "game/ROM2/0/23.DAT"
+},
+{
+"id": 209,
+"name": "Cloister of Tremors",
+"path": "game/ROM2/0/22.DAT"
+},
+{
+"id": 197,
+"name": "Crawlers' Nest",
+"path": "game/ROM/0/76.DAT"
+},
+{
+"id": 171,
+"name": "Crawlers' Nest [S]",
+"path": "game/ROM5/0/27.DAT"
+},
+{
+"id": 191,
+"name": "Dangruf Wadi",
+"path": "game/ROM/0/52.DAT"
+},
+{
+"id": 149,
+"name": "Davoi",
+"path": "game/ROM/0/99.DAT"
+},
+{
+"id": 160,
+"name": "Den of Rancor",
+"path": "game/ROM2/12/110.DAT"
+},
+{
+"id": 290,
+"name": "Desuetia - Empyreal Paradox",
+"path": "game/ROM/342/72.DAT"
+},
+{
+"id": 272,
+"name": "Dho Gates",
+"path": "game/ROM9/0/19.DAT"
+},
+{
+"id": 43,
+"name": "Diorama Abdhaljs-Ghelsba",
+"path": "game/ROM3/5/6.DAT"
+},
+{
+"id": 154,
+"name": "Dragon's Aery",
+"path": "game/ROM2/0/9.DAT"
+},
+{
+"id": 186,
+"name": "Dynamis - Bastok",
+"path": "game/ROM2/12/117.DAT"
+},
+{
+"id": 295,
+"name": "Dynamis - Bastok [D]",
+"path": "game/ROM/355/3.DAT"
+},
+{
+"id": 134,
+"name": "Dynamis - Beaucedine",
+"path": "game/ROM2/12/108.DAT"
+},
+{
+"id": 40,
+"name": "Dynamis - Buburimu",
+"path": "game/ROM3/5/3.DAT"
+},
+{
+"id": 188,
+"name": "Dynamis - Jeuno",
+"path": "game/ROM2/12/119.DAT"
+},
+{
+"id": 297,
+"name": "Dynamis - Jeuno [D]",
+"path": "game/ROM/355/47.DAT"
+},
+{
+"id": 41,
+"name": "Dynamis - Qufim",
+"path": "game/ROM3/5/4.DAT"
+},
+{
+"id": 185,
+"name": "Dynamis - San d'Oria",
+"path": "game/ROM2/12/116.DAT"
+},
+{
+"id": 294,
+"name": "Dynamis - San d'Oria [D]",
+"path": "game/ROM/354/109.DAT"
+},
+{
+"id": 42,
+"name": "Dynamis - Tavnazia",
+"path": "game/ROM3/5/5.DAT"
+},
+{
+"id": 39,
+"name": "Dynamis - Valkurm",
+"path": "game/ROM3/5/2.DAT"
+},
+{
+"id": 187,
+"name": "Dynamis - Windurst",
+"path": "game/ROM2/12/118.DAT"
+},
+{
+"id": 296,
+"name": "Dynamis - Windurst [D]",
+"path": "game/ROM/355/32.DAT"
+},
+{
+"id": 135,
+"name": "Dynamis - Xarcabard",
+"path": "game/ROM2/12/109.DAT"
+},
+{
+"id": 101,
+"name": "East Ronfaure",
+"path": "game/ROM/0/121.DAT"
+},
+{
+"id": 81,
+"name": "East Ronfaure [S]",
+"path": "game/ROM5/0/1.DAT"
+},
+{
+"id": 116,
+"name": "East Sarutabaruta",
+"path": "game/ROM/1/0.DAT"
+},
+{
+"id": 257,
+"name": "Eastern Adoulin",
+"path": "game/ROM9/0/4.DAT"
+},
+{
+"id": 114,
+"name": "Eastern Altepa Desert",
+"path": "game/ROM2/0/1.DAT"
+},
+{
+"id": 36,
+"name": "Empyreal Paradox",
+"path": "game/ROM3/0/35.DAT"
+},
+{
+"id": 289,
+"name": "Escha - Ru'Aun",
+"path": "game/ROM/337/59.DAT"
+},
+{
+"id": 288,
+"name": "Escha - Zi'Tah",
+"path": "game/ROM/332/99.DAT"
+},
+{
+"id": 86,
+"name": "Everbloom Hollow",
+"path": "game/ROM5/0/6.DAT"
+},
+{
+"id": 204,
+"name": "Fei'Yin",
+"path": "game/ROM/1/18.DAT"
+},
+{
+"id": 285,
+"name": "Feretory",
+"path": "game/ROM/306/54.DAT"
+},
+{
+"id": 262,
+"name": "Foret de Hennetiel",
+"path": "game/ROM9/0/9.DAT"
+},
+{
+"id": 141,
+"name": "Fort Ghelsba",
+"path": "game/ROM/1/7.DAT"
+},
+{
+"id": 96,
+"name": "Fort Karugo-Narugo [S]",
+"path": "game/ROM5/0/16.DAT"
+},
+{
+"id": 170,
+"name": "Full Moon Fountain",
+"path": "game/ROM2/0/12.DAT"
+},
+{
+"id": 200,
+"name": "Garlaige Citadel",
+"path": "game/ROM/1/17.DAT"
+},
+{
+"id": 164,
+"name": "Garlaige Citadel [S]",
+"path": "game/ROM5/0/26.DAT"
+},
+{
+"id": 140,
+"name": "Ghelsba Outpost",
+"path": "game/ROM/0/95.DAT"
+},
+{
+"id": 129,
+"name": "Ghoyu's Reverie",
+"path": "game/ROM5/0/20.DAT"
+},
+{
+"id": 145,
+"name": "Giddeus",
+"path": "game/ROM/0/104.DAT"
+},
+{
+"id": 34,
+"name": "Grand Palace of Hu'Xzoi",
+"path": "game/ROM3/0/33.DAT"
+},
+{
+"id": 89,
+"name": "Grauberg [S]",
+"path": "game/ROM5/0/9.DAT"
+},
+{
+"id": 196,
+"name": "Gusgen Mines",
+"path": "game/ROM/1/16.DAT"
+},
+{
+"id": 212,
+"name": "Gustav Tunnel",
+"path": "game/ROM2/12/121.DAT"
+},
+{
+"id": 278,
+"name": "Gwora - Corridor",
+"path": "game/ROM/375/123.DAT"
+},
+{
+"id": 299,
+"name": "Gwora - Throne Room",
+"path": "game/ROM/378/99.DAT"
+},
+{
+"id": 251,
+"name": "Hall of the Gods",
+"path": "game/ROM2/21/114.DAT"
+},
+{
+"id": 14,
+"name": "Hall of Transference",
+"path": "game/ROM3/0/13.DAT"
+},
+{
+"id": 62,
+"name": "Halvung",
+"path": "game/ROM4/0/15.DAT"
+},
+{
+"id": 78,
+"name": "Hazhalm Testing Grounds",
+"path": "game/ROM4/0/31.DAT"
+},
+{
+"id": 242,
+"name": "Heavens Tower",
+"path": "game/ROM/1/38.DAT"
+},
+{
+"id": 139,
+"name": "Horlais Peak",
+"path": "game/ROM/1/6.DAT"
+},
+{
+"id": 205,
+"name": "Ifrit's Cauldron",
+"path": "game/ROM2/0/20.DAT"
+},
+{
+"id": 55,
+"name": "Ilrusi Atoll",
+"path": "game/ROM4/0/8.DAT"
+},
+{
+"id": 192,
+"name": "Inner Horutoto Ruins",
+"path": "game/ROM/0/112.DAT"
+},
+{
+"id": 67,
+"name": "Jade Sepulcher",
+"path": "game/ROM4/0/20.DAT"
+},
+{
+"id": 104,
+"name": "Jugner Forest",
+"path": "game/ROM/0/114.DAT"
+},
+{
+"id": 82,
+"name": "Jugner Forest [S]",
+"path": "game/ROM5/0/2.DAT"
+},
+{
+"id": 267,
+"name": "Kamihr Drifts",
+"path": "game/ROM9/0/14.DAT"
+},
+{
+"id": 250,
+"name": "Kazham",
+"path": "game/ROM2/0/25.DAT"
+},
+{
+"id": 226,
+"name": "Kazham-Jeuno Airship",
+"path": "game/ROM2/0/24.DAT"
+},
+{
+"id": 190,
+"name": "King Ranperre's Tomb",
+"path": "game/ROM/1/14.DAT"
+},
+{
+"id": 108,
+"name": "Konschtat Highlands",
+"path": "game/ROM/0/90.DAT"
+},
+{
+"id": 173,
+"name": "Korroloka Tunnel",
+"path": "game/ROM2/0/13.DAT"
+},
+{
+"id": 174,
+"name": "Kuftal Tunnel",
+"path": "game/ROM2/0/14.DAT"
+},
+{
+"id": 102,
+"name": "La Theine Plateau",
+"path": "game/ROM/0/115.DAT"
+},
+{
+"id": 85,
+"name": "La Vaule [S]",
+"path": "game/ROM5/0/5.DAT"
+},
+{
+"id": 180,
+"name": "La'Loff Amphitheater",
+"path": "game/ROM2/12/114.DAT"
+},
+{
+"id": 213,
+"name": "Labyrinth of Onzozo",
+"path": "game/ROM2/12/122.DAT"
+},
+{
+"id": 281,
+"name": "Leafallia",
+"path": "game/ROM9/8/10.DAT"
+},
+{
+"id": 63,
+"name": "Lebros Cavern",
+"path": "game/ROM4/0/16.DAT"
+},
+{
+"id": 69,
+"name": "Leujaoam Sanctum",
+"path": "game/ROM4/0/22.DAT"
+},
+{
+"id": 184,
+"name": "Lower Delkfutt's Tower",
+"path": "game/ROM/1/13.DAT"
+},
+{
+"id": 245,
+"name": "Lower Jeuno",
+"path": "game/ROM/1/41.DAT"
+},
+{
+"id": 24,
+"name": "Lufaise Meadows",
+"path": "game/ROM3/0/23.DAT"
+},
+{
+"id": 65,
+"name": "Mamook",
+"path": "game/ROM4/0/18.DAT"
+},
+{
+"id": 66,
+"name": "Mamool Ja Training Grounds",
+"path": "game/ROM4/0/19.DAT"
+},
+{
+"id": 3,
+"name": "Manaclipper",
+"path": "game/ROM3/0/2.DAT"
+},
+{
+"id": 183,
+"name": "Maquette Abdhaljs-LegionA",
+"path": "game/ROM/1/12.DAT"
+},
+{
+"id": 287,
+"name": "Maquette Abdhaljs-LegionB",
+"path": "game/ROM/362/18.DAT"
+},
+{
+"id": 266,
+"name": "Marjami Ravine",
+"path": "game/ROM9/0/13.DAT"
+},
+{
+"id": 198,
+"name": "Maze of Shakhrami",
+"path": "game/ROM/0/75.DAT"
+},
+{
+"id": 119,
+"name": "Meriphataud Mountains",
+"path": "game/ROM/0/101.DAT"
+},
+{
+"id": 97,
+"name": "Meriphataud Mountains [S]",
+"path": "game/ROM5/0/17.DAT"
+},
+{
+"id": 237,
+"name": "Metalworks",
+"path": "game/ROM/1/37.DAT"
+},
+{
+"id": 249,
+"name": "Mhaura",
+"path": "game/ROM/1/44.DAT"
+},
+{
+"id": 157,
+"name": "Middle Delkfutt's Tower",
+"path": "game/ROM/0/56.DAT"
+},
+{
+"id": 13,
+"name": "Mine Shaft #2716",
+"path": "game/ROM3/0/12.DAT"
+},
+{
+"id": 25,
+"name": "Misareaux Coast",
+"path": "game/ROM3/0/24.DAT"
+},
+{
+"id": 280,
+"name": "Mog Garden",
+"path": "game/ROM/309/10.DAT"
+},
+{
+"id": 269,
+"name": "Moh Gates",
+"path": "game/ROM9/0/16.DAT"
+},
+{
+"id": 31,
+"name": "Monarch Linn",
+"path": "game/ROM3/0/30.DAT"
+},
+{
+"id": 150,
+"name": "Monastic Cavern",
+"path": "game/ROM/0/100.DAT"
+},
+{
+"id": 131,
+"name": "Mordion Gaol",
+"path": "game/ROM/1/4.DAT"
+},
+{
+"id": 265,
+"name": "Morimar Basalt Fields",
+"path": "game/ROM9/0/12.DAT"
+},
+{
+"id": 282,
+"name": "Mount Kamihr",
+"path": "game/ROM/315/102.DAT"
+},
+{
+"id": 61,
+"name": "Mount Zhayolm",
+"path": "game/ROM4/0/14.DAT"
+},
+{
+"id": 53,
+"name": "Nashmau",
+"path": "game/ROM4/0/6.DAT"
+},
+{
+"id": 64,
+"name": "Navukgo Execution Chamber",
+"path": "game/ROM4/0/17.DAT"
+},
+{
+"id": 12,
+"name": "Newton Movalpolos",
+"path": "game/ROM3/0/11.DAT"
+},
+{
+"id": 252,
+"name": "Norg",
+"path": "game/ROM2/0/27.DAT"
+},
+{
+"id": 106,
+"name": "North Gustaberg",
+"path": "game/ROM/0/123.DAT"
+},
+{
+"id": 88,
+"name": "North Gustaberg [S]",
+"path": "game/ROM5/0/8.DAT"
+},
+{
+"id": 231,
+"name": "Northern San d'Oria",
+"path": "game/ROM/1/32.DAT"
+},
+{
+"id": 77,
+"name": "Nyzul Isle",
+"path": "game/ROM4/0/30.DAT"
+},
+{
+"id": 11,
+"name": "Oldton Movalpolos",
+"path": "game/ROM3/0/10.DAT"
+},
+{
+"id": 46,
+"name": "Open sea route to Al Zahbi",
+"path": "game/ROM4/0/0.DAT"
+},
+{
+"id": 47,
+"name": "Open sea route to Mhaura",
+"path": "game/ROM4/0/1.DAT"
+},
+{
+"id": 193,
+"name": "Ordelle's Caves",
+"path": "game/ROM/0/92.DAT"
+},
+{
+"id": 194,
+"name": "Outer Horutoto Ruins",
+"path": "game/ROM/1/15.DAT"
+},
+{
+"id": 274,
+"name": "Outer Ra'Kaznar",
+"path": "game/ROM9/0/21.DAT"
+},
+{
+"id": 275,
+"name": "Outer Ra'Kaznar [U1]",
+"path": "game/ROM9/0/22.DAT"
+},
+{
+"id": 133,
+"name": "Outer Ra'Kaznar [U2]",
+"path": "game/ROM9/0/22.DAT"
+},
+{
+"id": 189,
+"name": "Outer Ra'Kaznar [U3]",
+"path": "game/ROM9/0/22.DAT"
+},
+{
+"id": 143,
+"name": "Palborough Mines",
+"path": "game/ROM/0/88.DAT"
+},
+{
+"id": 109,
+"name": "Pashhow Marshlands",
+"path": "game/ROM/0/125.DAT"
+},
+{
+"id": 90,
+"name": "Pashhow Marshlands [S]",
+"path": "game/ROM5/0/10.DAT"
+},
+{
+"id": 56,
+"name": "Periqia",
+"path": "game/ROM4/0/9.DAT"
+},
+{
+"id": 1,
+"name": "Phanauet Channel",
+"path": "game/ROM3/0/0.DAT"
+},
+{
+"id": 27,
+"name": "Phomiuna Aqueducts",
+"path": "game/ROM3/0/26.DAT"
+},
+{
+"id": 236,
+"name": "Port Bastok",
+"path": "game/ROM/1/36.DAT"
+},
+{
+"id": 246,
+"name": "Port Jeuno",
+"path": "game/ROM/1/42.DAT"
+},
+{
+"id": 232,
+"name": "Port San d'Oria",
+"path": "game/ROM/0/113.DAT"
+},
+{
+"id": 240,
+"name": "Port Windurst",
+"path": "game/ROM/0/80.DAT"
+},
+{
+"id": 18,
+"name": "Promyvion - Dem",
+"path": "game/ROM3/0/17.DAT"
+},
+{
+"id": 16,
+"name": "Promyvion - Holla",
+"path": "game/ROM3/0/15.DAT"
+},
+{
+"id": 20,
+"name": "Promyvion - Mea",
+"path": "game/ROM3/0/19.DAT"
+},
+{
+"id": 22,
+"name": "Promyvion - Vahzl",
+"path": "game/ROM3/0/21.DAT"
+},
+{
+"id": 222,
+"name": "Provenance",
+"path": "game/ROM/280/2.DAT"
+},
+{
+"id": 9,
+"name": "Pso'Xja",
+"path": "game/ROM3/0/8.DAT"
+},
+{
+"id": 206,
+"name": "Qu'Bia Arena",
+"path": "game/ROM/1/19.DAT"
+},
+{
+"id": 126,
+"name": "Qufim Island",
+"path": "game/ROM/0/58.DAT"
+},
+{
+"id": 208,
+"name": "Quicksand Caves",
+"path": "game/ROM2/12/120.DAT"
+},
+{
+"id": 148,
+"name": "Qulun Dome",
+"path": "game/ROM/0/62.DAT"
+},
+{
+"id": 276,
+"name": "Ra'Kaznar Inner Court",
+"path": "game/ROM9/0/23.DAT"
+},
+{
+"id": 277,
+"name": "Ra'Kaznar Turris",
+"path": "game/ROM9/0/24.DAT"
+},
+{
+"id": 247,
+"name": "Rabao",
+"path": "game/ROM2/12/123.DAT"
+},
+{
+"id": 258,
+"name": "Rala Waterways",
+"path": "game/ROM9/0/5.DAT"
+},
+{
+"id": 259,
+"name": "Rala Waterways [U]",
+"path": "game/ROM9/0/6.DAT"
+},
+{
+"id": 166,
+"name": "Ranguemont Pass",
+"path": "game/ROM/1/10.DAT"
+},
+{
+"id": 291,
+"name": "Reisenjima",
+"path": "game/ROM/342/73.DAT"
+},
+{
+"id": 292,
+"name": "Reisenjima Henge",
+"path": "game/ROM/351/58.DAT"
+},
+{
+"id": 293,
+"name": "Reisenjima Sanctorium",
+"path": "game/ROM/342/74.DAT"
+},
+{
+"id": 30,
+"name": "Riverne - Site #A01",
+"path": "game/ROM3/0/29.DAT"
+},
+{
+"id": 29,
+"name": "Riverne - Site #B01",
+"path": "game/ROM3/0/28.DAT"
+},
+{
+"id": 122,
+"name": "Ro'Maeve",
+"path": "game/ROM2/0/3.DAT"
+},
+{
+"id": 110,
+"name": "Rolanberry Fields",
+"path": "game/ROM/0/126.DAT"
+},
+{
+"id": 91,
+"name": "Rolanberry Fields [S]",
+"path": "game/ROM5/0/11.DAT"
+},
+{
+"id": 130,
+"name": "Ru'Aun Gardens",
+"path": "game/ROM2/12/107.DAT"
+},
+{
+"id": 243,
+"name": "Ru'Lude Gardens",
+"path": "game/ROM/1/39.DAT"
+},
+{
+"id": 93,
+"name": "Ruhotz Silvermines",
+"path": "game/ROM5/0/13.DAT"
+},
+{
+"id": 28,
+"name": "Sacrarium",
+"path": "game/ROM3/0/27.DAT"
+},
+{
+"id": 163,
+"name": "Sacrificial Chamber",
+"path": "game/ROM2/12/111.DAT"
+},
+{
+"id": 223,
+"name": "San d'Oria-Jeuno Airship",
+"path": "game/ROM/1/26.DAT"
+},
+{
+"id": 120,
+"name": "Sauromugue Champaign",
+"path": "game/ROM/1/2.DAT"
+},
+{
+"id": 98,
+"name": "Sauromugue Champaign [S]",
+"path": "game/ROM5/0/18.DAT"
+},
+{
+"id": 176,
+"name": "Sea Serpent Grotto",
+"path": "game/ROM2/0/15.DAT"
+},
+{
+"id": 32,
+"name": "Sealion's Den",
+"path": "game/ROM3/0/31.DAT"
+},
+{
+"id": 248,
+"name": "Selbina",
+"path": "game/ROM/1/43.DAT"
+},
+{
+"id": 221,
+"name": "Ship bound for Mhaura",
+"path": "game/ROM/1/25.DAT"
+},
+{
+"id": 228,
+"name": "Ship bound for Mhaura",
+"path": "game/ROM/1/30.DAT"
+},
+{
+"id": 220,
+"name": "Ship bound for Selbina",
+"path": "game/ROM/1/24.DAT"
+},
+{
+"id": 227,
+"name": "Ship bound for Selbina",
+"path": "game/ROM/1/29.DAT"
+},
+{
+"id": 268,
+"name": "Sih Gates",
+"path": "game/ROM9/0/15.DAT"
+},
+{
+"id": 283,
+"name": "Silver Knife",
+"path": "game/ROM/374/94.DAT"
+},
+{
+"id": 76,
+"name": "Silver Sea Remnants",
+"path": "game/ROM4/0/29.DAT"
+},
+{
+"id": 59,
+"name": "Silver Sea route to Al Zahbi",
+"path": "game/ROM4/0/12.DAT"
+},
+{
+"id": 58,
+"name": "Silver Sea route to Nashmau",
+"path": "game/ROM4/0/11.DAT"
+},
+{
+"id": 107,
+"name": "South Gustaberg",
+"path": "game/ROM/0/124.DAT"
+},
+{
+"id": 230,
+"name": "Southern San d'Oria",
+"path": "game/ROM/1/31.DAT"
+},
+{
+"id": 80,
+"name": "Southern San d'Oria [S]",
+"path": "game/ROM5/0/0.DAT"
+},
+{
+"id": 19,
+"name": "Spire of Dem",
+"path": "game/ROM3/0/18.DAT"
+},
+{
+"id": 17,
+"name": "Spire of Holla",
+"path": "game/ROM3/0/16.DAT"
+},
+{
+"id": 21,
+"name": "Spire of Mea",
+"path": "game/ROM3/0/20.DAT"
+},
+{
+"id": 23,
+"name": "Spire of Vahzl",
+"path": "game/ROM3/0/22.DAT"
+},
+{
+"id": 179,
+"name": "Stellar Fulcrum",
+"path": "game/ROM2/0/16.DAT"
+},
+{
+"id": 117,
+"name": "Tahrongi Canyon",
+"path": "game/ROM/1/1.DAT"
+},
+{
+"id": 57,
+"name": "Talacca Cove",
+"path": "game/ROM4/0/10.DAT"
+},
+{
+"id": 26,
+"name": "Tavnazian Safehold",
+"path": "game/ROM3/0/25.DAT"
+},
+{
+"id": 37,
+"name": "Temenos",
+"path": "game/ROM3/3/82.DAT"
+},
+{
+"id": 159,
+"name": "Temple of Uggalepih",
+"path": "game/ROM2/0/10.DAT"
+},
+{
+"id": 60,
+"name": "The Ashu Talif",
+"path": "game/ROM4/0/13.DAT"
+},
+{
+"id": 153,
+"name": "The Boyahda Tree",
+"path": "game/ROM2/0/8.DAT"
+},
+{
+"id": 181,
+"name": "The Celestial Nexus",
+"path": "game/ROM2/12/115.DAT"
+},
+{
+"id": 71,
+"name": "The Colosseum",
+"path": "game/ROM4/0/24.DAT"
+},
+{
+"id": 195,
+"name": "The Eldieme Necropolis",
+"path": "game/ROM/0/77.DAT"
+},
+{
+"id": 175,
+"name": "The Eldieme Necropolis [S]",
+"path": "game/ROM5/0/28.DAT"
+},
+{
+"id": 35,
+"name": "The Garden of Ru'Hmet",
+"path": "game/ROM3/0/34.DAT"
+},
+{
+"id": 121,
+"name": "The Sanctuary of Zi'Tah",
+"path": "game/ROM2/0/2.DAT"
+},
+{
+"id": 178,
+"name": "The Shrine of Ru'Avitau",
+"path": "game/ROM2/12/113.DAT"
+},
+{
+"id": 10,
+"name": "The Shrouded Maw",
+"path": "game/ROM3/0/9.DAT"
+},
+{
+"id": 165,
+"name": "Throne Room",
+"path": "game/ROM/0/74.DAT"
+},
+{
+"id": 156,
+"name": "Throne Room [S]",
+"path": "game/ROM5/0/25.DAT"
+},
+{
+"id": 229,
+"name": "Throne Room [V]",
+"path": "game/ROM/373/34.DAT"
+},
+{
+"id": 169,
+"name": "Toraimarai Canal",
+"path": "game/ROM/0/65.DAT"
+},
+{
+"id": 5,
+"name": "Uleguerand Range",
+"path": "game/ROM3/0/4.DAT"
+},
+{
+"id": 0,
+"name": "unknown",
+"path": "game/ROM/0/28.DAT"
+},
+{
+"id": 158,
+"name": "Upper Delkfutt's Tower",
+"path": "game/ROM/1/9.DAT"
+},
+{
+"id": 244,
+"name": "Upper Jeuno",
+"path": "game/ROM/1/40.DAT"
+},
+{
+"id": 103,
+"name": "Valkurm Dunes",
+"path": "game/ROM/0/102.DAT"
+},
+{
+"id": 128,
+"name": "Valley of Sorrows",
+"path": "game/ROM2/0/7.DAT"
+},
+{
+"id": 177,
+"name": "Ve'Lugannon Palace",
+"path": "game/ROM2/12/112.DAT"
+},
+{
+"id": 83,
+"name": "Vunkerl Inlet [S]",
+"path": "game/ROM5/0/3.DAT"
+},
+{
+"id": 51,
+"name": "Wajaom Woodlands",
+"path": "game/ROM4/1/99.DAT"
+},
+{
+"id": 182,
+"name": "Walk of Echoes",
+"path": "game/ROM5/0/29.DAT"
+},
+{
+"id": 298,
+"name": "Walk of Echoes [P1]",
+"path": "game/ROM/361/85.DAT"
+},
+{
+"id": 279,
+"name": "Walk of Echoes [P2]",
+"path": "game/ROM/361/85.DAT"
+},
+{
+"id": 144,
+"name": "Waughroon Shrine",
+"path": "game/ROM/0/89.DAT"
+},
+{
+"id": 100,
+"name": "West Ronfaure",
+"path": "game/ROM/0/120.DAT"
+},
+{
+"id": 115,
+"name": "West Sarutabaruta",
+"path": "game/ROM/0/127.DAT"
+},
+{
+"id": 95,
+"name": "West Sarutabaruta [S]",
+"path": "game/ROM5/0/15.DAT"
+},
+{
+"id": 256,
+"name": "Western Adoulin",
+"path": "game/ROM9/0/3.DAT"
+},
+{
+"id": 125,
+"name": "Western Altepa Desert",
+"path": "game/ROM2/0/6.DAT"
+},
+{
+"id": 239,
+"name": "Windurst Walls",
+"path": "game/ROM/0/79.DAT"
+},
+{
+"id": 238,
+"name": "Windurst Waters",
+"path": "game/ROM/0/78.DAT"
+},
+{
+"id": 94,
+"name": "Windurst Waters [S]",
+"path": "game/ROM5/0/14.DAT"
+},
+{
+"id": 241,
+"name": "Windurst Woods",
+"path": "game/ROM/0/81.DAT"
+},
+{
+"id": 225,
+"name": "Windurst-Jeuno Airship",
+"path": "game/ROM/1/28.DAT"
+},
+{
+"id": 273,
+"name": "Woh Gates",
+"path": "game/ROM9/0/20.DAT"
+},
+{
+"id": 112,
+"name": "Xarcabard",
+"path": "game/ROM/0/57.DAT"
+},
+{
+"id": 137,
+"name": "Xarcabard [S]",
+"path": "game/ROM5/0/22.DAT"
+},
+{
+"id": 260,
+"name": "Yahse Hunting Grounds",
+"path": "game/ROM9/0/7.DAT"
+},
+{
+"id": 124,
+"name": "Yhoator Jungle",
+"path": "game/ROM2/0/5.DAT"
+},
+{
+"id": 263,
+"name": "Yorcia Weald",
+"path": "game/ROM9/0/10.DAT"
+},
+{
+"id": 264,
+"name": "Yorcia Weald [U]",
+"path": "game/ROM9/0/11.DAT"
+},
+{
+"id": 142,
+"name": "Yughott Grotto",
+"path": "game/ROM/1/8.DAT"
+},
+{
+"id": 123,
+"name": "Yuhtunga Jungle",
+"path": "game/ROM2/0/4.DAT"
+},
+{
+"id": 172,
+"name": "Zeruhn Mines",
+"path": "game/ROM/1/11.DAT"
+},
+{
+"id": 73,
+"name": "Zhayolm Remnants",
+"path": "game/ROM4/0/26.DAT"
+},
+{
+"name": "barrel_03",
+"path": "game/ROM/2/97.DAT",
+"group": "Rooms"
+},
+{
+"name": "book1",
+"path": "game/ROM/2/103.DAT",
+"group": "Rooms"
+},
+{
+"name": "bottle_05",
+"path": "game/ROM/2/100.DAT",
+"group": "Rooms"
+},
+{
+"name": "cheez",
+"path": "game/ROM/1/81.DAT",
+"group": "Rooms"
+},
+{
+"name": "danh",
+"path": "game/ROM/2/84.DAT",
+"group": "Rooms"
+},
+{
+"name": "danh",
+"path": "game/ROM/2/85.DAT",
+"group": "Rooms"
+},
+{
+"name": "danh",
+"path": "game/ROM/2/87.DAT",
+"group": "Rooms"
+},
+{
+"name": "desk01",
+"path": "game/ROM/2/101.DAT",
+"group": "Rooms"
+},
+{
+"name": "dn00",
+"path": "game/ROM/1/21.DAT",
+"group": "Rooms"
+},
+{
+"name": "dn00",
+"path": "game/ROM/1/22.DAT",
+"group": "Rooms"
+},
+{
+"name": "dn00",
+"path": "game/ROM/1/45.DAT",
+"group": "Rooms"
+},
+{
+"name": "dn00",
+"path": "game/ROM/1/115.DAT",
+"group": "Rooms"
+},
+{
+"name": "dn00",
+"path": "game/ROM/1/117.DAT",
+"group": "Rooms"
+},
+{
+"name": "dun01",
+"path": "game/ROM/2/74.DAT",
+"group": "Rooms"
+},
+{
+"name": "hasira03",
+"path": "game/ROM/2/99.DAT",
+"group": "Rooms"
+},
+{
+"name": "hikuryo_2",
+"path": "game/ROM/2/104.DAT",
+"group": "Rooms"
+},
+{
+"name": "hu00",
+"path": "game/ROM/1/84.DAT",
+"group": "Rooms"
+},
+{
+"name": "ku01",
+"path": "game/ROM/2/60.DAT",
+"group": "Rooms"
+},
+{
+"name": "ltcube",
+"path": "game/ROM2/0/35.DAT",
+"group": "Rooms"
+},
+{
+"name": "obn",
+"path": "game/ROM/2/19.DAT",
+"group": "Rooms"
+},
+{
+"name": "r3ju11_table1",
+"path": "game/ROM/2/96.DAT",
+"group": "Rooms"
+},
+{
+"name": "ran0",
+"path": "game/ROM/1/46.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/100",
+"path": "game/ROM/1/100.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/101",
+"path": "game/ROM/1/101.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/102",
+"path": "game/ROM/1/102.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/104",
+"path": "game/ROM/1/104.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/105",
+"path": "game/ROM/1/105.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/106",
+"path": "game/ROM/1/106.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/107",
+"path": "game/ROM/1/107.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/108",
+"path": "game/ROM/1/108.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/109",
+"path": "game/ROM/1/109.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/110",
+"path": "game/ROM/1/110.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/111",
+"path": "game/ROM/1/111.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/112",
+"path": "game/ROM/1/112.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/113",
+"path": "game/ROM/1/113.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/114",
+"path": "game/ROM/1/114.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/116",
+"path": "game/ROM/1/116.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/118",
+"path": "game/ROM/1/118.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/119",
+"path": "game/ROM/1/119.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/120",
+"path": "game/ROM/1/120.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/121",
+"path": "game/ROM/1/121.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/122",
+"path": "game/ROM/1/122.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/123",
+"path": "game/ROM/1/123.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/124",
+"path": "game/ROM/1/124.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/125",
+"path": "game/ROM/1/125.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/126",
+"path": "game/ROM/1/126.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/127",
+"path": "game/ROM/1/127.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/20",
+"path": "game/ROM/1/20.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/47",
+"path": "game/ROM/1/47.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/48",
+"path": "game/ROM/1/48.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/49",
+"path": "game/ROM/1/49.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/50",
+"path": "game/ROM/1/50.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/51",
+"path": "game/ROM/1/51.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/52",
+"path": "game/ROM/1/52.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/56",
+"path": "game/ROM/1/56.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/58",
+"path": "game/ROM/1/58.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/59",
+"path": "game/ROM/1/59.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/60",
+"path": "game/ROM/1/60.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/61",
+"path": "game/ROM/1/61.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/62",
+"path": "game/ROM/1/62.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/63",
+"path": "game/ROM/1/63.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/64",
+"path": "game/ROM/1/64.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/65",
+"path": "game/ROM/1/65.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/66",
+"path": "game/ROM/1/66.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/67",
+"path": "game/ROM/1/67.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/68",
+"path": "game/ROM/1/68.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/69",
+"path": "game/ROM/1/69.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/70",
+"path": "game/ROM/1/70.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/71",
+"path": "game/ROM/1/71.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/72",
+"path": "game/ROM/1/72.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/73",
+"path": "game/ROM/1/73.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/75",
+"path": "game/ROM/1/75.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/76",
+"path": "game/ROM/1/76.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/77",
+"path": "game/ROM/1/77.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/78",
+"path": "game/ROM/1/78.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/79",
+"path": "game/ROM/1/79.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/80",
+"path": "game/ROM/1/80.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/82",
+"path": "game/ROM/1/82.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/85",
+"path": "game/ROM/1/85.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/86",
+"path": "game/ROM/1/86.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/87",
+"path": "game/ROM/1/87.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/88",
+"path": "game/ROM/1/88.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/89",
+"path": "game/ROM/1/89.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/90",
+"path": "game/ROM/1/90.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/91",
+"path": "game/ROM/1/91.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/92",
+"path": "game/ROM/1/92.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/93",
+"path": "game/ROM/1/93.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/94",
+"path": "game/ROM/1/94.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/95",
+"path": "game/ROM/1/95.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/96",
+"path": "game/ROM/1/96.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/97",
+"path": "game/ROM/1/97.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/98",
+"path": "game/ROM/1/98.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/1/99",
+"path": "game/ROM/1/99.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/0",
+"path": "game/ROM/2/0.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/1",
+"path": "game/ROM/2/1.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/10",
+"path": "game/ROM/2/10.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/102",
+"path": "game/ROM/2/102.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/109",
+"path": "game/ROM/2/109.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/11",
+"path": "game/ROM/2/11.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/110",
+"path": "game/ROM/2/110.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/111",
+"path": "game/ROM/2/111.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/113",
+"path": "game/ROM/2/113.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/114",
+"path": "game/ROM/2/114.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/115",
+"path": "game/ROM/2/115.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/116",
+"path": "game/ROM/2/116.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/117",
+"path": "game/ROM/2/117.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/118",
+"path": "game/ROM/2/118.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/119",
+"path": "game/ROM/2/119.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/12",
+"path": "game/ROM/2/12.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/121",
+"path": "game/ROM/2/121.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/122",
+"path": "game/ROM/2/122.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/123",
+"path": "game/ROM/2/123.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/124",
+"path": "game/ROM/2/124.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/125",
+"path": "game/ROM/2/125.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/13",
+"path": "game/ROM/2/13.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/14",
+"path": "game/ROM/2/14.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/15",
+"path": "game/ROM/2/15.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/16",
+"path": "game/ROM/2/16.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/17",
+"path": "game/ROM/2/17.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/18",
+"path": "game/ROM/2/18.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/2",
+"path": "game/ROM/2/2.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/20",
+"path": "game/ROM/2/20.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/21",
+"path": "game/ROM/2/21.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/22",
+"path": "game/ROM/2/22.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/23",
+"path": "game/ROM/2/23.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/24",
+"path": "game/ROM/2/24.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/25",
+"path": "game/ROM/2/25.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/26",
+"path": "game/ROM/2/26.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/27",
+"path": "game/ROM/2/27.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/28",
+"path": "game/ROM/2/28.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/29",
+"path": "game/ROM/2/29.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/3",
+"path": "game/ROM/2/3.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/30",
+"path": "game/ROM/2/30.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/31",
+"path": "game/ROM/2/31.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/32",
+"path": "game/ROM/2/32.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/33",
+"path": "game/ROM/2/33.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/34",
+"path": "game/ROM/2/34.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/35",
+"path": "game/ROM/2/35.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/36",
+"path": "game/ROM/2/36.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/37",
+"path": "game/ROM/2/37.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/38",
+"path": "game/ROM/2/38.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/39",
+"path": "game/ROM/2/39.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/4",
+"path": "game/ROM/2/4.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/40",
+"path": "game/ROM/2/40.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/41",
+"path": "game/ROM/2/41.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/42",
+"path": "game/ROM/2/42.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/43",
+"path": "game/ROM/2/43.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/44",
+"path": "game/ROM/2/44.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/46",
+"path": "game/ROM/2/46.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/47",
+"path": "game/ROM/2/47.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/48",
+"path": "game/ROM/2/48.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/49",
+"path": "game/ROM/2/49.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/5",
+"path": "game/ROM/2/5.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/50",
+"path": "game/ROM/2/50.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/51",
+"path": "game/ROM/2/51.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/52",
+"path": "game/ROM/2/52.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/53",
+"path": "game/ROM/2/53.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/54",
+"path": "game/ROM/2/54.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/55",
+"path": "game/ROM/2/55.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/56",
+"path": "game/ROM/2/56.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/57",
+"path": "game/ROM/2/57.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/58",
+"path": "game/ROM/2/58.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/59",
+"path": "game/ROM/2/59.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/6",
+"path": "game/ROM/2/6.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/61",
+"path": "game/ROM/2/61.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/62",
+"path": "game/ROM/2/62.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/63",
+"path": "game/ROM/2/63.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/64",
+"path": "game/ROM/2/64.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/65",
+"path": "game/ROM/2/65.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/66",
+"path": "game/ROM/2/66.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/67",
+"path": "game/ROM/2/67.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/68",
+"path": "game/ROM/2/68.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/69",
+"path": "game/ROM/2/69.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/7",
+"path": "game/ROM/2/7.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/70",
+"path": "game/ROM/2/70.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/72",
+"path": "game/ROM/2/72.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/73",
+"path": "game/ROM/2/73.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/75",
+"path": "game/ROM/2/75.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/76",
+"path": "game/ROM/2/76.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/77",
+"path": "game/ROM/2/77.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/78",
+"path": "game/ROM/2/78.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/79",
+"path": "game/ROM/2/79.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/8",
+"path": "game/ROM/2/8.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/80",
+"path": "game/ROM/2/80.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/81",
+"path": "game/ROM/2/81.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/82",
+"path": "game/ROM/2/82.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/83",
+"path": "game/ROM/2/83.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/86",
+"path": "game/ROM/2/86.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/88",
+"path": "game/ROM/2/88.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/89",
+"path": "game/ROM/2/89.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/9",
+"path": "game/ROM/2/9.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/90",
+"path": "game/ROM/2/90.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/91",
+"path": "game/ROM/2/91.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/92",
+"path": "game/ROM/2/92.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/93",
+"path": "game/ROM/2/93.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/94",
+"path": "game/ROM/2/94.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM/2/95",
+"path": "game/ROM/2/95.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/0/28",
+"path": "game/ROM2/0/28.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/0/29",
+"path": "game/ROM2/0/29.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/0/30",
+"path": "game/ROM2/0/30.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/0/31",
+"path": "game/ROM2/0/31.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/0/32",
+"path": "game/ROM2/0/32.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/0/33",
+"path": "game/ROM2/0/33.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/0/34",
+"path": "game/ROM2/0/34.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/0/36",
+"path": "game/ROM2/0/36.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/0/37",
+"path": "game/ROM2/0/37.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/15/122",
+"path": "game/ROM2/15/122.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/15/123",
+"path": "game/ROM2/15/123.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/15/124",
+"path": "game/ROM2/15/124.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/16/2",
+"path": "game/ROM2/16/2.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/21/115",
+"path": "game/ROM2/21/115.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/21/116",
+"path": "game/ROM2/21/116.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/21/117",
+"path": "game/ROM2/21/117.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/21/118",
+"path": "game/ROM2/21/118.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/21/119",
+"path": "game/ROM2/21/119.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/21/120",
+"path": "game/ROM2/21/120.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/21/121",
+"path": "game/ROM2/21/121.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/21/122",
+"path": "game/ROM2/21/122.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/21/123",
+"path": "game/ROM2/21/123.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/21/124",
+"path": "game/ROM2/21/124.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/21/125",
+"path": "game/ROM2/21/125.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/21/126",
+"path": "game/ROM2/21/126.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/21/127",
+"path": "game/ROM2/21/127.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/22/0",
+"path": "game/ROM2/22/0.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/22/1",
+"path": "game/ROM2/22/1.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/22/2",
+"path": "game/ROM2/22/2.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/22/3",
+"path": "game/ROM2/22/3.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM2/22/4",
+"path": "game/ROM2/22/4.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM3/0/47",
+"path": "game/ROM3/0/47.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM3/0/48",
+"path": "game/ROM3/0/48.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM3/0/49",
+"path": "game/ROM3/0/49.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM3/0/50",
+"path": "game/ROM3/0/50.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM3/0/51",
+"path": "game/ROM3/0/51.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM3/0/52",
+"path": "game/ROM3/0/52.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM3/3/83",
+"path": "game/ROM3/3/83.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM3/7/49",
+"path": "game/ROM3/7/49.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM3/7/50",
+"path": "game/ROM3/7/50.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM3/7/51",
+"path": "game/ROM3/7/51.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM3/7/52",
+"path": "game/ROM3/7/52.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/0/39",
+"path": "game/ROM4/0/39.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/0/40",
+"path": "game/ROM4/0/40.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/0/41",
+"path": "game/ROM4/0/41.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/0/42",
+"path": "game/ROM4/0/42.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/0/43",
+"path": "game/ROM4/0/43.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/0/44",
+"path": "game/ROM4/0/44.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/0/45",
+"path": "game/ROM4/0/45.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/0/46",
+"path": "game/ROM4/0/46.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/0/47",
+"path": "game/ROM4/0/47.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/0/48",
+"path": "game/ROM4/0/48.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/0/49",
+"path": "game/ROM4/0/49.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/0/50",
+"path": "game/ROM4/0/50.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/4/123",
+"path": "game/ROM4/4/123.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/4/124",
+"path": "game/ROM4/4/124.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/4/125",
+"path": "game/ROM4/4/125.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/4/126",
+"path": "game/ROM4/4/126.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/4/127",
+"path": "game/ROM4/4/127.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/5/0",
+"path": "game/ROM4/5/0.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/5/1",
+"path": "game/ROM4/5/1.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/5/2",
+"path": "game/ROM4/5/2.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/5/3",
+"path": "game/ROM4/5/3.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/5/4",
+"path": "game/ROM4/5/4.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM4/5/7",
+"path": "game/ROM4/5/7.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM9/0/2",
+"path": "game/ROM9/0/2.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM9/3/84",
+"path": "game/ROM9/3/84.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM9/3/85",
+"path": "game/ROM9/3/85.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM9/5/48",
+"path": "game/ROM9/5/48.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM9/5/49",
+"path": "game/ROM9/5/49.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM9/5/50",
+"path": "game/ROM9/5/50.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM9/5/51",
+"path": "game/ROM9/5/51.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM9/5/52",
+"path": "game/ROM9/5/52.DAT",
+"group": "Rooms"
+},
+{
+"name": "ROM9/6/116",
+"path": "game/ROM9/6/116.DAT",
+"group": "Rooms"
+},
+{
+"name": "sh-u",
+"path": "game/ROM/1/23.DAT",
+"group": "Rooms"
+},
+{
+"name": "sroom_komono1",
+"path": "game/ROM/2/107.DAT",
+"group": "Rooms"
+},
+{
+"name": "sroom_komono1",
+"path": "game/ROM/2/108.DAT",
+"group": "Rooms"
+},
+{
+"name": "sroom_lamp1",
+"path": "game/ROM/2/106.DAT",
+"group": "Rooms"
+},
+{
+"name": "sroom_table",
+"path": "game/ROM/2/105.DAT",
+"group": "Rooms"
+},
+{
+"name": "sup0",
+"path": "game/ROM/1/53.DAT",
+"group": "Rooms"
+},
+{
+"name": "sup0",
+"path": "game/ROM/1/54.DAT",
+"group": "Rooms"
+},
+{
+"name": "sup0",
+"path": "game/ROM/1/55.DAT",
+"group": "Rooms"
+},
+{
+"name": "sup0",
+"path": "game/ROM/1/57.DAT",
+"group": "Rooms"
+},
+{
+"name": "sup0",
+"path": "game/ROM/1/74.DAT",
+"group": "Rooms"
+},
+{
+"name": "turi_himo01",
+"path": "game/ROM/1/103.DAT",
+"group": "Rooms"
+},
+{
+"name": "wall_08",
+"path": "game/ROM/2/98.DAT",
+"group": "Rooms"
+},
+{
+"name": "wi_al",
+"path": "game/ROM/2/45.DAT",
+"group": "Rooms"
+},
+{
+"name": "ya01",
+"path": "game/ROM/1/83.DAT",
+"group": "Rooms"
+}
+]

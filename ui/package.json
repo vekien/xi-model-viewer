@@ -1,0 +1,22 @@
+{
+  "name": "xi-model-viewer-ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@headlessui/react": "^2.2.0",
+    "@tippyjs/react": "^4.2.6",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tippy.js": "^6.3.7"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^6.0.0"
+  }
+}
