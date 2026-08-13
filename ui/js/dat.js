@@ -724,7 +724,8 @@ function parseTexture(r, sec) {
   r.pos = sec.dataStart;
 
   const type = r.u8();
-  if (type !== 0x91 && type !== 0xa1 && type !== 0xb1) return null;
+  // 0x01/0x05/0x81 = paletted (same layout as 0x91); 0xa1 = DXT; 0xb1 = paletted+extra.
+  if (type !== 0x01 && type !== 0x05 && type !== 0x81 && type !== 0x91 && type !== 0xa1 && type !== 0xb1) return null;
 
   const name = r.str(0x10);
   r.u32();                                // 0x28

@@ -64,7 +64,11 @@ const strAt = (bytes, p, n) => {
 function peekTexture(bytes, dv, s) {
   const d = s.dataStart;
   const texType = bytes[d];
-  if (![0x81, 0x91, 0xA1, 0xB1].includes(texType)) return null;
+  // 0x01/0x05 = paletted (same layout as 0x91); see zone.js parseTexture.
+  if (![0x01, 0x05, 0x81, 0x91, 0xA1, 0xB1].includes(texType)) {
+    // Still mark clickable via section id — open path may resolve it later.
+    return { text: null, textureName: null, isTexture: true };
+  }
   const name = strAt(bytes, d + 1, 0x10).trim();
   const width = dv.getUint32(d + 0x15, true);
   const height = dv.getUint32(d + 0x19, true);
@@ -76,7 +80,13 @@ function peekTexture(bytes, dv, s) {
   } else {
     format = bitCount === 32 ? 'RGBA32' : `palette ${bitCount}bpp`;
   }
-  return { text: `${name} · ${width}×${height} ${format}`, textureName: name };
+  const label = name || null;
+  const dims = width > 0 && height > 0 ? `${width}×${height} ${format}` : format;
+  return {
+    text: label ? `${label} · ${dims}` : dims,
+    textureName: label,
+    isTexture: true,
+  };
 }
 
 function peekSkeleton(bytes, dv, s) {
@@ -238,18 +248,23 @@ export function inspectDat(buffer) {
     } else {
       let detail = null;
       let textureName = null;
+      let isTexture = type === 0x20;
       const peek = PEEKS[type];
       if (peek) {
         try {
           const r = peek(bytes, dv, { start: pos, size, dataStart: pos + 0x10 });
           detail = r?.text ?? null;
           textureName = r?.textureName ?? null;
+          if (r?.isTexture) isTexture = true;
         } catch { /* malformed header — list it plain */ }
       }
+      // Structure tree shows the 4-char section id; use it as a lookup key when
+      // the embedded name is missing so Texture rows stay clickable.
+      if (isTexture && !textureName && id.trim()) textureName = id.trim();
       stack[stack.length - 1].children.push({
         kind: 'res', id, type, name: typeName(type),
         icon: SECTION_TYPE_ICONS[type] ?? 'data_object',
-        size, offset: pos, flags, detail, textureName,
+        size, offset: pos, flags, detail, textureName, isTexture,
       });
       const agg = summary.get(type) ?? { count: 0, bytes: 0 };
       agg.count++; agg.bytes += size;

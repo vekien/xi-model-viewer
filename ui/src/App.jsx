@@ -46,6 +46,7 @@ import { toAudioBuffer, parseAudioHeader, FMT_ATRAC3 } from '../js/audio.js';
 import { parseImageDat, textureForSet } from '../js/images.js';
 import { inspectDat } from '../js/dat/inspect.js';
 import { matchTablePath, parseFileTable } from '../js/dat/ftable.js';
+import { classifyDat } from '../js/dat/classify.js';
 import {
   sniffZoneDat, zoneForFileId, zoneFileIds, parseNpcList, npcNameMap,
   parseEventDat, parseDialogDat, dialogSpeakers, dialogConversations, EVENT_CATEGORIES,
@@ -92,7 +93,7 @@ const VIEWS = ['files', 'npc', 'pc', 'creation', 'music', 'sfx', 'scene', 'zones
 /** Views that browse individual models, where fly controls are a hindrance. */
 const ORBIT_VIEWS = new Set(['files', 'npc', 'pc', 'creation']);
 /** Views with a Details panel — model/zone stats, or an effect's sprite images. */
-const DETAIL_VIEWS = new Set([...ORBIT_VIEWS, 'effects']);
+const DETAIL_VIEWS = new Set([...ORBIT_VIEWS, 'effects', 'zones']);
 // Zones and Scene are two panels onto the same loaded zone, so moving between
 // them keeps it. Every other view change is a fresh page: whatever the last one
 // had running gets torn down.
@@ -104,7 +105,6 @@ const AUDIO_VIEWS = new Set(['music', 'sfx']);
 // Views that put their own content on screen as soon as they open. Restoring
 // one of these at startup must not also load the last/default DAT.
 const SELF_LOADING_VIEWS = new Set(['pc', 'creation', 'images', 'music', 'sfx', 'effects', 'data']);
-
 // A schedule sequence lays segments on a timeline; a joint whose segment hasn't
 // started yet would show bind pose (T-pose flash each loop). Underlay a looping
 // idle so those joints rest naturally — battle idle for weapon actions if it's
@@ -345,13 +345,25 @@ export default function App() {
     setLeftViewState(v);
     localStorage.setItem(LAST_VIEW_KEY, v);
   }, []);
+  // What the File Browser last opened (zone/image/…); drives the right-hand
+  // panels without leaving Assets > File Browser.
+  const [browserKind, setBrowserKind] = useState(null);
+  // FTABLE paths for File Browser search (ROM\…\n.DAT).
+  const [filePathIndex, setFilePathIndex] = useState(null);
+  const fileIndexRef = useRef(null);
+  // File → Open DAT from a non-browser view: switch to File Browser, then open.
+  const pendingBrowserFileRef = useRef(null);
   // Browsing single models rather than a zone: fly controls put the camera
   // somewhere arbitrary and WASD swallows typing in the filter boxes, so drop
-  // back to orbit on arrival. Only fires on a view change, so turning WASD back
-  // on while you are in one of these views sticks.
+  // back to orbit on arrival. Zones (including prototype ones opened from the
+  // file browser) stay in fly/WASD — same as Assets > Zones.
   useEffect(() => {
+    if (browserKind === 'zone') {
+      if (settingsRef.current?.autoWasdZones !== false) setWasd(true);
+      return;
+    }
     if (ORBIT_VIEWS.has(leftView) && wasdRef.current) setWasd(false);
-  }, [leftView, setWasd]);
+  }, [leftView, browserKind, setWasd]);
   // Left explorer panel (zones/files/…); toolbar toggle, persisted.
   const [explorerOpen, setExplorerOpen] = useState(() => localStorage.getItem('explorer') !== '0');
   const [statusText, setStatusText] = useState('');       // secondary detail/stats
@@ -758,8 +770,9 @@ export default function App() {
 
       if (!model.isRenderable) {
         releaseOverlay();
-        setStatusText(`${displayName} — no renderable skeleton+mesh (skeleton: ${model.skeleton ? 'yes' : 'no'}, mesh groups: ${model.meshGroups.length})`);
-        return;
+        const why = `no renderable skeleton+mesh (skeleton: ${model.skeleton ? 'yes' : 'no'}, mesh groups: ${model.meshGroups.length})`;
+        setStatusText(`${displayName} — ${why}`);
+        return { ok: false, reason: why };
       }
 
       if (showOverlay) stepLoad('Uploading to GPU…');
@@ -923,18 +936,16 @@ export default function App() {
       try {
         localStorage.setItem(LAST_DAT_KEY, JSON.stringify({ paths, name: displayName, opts: { focusPaths, weaponSlots, battleTable, parts } }));
       } catch { /* quota / private mode */ }
+      return { ok: true };
     } catch (err) {
       console.error(err);
       releaseOverlay();
       if (stillCurrent()) setStatusText(`${displayName} — failed to load: ${err.message ?? err}`);
+      return { ok: false, reason: err.message ?? String(err) };
     }
   }, [beginLoad, stepLoad, endLoad]);
 
   const relativeName = (path) => relFromAbs(path, settingsRef.current);
-
-  const loadFromTree = useCallback(
-    (path) => loadModel([path], relativeName(path)),
-    [loadModel]);
 
   const loadNpcEntry = useCallback(
     (entry) => {
@@ -1043,6 +1054,7 @@ export default function App() {
     const settings = settingsRef.current;
     if (!settings?.gamePath) { setStatusText('Set a game path in Settings first.'); return; }
     const rel = normRel(entry.path);
+    const abs = `${settings.gamePath}\\${rel}`;
     const token = ++effectTokenRef.current;
     // Silence the outgoing effect on the click, not when the new one finishes
     // loading — reading and parsing the DAT takes long enough that the old
@@ -1414,7 +1426,7 @@ export default function App() {
       if (!model.isRenderable) {
         releaseOverlay();
         setStatusText(`${displayName} — no renderable mesh`);
-        return;
+        return { ok: false, reason: 'no renderable mesh' };
       }
 
       stepLoad('Uploading to GPU…');
@@ -1437,14 +1449,18 @@ export default function App() {
       // for this zone; first visit fits + optional auto-WASD.
       const saved = keepCamera ? (cameraSnap || null) : readZoneCamera(key);
       renderer.setModel(model, !!saved);
+      // Zones default to fly/WASD (incl. pre-production MZB zones from the file
+      // browser). A saved orbit pose still restores the eye, but we keep fly
+      // unless the user turned Auto-WASD off in Settings.
+      const wantFly = settingsRef.current?.autoWasdZones !== false;
       if (saved) {
-        const mode = saved.mode === 'orbit' ? 'orbit' : 'fly';
-        // Sync WASD UI without setMode — restore() assigns mode itself.
+        const mode = wantFly ? 'fly' : (saved.mode === 'orbit' ? 'orbit' : 'fly');
         wasdRef.current = mode === 'fly';
         setWasdState(mode === 'fly');
         try { localStorage.setItem('wasd', mode === 'fly' ? '1' : '0'); } catch { /* quota */ }
         renderer.camera.restore({ ...saved, mode });
-      } else if (settingsRef.current?.autoWasdZones !== false) {
+        if (mode === 'fly') renderer.camera.setMode('fly');
+      } else if (wantFly) {
         // setModel already fitted in orbit; seat fly on that eye.
         setWasd(true);
         renderer.fitCamera();
@@ -1549,10 +1565,12 @@ export default function App() {
           zone: { id: zone.id, name: zone.name, path: zone.path },
         }));
       } catch { /* quota */ }
+      return { ok: true };
     } catch (err) {
       console.error(err);
       releaseOverlay();
       if (stillCurrent()) setStatusText(`${displayName} — failed: ${err.message ?? err}`);
+      return { ok: false, reason: err.message ?? String(err) };
     }
   }, [getKeyTables, beginLoad, stepLoad, endLoad, setWasd, buildParticleSystem, getWeatherAudio, resolveZoneTrack, persistCurrentZoneCamera]);
 
@@ -2129,16 +2147,26 @@ export default function App() {
 
   // ── Assets > Data (DAT structure inspector) ────────────────────────────────
   const [dataDoc, setDataDoc] = useState(null);         // inspectDat result + path
+  // Status-bar overlay: peek structure without leaving the live zone/model/etc.
+  const [dataStructOpen, setDataStructOpen] = useState(false);
+  const dataStructStatusRef = useRef('');               // status text to restore on close
   const dataTokenRef = useRef(0);                       // drop stale reads
   const dataBufRef = useRef(null);                      // raw buffer, for texture decode on click
   const dataTexturesRef = useRef(null);                 // lazy parseDatTextures cache
   const dataTablesRef = useRef(null);                   // merged FTABLE maps (zone DAT cross-refs)
 
-  const loadDatData = useCallback(async (path) => {
+  /**
+   * @param {string} path
+   * @param {{ notice?: string, overlay?: boolean }} [opts]
+   *   overlay — don't rewrite modelPath / selection (status-bar toggle)
+   */
+  const loadDatData = useCallback(async (path, opts = {}) => {
     const token = ++dataTokenRef.current;
     const settings = settingsRef.current;
     const rel = relativeName(path);
-    setStatusText(`Reading ${rel}…`);
+    if (!opts.overlay) setStatusText(`Reading ${rel}…`);
+    // Highlight immediately so the tree tracks the click even if parse is slow.
+    if (!opts.overlay) setSelectedDat(String(path).toLowerCase().replace(/\//g, '\\'));
     const readAbs = async (abs) => {
       const r = relFromAbs(abs, settings);
       if (r !== abs) {
@@ -2182,12 +2210,19 @@ export default function App() {
         }
       }
       dataTexturesRef.current = null;
-      setDataDoc({ ...doc, path: rel });
-      setSelectedDat(path.toLowerCase());
-      setModelPath(rel);
-      shownPathRef.current = path;
+      setDataDoc({
+        ...doc,
+        path: rel,
+        fullPath: String(path).replace(/\//g, '\\'),
+        notice: opts.notice || null,
+      });
+      if (!opts.overlay) {
+        setSelectedDat(String(path).toLowerCase().replace(/\//g, '\\'));
+        setModelPath(rel);
+        shownPathRef.current = path;
+      }
       const zoneSuffix = doc.zoneName ? ` · ${doc.zoneName}` : '';
-      setStatusText(doc.kind === 'sections'
+      const baseStatus = doc.kind === 'sections'
         ? `${doc.sectionCount.toLocaleString()} sections · ${doc.dirCount.toLocaleString()} folder${doc.dirCount === 1 ? '' : 's'}`
         : doc.kind === 'ftable'
           ? `${doc.registered.toLocaleString()} of ${doc.capacity.toLocaleString()} file ids registered`
@@ -2197,13 +2232,51 @@ export default function App() {
               ? `${doc.actors.length.toLocaleString()} actors · ${doc.stats.events.toLocaleString()} events${zoneSuffix}`
               : doc.kind === 'dialog'
                 ? `${doc.entries.length.toLocaleString()} dialog entries${zoneSuffix}`
-                : doc.label);
+                : doc.label;
+      if (!opts.overlay) {
+        setStatusText(opts.notice ? `${rel} — ${opts.notice}` : baseStatus);
+      }
     } catch (e) {
       if (token !== dataTokenRef.current) return;
-      setDataDoc(null);
-      setStatusText(`Failed to read ${rel}: ${e.message ?? e}`);
+      if (!opts.overlay) {
+        setDataDoc(null);
+        setStatusText(`Failed to read ${rel}: ${e.message ?? e}`);
+      } else {
+        setStatusText(`Data struct failed: ${e.message ?? e}`);
+      }
     }
   }, []);
+
+  /** Status-bar toggle: structure overlay without unloading the live view. */
+  const toggleDataStruct = useCallback(async () => {
+    if (dataStructOpen) {
+      setDataStructOpen(false);
+      // Drop overlay-only docs; keep docs that own the page (browserKind data).
+      if (browserKind !== 'data' && leftView !== 'data') {
+        setDataDoc(null);
+        dataBufRef.current = null;
+        dataTexturesRef.current = null;
+      }
+      if (dataStructStatusRef.current !== undefined) {
+        setStatusText(dataStructStatusRef.current);
+        dataStructStatusRef.current = '';
+      }
+      return;
+    }
+    const path = shownPathRef.current
+      || (player.current?.path)
+      || selectedDat;
+    if (!path) {
+      setStatusText('Nothing loaded to inspect.');
+      return;
+    }
+    dataStructStatusRef.current = statusText;
+    setStatusText('Loading data structure…');
+    await loadDatData(path, { overlay: true });
+    setDataStructOpen(true);
+    // Restore prior status (zone name, etc.) — structure lives in the overlay.
+    setStatusText(dataStructStatusRef.current || '');
+  }, [dataStructOpen, browserKind, leftView, selectedDat, statusText, loadDatData, player]);
 
   /** A row in the file-table view names a DAT — jump the inspector to it. */
   const openDatFromTable = useCallback((datRel) => {
@@ -2216,10 +2289,25 @@ export default function App() {
 
   /** Decode this DAT's 0x20 textures on first click and open the viewer. */
   const openDataTexture = useCallback((name) => {
+    if (!name) return;
     if (!dataTexturesRef.current && dataBufRef.current) {
-      try { dataTexturesRef.current = parseDatTextures(dataBufRef.current); } catch { dataTexturesRef.current = new Map(); }
+      try { dataTexturesRef.current = parseDatTextures(dataBufRef.current); }
+      catch { dataTexturesRef.current = new Map(); }
     }
-    const tex = dataTexturesRef.current?.get(name);
+    const map = dataTexturesRef.current;
+    if (!map?.size) {
+      setStatusText(`Couldn't decode textures in this DAT`);
+      return;
+    }
+    let tex = map.get(name);
+    if (!tex) {
+      // Fuzzy: section id, embedded name, or 8+8 half ("tower_25").
+      const n = String(name).replace(/\s+/g, '').toLowerCase();
+      for (const [k, v] of map) {
+        const kk = String(k).replace(/\s+/g, '').toLowerCase();
+        if (kk === n || kk.includes(n) || n.includes(kk)) { tex = v; break; }
+      }
+    }
     if (tex) openTexture(tex);
     else setStatusText(`Couldn't decode texture ${name}`);
   }, [openTexture]);
@@ -2247,6 +2335,12 @@ export default function App() {
     setCurrentSchedule('');
     setPlayingState(false);
     setObjectGroups(null);
+    setPlcOpen(false);
+    setPlcSelected('');
+    setWeatherList([]);
+    setHasCollision(false);
+    setHasNavmesh(false);
+    setHasSkybox(false);
     setStatusText('');
   }, [persistCurrentZoneCamera]);
 
@@ -2259,35 +2353,53 @@ export default function App() {
     if (prev === leftView) return;
     prevViewRef.current = leftView;
 
+    // File Browser / Data can host zone content in-place via browserKind.
+    const prevZone = ZONE_VIEWS.has(prev)
+      || ((prev === 'files' || prev === 'data') && browserKind === 'zone');
+    const nextZone = ZONE_VIEWS.has(leftView)
+      || ((leftView === 'files' || leftView === 'data') && browserKind === 'zone');
+    const prevAudio = AUDIO_VIEWS.has(prev)
+      || ((prev === 'files' || prev === 'data') && (browserKind === 'music' || browserKind === 'sfx'));
+    const nextAudio = AUDIO_VIEWS.has(leftView)
+      || ((leftView === 'files' || leftView === 'data') && (browserKind === 'music' || browserKind === 'sfx'));
+
     // Zones <-> Scene share one zone; anything else starts empty. Characters
     // reloads itself on arrival, so unloading here just clears the old actor.
-    if (!(ZONE_VIEWS.has(prev) && ZONE_VIEWS.has(leftView))) unloadModel();
-    if (!(AUDIO_VIEWS.has(prev) && AUDIO_VIEWS.has(leftView))) player.stop();
+    if (!(prevZone && nextZone)) unloadModel();
+    if (!(prevAudio && nextAudio)) player.stop();
     // Leaving the zone views silences the zone outright: the BGM and every
     // ambient/weather voice, including one-shots already in flight. Detaching
     // the particle system alone leaves those playing, which is why zone sound
     // followed you into other pages.
-    if (!ZONE_VIEWS.has(leftView)) {
+    if (!nextZone) {
       player.stop();
       weatherAudioRef.current?.stopAll();
       setZoneTrack(null);
       zoneMusicIdRef.current = null;
     }
-    if (leftView !== 'images') { setImageEntry(null); setImageDoc(null); setImageSet(null); }
-    if (leftView !== 'data') { setDataDoc(null); dataBufRef.current = null; dataTexturesRef.current = null; }
-    setShowAxes(leftView === 'effects');   // per-view default; the toggle still overrides
+    if (leftView !== 'images' && leftView !== 'files' && leftView !== 'data') {
+      setImageEntry(null); setImageDoc(null); setImageSet(null);
+    }
+    if (leftView !== 'data' && leftView !== 'files') {
+      setDataDoc(null); dataBufRef.current = null; dataTexturesRef.current = null;
+    }
+    // Keep browserKind when moving between File Browser and Data (same openers).
+    if (leftView !== 'files' && leftView !== 'data') setBrowserKind(null);
+    setDataStructOpen(false);
+    setShowAxes(leftView === 'effects' || (leftView === 'files' && browserKind === 'effect'));
     // Leaving Effects: unloadModel already tore down the particle scene; drop the
     // selection so returning starts clean instead of showing dead transport rows.
     // Re-entering Character Creation frames the model once more; while you are
     // in it, the camera is yours.
     if (leftView !== 'creation') crFramedRef.current = false;
-    if (prev === 'effects' && leftView !== 'effects') {
+    if ((prev === 'effects' || (prev === 'files' && browserKind === 'effect'))
+      && leftView !== 'effects' && leftView !== 'files') {
       effectRoutinesRef.current = [];
       setEffectEntry(null);
       setEffectRoutines([]);
       setEffectSchedule('');
     }
-  }, [leftView, unloadModel, player, setZoneTrack]);
+  }, [leftView, unloadModel, player, setZoneTrack, browserKind]);
 
   const loadImage = useCallback(async (entry) => {
     const settings = settingsRef.current;
@@ -2321,6 +2433,210 @@ export default function App() {
       setStatusText(`Failed to read ${entry.path}: ${e.message ?? e}`);
     }
   }, []);
+
+  /** FTABLE path list for File Browser search (once per session / install). */
+  const ensureFilePathIndex = useCallback(async () => {
+    if (fileIndexRef.current) return fileIndexRef.current;
+    try {
+      const { byPath } = await loadMergedTables(settingsRef.current, dataTablesRef);
+      const paths = [...byPath.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+      fileIndexRef.current = paths;
+      setFilePathIndex(paths);
+      return paths;
+    } catch (e) {
+      console.warn('file path index failed', e);
+      fileIndexRef.current = [];
+      setFilePathIndex([]);
+      return [];
+    }
+  }, []);
+
+  useEffect(() => {
+    if (leftView === 'files' || leftView === 'data') ensureFilePathIndex();
+  }, [leftView, ensureFilePathIndex, settings?.gamePath]);
+
+  /**
+   * Assets > File Browser click: sniff the DAT and open the matching viewer
+   * (zone / model / image / music / sfx / effect / data inspector).
+   */
+  const loadFromTree = useCallback(async (path) => {
+    const settings = settingsRef.current;
+    if (!settings?.gamePath) { setStatusText('Game path not set — open Settings first.'); return; }
+    const rel = relativeName(path);
+    const lower = String(path).toLowerCase().replace(/\//g, '\\');
+    // Highlight the clicked row immediately (before async load finishes).
+    setSelectedDat(lower);
+    setRevealTarget(lower);
+    setDataStructOpen(false);
+    setStatusText(`Reading ${rel}…`);
+    try {
+      const readAbs = async (abs) => {
+        const r = relFromAbs(abs, settings);
+        if (r !== abs) {
+          const { data } = await backend.readPrefer(gameCandidates(r, settings));
+          return data;
+        }
+        return backend.readFile(abs);
+      };
+      const buf = await readAbs(path);
+      const cls = classifyDat(buf, path);
+
+      const clearImages = () => { setImageEntry(null); setImageDoc(null); setImageSet(null); };
+      const clearData = () => {
+        setDataDoc(null);
+        dataBufRef.current = null;
+        dataTexturesRef.current = null;
+      };
+      const clearEffect = () => {
+        effectRoutinesRef.current = [];
+        setEffectEntry(null);
+        setEffectRoutines([]);
+        setEffectSchedule('');
+        weatherAudioRef.current?.stopOneShots();
+        rendererRef.current?.particleSystem?.clearEffect?.();
+      };
+
+      /** Zone/entity parse failed — drop the old scene and show structure + why. */
+      const openAsData = async (notice) => {
+        clearImages();
+        clearEffect();
+        player.stop();
+        unloadModel();
+        setBrowserKind('data');
+        await loadDatData(path, { notice });
+      };
+
+      if (cls.kind === 'zone') {
+        clearImages();
+        clearData();
+        clearEffect();
+        player.stop();
+        // Stay on the current Assets page — switching Data→Files runs the view
+        // cleanup effect and would unload the zone we are about to load.
+        setBrowserKind('zone');
+        setDataDoc(null);
+        const slash = rel.replace(/\\/g, '/');
+        const zonePath = `game/${slash}`;
+        // Prefer the baked zone name when this DAT is a known zone.
+        let zone = { id: null, name: rel, path: zonePath };
+        try {
+          const zones = await (await fetch('lists/zones.json')).json();
+          const hit = zones.find((z) => zoneDatRelPath(z.path).toLowerCase() === rel.toLowerCase());
+          if (hit) zone = { id: hit.id, name: hit.name, path: hit.path };
+        } catch { /* nameless is fine */ }
+        const result = await loadZone(zone);
+        if (result && result.ok === false) {
+          await openAsData(
+            `Looks like a zone DAT, but nothing drawable was found (${result.reason}). `
+            + 'Showing the file structure instead.',
+          );
+          setSelectedDat(lower);
+          return;
+        }
+        // Keep tree highlight on the clicked path (not an HD resolve path).
+        setSelectedDat(lower);
+        setBrowserKind('zone');
+        setDataDoc(null);
+        if (settingsRef.current?.autoWasdZones !== false) setWasd(true);
+        return;
+      }
+
+      if (cls.kind === 'entity') {
+        clearImages();
+        clearData();
+        clearEffect();
+        player.stop();
+        setBrowserKind('entity');
+        setDataDoc(null);
+        const result = await loadModel([path], rel);
+        if (result && result.ok === false) {
+          await openAsData(
+            `Looks like a model DAT, but nothing drawable was found (${result.reason}). `
+            + 'Showing the file structure instead.',
+          );
+          setSelectedDat(lower);
+          return;
+        }
+        setSelectedDat(lower);
+        return;
+      }
+
+      if (cls.kind === 'image') {
+        clearData();
+        clearEffect();
+        player.stop();
+        unloadModel();
+        setBrowserKind('image');
+        await loadImage({ name: rel.split(/[\\/]/).pop() || rel, path: rel });
+        setSelectedDat(lower);
+        return;
+      }
+
+      if (cls.kind === 'music' || cls.kind === 'sfx') {
+        clearImages();
+        clearData();
+        clearEffect();
+        unloadModel();
+        setBrowserKind(cls.kind);
+        const file = rel.split(/[\\/]/).pop() || rel;
+        const root = rel.match(/^(sound\d*)\\/i)?.[1] || 'sound';
+        setSelectedDat(lower);
+        setModelPath(rel);
+        shownPathRef.current = path;
+        try {
+          await player.play({ path, file, root, name: rel, num: '' });
+          setStatusText(cls.label);
+        } catch (e) {
+          await openAsData(`Could not play as ${cls.label}: ${e.message ?? e}`);
+          setSelectedDat(lower);
+        }
+        return;
+      }
+
+      if (cls.kind === 'effect') {
+        clearImages();
+        clearData();
+        player.stop();
+        unloadModel();
+        setBrowserKind('effect');
+        await loadEffect({ name: rel, path: rel });
+        setSelectedDat(lower);
+        return;
+      }
+
+      // data / unknown → structure inspector (same as Assets > Data).
+      clearImages();
+      clearEffect();
+      player.stop();
+      unloadModel();
+      setBrowserKind('data');
+      await loadDatData(path, cls.kind === 'unknown'
+        ? { notice: 'Not a renderable zone, model, image, audio, or effect DAT. Showing structure.' }
+        : undefined);
+      setSelectedDat(lower);
+    } catch (err) {
+      console.error(err);
+      try {
+        player.stop();
+        unloadModel();
+        setBrowserKind('data');
+        await loadDatData(path, { notice: `Failed to open: ${err.message ?? err}` });
+        setSelectedDat(lower);
+      } catch {
+        setBrowserKind(null);
+        setStatusText(`${rel} — failed: ${err.message ?? err}`);
+      }
+    }
+  }, [loadModel, loadZone, loadImage, loadEffect, loadDatData, unloadModel, player, setWasd]);
+
+  // File → Open DAT arrived from another Assets page: open after the switch.
+  useEffect(() => {
+    if (leftView !== 'files') return;
+    const pending = pendingBrowserFileRef.current;
+    if (!pending) return;
+    pendingBrowserFileRef.current = null;
+    loadFromTree(pending);
+  }, [leftView, loadFromTree]);
 
   const setFov = useCallback((deg) => {
     const v = Math.min(120, Math.max(20, Math.round(deg)));
@@ -2646,9 +2962,22 @@ export default function App() {
         setLeftView('effects');
         break;
       case 'open-dat':
-        // In the Data view an opened DAT gets inspected, not loaded as a model.
+        // Data view inspects structure; otherwise sniff type in File Browser.
         backend.pickFile(settingsRef.current?.gamePath || null)
-          .then((file) => { if (file) (leftView === 'data' ? loadDatData : loadFromTree)(file); })
+          .then((file) => {
+            if (!file) return;
+            if (leftView === 'data') {
+              loadDatData(file);
+              return;
+            }
+            if (leftView === 'files') {
+              loadFromTree(file);
+              return;
+            }
+            // Switch view first so cleanup finishes, then open the file.
+            pendingBrowserFileRef.current = file;
+            setLeftView('files');
+          })
           .catch((err) => setStatusText(`Open DAT failed: ${err.message ?? err}`));
         break;
       case 'help':
@@ -2729,8 +3058,10 @@ export default function App() {
   // Leaving the Zones view takes its panel — and the stop button — off screen,
   // so don't leave the clock running where it can't be stopped.
   useEffect(() => {
-    if (leftView !== 'zones') setTodPlaying(false);
-  }, [leftView]);
+    if (leftView !== 'zones' && browserKind !== 'zone') {
+      setTodPlaying(false);
+    }
+  }, [leftView, browserKind]);
 
   const focusPlacementGroup = useCallback((group) => {
     if (!group?.instances?.length) return;
@@ -2849,6 +3180,7 @@ export default function App() {
           revealTarget={revealTarget}
           onSelectFile={loadFromTree}
           onError={(msg) => setStatusText(msg)}
+          pathIndex={filePathIndex}
         />
       )}
       {explorerOpen && leftView === 'npc' && (
@@ -2920,23 +3252,44 @@ export default function App() {
         <EffectList onSelect={loadEffect} selectedPath={effectEntry?.path} />
       )}
 
-      {/* Data view reuses the File Explorer's tree; clicking a DAT inspects its
-          structure instead of loading it into the 3D scene. */}
+      {/* Data view reuses the file tree. Clicks smart-open (same as File Browser)
+          so zones/models render; pure tables still land in the inspector. */}
       {explorerOpen && leftView === 'data' && (
         <FileTree
           rootPath={settings?.gamePath ?? ''}
           selectedPath={selectedDat}
           revealTarget={revealTarget}
-          onSelectFile={loadDatData}
+          onSelectFile={loadFromTree}
           onError={(msg) => setStatusText(msg)}
+          pathIndex={filePathIndex}
         />
       )}
 
-      {leftView === 'data' && (
-        <DataViewer doc={dataDoc} onOpenTexture={openDataTexture} onOpenDat={openDatFromTable} />
+      {/* Structure: owned page (Data / failed open) or status-bar overlay toggle. */}
+      {(dataStructOpen
+        || (leftView === 'data' && !browserKind)
+        || browserKind === 'data') && (
+        <>
+          {dataDoc?.notice && (
+            <div className="file-open-banner" role="status">
+              <span className="icon">info</span>
+              <span className="file-open-banner-text">{dataDoc.notice}</span>
+            </div>
+          )}
+          <DataViewer
+            doc={dataDoc}
+            onOpenTexture={openDataTexture}
+            onOpenDat={openDatFromTable}
+            onRenderFile={dataDoc?.fullPath ? () => {
+              setDataStructOpen(false);
+              loadFromTree(dataDoc.fullPath);
+            } : undefined}
+          />
+        </>
       )}
 
-      {leftView === 'images' && imageDoc && (
+      {!dataStructOpen && (leftView === 'images' || (leftView === 'files' && browserKind === 'image')
+        || (leftView === 'data' && browserKind === 'image')) && imageDoc && (
         <>
           <ImageViewer doc={imageDoc} set={imageSet} />
           <ImageSetPanel
@@ -2950,7 +3303,7 @@ export default function App() {
 
       {/* Stays visible while zone music plays — the play button lives in here,
           so taking the panel over would pull the controls out from under it. */}
-      {leftView === 'zones' && (
+      {!dataStructOpen && (leftView === 'zones' || browserKind === 'zone') && (
         <WeatherPanel
           weathers={weatherList}
           weather={weather}
@@ -2985,7 +3338,8 @@ export default function App() {
         />
       )}
 
-      {objectGroups && plcOpen && (leftView === 'zones' || !player.current) && (
+      {!dataStructOpen && objectGroups && plcOpen
+        && (leftView === 'zones' || browserKind === 'zone') && (
         <PlacementPanel
           groups={objectGroups}
           selectedKey={plcSelected}
@@ -2996,11 +3350,16 @@ export default function App() {
         />
       )}
 
-      {player.current && leftView !== 'zones' && <MusicPlayer player={player} />}
+      {!dataStructOpen && player.current && leftView !== 'zones' && browserKind !== 'zone' && (
+        <MusicPlayer player={player} />
+      )}
 
       {/* Only the views that actually put a model on screen get playback
           controls — Images/Music/SFX have their own right-hand panels. */}
-      {!player.current && ORBIT_VIEWS.has(leftView) && (
+      {!dataStructOpen && !player.current
+        && (ORBIT_VIEWS.has(leftView) || leftView === 'data')
+        && browserKind === 'entity'
+        && (
         <AnimationPanel
           pc={leftView === 'pc' ? pc : null}
           anim={leftView === 'creation' ? creationAnim : animControls}
@@ -3009,22 +3368,35 @@ export default function App() {
 
       {/* Standalone effect: Schedule picker + transport + speed (no scrubber —
           a live particle sim isn't frame-seekable). */}
-      {leftView === 'effects' && effectEntry && (
+      {!dataStructOpen
+        && ((leftView === 'effects') || (leftView === 'files' && browserKind === 'effect'))
+        && effectEntry && (
         <AnimationPanel anim={effectAnim} />
       )}
 
       <div id="status" className="panel mono">
-        {!player.current && modelPath && selectedDat ? (
-          <Tooltip content="Show in Explorer">
-            <button id="statusPath" className="status-path-link" onClick={revealInExplorer}>
-              {modelPath}
+        <div className="status-left">
+          {(modelPath || selectedDat || player.current) && (
+            <button
+              type="button"
+              className={`status-link${dataStructOpen ? ' on' : ''}`}
+              onClick={() => { toggleDataStruct(); }}
+            >
+              {dataStructOpen ? 'Hide Data Struct' : 'Data Struct'}
             </button>
-          </Tooltip>
-        ) : (
-          <span id="statusPath">
-            {player.current ? relativeName(player.current.path) : (modelPath || '—')}
-          </span>
-        )}
+          )}
+          {!player.current && modelPath && selectedDat ? (
+            <Tooltip content="Show in Explorer">
+              <button id="statusPath" className="status-path-link" onClick={revealInExplorer}>
+                {modelPath}
+              </button>
+            </Tooltip>
+          ) : (
+            <span id="statusPath">
+              {player.current ? relativeName(player.current.path) : (modelPath || '—')}
+            </span>
+          )}
+        </div>
         <span className="hints">
           {player.current ? (
             `${player.playing ? 'playing' : 'paused'}: ${player.current.name ?? `music${player.current.num?.padStart(3, '0')}`}`
@@ -3039,13 +3411,16 @@ export default function App() {
                   </button>
                 </>
               )}
-              {modelInfo && ORBIT_VIEWS.has(leftView) && (
+              {modelInfo && ORBIT_VIEWS.has(leftView)
+                && !(leftView === 'files' && browserKind && browserKind !== 'entity') && (
                 <>
                   <span className="status-sep">·</span>
                   <button className="status-link" onClick={() => setSkeletonOpen((v) => !v)}>Skeleton</button>
                 </>
               )}
-              {modelInfo && DETAIL_VIEWS.has(leftView) && (
+              {modelInfo && (DETAIL_VIEWS.has(leftView)
+                || (leftView === 'files' && (browserKind === 'zone' || browserKind === 'effect')))
+                && !(leftView === 'files' && browserKind && !['entity', 'zone', 'effect'].includes(browserKind)) && (
                 <>
                   <span className="status-sep">·</span>
                   <button className="status-link" onClick={() => setDetailsOpen((v) => !v)}>Details</button>
@@ -3073,14 +3448,17 @@ export default function App() {
                   </button>
                 </>
               )}
-              {ORBIT_VIEWS.has(leftView) && (
+              {ORBIT_VIEWS.has(leftView)
+                && !(leftView === 'files' && browserKind && browserKind !== 'entity') && (
                 <>
                   <span className="status-sep">·</span>
                   <button className="status-link" onClick={() => setSkeletonOpen((v) => !v)}>Skeleton</button>
                 </>
               )}
               {/* Effects have no skeleton, but they do have sprite images. */}
-              {DETAIL_VIEWS.has(leftView) && (
+              {(DETAIL_VIEWS.has(leftView)
+                || (leftView === 'files' && (browserKind === 'zone' || browserKind === 'effect')))
+                && !(leftView === 'files' && browserKind && !['entity', 'zone', 'effect'].includes(browserKind)) && (
                 <>
                   <span className="status-sep">·</span>
                   <button className="status-link" onClick={() => setDetailsOpen((v) => !v)}>Details</button>
@@ -3091,14 +3469,17 @@ export default function App() {
         </span>
       </div>
 
-      {skeletonOpen && !player.current && ORBIT_VIEWS.has(leftView) && (
+      {skeletonOpen && !player.current && ORBIT_VIEWS.has(leftView)
+        && !(leftView === 'files' && browserKind && browserKind !== 'entity') && (
         <SkeletonPanel
           pose={rendererRef.current?.pose ?? null}
           onClose={() => setSkeletonOpen(false)}
         />
       )}
 
-      {detailsOpen && modelInfo && !player.current && DETAIL_VIEWS.has(leftView) && (
+      {detailsOpen && modelInfo && !player.current
+        && (DETAIL_VIEWS.has(leftView) || (leftView === 'files' && (browserKind === 'zone' || browserKind === 'effect')))
+        && !(leftView === 'files' && browserKind && !['entity', 'zone', 'effect'].includes(browserKind)) && (
         <DetailsPanel
           info={modelInfo}
           animClip={animsRef.current.find((g) => g.id === currentAnim)?.clip ?? null}

@@ -11,7 +11,7 @@ const FT_MAX_ROWS = 1000;
  * and a per-type census. Resources are listed with a header peek (dimensions,
  * joint counts, sound ids), never their payload.
  */
-export function DataViewer({ doc, onOpenTexture, onOpenDat }) {
+export function DataViewer({ doc, onOpenTexture, onOpenDat, onRenderFile }) {
   if (!doc) {
     return (
       <div className="data-viewer">
@@ -72,6 +72,9 @@ export function DataViewer({ doc, onOpenTexture, onOpenDat }) {
         <div className="panel data-card">
           <div className="data-card-title"><span className="icon">description</span>File</div>
           <Row label="Path" value={doc.path} mono />
+          {doc.fullPath && (
+            <Row label="Full path" value={doc.fullPath} mono />
+          )}
           <Row label="Size" value={fmtBytes(doc.fileSize)} />
           <Row label="Sections" value={doc.sectionCount.toLocaleString()} />
           <Row label="Folders" value={doc.dirCount.toLocaleString()} />
@@ -81,6 +84,14 @@ export function DataViewer({ doc, onOpenTexture, onOpenDat }) {
               <span className="icon">warning</span>{w}
             </div>
           ))}
+          {onRenderFile && (
+            <div className="data-card-actions">
+              <button type="button" className="data-open-btn" onClick={onRenderFile}>
+                <span className="icon">view_in_ar</span>
+                Open in 3D viewer
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="panel data-card data-census">
@@ -812,19 +823,28 @@ function DirNode({ dir, depth, onOpenTexture }) {
 }
 
 function ResRow({ res, depth, onOpenTexture }) {
-  const clickable = !!res.textureName && !!onOpenTexture;
+  const clickable = !!(res.isTexture || res.textureName) && !!onOpenTexture;
+  const openKey = res.textureName || res.id?.trim() || null;
   return (
     <div
       className={`data-row data-res-row${clickable ? ' data-res-click' : ''}`}
       style={{ paddingLeft: 8 + depth * 14 }}
-      title={`offset 0x${res.offset.toString(16).toUpperCase()}${res.flags.length ? ` · ${res.flags.join(', ')}` : ''}`}
-      onClick={clickable ? () => onOpenTexture(res.textureName) : undefined}
+      title={clickable
+        ? `Click to view texture · offset 0x${res.offset.toString(16).toUpperCase()}`
+        : `offset 0x${res.offset.toString(16).toUpperCase()}${res.flags.length ? ` · ${res.flags.join(', ')}` : ''}`}
+      onClick={clickable && openKey ? () => onOpenTexture(openKey) : undefined}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={clickable && openKey ? (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenTexture(openKey); }
+      } : undefined}
     >
       <span className="data-caret-pad" />
       <span className="icon data-kind">{res.icon}</span>
       <span className="data-id mono">{res.id || '····'}</span>
       <span className="data-type">{res.name}</span>
       {res.detail && <span className="data-detail mono">{res.detail}</span>}
+      {clickable && !res.detail && <span className="data-detail data-tex-hint">click to view</span>}
       {res.flags.length > 0 && <span className="data-flags mono">{res.flags.join(' ')}</span>}
       <span className="data-size mono">{fmtBytes(res.size)}</span>
     </div>

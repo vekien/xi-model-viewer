@@ -337,6 +337,12 @@
 .tree-browse-btn:hover { background: rgba(255,255,255,0.07); color: var(--text); border-color: rgba(255,255,255,0.2); }
 .tree-browse-btn .icon { font-size: 16px; color: inherit; }
 .tree-scroll { flex: 1 1 auto; overflow: auto; padding: 6px 4px; }
+.tree-search-results { padding: 2px 0 8px; }
+.tree-hit-path {
+  flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis;
+  font: 400 12px/1.3 var(--font-mono, ui-monospace, monospace);
+}
 .node { cursor: pointer; white-space: nowrap; }
 .node > .row {
   display: flex; align-items: center; gap: 4px;
@@ -681,7 +687,19 @@ button.gs-tool:focus-visible {
   padding: 7px 12px;
   color: var(--muted);
 }
+.status-left {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; gap: 10px;
+  overflow: hidden;
+}
+.status-left .status-link {
+  flex: 0 0 auto;
+}
+.status-left .status-link.on {
+  font-weight: 600;
+}
 #status #statusPath {
+  flex: 1 1 auto; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--gray-200);
 }
@@ -1810,6 +1828,29 @@ body.cinematic #canvas { cursor: none; }
 .export-frame .vol-slider { flex: 1 1 auto; }
 .export-frame-num { color: var(--muted); font-size: 11px; flex: 0 0 auto; }
 
+/* Banner when File Browser opens a DAT that can't be rendered (no mesh, etc.). */
+.file-open-banner {
+  position: fixed;
+  left: 372px; right: 12px;
+  top: 60px;
+  z-index: 25;
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(40, 56, 78, 0.96), rgba(28, 38, 54, 0.96));
+  border: 1px solid rgba(120, 170, 230, 0.35);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  font: 400 13px/1.4 var(--font-ui);
+}
+.file-open-banner > .icon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  font-size: 20px;
+  color: var(--accent);
+}
+.file-open-banner-text { flex: 1 1 auto; min-width: 0; }
+
 /* --- Data view (Assets > Data — DAT structure inspector) ------------------- */
 
 .data-viewer {
@@ -1819,6 +1860,8 @@ body.cinematic #canvas { cursor: none; }
   display: flex; gap: 10px;
   z-index: 20;
 }
+/* Make room for the open-failure banner when present. */
+.file-open-banner + .data-viewer { top: 118px; }
 /* .panel is fixed-position by default; these live in the viewer's flex row. */
 .data-viewer .panel { position: relative; inset: auto; }
 
@@ -1834,6 +1877,23 @@ body.cinematic #canvas { cursor: none; }
 }
 .data-card { display: flex; flex-direction: column; padding-bottom: 8px; overflow: hidden; }
 .data-card .details-row { padding: 0 12px; }
+.data-card-actions { padding: 10px 12px 4px; }
+.data-open-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(120, 170, 230, 0.35);
+  background: linear-gradient(180deg, rgba(60, 90, 130, 0.45), rgba(40, 60, 90, 0.55));
+  color: var(--text);
+  font: 600 12px/1.2 var(--font-ui);
+  cursor: pointer;
+}
+.data-open-btn:hover {
+  border-color: var(--accent);
+  background: linear-gradient(180deg, rgba(70, 110, 160, 0.55), rgba(45, 70, 105, 0.65));
+}
+.data-open-btn .icon { font-size: 18px; color: var(--accent); }
 .data-census { flex: 1 1 auto; min-height: 0; }
 
 .data-card-title {
@@ -1886,6 +1946,17 @@ body.cinematic #canvas { cursor: none; }
 .data-res-click:hover { background: rgba(255, 255, 255, 0.06); }
 .data-res-click:hover .data-id { color: var(--accent); }
 .data-res-click:hover .data-kind { color: var(--accent); }
+.data-res-click:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+  background: rgba(255, 255, 255, 0.05);
+}
+.data-tex-hint {
+  color: var(--muted);
+  font-style: italic;
+  opacity: 0.75;
+}
+.data-res-click:hover .data-tex-hint { color: var(--accent); opacity: 1; font-style: normal; }
 
 .data-census-row {
   display: flex; align-items: center; gap: 8px;

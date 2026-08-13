@@ -149,10 +149,37 @@ function decryptZoneObjects(bytes, dv, section, table1) {
 }
 
 // ── 0x2E geometry parse ─────────────────────────────────────────────────────
+/** True if `p` looks like a submesh header (texture name + sane nverts).
+ *  Prototype zones often leave the 16-byte texture name blank (all NUL/space). */
+function looksLikeSubmesh(bytes, dv, p, sectionEnd, stride) {
+  if (p + 20 > sectionEnd) return false;
+  let printable = 0;
+  let blank = true;
+  for (let i = 0; i < 16; i++) {
+    const c = bytes[p + i];
+    if (c === 0 || c === 0x20) continue;
+    blank = false;
+    if (c < 0x20 || c > 0x7e) return false;
+    printable++;
+  }
+  if (!blank && printable < 2) return false;
+  const numVerts = dv.getUint16(p + 16, true);
+  if (numVerts === 0 || numVerts > 20000) return false;
+  if (p + 20 + numVerts * stride + 4 > sectionEnd) return false;
+  // Blank-name headers still need a plausible index count after the verts.
+  const niAt = p + 20 + numVerts * stride;
+  const numIdx = dv.getUint16(niAt, true);
+  if (numIdx === 0 || numIdx > 60000) return false;
+  if (niAt + 4 + numIdx * 2 > sectionEnd) return false;
+  return true;
+}
+
 function parseZoneMeshSection(bytes, dv, section) {
   const ds = section.dataStart;
   const config = u32at(dv, ds + 4) & 0xFF;
-  const isStrip = (config & 0x1) !== 0;
+  // Bit0 = strip (xim). Some prototype MMBs leave the flag clear even when the
+  // index buffer is clearly a strip (count not divisible by 3) — detect that.
+  let isStrip = (config & 0x1) !== 0;
   const vertexBlend = (config & 0x2) !== 0;
   const meshName = strAt(bytes, ds + 0x10, 0x10);
 
@@ -160,13 +187,41 @@ function parseZoneMeshSection(bytes, dv, section) {
   const meshCount0 = u32at(dv, defStart);
   if (meshCount0 === 0) return { meshName, prims: [] }; // collision-only "hit" model
 
-  const section1Off = u32at(dv, ds + 0x3C);
-  const meshCount1 = u32at(dv, ds + 0x40);
-  let p = defStart + section1Off;
+  // Modern layout (xim ZoneMeshSection): after meshCount0 + bbox0 sits
+  // section1Off @ +0x3C and meshCount1 @ +0x40.
+  // Pre-production / MZB-era meshes (ROM/0/28,41,42,…) often leave those zero
+  // and park the data offset at +0x4C or +0x5C instead (still usually 0x60 from
+  // defStart). Some large floor meshes (e.g. hole1) then carry a SECOND group:
+  // after the first stream, count + bbox + pad + more submeshes.
+  const offOk = (v) => v > 0 && v < section.size - 0x20;
+  let section1Off = u32at(dv, ds + 0x3C);
+  let meshCount1 = u32at(dv, ds + 0x40);
+  // Prefer the smaller "near header" offsets first — +0x5C can be a large
+  // second-region pointer (see dual-group parse below), not the primary start.
+  if (!offOk(section1Off) || section1Off > 0x200) {
+    for (const at of [0x4c, 0x5c, 0x50, 0x58]) {
+      const alt = u32at(dv, ds + at);
+      if (offOk(alt) && alt <= 0x200) { section1Off = alt; break; }
+    }
+  }
+  if (!offOk(section1Off)) {
+    for (const at of [0x4c, 0x5c, 0x50, 0x58]) {
+      const alt = u32at(dv, ds + at);
+      if (offOk(alt)) { section1Off = alt; break; }
+    }
+  }
+  // +0x60 is often section-2's count sitting on a second bbox, NOT the submesh
+  // stream length — prefer meshCount0 when +0x40 is empty.
+  if (meshCount1 === 0 || meshCount1 > 256) meshCount1 = meshCount0;
+  if (!offOk(section1Off)) return { meshName, prims: [] };
+
   const stride = vertexBlend ? 48 : 36;
   const prims = [];
+  const sectionEnd = section.start + section.size;
 
-  for (let m = 0; m < meshCount1; m++) {
+  const parseOne = (pRef) => {
+    let p = pRef.p;
+    if (!looksLikeSubmesh(bytes, dv, p, sectionEnd, stride)) return false;
     const textureName = strAt(bytes, p, 0x10); p += 0x10;
     const numVerts = dv.getUint16(p, true);
     const flags = dv.getUint16(p + 2, true); p += 4;
@@ -195,6 +250,7 @@ function parseZoneMeshSection(bytes, dv, section) {
     }
 
     const numIndices = dv.getUint16(p, true); p += 4;
+    if (p + numIndices * 2 > sectionEnd) return false;
     // Keep raw indices so degenerate detection matches Python (index equality,
     // not vertex-object identity — required for correct strip restarts).
     const indices = new Array(numIndices);
@@ -203,6 +259,9 @@ function parseZoneMeshSection(bytes, dv, section) {
       p += 2;
     }
     p = (p + 3) & ~3; // align0x04 after each mesh
+
+    // Auto-detect strip when the flag is wrong but the index count can't be tris.
+    const useStrip = isStrip || (numIndices > 3 && numIndices % 3 !== 0);
 
     const positions = [], normals = [], uvs = [], colors = [], blendOffsets = [];
     const pushIdx = (ii) => {
@@ -213,7 +272,7 @@ function parseZoneMeshSection(bytes, dv, section) {
       if (vertexBlend) blendOffsets.push(vt[12], vt[13], vt[14]);
       return true;
     };
-    if (isStrip) {
+    if (useStrip) {
       // Degenerate tris (shared index) are strip restarts — reset parity so
       // winding stays consistent after the break (xi xi_export.py).
       let parity = 0;
@@ -233,10 +292,13 @@ function parseZoneMeshSection(bytes, dv, section) {
       }
     }
     if (positions.length) {
+      // Blank-name prototype meshes (no 0x20 textures in the DAT) often author
+      // floor/ceiling winding that back-face culls under our Y flip — two-sided.
+      const blankTex = !textureName || !textureName.trim();
       prims.push({
         textureName: textureName || null,
         blend,
-        noCull,
+        noCull: noCull || blankTex,
         hasBlendPos: vertexBlend,
         positions: new Float32Array(positions),
         blendOffsets: vertexBlend ? new Float32Array(blendOffsets) : null,
@@ -245,22 +307,102 @@ function parseZoneMeshSection(bytes, dv, section) {
         colors: new Float32Array(colors),
       });
     }
+    pRef.p = p;
+    return true;
+  };
+
+  // Primary stream (defStart-relative offset, like xim).
+  const pRef = { p: defStart + section1Off };
+  // Only read while headers look like submeshes — a high meshCount0 often means
+  // "N LOD/groups" with group headers between streams, not N back-to-back parts.
+  for (let m = 0; m < 64; m++) {
+    if (!parseOne(pRef)) break;
   }
+  let highWater = pRef.p;
+
+  // Further groups: count(u32) + bbox(6×f32) + pad(u32) = 0x20, then submeshes.
+  // Large floor/wall meshes chain several of these (mc0=3 → up to 3 groups).
+  // Also reachable via pointers at +0x4C / +0x5C. highWater avoids double-adds.
+  const tryGroupAt = (at) => {
+    if (at + 0x30 > sectionEnd) return false;
+    // Already consumed this region via the cursor chain.
+    if (at + 0x20 < highWater) return false;
+    const c2 = u32at(dv, at);
+    if (c2 < 1 || c2 > 64) return false;
+    const nameAt = at + 0x20;
+    if (!looksLikeSubmesh(bytes, dv, nameAt, sectionEnd, stride)) return false;
+    const p2 = { p: nameAt };
+    let n = 0;
+    for (let m = 0; m < c2; m++) {
+      if (!parseOne(p2)) break;
+      n++;
+    }
+    if (n > 0) {
+      pRef.p = p2.p;
+      highWater = Math.max(highWater, p2.p);
+    }
+    return n > 0;
+  };
+
+  // Keep consuming group headers from the current cursor.
+  for (let g = 0; g < 8; g++) {
+    if (!tryGroupAt(pRef.p)) break;
+  }
+  // Pointer fallbacks for groups the cursor didn't reach.
+  for (const at of [0x4c, 0x5c]) {
+    const off = u32at(dv, ds + at);
+    if (!offOk(off) || off <= section1Off) continue;
+    if (!tryGroupAt(ds + off)) tryGroupAt(defStart + off);
+    for (let g = 0; g < 8; g++) {
+      if (!tryGroupAt(pRef.p)) break;
+    }
+  }
+
   return { meshName, prims };
 }
 
 // ── 0x1C placement parse ────────────────────────────────────────────────────
+// Modern retail objects are 0x64 bytes. Pre-production MZB zones (mode ≤ 5,
+// ROM/0/28·41·42…) pack the same name/pos/rot/scale fields into 0x54 bytes —
+// using 0x64 there misaligns every entry after the first and yields garbage.
+const OBJ_STRIDE_MODERN = 0x64;
+const OBJ_STRIDE_PROTO = 0x54;
+
+function zoneDefObjectStride(bytes, dv, ds, nodeCount) {
+  const mode = (u32at(dv, ds) >>> 24) & 0xFF;
+  // Mode 5 (and below, once past the "not encrypted" check) is the prototype
+  // MZB layout. Higher modes use the modern 0x64 stride after decrypt.
+  if (mode > 0 && mode <= 5) return OBJ_STRIDE_PROTO;
+  // Fallback: prefer the stride that yields more printable mesh-id names.
+  if (nodeCount < 2) return OBJ_STRIDE_MODERN;
+  const score = (stride) => {
+    let n = 0;
+    for (let i = 0; i < Math.min(nodeCount, 32); i++) {
+      const id = strAt(bytes, ds + 0x20 + i * stride, 0x10);
+      if (id.length >= 2 && /^[\x20-\x7e]+$/.test(id)) n++;
+    }
+    return n;
+  };
+  const s54 = score(OBJ_STRIDE_PROTO);
+  const s64 = score(OBJ_STRIDE_MODERN);
+  return s54 > s64 + 2 ? OBJ_STRIDE_PROTO : OBJ_STRIDE_MODERN;
+}
+
 function parseZoneDef(bytes, dv, section, table1) {
   const nodeCount = decryptZoneObjects(bytes, dv, section, table1);
   const ds = section.dataStart;
+  const stride = zoneDefObjectStride(bytes, dv, ds, nodeCount);
   const placements = [];
+  const sectionEnd = section.start + section.size;
   for (let i = 0; i < nodeCount; i++) {
-    const b = ds + 0x20 + i * 0x64;
+    const b = ds + 0x20 + i * stride;
+    if (b + 0x34 > sectionEnd) break;
     const meshId = strAt(bytes, b, 0x10);
     placements.push({
       meshId,
       index: i,   // stable DAT object index — lets edits target the EXACT instance of a shared mesh name
-      fileIdLink: dv.getUint32(b + 0x50, true) || null,  // sub-area id this object is a placeholder for (0 = none); hide it when that interior is shown
+      // fileIdLink sits at +0x50 in the modern 0x64 record; absent on 0x54 proto.
+      fileIdLink: stride >= OBJ_STRIDE_MODERN ? (dv.getUint32(b + 0x50, true) || null) : null,
       pos: [dv.getFloat32(b + 0x10, true), dv.getFloat32(b + 0x14, true), dv.getFloat32(b + 0x18, true)],
       rot: [dv.getFloat32(b + 0x1C, true), dv.getFloat32(b + 0x20, true), dv.getFloat32(b + 0x24, true)],
       scale: [dv.getFloat32(b + 0x28, true), dv.getFloat32(b + 0x2C, true), dv.getFloat32(b + 0x30, true)],
@@ -436,10 +578,9 @@ function decodePalette(r, width, height, paletted) {
 function parseTexture(bytes, dv, section) {
   const r = new Reader(dv, section.dataStart);
   const texType = r.u8();
-  // 0x81: older 8-bit-paletted variant in prototype/beta zones (e.g. rom/0/28.dat);
-  // identical header+data layout to 0x91, so it decodes via the same paletted path.
-  // Without it the zone parses 0 textures and renders untextured (Noesis handles 0x81).
-  if (![0x81, 0x91, 0xA1, 0xB1].includes(texType)) return null;
+  // Paletted: 0x01 / 0x05 (common in field zones), 0x81 (proto/beta), 0x91, 0xB1.
+  // DXT: 0xA1. 0x01/0x05/0x81 share the 0x91 header+payload layout.
+  if (![0x01, 0x05, 0x81, 0x91, 0xA1, 0xB1].includes(texType)) return null;
   const name = r.str(0x10);
   r.u32();
   const width = r.u32(), height = r.u32();
@@ -473,11 +614,17 @@ export function parseDatTextures(datBuffer) {
   for (const s of parseSections(dv)) {
     if (s.typeCode !== 0x20) continue;
     const img = parseTexture(bytes, dv, s);
-    if (!img || out.has(img.name)) continue;
-    out.set(img.name, {
+    if (!img) continue;
+    const entry = {
       name: img.name, width: img.width, height: img.height,
       format: 'rgba32', data: img.rgba,
-    });
+    };
+    // Key by embedded name and by section fourcc (structure tree shows the id).
+    if (img.name && !out.has(img.name)) out.set(img.name, entry);
+    if (s.id && !out.has(s.id)) out.set(s.id, entry);
+    // Also the 8+8 category/name halves ("twr2bai tower_25" → "tower_25").
+    const half = img.name.length > 8 ? img.name.slice(8).trim() : '';
+    if (half && !out.has(half)) out.set(half, entry);
   }
   return out;
 }
@@ -486,9 +633,20 @@ export function parseDatTextures(datBuffer) {
 const norm = (s) => s.replace(/ /g, '').replace(/_/g, '').toLowerCase();
 
 export function resolveMeshName(meshId, meshes) {
+  if (!meshId) return null;
   if (meshes.has(meshId)) return meshId;
   const base = ['_l', '_m', '_h'].includes(meshId.slice(-2)) ? meshId.slice(0, -2) : meshId;
   for (const suffix of ['_h', '_m', '_l']) if (meshes.has(base + suffix)) return base + suffix;
+  // Prototype zones: mesh DAT name is often "category meshid" (e.g. "twr2bai
+  // ue_wallh") while placements store just "ue_wallh".
+  const want = norm(meshId);
+  if (want.length >= 2) {
+    for (const key of meshes.keys()) {
+      const k = norm(key);
+      if (k === want) return key;
+      if (k.endsWith(want) || k.split(/\s+/).includes(want) || want.endsWith(k)) return key;
+    }
+  }
   return null;
 }
 
@@ -587,6 +745,13 @@ export function parseZone(datBuffer, keyTables) {
     }
 
     if (!meshes.has(meshName)) meshes.set(meshName, prims);
+    // Aliases for prototype placements that store a short id / section fourcc.
+    if (s.id && !meshes.has(s.id)) meshes.set(s.id, prims);
+    const parts = meshName.split(/\s+/).filter(Boolean);
+    if (parts.length > 1) {
+      const tail = parts[parts.length - 1];
+      if (tail && !meshes.has(tail)) meshes.set(tail, prims);
+    }
   }
 
   let placements = [];
