@@ -182,7 +182,7 @@ function snapshotLoadout(race, sel, slots) {
   return { race, gear };
 }
 
-export function useCharacter({ enabled, onLoad, onError }) {
+export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
   const saved = useRef(loadPcState());
   const [races, setRaces] = useState(null);
   const [race, setRaceState] = useState(saved.current.race ?? '');
@@ -195,9 +195,17 @@ export function useCharacter({ enabled, onLoad, onError }) {
   const [actions, setActions] = useState([]);
   const [actionGroup, setActionGroupState] = useState('');
   const [action, setAction] = useState('');
+  // Slot keys (incl. 'race') currently isolated — empty = show everything.
+  const [isolated, setIsolated] = useState(() => new Set());
+  const isolatedRef = useRef(isolated);
+  isolatedRef.current = isolated;
   const lastKey = useRef('');
   const lastRace = useRef('');                  // race of the last onLoad (camera keep)
   const restored = useRef(false);               // saved selections applied?
+  const isoCbRef = useRef(onIsolationChange);
+  isoCbRef.current = onIsolationChange;
+  // Latest parts list from the last assemble (for isolation path lookup).
+  const partsRef = useRef([]);
   const carry = useRef({ gear: {}, actionKey: null });   // selections to carry across a race switch
   const pendingGear = useRef(null);             // gear-set labels to apply after race/slots ready
   const prevSelRef = useRef(null);              // sel snapshot from the last onLoad (for displayPath)
@@ -214,6 +222,8 @@ export function useCharacter({ enabled, onLoad, onError }) {
     lastKey.current = '';
     lastRace.current = '';
     prevSelRef.current = null;
+    setIsolated(new Set());
+    isoCbRef.current?.(new Set(), []);
     setRaceState(id);
   };
 
@@ -359,14 +369,14 @@ export function useCharacter({ enabled, onLoad, onError }) {
       if (!item) return;
       paths.push(...item.paths);
       if (s.key === 'main' || s.key === 'sub') weaponSlots[s.key] = item.paths;
-      if (item.paths.length) {
-        parts.push({
-          key: s.key,
-          label: s.section === 'Weapon' ? `Weapon: ${s.label}` : s.label,
-          itemLabel: item.label,
-          paths: item.paths,
-        });
-      }
+      // Always list every equipped slot in Details / Data Struct — including
+      // None placeholders (they still have a DAT) and empty-path stubs.
+      parts.push({
+        key: s.key,
+        label: s.section === 'Weapon' ? `Weapon: ${s.label}` : s.label,
+        itemLabel: item.label,
+        paths: item.paths ?? [],
+      });
     }
     const act = actions.find((a) => a.id === action);
     if (action && !act) return;
@@ -396,6 +406,7 @@ export function useCharacter({ enabled, onLoad, onError }) {
     }
     prevSelRef.current = { ...sel };
 
+    partsRef.current = parts;
     cbRef.current.onLoad?.({
       name: r.label,
       paths: unique,
@@ -409,7 +420,20 @@ export function useCharacter({ enabled, onLoad, onError }) {
       keepCamera: isGearSwap,
     });
     lastRace.current = race;
+    // Re-apply current isolation against the new part paths (gear/race swap).
+    isoCbRef.current?.(isolatedRef.current, parts);
   }, [enabled, races, race, slots, slotsRace, sel, actions, action]);
+
+  const toggleIsolate = useCallback((key) => {
+    setIsolated((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      // Defer notify so state is consistent; paths from latest assemble.
+      queueMicrotask(() => isoCbRef.current?.(next, partsRef.current));
+      return next;
+    });
+  }, []);
 
   /** Apply a saved gear set (race + slot labels). Switches race if needed. */
   const applyGearSet = useCallback((entry) => {
@@ -447,13 +471,17 @@ export function useCharacter({ enabled, onLoad, onError }) {
     races, race, setRace, slots, sel, setSel,
     actionGroups, actionGroup, setActionGroup, actionEntries, action, setAction,
     applyGearSet,
+    isolated, toggleIsolate,
   };
 }
 
 // ---------------------------------------------------------------------------
 
 export function CharacterList({ pc }) {
-  const { races, race, setRace, slots, sel, setSel, applyGearSet } = pc;
+  const {
+    races, race, setRace, slots, sel, setSel, applyGearSet,
+    isolated, toggleIsolate,
+  } = pc;
   const raceItems = (races ?? []).map((r) => ({ id: r.id, label: r.label }));
   const pick = (key) => (id) => setSel((s) => ({ ...s, [key]: id }));
 
@@ -469,15 +497,49 @@ export function CharacterList({ pc }) {
     });
   };
 
+  const isoBtn = (key, { disabled = false } = {}) => (
+    <button
+      type="button"
+      className={`pc-iso${isolated?.has(key) ? ' on' : ''}${disabled ? ' disabled' : ''}`}
+      title={disabled
+        ? 'Nothing equipped'
+        : isolated?.has(key) ? 'Show all (clear isolation)' : 'Isolate this DAT'}
+      aria-label="Isolate"
+      aria-pressed={isolated?.has(key) ? 'true' : 'false'}
+      disabled={disabled}
+      onClick={() => { if (!disabled) toggleIsolate?.(key); }}
+    >
+      <span className="icon">visibility</span>
+    </button>
+  );
+
+  // Clear isolation when a slot is switched to None (no mesh to show alone).
+  useEffect(() => {
+    if (!slots || !isolated?.size) return;
+    for (const s of SLOTS) {
+      if (!isolated.has(s.key)) continue;
+      const item = slots[s.key]?.find((it) => it.id === sel[s.key]);
+      const isNone = !item
+        || /^none$/i.test(item.label ?? '')
+        || !(item.paths?.length);
+      if (isNone) toggleIsolate?.(s.key);
+    }
+  }, [sel, slots, isolated, toggleIsolate]);
+
   const slotCtrl = (s) => {
     const items = slots?.[s.key];
     if (!items?.length) return null;
     // Weapon + armor: type first (Katana / Artifact / …), then the piece.
     const typed = s.section === 'Weapon' || s.section === 'Armor';
+    const item = items.find((it) => it.id === sel[s.key]);
+    const isNone = !item
+      || /^none$/i.test(item.label ?? '')
+      || !(item.paths?.length);
     return (
       <div className="pc-ctrl" key={s.key}>
         <span className="pc-ctrl-label">{s.label}</span>
         <Combo value={sel[s.key]} items={items} onChange={pick(s.key)} groupByType={typed} />
+        {isoBtn(s.key, { disabled: isNone })}
       </div>
     );
   };

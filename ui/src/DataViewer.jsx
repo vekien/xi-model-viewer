@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { fmtBytes } from '../js/dat/inspect.js';
 import { ENTITY_MODEL_OFFSET, GEAR_SLOTS, GEAR_TABLES, RACE_LABELS, gearIndex } from '../js/dat/modelids.js';
+import { Combo } from './Combo.jsx';
 
 /** Cap on rendered file-table rows — the base table registers ~50k ids. */
 const FT_MAX_ROWS = 1000;
@@ -10,8 +11,13 @@ const FT_MAX_ROWS = 1000;
  * tree the client walks (0x01/0x00 sections); right column is the file card
  * and a per-type census. Resources are listed with a header peek (dimensions,
  * joint counts, sound ids), never their payload.
+ *
+ * `sources` — optional multi-DAT set (PC parts, creation files). Dropdown
+ * switches which file File/Contents/Structure describe.
  */
-export function DataViewer({ doc, onOpenTexture, onOpenDat, onRenderFile }) {
+export function DataViewer({
+  doc, sources, onSelectSource, onOpenTexture, onOpenSkeleton, onRevealPath, onOpenDat, onRenderFile,
+}) {
   if (!doc) {
     return (
       <div className="data-viewer">
@@ -34,10 +40,27 @@ export function DataViewer({ doc, onOpenTexture, onOpenDat, onRenderFile }) {
   if (doc.kind === 'events') return <EventsView doc={doc} />;
   if (doc.kind === 'dialog') return <DialogView doc={doc} />;
 
+  const sourceItems = (sources?.length > 1)
+    ? sources.map((s) => ({ id: s.path, label: s.label }))
+    : null;
+  const activePath = doc.fullPath || '';
+  const activeSource = sourceItems
+    ? (sourceItems.find((s) => s.id.toLowerCase() === activePath.toLowerCase())?.id
+      ?? sourceItems[0]?.id)
+    : '';
+
   if (doc.kind === 'other') {
     return (
       <div className="data-viewer">
         <div className="panel data-main">
+          <div className="data-card-title">
+            <span className="icon">data_array</span>Structure
+          </div>
+          <StructureToolbar
+            sourceItems={sourceItems}
+            activeSource={activeSource}
+            onSelectSource={onSelectSource}
+          />
           <div className="data-empty">
             <span className="icon">data_array</span>
             <div className="data-empty-title">{doc.label}</div>
@@ -50,36 +73,229 @@ export function DataViewer({ doc, onOpenTexture, onOpenDat, onRenderFile }) {
             </div>
           </div>
         </div>
+        <div className="data-side">
+          <div className="panel data-card">
+            <div className="data-card-title"><span className="icon">description</span>File</div>
+            {sourceItems && (
+              <div className="data-source-combo data-source-combo-side">
+                <Combo value={activeSource} items={sourceItems} onChange={(id) => onSelectSource?.(id)} />
+              </div>
+            )}
+            <PathRow label="Path" value={doc.path} mono onClick={onRevealPath ? () => onRevealPath(doc.fullPath || doc.path) : undefined} />
+            {doc.fullPath && (
+              <PathRow label="Full path" value={doc.fullPath} mono onClick={onRevealPath ? () => onRevealPath(doc.fullPath) : undefined} />
+            )}
+            <Row label="Size" value={fmtBytes(doc.fileSize)} />
+          </div>
+        </div>
       </div>
     );
   }
+
+  return (
+    <SectionsView
+      doc={doc}
+      sourceItems={sourceItems}
+      activeSource={activeSource}
+      onSelectSource={onSelectSource}
+      onOpenTexture={onOpenTexture}
+      onOpenSkeleton={onOpenSkeleton}
+      onRevealPath={onRevealPath}
+      onRenderFile={onRenderFile}
+    />
+  );
+}
+
+/** DAT dropdown + structure search row. Search is optional (other/empty views). */
+function StructureToolbar({
+  sourceItems, activeSource, onSelectSource, query, setQuery, matchCount, totalHint,
+}) {
+  const hasSources = !!sourceItems?.length;
+  const hasSearch = typeof setQuery === 'function';
+  if (!hasSources && !hasSearch) return null;
+  return (
+    <div className={`data-struct-bar${hasSources && hasSearch ? ' dual' : ''}`}>
+      {hasSources && (
+        <div className="data-source-combo">
+          <Combo
+            value={activeSource}
+            items={sourceItems}
+            onChange={(id) => onSelectSource?.(id)}
+          />
+        </div>
+      )}
+      {hasSearch && (
+        <div className="data-struct-search">
+          <span className="icon">search</span>
+          <input
+            className="list-search"
+            type="search"
+            placeholder="Filter name or type (e.g. EffectRoutine)…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {query && (
+            <button
+              type="button"
+              className="list-search-clear"
+              onClick={() => setQuery('')}
+              title="Clear"
+            >
+              <span className="icon">close</span>
+            </button>
+          )}
+          {query.trim() && matchCount != null && (
+            <span className="data-struct-match mono" title={totalHint || ''}>
+              {matchCount.toLocaleString()}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Match resource/folder text against the structure filter. */
+function nodeMatchesQuery(node, q) {
+  if (!q) return true;
+  const hay = [
+    node.id,
+    node.name,
+    node.detail,
+    node.textureName,
+    ...(node.flags ?? []),
+    node.type != null && node.type >= 0 ? `0x${node.type.toString(16)}` : '',
+    node.type != null && node.type >= 0 ? String(node.type) : '',
+  ].filter(Boolean).join(' ').toLowerCase();
+  return hay.includes(q);
+}
+
+/**
+ * Filter the structure tree: keep a resource if it matches; keep a folder if
+ * its id matches or any descendant is kept. Returns a shallow-cloned tree.
+ */
+function filterStructureTree(root, query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return { root, matchCount: null };
+
+  let matchCount = 0;
+  const filter = (node) => {
+    if (node.kind === 'res') {
+      if (nodeMatchesQuery(node, q)) { matchCount++; return node; }
+      return null;
+    }
+    // dir
+    const kids = [];
+    for (const c of node.children ?? []) {
+      const kept = filter(c);
+      if (kept) kids.push(kept);
+    }
+    const selfHit = nodeMatchesQuery(node, q);
+    if (!kids.length && !selfHit) return null;
+    if (selfHit && !kids.length) matchCount++; // empty matching folder
+    return { ...node, children: kids };
+  };
+
+  const next = filter(root) || { kind: 'dir', id: '(root)', children: [] };
+  return { root: next, matchCount };
+}
+
+function countRes(node) {
+  if (!node) return 0;
+  if (node.kind === 'res') return 1;
+  let n = 0;
+  for (const c of node.children ?? []) n += countRes(c);
+  return n;
+}
+
+function SectionsView({
+  doc, sourceItems, activeSource, onSelectSource,
+  onOpenTexture, onOpenSkeleton, onRevealPath, onRenderFile,
+}) {
+  const [query, setQuery] = useState('');
+  // Reset filter when switching DAT / reloading structure.
+  const docKey = doc.fullPath || doc.path || '';
+  useEffect(() => { setQuery(''); }, [docKey]);
+
+  const { root: shownRoot, matchCount } = useMemo(
+    () => filterStructureTree(doc.root, query),
+    [doc.root, query],
+  );
+  const totalRes = useMemo(() => countRes(doc.root), [doc.root]);
+
+  const isCreation = doc.format === 'creation';
+  const structureNote = isCreation
+    ? (doc.formatLabel || doc.magic || 'creation')
+    : `${doc.sectionCount.toLocaleString()} sections`;
 
   return (
     <div className="data-viewer">
       <div className="panel data-main">
         <div className="data-card-title">
           <span className="icon">account_tree</span>Structure
-          <span className="data-card-note mono">
-            {doc.sectionCount.toLocaleString()} sections
-          </span>
+          <span className="data-card-note mono">{structureNote}</span>
         </div>
+        <StructureToolbar
+          sourceItems={sourceItems}
+          activeSource={activeSource}
+          onSelectSource={onSelectSource}
+          query={query}
+          setQuery={setQuery}
+          matchCount={matchCount}
+          totalHint={`${totalRes.toLocaleString()} total`}
+        />
         <div className="data-tree">
-          <DirNode dir={doc.root} depth={0} onOpenTexture={onOpenTexture} />
+          {query.trim() && matchCount === 0 ? (
+            <div className="data-filter-empty">No sections match “{query.trim()}”.</div>
+          ) : (
+            <DirNode
+              dir={shownRoot}
+              depth={0}
+              forceOpen={!!query.trim()}
+              onOpenTexture={onOpenTexture}
+              onOpenSkeleton={onOpenSkeleton}
+            />
+          )}
         </div>
       </div>
 
       <div className="data-side">
         <div className="panel data-card">
           <div className="data-card-title"><span className="icon">description</span>File</div>
-          <Row label="Path" value={doc.path} mono />
+          {sourceItems && (
+            <div className="data-source-combo data-source-combo-side">
+              <Combo value={activeSource} items={sourceItems} onChange={(id) => onSelectSource?.(id)} />
+            </div>
+          )}
+          <PathRow
+            label="Path"
+            value={doc.path}
+            mono
+            onClick={onRevealPath ? () => onRevealPath(doc.fullPath || doc.path) : undefined}
+          />
           {doc.fullPath && (
-            <Row label="Full path" value={doc.fullPath} mono />
+            <PathRow
+              label="Full path"
+              value={doc.fullPath}
+              mono
+              onClick={onRevealPath ? () => onRevealPath(doc.fullPath) : undefined}
+            />
           )}
           <Row label="Size" value={fmtBytes(doc.fileSize)} />
-          <Row label="Sections" value={doc.sectionCount.toLocaleString()} />
-          <Row label="Folders" value={doc.dirCount.toLocaleString()} />
-          <Row label="Depth" value={doc.maxDepth} />
-          {doc.warnings.map((w, i) => (
+          {isCreation ? (
+            <>
+              <Row label="Format" value={doc.formatLabel || doc.magic || 'creation'} />
+              {doc.magic && <Row label="Magic" value={doc.magic} mono />}
+              <Row label="Entries" value={doc.sectionCount.toLocaleString()} />
+            </>
+          ) : (
+            <>
+              <Row label="Sections" value={doc.sectionCount.toLocaleString()} />
+              <Row label="Folders" value={doc.dirCount.toLocaleString()} />
+              <Row label="Depth" value={doc.maxDepth} />
+            </>
+          )}
+          {(doc.warnings ?? []).map((w, i) => (
             <div key={i} className="data-warning">
               <span className="icon">warning</span>{w}
             </div>
@@ -97,14 +313,32 @@ export function DataViewer({ doc, onOpenTexture, onOpenDat, onRenderFile }) {
         <div className="panel data-card data-census">
           <div className="data-card-title"><span className="icon">category</span>Contents</div>
           <div className="data-census-rows">
-            {doc.summary.map((row) => (
-              <div key={row.type} className="data-census-row">
-                <span className="icon">{row.icon}</span>
-                <span className="data-census-name">{row.name}</span>
-                <span className="data-census-count mono">{row.count.toLocaleString()}</span>
-                <span className="data-census-bytes mono">{fmtBytes(row.bytes)}</span>
-              </div>
-            ))}
+            {(doc.summary ?? []).map((row) => {
+              const texClick = (row.type === 0x20 || row.name === 'Texture') && onOpenTexture;
+              const q = query.trim().toLowerCase();
+              const dim = q && !row.name.toLowerCase().includes(q);
+              return (
+                <div
+                  key={row.type}
+                  className={`data-census-row${texClick ? ' data-census-click' : ''}${dim ? ' data-census-dim' : ''}`}
+                  role={texClick ? 'button' : undefined}
+                  tabIndex={texClick ? 0 : undefined}
+                  title={texClick ? 'Click to view texture' : undefined}
+                  onClick={texClick ? () => onOpenTexture(null) : undefined}
+                  onKeyDown={texClick ? (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onOpenTexture(null);
+                    }
+                  } : undefined}
+                >
+                  <span className="icon">{row.icon}</span>
+                  <span className="data-census-name">{row.name}</span>
+                  <span className="data-census-count mono">{row.count.toLocaleString()}</span>
+                  <span className="data-census-bytes mono">{row.bytes ? fmtBytes(row.bytes) : ''}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -782,8 +1016,10 @@ function GearSlotNode({ node, onOpenDat }) {
   );
 }
 
-function DirNode({ dir, depth, onOpenTexture }) {
-  const [open, setOpen] = useState(depth < 4);
+function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton }) {
+  const [open, setOpen] = useState(depth < 4 || !!forceOpen);
+  // While filtering, keep matching branches expanded.
+  const expanded = forceOpen || open;
   // Folder rows summarise what's inside so a collapsed tree still reads.
   const counts = useMemo(() => {
     let dirs = 0, res = 0;
@@ -805,7 +1041,7 @@ function DirNode({ dir, depth, onOpenTexture }) {
           style={{ paddingLeft: 8 + depth * 14 }}
           onClick={() => setOpen((v) => !v)}
         >
-          <span className={`icon data-caret${open ? ' open' : ''}`}>chevron_right</span>
+          <span className={`icon data-caret${expanded ? ' open' : ''}`}>chevron_right</span>
           <span className="icon data-kind">folder</span>
           <span className="data-id mono">{dir.id || '(unnamed)'}</span>
           <span className="data-dir-counts mono">
@@ -813,30 +1049,63 @@ function DirNode({ dir, depth, onOpenTexture }) {
           </span>
         </div>
       )}
-      {(isRoot || open) && dir.children.map((c, i) => (
+      {(isRoot || expanded) && dir.children.map((c, i) => (
         c.kind === 'dir'
-          ? <DirNode key={`d${i}`} dir={c} depth={depth + 1} onOpenTexture={onOpenTexture} />
-          : <ResRow key={`r${i}`} res={c} depth={depth + 1} onOpenTexture={onOpenTexture} />
+          ? (
+            <DirNode
+              key={`d${i}`}
+              dir={c}
+              depth={depth + 1}
+              forceOpen={forceOpen}
+              onOpenTexture={onOpenTexture}
+              onOpenSkeleton={onOpenSkeleton}
+            />
+          )
+          : (
+            <ResRow
+              key={`r${i}`}
+              res={c}
+              depth={depth + 1}
+              onOpenTexture={onOpenTexture}
+              onOpenSkeleton={onOpenSkeleton}
+            />
+          )
       ))}
     </div>
   );
 }
 
-function ResRow({ res, depth, onOpenTexture }) {
-  const clickable = !!(res.isTexture || res.textureName) && !!onOpenTexture;
+function ResRow({ res, depth, onOpenTexture, onOpenSkeleton }) {
+  const isTex = !!(res.isTexture || res.textureName || res.type === 0x20 || res.name === 'Texture');
+  // 0x29 Skeleton — accept numeric 41 or hex, name, or inspect flag.
+  const isSkel = !!(res.isSkeleton
+    || res.type === 0x29 || res.type === 41
+    || res.name === 'Skeleton'
+    || res.skeletonKind);
+  const texClick = isTex && !!onOpenTexture;
+  const skelClick = isSkel && !!onOpenSkeleton;
+  const clickable = texClick || skelClick;
   const openKey = res.textureName || res.id?.trim() || null;
+  const onActivate = (e) => {
+    e?.stopPropagation?.();
+    if (skelClick) onOpenSkeleton(res);
+    else if (texClick && openKey) onOpenTexture(openKey);
+  };
+  const flags = res.flags ?? [];
   return (
     <div
-      className={`data-row data-res-row${clickable ? ' data-res-click' : ''}`}
+      className={`data-row data-res-row${isTex ? ' data-res-tex' : ''}${isSkel ? ' data-res-skel' : ''}${clickable ? ' data-res-click' : ''}`}
       style={{ paddingLeft: 8 + depth * 14 }}
-      title={clickable
-        ? `Click to view texture · offset 0x${res.offset.toString(16).toUpperCase()}`
-        : `offset 0x${res.offset.toString(16).toUpperCase()}${res.flags.length ? ` · ${res.flags.join(', ')}` : ''}`}
-      onClick={clickable && openKey ? () => onOpenTexture(openKey) : undefined}
+      title={skelClick
+        ? `Click to view skeleton tree · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
+        : texClick
+          ? `Click to view texture · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
+          : `offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}${flags.length ? ` · ${flags.join(', ')}` : ''}`}
+      onClick={clickable ? onActivate : undefined}
       role={clickable ? 'button' : undefined}
       tabIndex={clickable ? 0 : undefined}
-      onKeyDown={clickable && openKey ? (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenTexture(openKey); }
+      onKeyDown={clickable ? (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onActivate(e); }
       } : undefined}
     >
       <span className="data-caret-pad" />
@@ -844,8 +1113,10 @@ function ResRow({ res, depth, onOpenTexture }) {
       <span className="data-id mono">{res.id || '····'}</span>
       <span className="data-type">{res.name}</span>
       {res.detail && <span className="data-detail mono">{res.detail}</span>}
-      {clickable && !res.detail && <span className="data-detail data-tex-hint">click to view</span>}
-      {res.flags.length > 0 && <span className="data-flags mono">{res.flags.join(' ')}</span>}
+      {clickable && !res.detail && (
+        <span className="data-detail data-tex-hint">click to view</span>
+      )}
+      {flags.length > 0 && <span className="data-flags mono">{flags.join(' ')}</span>}
       <span className="data-size mono">{fmtBytes(res.size)}</span>
     </div>
   );
@@ -856,6 +1127,24 @@ function Row({ label, value, mono }) {
     <div className="details-row">
       <span className="details-row-label">{label}</span>
       <span className={`details-row-value${mono ? ' mono' : ''}`}>{value}</span>
+    </div>
+  );
+}
+
+/** Clickable path row — jumps the File Browser to that DAT / folder. */
+function PathRow({ label, value, mono, onClick }) {
+  if (!onClick || !value) return <Row label={label} value={value} mono={mono} />;
+  return (
+    <div className="details-row">
+      <span className="details-row-label">{label}</span>
+      <button
+        type="button"
+        className={`details-row-value details-path-link${mono ? ' mono' : ''}`}
+        title="Show in File Browser"
+        onClick={onClick}
+      >
+        {value}
+      </button>
     </div>
   );
 }

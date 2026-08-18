@@ -410,6 +410,21 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .pc-ctrl .combo-input { flex: 1 1 auto; width: auto; min-width: 0; }
+/* Per-slot mesh isolation — bare icon, blue when active. */
+.pc-iso {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0;
+  border: none; background: transparent; border-radius: 6px;
+  color: var(--gray-500);
+  cursor: pointer;
+}
+.pc-iso:hover { background: transparent; border: none; color: var(--gray-300); }
+.pc-iso.on, .pc-iso.on:hover { color: var(--accent); background: transparent; border: none; }
+.pc-iso.disabled, .pc-iso.disabled:hover {
+  color: var(--gray-600); opacity: 0.35; cursor: default;
+}
+.pc-iso .icon { font-size: 18px; }
 .pc-panel .side-separator { padding: 10px 0 2px; }
 /* Gear set library — flat list under Look String */
 .gs-panel {
@@ -679,47 +694,73 @@ button.gs-tool:focus-visible {
 .anim-title { display: flex; align-items: center; gap: 6px; }
 .anim-title .icon { color: var(--accent); font-size: 18px; }
 
-/* --- Status bar ------------------------------------------------------------ */
+/* --- Status bars (two floating pills) -------------------------------------- */
+/* Left:  DAT path · Data Struct
+   Right: live status + Objects / Skeleton / Details */
 
-#status {
-  left: 12px; right: 12px; bottom: 12px;
-  display: flex; justify-content: space-between; align-items: center; gap: 16px;
+#statusFile {
+  left: 12px;
+  bottom: 12px;
+  right: auto;
+  max-width: min(48vw, 560px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 7px 12px;
   color: var(--muted);
+  z-index: 25;
 }
-.status-left {
-  flex: 1 1 auto; min-width: 0;
-  display: flex; align-items: center; gap: 10px;
+#statusFile #statusPath {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 36vw;
   overflow: hidden;
-}
-.status-left .status-link {
-  flex: 0 0 auto;
-}
-.status-left .status-link.on {
-  font-weight: 600;
-}
-#status #statusPath {
-  flex: 1 1 auto; min-width: 0;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--gray-200);
 }
+#statusFile .status-data-struct {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+#statusFile .status-data-struct.on {
+  font-weight: 600;
+}
+
+#status {
+  left: auto;
+  right: 12px;
+  bottom: 12px;
+  max-width: min(50vw, 720px);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 7px 12px;
+  color: var(--muted);
+  z-index: 25;
+}
 #status .hints {
-  flex: 0 0 auto; color: var(--muted);
-  display: flex; align-items: center; gap: 8px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .status-actor { color: var(--gray-200); }
-.status-sep { color: var(--gray-600); }
+.status-sep { color: var(--gray-600); flex: 0 0 auto; }
 .status-link {
   background: none; border: none; box-shadow: none; min-height: 0; padding: 0;
   color: var(--accent); font: inherit; cursor: pointer;
+  flex: 0 0 auto;
 }
 .status-link:hover { text-decoration: underline; background: none; }
-/* The path reads as text until hovered — it's a whole-width target, so styling
-   it like the accent links would shout. */
 .status-path-link {
   background: none; border: none; box-shadow: none; min-height: 0; padding: 0;
   font: inherit; text-align: left; cursor: pointer;
+  color: inherit;
 }
 .status-path-link:hover { background: none; color: var(--accent); text-decoration: underline; }
 
@@ -1017,6 +1058,23 @@ body:has(#placements) #animbar { right: 344px; }
 .details-row-label { color: var(--muted); flex: 0 0 92px; font-size: 12px; }
 .details-row-value { color: var(--gray-100); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
 .details-row-value.mono { font-family: var(--font-mono); font-size: 11px; }
+.details-path-link {
+  display: block;
+  max-width: 100%;
+  margin: 0; padding: 0;
+  border: none; background: none; box-shadow: none;
+  text-align: left;
+  color: var(--gray-100);
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.details-path-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+  background: none;
+}
+.details-path-link.mono { font-family: var(--font-mono); font-size: 11px; }
 
 .details-tex { display: flex; align-items: center; gap: 6px; padding: 1px 0; }
 .details-tex .icon { font-size: 14px; color: var(--gray-500); }
@@ -1878,6 +1936,69 @@ body.cinematic #canvas { cursor: none; }
 .data-card { display: flex; flex-direction: column; padding-bottom: 8px; overflow: hidden; }
 .data-card .details-row { padding: 0 12px; }
 .data-card-actions { padding: 10px 12px 4px; }
+.data-source-combo {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+}
+.data-source-combo .combo-input { width: 100%; }
+.data-source-combo-side { padding: 2px 12px 8px; }
+/* Structure toolbar: DAT picker + name/type filter. */
+.data-struct-bar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 12px 8px;
+}
+.data-struct-bar.dual {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.data-struct-bar.dual .data-source-combo { flex: 1 1 45%; min-width: 0; }
+.data-struct-bar.dual .data-struct-search { flex: 1 1 55%; min-width: 0; }
+.data-struct-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.data-struct-search > .icon {
+  position: absolute;
+  left: 8px;
+  font-size: 16px;
+  color: var(--gray-500);
+  pointer-events: none;
+}
+.data-struct-search .list-search {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  padding-left: 30px;
+  padding-right: 52px;
+}
+.data-struct-search .list-search-clear {
+  position: absolute;
+  right: 28px;
+}
+.data-struct-match {
+  position: absolute;
+  right: 8px;
+  font-size: 10px;
+  color: var(--gray-500);
+  pointer-events: none;
+}
+.data-filter-empty {
+  padding: 16px 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.data-census-dim { opacity: 0.35; }
+.data-census-click { cursor: pointer; }
+.data-census-click:hover { background: rgba(255, 255, 255, 0.06); }
+.data-census-click .data-census-name { color: var(--accent); }
 .data-open-btn {
   display: flex; align-items: center; justify-content: center; gap: 8px;
   width: 100%;
@@ -1942,10 +2063,30 @@ body.cinematic #canvas { cursor: none; }
 .data-flags { color: var(--accent); font-size: 10px; flex: 0 0 auto; }
 .data-size { margin-left: auto; flex: 0 0 auto; color: var(--gray-500); font-size: 11px; }
 
+/* Texture rows — light green so they stand out from meshes/skeletons. */
+.data-res-tex .data-kind,
+.data-res-tex .data-id,
+.data-res-tex .data-type,
+.data-res-tex .data-detail { color: #8fd9a8; }
+.data-res-tex .data-kind { opacity: 1; }
+/* Skeleton rows — light purple. */
+.data-res-skel .data-kind,
+.data-res-skel .data-id,
+.data-res-skel .data-type,
+.data-res-skel .data-detail { color: #c4a8ef; }
+.data-res-skel .data-kind { opacity: 1; }
 .data-res-click { cursor: pointer; }
 .data-res-click:hover { background: rgba(255, 255, 255, 0.06); }
 .data-res-click:hover .data-id { color: var(--accent); }
 .data-res-click:hover .data-kind { color: var(--accent); }
+.data-res-tex.data-res-click:hover .data-kind,
+.data-res-tex.data-res-click:hover .data-id,
+.data-res-tex.data-res-click:hover .data-type,
+.data-res-tex.data-res-click:hover .data-detail { color: #b6efc8; }
+.data-res-skel.data-res-click:hover .data-kind,
+.data-res-skel.data-res-click:hover .data-id,
+.data-res-skel.data-res-click:hover .data-type,
+.data-res-skel.data-res-click:hover .data-detail { color: #dbc8ff; }
 .data-res-click:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: -1px;
@@ -1956,7 +2097,45 @@ body.cinematic #canvas { cursor: none; }
   font-style: italic;
   opacity: 0.75;
 }
+.data-res-tex .data-tex-hint { color: #8fd9a8; }
+.data-res-skel .data-tex-hint { color: #c4a8ef; }
 .data-res-click:hover .data-tex-hint { color: var(--accent); opacity: 1; font-style: normal; }
+.data-res-tex.data-res-click:hover .data-tex-hint { color: #b6efc8; }
+.data-res-skel.data-res-click:hover .data-tex-hint { color: #dbc8ff; }
+
+/* Draggable skeleton tree (Data Struct click) — portaled above Data Struct. */
+.skel-modal {
+  position: fixed;
+  z-index: 500;
+  width: 400px;
+  max-width: min(90vw, 520px);
+  max-height: min(70vh, 640px);
+  display: flex;
+  flex-direction: column;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 42%),
+    var(--gray-850);
+  border: 1px solid var(--ring-strong);
+  border-radius: 12px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
+  pointer-events: auto;
+}
+.skel-modal .modal-header { cursor: grab; flex: 0 0 auto; }
+.skel-modal .modal-header:active { cursor: grabbing; }
+.skel-modal .modal-title { flex: 1 1 auto; min-width: 0; }
+.skel-modal .skel-count {
+  flex: 0 0 auto;
+  margin-left: 0;
+  margin-right: 4px;
+  color: #c4a8ef;
+}
+.skel-modal-body {
+  flex: 1 1 auto;
+  min-height: 120px;
+  max-height: calc(70vh - 52px);
+  overflow: auto;
+  padding: 4px 0 10px;
+}
 
 .data-census-row {
   display: flex; align-items: center; gap: 8px;

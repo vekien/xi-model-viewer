@@ -45,9 +45,13 @@ import { EffectList } from './EffectList.jsx';
 import { WeatherAudio } from '../js/particle/audio.js';
 import { toAudioBuffer, parseAudioHeader, FMT_ATRAC3 } from '../js/audio.js';
 import { parseImageDat, textureForSet } from '../js/images.js';
-import { inspectDat } from '../js/dat/inspect.js';
+import { inspectDat, parseInspectSkeleton } from '../js/dat/inspect.js';
+import { SkeletonModal } from './SkeletonModal.jsx';
 import { matchTablePath, parseFileTable } from '../js/dat/ftable.js';
 import { classifyDat } from '../js/dat/classify.js';
+import {
+  sniffGearRace, RACE_SKELETON_RELS, RACE_SKELETON_LABELS,
+} from '../js/dat/modelids.js';
 import {
   sniffZoneDat, zoneForFileId, zoneFileIds, parseNpcList, npcNameMap,
   parseEventDat, parseDialogDat, dialogSpeakers, dialogConversations, EVENT_CATEGORIES,
@@ -387,6 +391,8 @@ export default function App() {
   const [skeletonOpen, setSkeletonOpen] = useState(false);
   const [texWindows, setTexWindows] = useState([]); // [{ id, tex }] open texture viewers
   const texIdRef = useRef(0);
+  const [skelWindows, setSkelWindows] = useState([]); // [{ id, joints, title, cascade }]
+  const skelIdRef = useRef(0);
   const [selectedFloor, setSelectedFloor] = useState('');
   const [playing, setPlayingState] = useState(false);
   // Animation playback rate, 0.1–2.0 (10%–200%). Mirrored to a ref so the
@@ -806,11 +812,13 @@ export default function App() {
       const prevPlay = appliedPlayRef.current;
       modelRef.current = model;
       renderer.setModel(model, keepCamera);
+      setBrowserKind('entity');
       const primaryPath = displayPath ?? paths[paths.length - 1];
       setSelectedDat(primaryPath.toLowerCase());
       setModelPath(relativeName(primaryPath));
       shownPathRef.current = primaryPath;
       sourcePathRef.current = paths[paths.length - 1];
+      if (parts?.length) pcPartsRef.current = parts;
 
       // Viewbar lists. Group over the WHOLE model so each clip's body-region
       // parts merge across DATs — locomotion is split (lower body wlk0 lives in
@@ -897,15 +905,23 @@ export default function App() {
       });
 
       // Per-part breakdown (character composer): stats of each slot's own DATs.
-      const infoParts = (parts ?? [])
-        .map((p) => {
-          const set = new Set(p.paths.map((x) => x.toLowerCase()));
-          const models = parsed.filter((e) => set.has(e.path.toLowerCase())).map((e) => e.model);
-          return models.length
-            ? { key: p.key, label: p.label, itemLabel: p.itemLabel, relPaths: p.paths.map(relativeName), ...statsOf(models) }
-            : null;
-        })
-        .filter(Boolean);
+      // Match on relative path — resolved HD paths rarely equal the composer abs path.
+      const relKey = (p) => relativeName(p).toLowerCase().replace(/\//g, '\\');
+      const infoParts = (parts ?? []).map((p) => {
+        const set = new Set((p.paths ?? []).map(relKey));
+        const models = set.size
+          ? parsed.filter((e) => set.has(relKey(e.path))).map((e) => e.model)
+          : [];
+        return {
+          key: p.key,
+          label: p.label,
+          itemLabel: p.itemLabel,
+          relPaths: (p.paths ?? []).map(relativeName),
+          ...(models.length ? statsOf(models) : {
+            joints: null, verts: 0, tris: 0, animCount: 0, scheduleCount: 0, textures: [],
+          }),
+        };
+      });
 
       setModelInfo({
         name: displayName,
@@ -913,6 +929,28 @@ export default function App() {
         joints: model.skeleton.joints.length,
         parts: infoParts,
       });
+
+      // Multi-DAT set for Data Struct dropdown (race + each gear/anim part).
+      {
+        const seen = new Set();
+        const sources = [];
+        const pushSrc = (id, label, path) => {
+          if (!path) return;
+          const k = relKey(path);
+          if (seen.has(k)) return;
+          seen.add(k);
+          sources.push({ id, label, path: String(path).replace(/\//g, '\\') });
+        };
+        if (parts?.length) {
+          for (const p of parts) {
+            for (const path of p.paths ?? []) {
+              pushSrc(`${p.key}:${relKey(path)}`, p.itemLabel ? `${p.label} — ${p.itemLabel}` : p.label, path);
+            }
+          }
+        }
+        for (const path of paths) pushSrc(relKey(path), relativeName(path), path);
+        setDataSources(sources);
+      }
 
       setTexWindows([]);   // close texture windows from the previous model
       setObjectGroups(null);
@@ -1152,6 +1190,7 @@ export default function App() {
       setModelPath(rel);
       setSelectedDat(abs.toLowerCase());
       shownPathRef.current = abs;
+      setDataSources([{ id: 'effect', label: rel, path: abs }]);
 
       // Details panel: the effect's sprite images (click to view, same as gear
       // textures) plus what the DAT actually contains.
@@ -1490,6 +1529,7 @@ export default function App() {
       setModelPath(rel);
       shownPathRef.current = resolvedAbs;
       sourcePathRef.current = resolvedAbs;
+      setDataSources([{ id: 'zone', label: rel, path: resolvedAbs }]);
       zoneCamKeyRef.current = key;
       animsRef.current = [];
       setAnims([]);
@@ -1577,10 +1617,27 @@ export default function App() {
 
   // Character composer (Assets > Characters) — shared by the left panel and
   // the Animation panel Action combo.
+  const pcPartsRef = useRef([]);
+  const applyPcIsolation = useCallback((keys, parts) => {
+    if (parts) pcPartsRef.current = parts;
+    const r = rendererRef.current;
+    if (!r) return;
+    if (!keys?.size) {
+      r.setMeshSourceFilter(null);
+      return;
+    }
+    const paths = [];
+    for (const p of pcPartsRef.current) {
+      if (!keys.has(p.key)) continue;
+      for (const path of p.paths ?? []) paths.push(path);
+    }
+    r.setMeshSourceFilter(paths);
+  }, []);
   const pc = useCharacter({
     enabled: leftView === 'pc' && !!settings?.gamePath,
     onLoad: loadNpcEntry,
     onError: (msg) => setStatusText(msg),
+    onIsolationChange: applyPcIsolation,
   });
 
   // --- Character Creation (high-poly RT/SHAPE + SQLE models) ----------------
@@ -1784,6 +1841,38 @@ export default function App() {
       shownPathRef.current = `${settings.gamePath}\\${normRel(desc.bodyMesh)}`;
       sourcePathRef.current = shownPathRef.current;
 
+      {
+        const absOf = (rel) => `${settings.gamePath}\\${normRel(rel)}`;
+        const src = [];
+        const seen = new Set();
+        const push = (id, label, rel) => {
+          if (!rel) return;
+          const k = normRel(rel).toLowerCase();
+          if (seen.has(k)) return;
+          seen.add(k);
+          src.push({ id, label, path: absOf(rel) });
+        };
+        push('bodyMesh', 'Body mesh', bodyMeshRel);
+        push('bodyMat', 'Body material', bodyMatRel);
+        push('headMesh', 'Head mesh', desc.headMesh);
+        push('headMat', 'Head material', desc.headMat);
+        if (desc.motions) {
+          push('motionBody', 'Motion (body)', desc.motions.body);
+          push('motionHead', 'Motion (head)', desc.motions.head);
+        }
+        const raceDef = CREATION_RACES.find((r) => r.id === desc.raceId);
+        if (raceDef?.cameras) {
+          raceDef.cameras.forEach((pair, i) => {
+            push(`cam${i}fov`, `Camera ${i + 1} FOV`, pair[0]);
+            push(`cam${i}mat`, `Camera ${i + 1} matrix`, pair[1]);
+          });
+        }
+        const meta = CREATION_SEQUENCE_META[desc.raceId];
+        if (meta?.cue) push('cue', 'Sequence cues', meta.cue);
+        if (meta?.actions) push('actions', 'Action table', meta.actions);
+        setDataSources(src);
+      }
+
       const cr = model.creation;
       setCrInfo({
         bones: cr.bones.length,
@@ -1970,6 +2059,11 @@ export default function App() {
       if (settingsOpen) { setSettingsOpen(false); e.preventDefault(); return; }
       if (graphicsOpen) { setGraphicsOpen(false); e.preventDefault(); return; }
       if (helpOpen) { setHelpOpen(false); e.preventDefault(); return; }
+      if (skelWindows.length > 0) {
+        setSkelWindows((prev) => prev.slice(0, -1));
+        e.preventDefault();
+        return;
+      }
       if (texWindows.length > 0) {
         setTexWindows((prev) => prev.slice(0, -1));
         e.preventDefault();
@@ -1977,7 +2071,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [exportSpec, settingsOpen, graphicsOpen, helpOpen, texWindows.length]);
+  }, [exportSpec, settingsOpen, graphicsOpen, helpOpen, texWindows.length, skelWindows.length]);
 
   // --- handlers ------------------------------------------------------------
 
@@ -2059,17 +2153,32 @@ export default function App() {
     onVolume: setEffectVolume,
   };
 
-  /** Status-bar path → show that DAT in the system file manager, selected.
-   *  sourcePathRef keeps the real casing; selectedDat is lowercased for the
-   *  tree's own matching and would be a poor thing to hand the OS. */
-  const revealInExplorer = async () => {
-    const path = shownPathRef.current;
-    if (!path) return;
-    try {
-      await backend.revealPath(path);
-    } catch (err) {
-      setStatusText(`Could not show in Explorer: ${err.message ?? err}`);
+  /**
+   * Jump the File Browser to a DAT (or its parent folder): switch to Assets >
+   * Files, expand the tree to the path, and select the file.
+   */
+  const showInFileBrowser = useCallback((pathOrRel) => {
+    const settings = settingsRef.current;
+    if (!settings?.gamePath || !pathOrRel) return;
+    let abs = String(pathOrRel).replace(/\//g, '\\');
+    // Relative game path → absolute under the install root.
+    if (!/^[a-zA-Z]:[\\/]/.test(abs) && !abs.startsWith('\\\\')) {
+      abs = `${settings.gamePath}\\${abs.replace(/^\\+/, '')}`;
     }
+    const lower = abs.toLowerCase();
+    setDataStructOpen(false);
+    setLeftView('files');
+    setExplorerOpen(true);
+    setSelectedDat(lower);
+    // Bump reveal even if the same path is re-clicked (re-expand / re-scroll).
+    setRevealTarget('');
+    queueMicrotask(() => setRevealTarget(lower));
+  }, []);
+
+  /** Status-bar path → reveal in the in-app File Browser tree. */
+  const revealInExplorer = () => {
+    const path = shownPathRef.current || selectedDat;
+    if (path) showInFileBrowser(path);
   };
 
   // Play a raw DAT clip id (e.g. "at00") by switching to its display group ("at0").
@@ -2147,6 +2256,10 @@ export default function App() {
   const [dataDoc, setDataDoc] = useState(null);         // inspectDat result + path
   // Status-bar overlay: peek structure without leaving the live zone/model/etc.
   const [dataStructOpen, setDataStructOpen] = useState(false);
+  // Multi-DAT context (PC gear parts, creation body/head/motion, multi-file loads).
+  const [dataSources, setDataSources] = useState([]);   // [{ id, label, path }]
+  const dataSourcesRef = useRef([]);                    // sync for loadFromTree / Open in 3D
+  dataSourcesRef.current = dataSources;
   const dataStructStatusRef = useRef('');               // status text to restore on close
   const dataTokenRef = useRef(0);                       // drop stale reads
   const dataBufRef = useRef(null);                      // raw buffer, for texture decode on click
@@ -2220,7 +2333,9 @@ export default function App() {
         shownPathRef.current = path;
       }
       const zoneSuffix = doc.zoneName ? ` · ${doc.zoneName}` : '';
-      const baseStatus = doc.kind === 'sections'
+      const baseStatus = doc.kind === 'sections' && doc.format === 'creation'
+        ? `${doc.formatLabel || 'Creation DAT'} · ${doc.sectionCount.toLocaleString()} entries`
+        : doc.kind === 'sections'
         ? `${doc.sectionCount.toLocaleString()} sections · ${doc.dirCount.toLocaleString()} folder${doc.dirCount === 1 ? '' : 's'}`
         : doc.kind === 'ftable'
           ? `${doc.registered.toLocaleString()} of ${doc.capacity.toLocaleString()} file ids registered`
@@ -2262,6 +2377,7 @@ export default function App() {
       return;
     }
     const path = shownPathRef.current
+      || dataSources[0]?.path
       || (player.current?.path)
       || selectedDat;
     if (!path) {
@@ -2274,7 +2390,15 @@ export default function App() {
     setDataStructOpen(true);
     // Restore prior status (zone name, etc.) — structure lives in the overlay.
     setStatusText(dataStructStatusRef.current || '');
-  }, [dataStructOpen, browserKind, leftView, selectedDat, statusText, loadDatData, player]);
+  }, [dataStructOpen, browserKind, leftView, selectedDat, statusText, loadDatData, player, dataSources]);
+
+  /** Switch the Data Struct inspector to another DAT in the current multi-file set. */
+  const selectDataSource = useCallback(async (path) => {
+    if (!path) return;
+    await loadDatData(path, {
+      overlay: dataStructOpen || (browserKind !== 'data' && leftView !== 'data'),
+    });
+  }, [loadDatData, dataStructOpen, browserKind, leftView]);
 
   /** A row in the file-table view names a DAT — jump the inspector to it. */
   const openDatFromTable = useCallback((datRel) => {
@@ -2285,16 +2409,86 @@ export default function App() {
     loadDatData(abs);
   }, [loadDatData]);
 
-  /** Decode this DAT's 0x20 textures on first click and open the viewer. */
-  const openDataTexture = useCallback((name) => {
-    if (!name) return;
+  /** Ensure dataTexturesRef is populated from the current inspect buffer. */
+  const ensureDataTextures = useCallback(() => {
     if (!dataTexturesRef.current && dataBufRef.current) {
       try { dataTexturesRef.current = parseDatTextures(dataBufRef.current); }
       catch { dataTexturesRef.current = new Map(); }
     }
-    const map = dataTexturesRef.current;
+    return dataTexturesRef.current;
+  }, []);
+
+  /** Data Struct skeleton row → floating bone tree (bind pose). */
+  const openDataSkeleton = useCallback((res) => {
+    const title = (res?.id && String(res.id).trim()) || res?.name || 'Skeleton';
+    const kind = res?.skeletonKind
+      || (res?.type === 0x29 || res?.type === 41 ? 'entity' : null)
+      || (res?.name === 'Skeleton' ? 'entity' : null);
+
+    let joints = null;
+    // 1) Parse from the inspected DAT buffer (preferred — matches the row).
+    if (dataBufRef.current && kind && res?.offset != null) {
+      try {
+        joints = parseInspectSkeleton(dataBufRef.current, kind, res.offset);
+      } catch (e) {
+        console.warn('parseInspectSkeleton', e);
+      }
+    }
+    // 2) Fallback: live model pose (composed PC may already have this skeleton).
+    if (!joints?.length) {
+      const live = rendererRef.current?.pose?.skeleton?.joints
+        ?? modelRef.current?.skeleton?.joints;
+      if (live?.length) joints = live.map((j) => ({
+        parent: j.parent, rot: j.rot, trans: j.trans,
+      }));
+    }
+    if (!joints?.length) {
+      setStatusText(`Couldn't parse skeleton${dataBufRef.current ? '' : ' (no DAT buffer)'}`);
+      return;
+    }
+    const key = `${kind || 'live'}:${res?.offset ?? title}`;
+    setSkelWindows((prev) => {
+      const i = prev.findIndex((w) => w.key === key);
+      if (i >= 0) {
+        const copy = prev.slice();
+        const [hit] = copy.splice(i, 1);
+        copy.push(hit);
+        return copy;
+      }
+      const id = ++skelIdRef.current;
+      return [...prev, { id, key, joints, title, cascade: prev.length }];
+    });
+  }, []);
+
+  const closeSkeletonWin = useCallback((id) => {
+    setSkelWindows((prev) => prev.filter((w) => w.id !== id));
+  }, []);
+
+  const focusSkeletonWin = useCallback((id) => {
+    setSkelWindows((prev) => {
+      const i = prev.findIndex((w) => w.id === id);
+      if (i < 0 || i === prev.length - 1) return prev;
+      const copy = prev.slice();
+      const [hit] = copy.splice(i, 1);
+      copy.push(hit);
+      return copy;
+    });
+  }, []);
+
+  /** Decode this DAT's 0x20 textures on first click and open the viewer. */
+  const openDataTexture = useCallback((name) => {
+    // null/undefined name → open the first texture (Contents census row).
+    const map = ensureDataTextures();
     if (!map?.size) {
       setStatusText(`Couldn't decode textures in this DAT`);
+      return;
+    }
+    if (!name) {
+      const first = map.values().next().value;
+      if (first) openTexture(first);
+      if (map.size > 1) {
+        setStatusText(`Opened ${first?.name || 'texture'} (1 of ${map.size} — click Structure rows for others)`);
+      }
       return;
     }
     let tex = map.get(name);
@@ -2308,7 +2502,7 @@ export default function App() {
     }
     if (tex) openTexture(tex);
     else setStatusText(`Couldn't decode texture ${name}`);
-  }, [openTexture]);
+  }, [openTexture, ensureDataTextures]);
 
   /** Drop the scene and everything that described it. */
   const unloadModel = useCallback(() => {
@@ -2325,6 +2519,7 @@ export default function App() {
     setModelInfo(null);
     setModelPath('');
     setSelectedDat('');
+    setDataSources([]);
     shownPathRef.current = '';
     sourcePathRef.current = '';
     setAnims([]);
@@ -2390,6 +2585,7 @@ export default function App() {
     // Re-entering Character Creation frames the model once more; while you are
     // in it, the camera is yours.
     if (leftView !== 'creation') crFramedRef.current = false;
+    if (leftView !== 'pc') rendererRef.current?.setMeshSourceFilter(null);
     if ((prev === 'effects' || (prev === 'files' && browserKind === 'effect'))
       && leftView !== 'effects' && leftView !== 'files') {
       effectRoutinesRef.current = [];
@@ -2456,8 +2652,10 @@ export default function App() {
   /**
    * Assets > File Browser click: sniff the DAT and open the matching viewer
    * (zone / model / image / music / sfx / effect / data inspector).
+   * opts.fromOverlay — Open-in-3D from Data Struct overlay; on failure re-open
+   * the overlay instead of hijacking the page into browserKind=data.
    */
-  const loadFromTree = useCallback(async (path) => {
+  const loadFromTree = useCallback(async (path, opts = {}) => {
     const settings = settingsRef.current;
     if (!settings?.gamePath) { setStatusText('Game path not set — open Settings first.'); return; }
     const rel = relativeName(path);
@@ -2496,12 +2694,86 @@ export default function App() {
 
       /** Zone/entity parse failed — drop the old scene and show structure + why. */
       const openAsData = async (notice) => {
+        if (opts.fromOverlay) {
+          await loadDatData(path, { notice, overlay: true });
+          setDataStructOpen(true);
+          return;
+        }
         clearImages();
         clearEffect();
         player.stop();
         unloadModel();
         setBrowserKind('data');
+        setDataSources([{ id: lower, label: rel, path: String(path).replace(/\//g, '\\') }]);
         await loadDatData(path, { notice });
+      };
+
+      /** Gear DAT with mesh but no skeleton — load race base skeleton + gear only. */
+      const tryGearWithSkeleton = async () => {
+        const race = sniffGearRace(buf);
+        if (!race) return null;
+        const baseRel = RACE_SKELETON_RELS[race];
+        if (!baseRel) return null;
+        const baseAbs = `${settings.gamePath}\\${normRel(baseRel)}`;
+        const raceLabel = RACE_SKELETON_LABELS[race] || race;
+        setStatusText(`Gear for ${raceLabel} — loading skeleton…`);
+        try {
+          const baseBuf = await readAbs(baseAbs);
+          const baseModel = parseEntity(baseBuf, baseAbs);
+          if (!baseModel.skeleton) return null;
+          // Skeleton + anims from the race; meshes/textures only from the gear DAT.
+          baseModel.meshGroups = [];
+          const gearModel = parseEntity(buf, path);
+          const model = mergeModels([baseModel, gearModel], rel);
+          if (!model.isRenderable) return null;
+          player.stop();
+          setBrowserKind('entity');
+          setDataDoc(null);
+          const renderer = rendererRef.current;
+          modelRef.current = model;
+          renderer.setModel(model, false);
+          setSelectedDat(lower);
+          setModelPath(rel);
+          shownPathRef.current = String(path).replace(/\//g, '\\');
+          sourcePathRef.current = shownPathRef.current;
+          const texList = [...model.textures.values()].map((t) => ({
+            name: t.name, width: t.width, height: t.height, format: t.format, data: t.data,
+          }));
+          setModelInfo({
+            name: `${rel} · ${raceLabel} skeleton`,
+            joints: model.skeleton.joints.length,
+            verts: model.meshGroups.reduce((s, g) => s + g.vertices.length, 0),
+            tris: model.meshGroups.reduce((s, g) => s + g.pieces.reduce(
+              (t, p) => t + (p.topology === 'strip' ? p.corners.length - 2 : p.corners.length / 3), 0), 0),
+            animCount: model.animations.length,
+            scheduleCount: model.schedules?.length ?? 0,
+            textures: texList,
+            parts: [
+              { key: 'race', label: 'Race skeleton', itemLabel: raceLabel, relPaths: [baseRel], joints: baseModel.skeleton.joints.length, verts: 0, tris: 0, animCount: baseModel.animations.length, scheduleCount: 0, textures: [] },
+              { key: 'gear', label: 'Gear', itemLabel: rel, relPaths: [rel], joints: null, verts: model.meshGroups.reduce((s, g) => s + g.vertices.length, 0), tris: 0, animCount: gearModel.animations.length, scheduleCount: 0, textures: texList },
+            ],
+          });
+          setDataSources([
+            { id: 'gear', label: `Gear — ${rel}`, path: String(path).replace(/\//g, '\\') },
+            { id: 'race', label: `Race skeleton — ${raceLabel}`, path: baseAbs },
+          ]);
+          setAnims(groupAnimations(model.animations)
+            .filter((g) => g.clip.jointTracks.size > 0 && g.clip.numFrames > 0));
+          setSchedules([]);
+          setCurrentAnim('');
+          setCurrentSchedule('');
+          setTexWindows([]);
+          setObjectGroups(null);
+          setHasCollision(false);
+          setHasNavmesh(false);
+          setHasSkybox(false);
+          renderer.fitCamera();
+          setStatusText(`${rel} · ${raceLabel} skeleton (gear only)`);
+          return { ok: true };
+        } catch (err) {
+          console.warn('gear+skeleton load failed:', err);
+          return null;
+        }
       };
 
       if (cls.kind === 'zone') {
@@ -2546,8 +2818,34 @@ export default function App() {
         player.stop();
         setBrowserKind('entity');
         setDataDoc(null);
+        const absPath = String(path).replace(/\//g, '\\');
+        const prevSources = opts.keepSources ? dataSourcesRef.current.slice() : [];
+        if (!opts.keepSources) {
+          setDataSources([{ id: lower, label: rel, path: absPath }]);
+        }
+        const peek = parseEntity(buf, path);
+        // Isolated gear: meshes, no skeleton — pair with the race base DAT.
+        if (peek.meshGroups.length && !peek.skeleton) {
+          const geared = await tryGearWithSkeleton();
+          if (geared?.ok) { setSelectedDat(lower); return; }
+        }
+        // Skeleton-only race DAT while a multi-part set is known — load the set.
+        if (peek.skeleton && !peek.meshGroups.length && prevSources.length > 1) {
+          const result = await loadModel(prevSources.map((s) => s.path), modelInfo?.name || 'Model');
+          if (result && result.ok !== false) {
+            setDataSources(prevSources);
+            setSelectedDat(lower);
+            return;
+          }
+        }
         const result = await loadModel([path], rel);
         if (result && result.ok === false) {
+          // Retry gear pairing even if the first sniff/path failed early.
+          if (peek.meshGroups.length && !peek.skeleton) {
+            const geared = await tryGearWithSkeleton();
+            if (geared?.ok) { setSelectedDat(lower); return; }
+          }
+          if (prevSources.length > 1) setDataSources(prevSources);
           await openAsData(
             `Looks like a model DAT, but nothing drawable was found (${result.reason}). `
             + 'Showing the file structure instead.',
@@ -3276,11 +3574,44 @@ export default function App() {
           )}
           <DataViewer
             doc={dataDoc}
+            sources={dataSources}
+            onSelectSource={selectDataSource}
             onOpenTexture={openDataTexture}
+            onOpenSkeleton={openDataSkeleton}
+            onRevealPath={showInFileBrowser}
             onOpenDat={openDatFromTable}
             onRenderFile={dataDoc?.fullPath ? () => {
+              const path = dataDoc.fullPath;
+              const fromOverlay = dataStructOpen
+                || (browserKind !== 'data' && leftView !== 'data');
               setDataStructOpen(false);
-              loadFromTree(dataDoc.fullPath);
+              // Composed character/NPC/creation already on screen — just dismiss.
+              if (fromOverlay && modelRef.current
+                && (leftView === 'pc' || leftView === 'npc' || leftView === 'creation')) {
+                setDataDoc(null);
+                dataBufRef.current = null;
+                dataTexturesRef.current = null;
+                return;
+              }
+              // Multi-DAT set (race + gear + …): load the whole set, not one
+              // skeleton-only part that would fail alone and wipe the dropdown.
+              const sources = dataSourcesRef.current;
+              if (sources.length > 1) {
+                setDataDoc(null);
+                dataBufRef.current = null;
+                dataTexturesRef.current = null;
+                const keep = sources.slice();
+                loadModel(keep.map((s) => s.path), modelInfo?.name || 'Model').then((r) => {
+                  if (r?.ok !== false) setDataSources(keep);
+                });
+                return;
+              }
+              if (fromOverlay) {
+                setDataDoc(null);
+                dataBufRef.current = null;
+                dataTexturesRef.current = null;
+              }
+              loadFromTree(path, { fromOverlay, keepSources: true });
             } : undefined}
           />
         </>
@@ -3355,8 +3686,10 @@ export default function App() {
       {/* Only the views that actually put a model on screen get playback
           controls — Images/Music/SFX have their own right-hand panels.
           Creation is ORBIT but not browserKind==='entity', so list it explicitly. */}
+      {/* PC/NPC/Creation own the viewport directly (browserKind is cleared on
+          view switch). File Browser / Data need browserKind==='entity'. */}
       {!dataStructOpen && !player.current
-        && (leftView === 'creation'
+        && (leftView === 'pc' || leftView === 'npc' || leftView === 'creation'
           || ((ORBIT_VIEWS.has(leftView) || leftView === 'data') && browserKind === 'entity'))
         && (
         <AnimationPanel
@@ -3373,29 +3706,35 @@ export default function App() {
         <AnimationPanel anim={effectAnim} />
       )}
 
-      <div id="status" className="panel mono">
-        <div className="status-left">
-          {(modelPath || selectedDat || player.current) && (
+      {/* Left floating bar: DAT path + Data Struct toggle */}
+      <div id="statusFile" className="panel mono">
+        {!player.current && modelPath && selectedDat ? (
+          <Tooltip content="Show in File Browser">
+            <button id="statusPath" className="status-path-link" onClick={revealInExplorer}>
+              {modelPath}
+            </button>
+          </Tooltip>
+        ) : (
+          <span id="statusPath">
+            {player.current ? relativeName(player.current.path) : (modelPath || '—')}
+          </span>
+        )}
+        {(modelPath || selectedDat || player.current) && (
+          <>
+            <span className="status-sep">·</span>
             <button
               type="button"
-              className={`status-link${dataStructOpen ? ' on' : ''}`}
+              className={`status-link status-data-struct${dataStructOpen ? ' on' : ''}`}
               onClick={() => { toggleDataStruct(); }}
             >
               {dataStructOpen ? 'Hide Data Struct' : 'Data Struct'}
             </button>
-          )}
-          {!player.current && modelPath && selectedDat ? (
-            <Tooltip content="Show in Explorer">
-              <button id="statusPath" className="status-path-link" onClick={revealInExplorer}>
-                {modelPath}
-              </button>
-            </Tooltip>
-          ) : (
-            <span id="statusPath">
-              {player.current ? relativeName(player.current.path) : (modelPath || '—')}
-            </span>
-          )}
-        </div>
+          </>
+        )}
+      </div>
+
+      {/* Right floating bar: live status + panel toggles */}
+      <div id="status" className="panel mono">
         <span className="hints">
           {player.current ? (
             `${player.playing ? 'playing' : 'paused'}: ${player.current.name ?? `music${player.current.num?.padStart(3, '0')}`}`
@@ -3454,7 +3793,6 @@ export default function App() {
                   <button className="status-link" onClick={() => setSkeletonOpen((v) => !v)}>Skeleton</button>
                 </>
               )}
-              {/* Effects have no skeleton, but they do have sprite images. */}
               {(DETAIL_VIEWS.has(leftView)
                 || (leftView === 'files' && (browserKind === 'zone' || browserKind === 'effect')))
                 && !(leftView === 'files' && browserKind && !['entity', 'zone', 'effect'].includes(browserKind)) && (
@@ -3498,6 +3836,18 @@ export default function App() {
           zIndex={210 + i}
           onClose={() => closeTexture(w.id)}
           onFocus={() => focusTexture(w.id)}
+        />
+      ))}
+
+      {skelWindows.map((w, i) => (
+        <SkeletonModal
+          key={w.id}
+          joints={w.joints}
+          title={w.title}
+          cascadeOffset={w.cascade}
+          zIndex={500 + i}
+          onClose={() => closeSkeletonWin(w.id)}
+          onFocus={() => focusSkeletonWin(w.id)}
         />
       ))}
 

@@ -23,6 +23,59 @@ export const RACE_LABELS = {
   Mithra: 'Mithra', Galka: 'Galka',
 };
 
+/** Character composer race id → base skeleton DAT (matches lists/characters.json). */
+export const RACE_SKELETON_RELS = {
+  HumeM: 'ROM\\27\\82.DAT',
+  HumeF: 'ROM\\32\\58.DAT',
+  ElvaanM: 'ROM\\37\\31.DAT',
+  ElvaanF: 'ROM\\42\\4.DAT',
+  Tarutaru: 'ROM\\46\\93.DAT',
+  Mithra: 'ROM\\51\\89.DAT',
+  Galka: 'ROM\\56\\59.DAT',
+};
+
+export const RACE_SKELETON_LABELS = {
+  HumeM: 'Hume Male', HumeF: 'Hume Female',
+  ElvaanM: 'Elvaan Male', ElvaanF: 'Elvaan Female',
+  Tarutaru: 'Tarutaru', Mithra: 'Mithra', Galka: 'Galka',
+};
+
+/**
+ * Gear DAT section/folder ids encode the race. Retail uses several shapes:
+ *   `70hf`  `1hf_`  `hf_k`  `hf_m`  `hh_m`  (Hume Female)
+ *   `70hm`  `1hm_`  `hm_m`                   (Hume Male)
+ * and the same pattern for em/ef/tm/tf/mi/ga.
+ * Returns a composer race id (HumeF, …) when a tag is found.
+ */
+export function sniffGearRace(buffer) {
+  const bytes = buffer instanceof Uint8Array
+    ? buffer
+    : new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const n = Math.min(bytes.length, 256 * 1024);
+  let ascii = '';
+  for (let i = 0; i < n; i++) {
+    const c = bytes[i];
+    ascii += (c >= 0x20 && c < 0x7f) ? String.fromCharCode(c) : ' ';
+  }
+  // `\d{0,3}xx` covers `70hf` / `1hf` / bare `hf_…`. Trailing `_slot` optional.
+  // Require a non-letter boundary so we don't hit random substrings.
+  const tags = [
+    [/(?:^|[^a-z0-9])(?:\d{1,3})?hf(?:_[a-z0-9]+)?(?![a-z])/i, 'HumeF'],
+    [/(?:^|[^a-z0-9])(?:\d{1,3})?hh(?:_[a-z0-9]+)?(?![a-z])/i, 'HumeF'],
+    [/(?:^|[^a-z0-9])(?:\d{1,3})?hm(?:_[a-z0-9]+)?(?![a-z])/i, 'HumeM'],
+    [/(?:^|[^a-z0-9])(?:\d{1,3})?ef(?:_[a-z0-9]+)?(?![a-z])/i, 'ElvaanF'],
+    [/(?:^|[^a-z0-9])(?:\d{1,3})?em(?:_[a-z0-9]+)?(?![a-z])/i, 'ElvaanM'],
+    [/(?:^|[^a-z0-9])(?:\d{1,3})?tf(?:_[a-z0-9]+)?(?![a-z])/i, 'Tarutaru'],
+    [/(?:^|[^a-z0-9])(?:\d{1,3})?tm(?:_[a-z0-9]+)?(?![a-z])/i, 'Tarutaru'],
+    [/(?:^|[^a-z0-9])(?:\d{1,3})?mi(?:_[a-z0-9]+)?(?![a-z])/i, 'Mithra'],
+    [/(?:^|[^a-z0-9])(?:\d{1,3})?ga(?:_[a-z0-9]+)?(?![a-z])/i, 'Galka'],
+  ];
+  for (const [re, race] of tags) {
+    if (re.test(ascii)) return race;
+  }
+  return null;
+}
+
 /** {race: {slot: [[base_file_id, count], …]}} — zero-count groups dropped. */
 export const GEAR_TABLES = {
   HumeMale: { face: [[7080, 32]], head: [[7112, 256], [63323, 48], [63371, 16], [71247, 256], [98787, 32], [102961, 64]], body: [[7368, 256], [63387, 48], [63435, 16], [71503, 256], [98819, 32], [103025, 64]], hands: [[7624, 256], [63451, 48], [63499, 16], [71759, 256], [98851, 32], [103089, 64]], legs: [[7880, 256], [63515, 48], [63563, 16], [72015, 256], [98883, 32], [103153, 64]], feet: [[8136, 256], [63579, 48], [63627, 16], [72271, 256], [98915, 32], [103217, 64]], main: [[8392, 512], [63643, 128], [72527, 256], [107301, 300], [0, 64]], sub: [[41199, 512], [66459, 128], [81999, 256], [105201, 300], [0, 64]], ranged: [[9416, 256]] },

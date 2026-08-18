@@ -126,6 +126,12 @@ export function parseEntity(buffer, sourceName = '') {
   }
 
   resolveSchedules(model);
+  // Tag meshes with the DAT they came from so the PC isolator can hide/show
+  // per equipment slot after merge.
+  const src = String(sourceName || '').replace(/\//g, '\\').toLowerCase();
+  if (src) {
+    for (const g of model.meshGroups) g.sourcePath = g.sourcePath || src;
+  }
   model.isRenderable = model.meshGroups.length > 0 && model.skeleton !== null;
   return model;
 }
@@ -316,7 +322,10 @@ export function mergeModels(models, sourceName = '') {
   for (const m of models) {
     if (!m) continue;
     if (!out.skeleton && m.skeleton) out.skeleton = m.skeleton;
-    out.meshGroups.push(...m.meshGroups);
+    const src = String(m.sourceName || '').replace(/\//g, '\\').toLowerCase();
+    for (const g of m.meshGroups) {
+      out.meshGroups.push(g.sourcePath ? g : { ...g, sourcePath: src });
+    }
     for (const [name, tex] of m.textures) out.textures.set(name, tex);
     for (const anim of m.animations) {
       if (seenAnims.has(anim.id)) continue;

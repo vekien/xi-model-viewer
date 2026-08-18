@@ -769,6 +769,8 @@ export class Renderer {
     this.pose = null;
     this.batches = [];
     this.textures = new Map();
+    // PC gear isolation: null = show all; Set of lowercased source paths = only those.
+    this.meshSourceFilter = null;
 
     // Origin axis gizmo (View > Toggle Axes; on by default in the Effects view).
     this.showAxes = false;
@@ -911,10 +913,38 @@ export class Renderer {
 
   // -------------------------------------------------------------------------
 
+  /**
+   * PC gear isolation. `paths` null/empty = show every mesh; otherwise only
+   * batches whose sourcePath matches one of the given DAT paths (abs or ROM/…).
+   */
+  setMeshSourceFilter(paths) {
+    if (!paths || (typeof paths.size === 'number' ? paths.size === 0 : !paths.length)) {
+      this.meshSourceFilter = null;
+      return;
+    }
+    const set = new Set();
+    for (const p of paths) {
+      const n = String(p).replace(/\//g, '\\').toLowerCase();
+      set.add(n);
+      const m = n.match(/rom\d*[\\/][\w.\\/-]+\.dat$/i);
+      if (m) set.add(m[0]);
+    }
+    this.meshSourceFilter = set;
+  }
+
+  _batchSourceVisible(batch) {
+    if (!this.meshSourceFilter) return true;
+    const p = (batch.sourcePath || '').toLowerCase().replace(/\//g, '\\');
+    if (this.meshSourceFilter.has(p)) return true;
+    const m = p.match(/rom\d*[\\/][\w.\\/-]+\.dat$/i);
+    return !!(m && this.meshSourceFilter.has(m[0]));
+  }
+
   /** keepCamera: leave the orbit untouched (gear swap on the same actor). */
   setModel(model, keepCamera = false) {
     const gl = this.gl;
     this.effectMode = false;   // any real model/zone load leaves effect mode
+    if (!model) this.meshSourceFilter = null;
     for (const b of this.batches) {
       gl.deleteBuffer(b.vbo);
       if (b.wireEbo) gl.deleteBuffer(b.wireEbo);
@@ -1751,6 +1781,7 @@ export class Renderer {
       texture: piece.textureName ? this.textures.get(piece.textureName) ?? null : null,
       alphaMode,
       layer: piece.layer || 'world', // 'world' | 'env' (sky/water)
+      sourcePath: group.sourcePath || null,
     };
     if (piece.dynamic) {
       // The animator needs the CPU-side copy and the corner -> pool-vertex map
@@ -2020,6 +2051,7 @@ export class Renderer {
     const drawBatches = (asWire, pred) => {
       for (const batch of this.batches) {
         if ((batch.layer === 'sky' || batch.layer === 'water') && !showEnv) continue;
+        if (!this._batchSourceVisible(batch)) continue;
         if (pred && !pred(batch)) continue;
         gl.uniform1i(this.uniforms.alphaMode, batch.alphaMode ?? 0);
         gl.polygonOffset(0, batch.depthNudge ?? 0);
@@ -2335,6 +2367,7 @@ export class Renderer {
         for (const batch of this.batches) {
           if (batch.layer === 'sky' || batch.layer === 'water') continue;
           if ((batch.alphaMode ?? 0) === 3) continue;   // zone-style blend submesh
+          if (!this._batchSourceVisible(batch)) continue;
           gl.bindTexture(gl.TEXTURE_2D, batch.texture || this.whiteTexture);
           gl.bindVertexArray(batch.vao);
           gl.drawArrays(batch.mode, 0, batch.count);

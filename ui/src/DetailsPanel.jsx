@@ -74,8 +74,8 @@ export function DetailsPanel({ info, animClip, animId, schedule, onClose, onOpen
           ) : (
             shown.joints != null && <Row label="Joints" value={shown.joints} />
           )}
-          <Row label="Vertices" value={shown.verts.toLocaleString()} />
-          <Row label="Triangles" value={shown.tris.toLocaleString()} />
+          <Row label="Vertices" value={(shown.verts ?? 0).toLocaleString()} />
+          <Row label="Triangles" value={(shown.tris ?? 0).toLocaleString()} />
           {info.zone?.collTris > 0 && <Row label="Collision tris" value={fmtNum(info.zone.collTris)} />}
           {(info.zone?.skippedWild > 0 || info.zone?.skippedMissing > 0) && (
             <Row
@@ -87,7 +87,7 @@ export function DetailsPanel({ info, animClip, animId, schedule, onClose, onOpen
           {shown.scheduleCount > 0 && <Row label="Schedules" value={shown.scheduleCount} />}
         </Section>
 
-        {shown.textures.length > 0 && (
+        {(shown.textures?.length ?? 0) > 0 && (
           <Section title={`Textures (${shown.textures.length})`} icon="texture">
             {shown.textures.map((t, i) => (
               <button key={`${t.name}:${i}`} className="details-tex details-tex-btn" onClick={() => onOpenTexture?.(t)} title="View texture">

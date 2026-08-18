@@ -188,6 +188,345 @@ const PEEKS = {
   0x45: peekInfo,
 };
 
+// ── high-poly character-creation formats (RT/SHAPE, DMB, SQLE) ────────────────
+// These are not 16-byte section containers. We still build a sections-shaped
+// doc so DataViewer can show Structure / File / Contents + the multi-DAT dropdown.
+
+const i32le = (dv, o) => (o >= 0 && o + 4 <= dv.byteLength ? dv.getInt32(o, true) : 0);
+
+function res(id, name, icon, size, offset, detail = null, extra = {}) {
+  return {
+    kind: 'res', id, type: -1, name, icon, size, offset,
+    flags: [], detail, textureName: null, isTexture: false, isSkeleton: false, ...extra,
+  };
+}
+
+/**
+ * Parse a joint list from a DAT buffer for the Data Struct skeleton viewer.
+ * kind 'entity' — section 0x29 at `offset` (section start).
+ * kind 'sqle'   — SQLE type-11 chunk at `offset`.
+ * Returns [{ parent, rot?, trans }] or null.
+ */
+export function parseInspectSkeleton(buffer, kind, offset) {
+  // Preserve byteOffset when given a Uint8Array view (not only raw ArrayBuffer).
+  const bytes = buffer instanceof Uint8Array
+    ? buffer
+    : new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (kind === 'sqle') {
+    const ofs = offset | 0;
+    if (ofs + 104 > bytes.length) return null;
+    if (bytes[ofs] !== 0x53 || bytes[ofs + 1] !== 0x51
+      || bytes[ofs + 2] !== 0x4c || bytes[ofs + 3] !== 0x45) return null;
+    const boneCount = i32le(dv, ofs + 96);
+    if (boneCount <= 0 || boneCount > 1024) return null;
+    const rec = ofs + 100;
+    if (rec + boneCount * 64 > bytes.length) return null;
+    const joints = [];
+    for (let b = 0; b < boneCount; b++) {
+      const o = rec + b * 64;
+      joints.push({
+        parent: i32le(dv, o + 60),
+        rot: [
+          dv.getFloat32(o + 12, true), dv.getFloat32(o + 16, true),
+          dv.getFloat32(o + 20, true), dv.getFloat32(o + 24, true),
+        ],
+        trans: [
+          dv.getFloat32(o, true), dv.getFloat32(o + 4, true), dv.getFloat32(o + 8, true),
+        ],
+      });
+    }
+    return joints;
+  }
+  // Entity 0x29 — offset is the 16-byte section header start.
+  const dataStart = (offset | 0) + 0x10;
+  if (dataStart + 4 > bytes.length) return null;
+  const numJoints = bytes[dataStart + 0x02];
+  if (numJoints <= 0 || numJoints > 250) return null;
+  let p = dataStart + 0x04;
+  const joints = [];
+  for (let i = 0; i < numJoints; i++) {
+    if (p + 1 + 1 + 16 + 12 > bytes.length) return null;
+    const maybeParent = bytes[p];
+    p += 2;
+    const rot = [
+      dv.getFloat32(p, true), dv.getFloat32(p + 4, true),
+      dv.getFloat32(p + 8, true), dv.getFloat32(p + 12, true),
+    ];
+    p += 16;
+    const trans = [
+      dv.getFloat32(p, true), dv.getFloat32(p + 4, true), dv.getFloat32(p + 8, true),
+    ];
+    p += 12;
+    joints.push({ parent: maybeParent === i ? -1 : maybeParent, rot, trans });
+  }
+  return joints;
+}
+
+function packCreationDoc({ label, magic, root, summary, fileSize, warnings = [] }) {
+  const flat = [];
+  const walk = (n) => {
+    for (const c of n.children ?? []) {
+      if (c.kind === 'res') flat.push(c);
+      else walk(c);
+    }
+  };
+  walk(root);
+  return {
+    kind: 'sections',
+    format: 'creation',
+    formatLabel: label,
+    magic,
+    root,
+    sectionCount: flat.length,
+    dirCount: (root.children ?? []).filter((c) => c.kind === 'dir').length,
+    maxDepth: 2,
+    summary,
+    coveredBytes: fileSize,
+    fileSize,
+    warnings,
+  };
+}
+
+/** SQLE chunks embedded in mesh DATs (type 11 = skeleton, 21 = skin). */
+function findSqleChunks(bytes, dv) {
+  const out = [];
+  for (let ofs = 0; ofs + 104 <= bytes.length; ofs += 16) {
+    if (bytes[ofs] === 0x53 && bytes[ofs + 1] === 0x51
+      && bytes[ofs + 2] === 0x4c && bytes[ofs + 3] === 0x45) {
+      out.push({ ofs, type: dv.getUint16(ofs + 10, true) });
+    }
+  }
+  return out;
+}
+
+function inspectSqleMotion(bytes, dv, fileSize) {
+  if (bytes.length < 4 || bytes[0] !== 0x53 || bytes[1] !== 0x51
+    || bytes[2] !== 0x4c || bytes[3] !== 0x45) return null;
+  // Header is ASCII with embedded NULs between fields — don't stop at \\0.
+  let header = '';
+  const n = Math.min(200, bytes.length);
+  for (let i = 0; i < n; i++) {
+    const c = bytes[i];
+    header += (c >= 0x20 && c < 0x7f) ? String.fromCharCode(c) : ' ';
+  }
+  const m = header.match(/MOTION:\s*([^,]+),\s*time=([\d.eE+-]+),\s*size=(\d+),\s*frames=(\d+)/);
+  if (!m) {
+    // Non-motion SQLE (rare standalone) — still label it.
+    return packCreationDoc({
+      label: 'SQLE chunk',
+      magic: 'SQLE',
+      root: {
+        kind: 'dir', id: '(root)', children: [
+          res('SQLE', 'SQLE', 'data_object', fileSize, 0, 'no MOTION header'),
+        ],
+      },
+      summary: [{ type: 'sqle', name: 'SQLE', icon: 'data_object', count: 1, bytes: fileSize }],
+      fileSize,
+    });
+  }
+  const kindName = m[1].trim();
+  const kind = kindName.includes('PBChannel') ? 'PBChannel'
+    : kindName.includes('FrameChannel') ? 'FrameChannel' : kindName;
+  const duration = parseFloat(m[2]);
+  const channels = +m[3];
+  const frames = +m[4];
+  const fps = kind === 'FrameChannel' ? 60 : 30;
+  const children = [
+    res('hdr', 'Header', 'info', 0x74, 0, kind),
+    res('meta', 'Motion', 'animation', fileSize - 0x74, 0x74,
+      `${frames} frames · ${channels} channels · ~${fps} fps · ${duration.toFixed(2)}s header`),
+  ];
+  return packCreationDoc({
+    label: `Creation motion (${kind})`,
+    magic: 'SQLE',
+    root: { kind: 'dir', id: '(root)', children },
+    summary: [
+      { type: 'motion', name: kind, icon: 'animation', count: 1, bytes: fileSize },
+      { type: 'ch', name: 'Channels', icon: 'tune', count: channels, bytes: 0 },
+      { type: 'fr', name: 'Frames', icon: 'timer', count: frames, bytes: 0 },
+    ],
+    fileSize,
+  });
+}
+
+function inspectDmb(bytes, dv, fileSize) {
+  if (bytes.length < 0x100 || bytes[0] !== 0x44 || bytes[1] !== 0x4d
+    || bytes[2] !== 0x42 || bytes[3] !== 0) return null;
+  const texChildren = [];
+  let texBytes = 0;
+  for (let ofs = 0x20; ofs + 0x460 < bytes.length; ofs += 16) {
+    const w = i32le(dv, ofs + 0x40);
+    const h = i32le(dv, ofs + 0x44);
+    const bpp = i32le(dv, ofs + 0x48);
+    if (w < 16 || h < 16 || w > 2048 || h > 2048) continue;
+    if (bpp !== 3 && bpp !== 4) continue;
+    const payload = w * h * bpp;
+    if (ofs + 0x60 + payload > bytes.length) continue;
+    texBytes += 0x60 + payload;
+    texChildren.push(res(
+      `tex${texChildren.length}`,
+      'Texture',
+      'image',
+      0x60 + payload,
+      ofs,
+      `${w}×${h} ${bpp === 4 ? 'RGBA' : 'RGB'}`,
+      { isTexture: true, textureName: `dmb_${texChildren.length}` },
+    ));
+  }
+  // Named shape.sqo strings for the material↔mesh binding list.
+  const shapeNames = [];
+  for (let ofs = 0; ofs < bytes.length;) {
+    if (bytes[ofs] < 0x20 || bytes[ofs] > 0x7e) { ofs++; continue; }
+    const start = ofs;
+    while (ofs < bytes.length && bytes[ofs] >= 0x20 && bytes[ofs] <= 0x7e) ofs++;
+    if (ofs >= bytes.length || bytes[ofs] !== 0 || ofs - start < 8) continue;
+    const s = strAt(bytes, start, ofs - start);
+    const lower = s.toLowerCase();
+    if (lower.endsWith('shape.sqo')) {
+      const slash = Math.max(lower.lastIndexOf('/'), lower.lastIndexOf('\\'));
+      shapeNames.push(s.slice(slash + 1, s.length - 4));
+    }
+    ofs++;
+  }
+  const children = [
+    res('DMB', 'DMB header', 'description', 0x20, 0, 'material / texture container'),
+    ...texChildren,
+  ];
+  if (shapeNames.length) {
+    children.push({
+      kind: 'dir',
+      id: 'shapes',
+      children: shapeNames.map((n, i) => res(n.slice(0, 4) || `s${i}`, 'Shape ref', 'category', 0, 0, n)),
+    });
+  }
+  const summary = [
+    { type: 'tex', name: 'Texture', icon: 'image', count: texChildren.length, bytes: texBytes },
+  ];
+  if (shapeNames.length) {
+    summary.push({ type: 'shp', name: 'Shape refs', icon: 'category', count: shapeNames.length, bytes: 0 });
+  }
+  return packCreationDoc({
+    label: 'Creation material (DMB)',
+    magic: 'DMB',
+    root: { kind: 'dir', id: '(root)', children },
+    summary,
+    fileSize,
+  });
+}
+
+function inspectRtShape(bytes, dv, fileSize) {
+  // Mesh blocks: i32 type=4 at +0, "RT" at +8, "SHAPE:" ASCII nearby.
+  if (bytes.length < 0x60) return null;
+  if (i32le(dv, 0) !== 4) return null;
+  if (bytes[8] !== 0x52 || bytes[9] !== 0x54) return null; // RT
+
+  const shapes = [];
+  let shapeOfs = 0;
+  while (shapeOfs + 0x60 < bytes.length && i32le(dv, shapeOfs) === 4
+    && bytes[shapeOfs + 8] === 0x52 && bytes[shapeOfs + 9] === 0x54) {
+    let textOfs = -1;
+    const end = Math.min(shapeOfs + 256, bytes.length - 6);
+    for (let o = shapeOfs; o < end; o++) {
+      if (bytes[o] === 0x53 && bytes[o + 1] === 0x48 && bytes[o + 2] === 0x41
+        && bytes[o + 3] === 0x50 && bytes[o + 4] === 0x45 && bytes[o + 5] === 0x3a) {
+        textOfs = o;
+        break;
+      }
+    }
+    const blockSize = i32le(dv, shapeOfs + 4);
+    let detail = null;
+    if (textOfs >= 0) {
+      const text = strAt(bytes, textOfs, 120);
+      const m = text.match(/SHAPE:\s*TriStrip ver\.2,\s*(\d+)\s*tris,\s*(\d+)\s*codes,\s*(\d+)\s*verts/);
+      if (m) detail = `${m[3]} verts · ${m[1]} tris · ${m[2]} codes`;
+      else detail = text.split('\0')[0].slice(0, 60);
+    }
+    shapes.push(res(
+      `shp${shapes.length}`,
+      'RT/SHAPE',
+      'deployed_code',
+      Math.max(blockSize, 0x60),
+      shapeOfs,
+      detail,
+    ));
+    const rawEnd = shapeOfs + Math.max(blockSize, 0x60);
+    let next = -1;
+    const searchEnd = Math.min(rawEnd + 0x90, bytes.length - 0x60);
+    for (let o = (rawEnd + 0x20 + 3) & ~3; o <= searchEnd; o += 4) {
+      if (i32le(dv, o) === 4 && bytes[o + 8] === 0x52 && bytes[o + 9] === 0x54) {
+        next = o;
+        break;
+      }
+    }
+    if (next <= shapeOfs) break;
+    shapeOfs = next;
+  }
+  if (!shapes.length) return null;
+
+  const sqle = findSqleChunks(bytes, dv);
+  const sqleChildren = [];
+  for (const c of sqle) {
+    const type = c.type;
+    let name = `SQLE type ${type}`;
+    let icon = 'data_object';
+    let detail = null;
+    if (type === 11) {
+      name = 'Skeleton';
+      icon = 'accessibility_new';
+      const bones = i32le(dv, c.ofs + 96);
+      if (bones > 0 && bones < 2048) detail = `${bones} bones`;
+      sqleChildren.push(res(`sqle${c.ofs.toString(16)}`, name, icon, 104, c.ofs, detail, {
+        isSkeleton: true, skeletonKind: 'sqle',
+      }));
+      continue;
+    } else if (type === 21) {
+      name = 'Skin clusters';
+      icon = 'grain';
+      const clusters = i32le(dv, c.ofs + 96);
+      if (clusters > 0 && clusters < 4096) detail = `${clusters} clusters`;
+    }
+    sqleChildren.push(res(`sqle${c.ofs.toString(16)}`, name, icon, 104, c.ofs, detail));
+  }
+
+  const children = [
+    { kind: 'dir', id: 'shapes', children: shapes },
+  ];
+  if (sqleChildren.length) {
+    children.push({ kind: 'dir', id: 'sqle', children: sqleChildren });
+  }
+
+  const shapeBytes = shapes.reduce((s, r) => s + r.size, 0);
+  const summary = [
+    { type: 'shape', name: 'RT/SHAPE', icon: 'deployed_code', count: shapes.length, bytes: shapeBytes },
+  ];
+  const skel = sqle.filter((c) => c.type === 11).length;
+  const skin = sqle.filter((c) => c.type === 21).length;
+  if (skel) summary.push({ type: 'skel', name: 'Skeleton (SQLE)', icon: 'accessibility_new', count: skel, bytes: 0 });
+  if (skin) summary.push({ type: 'skin', name: 'Skin (SQLE)', icon: 'grain', count: skin, bytes: 0 });
+
+  return packCreationDoc({
+    label: 'Creation mesh (RT/SHAPE)',
+    magic: 'RT/SHAPE',
+    root: { kind: 'dir', id: '(root)', children },
+    summary,
+    fileSize,
+  });
+}
+
+/**
+ * High-poly creation DAT (mesh / material / motion). Returns null when the
+ * buffer is none of those formats.
+ */
+export function inspectCreationDat(buffer) {
+  const bytes = new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const fileSize = bytes.byteLength;
+  return inspectSqleMotion(bytes, dv, fileSize)
+    || inspectDmb(bytes, dv, fileSize)
+    || inspectRtShape(bytes, dv, fileSize);
+}
+
 // ── the walk ─────────────────────────────────────────────────────────────────
 
 /**
@@ -207,6 +546,10 @@ export function inspectDat(buffer) {
   const head8 = strAt(bytes, 0, 8);
   if (head8.startsWith('SeWave')) return { kind: 'other', label: 'Sound sample (SeWave)', magic: 'SeWave', fileSize };
   if (strAt(bytes, 0, 12).startsWith('BGMStream')) return { kind: 'other', label: 'Music stream (BGMStream)', magic: 'BGMStream', fileSize };
+
+  // Character-creation formats (before the section walker confuses them).
+  const creation = inspectCreationDat(buffer);
+  if (creation) return creation;
 
   const warnings = [];
   const root = { kind: 'dir', id: '(root)', children: [] };
@@ -261,10 +604,12 @@ export function inspectDat(buffer) {
       // Structure tree shows the 4-char section id; use it as a lookup key when
       // the embedded name is missing so Texture rows stay clickable.
       if (isTexture && !textureName && id.trim()) textureName = id.trim();
+      const isSkeleton = type === 0x29;
       stack[stack.length - 1].children.push({
         kind: 'res', id, type, name: typeName(type),
         icon: SECTION_TYPE_ICONS[type] ?? 'data_object',
         size, offset: pos, flags, detail, textureName, isTexture,
+        isSkeleton, skeletonKind: isSkeleton ? 'entity' : null,
       });
       const agg = summary.get(type) ?? { count: 0, bytes: 0 };
       agg.count++; agg.bytes += size;
@@ -279,6 +624,9 @@ export function inspectDat(buffer) {
   // A believable container covers (nearly) the whole file. Anything else — item
   // tables, dialog text, FTABLE — walks a step or two into garbage and stops.
   if (sectionCount === 0 || coveredBytes < len * 0.9) {
+    // Section walk may partially chew a creation DAT; prefer the dedicated view.
+    const cr = inspectCreationDat(buffer);
+    if (cr) return cr;
     return {
       kind: 'other',
       label: 'Not a sectioned resource DAT',
