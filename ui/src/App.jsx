@@ -11,7 +11,8 @@ import { CharacterList, useCharacter } from './CharacterList.jsx';
 import { CreationList, useCreation } from './CreationList.jsx';
 import {
   buildCreationModel, parseSqleMotion, CreationAnimator, restoreCreationBind, CREATION_CLIPS,
-  creationCameraPaths, buildCreationCamera, CREATION_RACES,
+  creationCameraPaths, buildCreationCamera, CREATION_RACES, CREATION_SEQUENCE_META,
+  parseCreationCues,
 } from '../js/creation.js';
 import { AnimationPanel } from './AnimationPanel.jsx';
 import { Combo } from './Combo.jsx';
@@ -1606,8 +1607,6 @@ export default function App() {
     setCrCameraOnState(on);
     const r = rendererRef.current;
     if (r) r.creationCamera = on ? crCameraTrackRef.current : null;
-    // Handing the camera back leaves it wherever the last shot pointed, which
-    // is rarely a useful view — re-frame the performance.
     if (!on && r?.creationDriver) {
       const seq = r.creationDriver.sequenceBounds();
       if (seq) r.camera.fit(seq.min, seq.max);
@@ -1628,37 +1627,41 @@ export default function App() {
     if (!settings?.gamePath) { setStatusText('Game path not set — open Settings first.'); return; }
     const gen = ++loadGenRef.current;
     const stillCurrent = () => gen === loadGenRef.current;
-    let bodyMeshRel = desc.bodyMesh;
-    let bodyMatRel = desc.bodyMat;
-    let modelKey = [bodyMeshRel, bodyMatRel, desc.headMesh, desc.headMat, desc.headY].join('|');
-    let rebuild = crModelCacheRef.current.key !== modelKey || !crModelCacheRef.current.model;
-    const showOverlay = rebuild;
-    const releaseOverlay = () => { if (showOverlay && overlayGenRef.current === gen) endLoad(); };
-    try {
-      if (showOverlay) {
-        beginLoad(desc.name, 'Reading DAT…');
-        overlayGenRef.current = gen;
-      } else {
-        setStatusText(`Loading ${desc.name}…`);
-      }
-      const readRel = async (rel) => (await backend.readPrefer(gameCandidates(rel, settings))).data;
+      let bodyMeshRel = desc.bodyMesh;
+      let bodyMatRel = desc.bodyMat;
+      const headVar = desc.headVariant ?? 0;
+      let modelKey = [bodyMeshRel, bodyMatRel, desc.headMesh, desc.headMat, desc.headY, headVar].join('|');
+      let rebuild = crModelCacheRef.current.key !== modelKey || !crModelCacheRef.current.model;
+      const showOverlay = rebuild;
+      const releaseOverlay = () => { if (showOverlay && overlayGenRef.current === gen) endLoad(); };
+      try {
+        if (showOverlay) {
+          beginLoad(desc.name, 'Reading DAT…');
+          overlayGenRef.current = gen;
+        } else {
+          setStatusText(`Loading ${desc.name}…`);
+        }
+        const readRel = async (rel) => (await backend.readPrefer(gameCandidates(rel, settings))).data;
 
-      const buildWith = async (meshRel, matRel) => {
-        const [bodyMesh, bodyMat, headMesh, headMat] = await Promise.all([
-          readRel(meshRel),
-          readRel(matRel).catch(() => null),
-          readRel(desc.headMesh),
-          readRel(desc.headMat).catch(() => null),
-        ]);
-        stepLoad('Building model…');
-        await yieldToPaint();
-        const built = buildCreationModel([
-          { mesh: bodyMesh, mat: bodyMat, isBody: true },
-          { mesh: headMesh, mat: headMat, isBody: false, offsetY: desc.headY },
-        ], desc.name);
-        if (!built.isRenderable) throw new Error('no displayable creation geometry');
-        return built;
-      };
+        const buildWith = async (meshRel, matRel) => {
+          const [bodyMesh, bodyMat, headMesh, headMat] = await Promise.all([
+            readRel(meshRel),
+            readRel(matRel).catch(() => null),
+            readRel(desc.headMesh),
+            readRel(desc.headMat).catch(() => null),
+          ]);
+          stepLoad('Building model…');
+          await yieldToPaint();
+          const built = buildCreationModel([
+            { mesh: bodyMesh, mat: bodyMat, isBody: true },
+            {
+              mesh: headMesh, mat: headMat, isBody: false,
+              offsetY: desc.headY, variantIndex: headVar,
+            },
+          ], desc.name);
+          if (!built.isRenderable) throw new Error('no displayable creation geometry');
+          return built;
+        };
 
       let model = crModelCacheRef.current.model;
       if (rebuild) {
@@ -1673,10 +1676,12 @@ export default function App() {
         return cache.get(rel);
       };
 
-      // Matched body/head motion pair for the chosen animation (if any).
+      // Matched body/head motion pair. Prefer the Equipment body the user
+      // chose; only fall back to altBody when channels truly cannot pair
+      // (should be rare after equip↔clip pairing in CreationList).
       let driver = null;
       let motions = null;
-      let swappedVariant = null;
+      let usedAlt = false;
       if (desc.motions) {
         if (showOverlay) stepLoad('Reading motion…');
         const [bodyMo, headMo] = await Promise.all([
@@ -1686,10 +1691,7 @@ export default function App() {
         if (!stillCurrent()) { releaseOverlay(); return; }
         motions = { body: bodyMo, head: headMo };
         driver = new CreationAnimator(model, [bodyMo, headMo]);
-        // Tarutaru/Mithra/Galka carry a different skeleton per equipment
-        // variant, and each clip is authored for exactly one of them. Rather
-        // than freeze on a bind pose, rebuild on the variant that can play it.
-        if (!driver.compatible && desc.altBodyMesh) {
+        if (!driver.compatible && desc.allowAltBody && desc.altBodyMesh) {
           const alt = await buildWith(desc.altBodyMesh, desc.altBodyMat);
           if (!stillCurrent()) { releaseOverlay(); return; }
           const altDriver = new CreationAnimator(alt, [bodyMo, headMo]);
@@ -1697,11 +1699,11 @@ export default function App() {
             model = alt;
             bodyMeshRel = desc.altBodyMesh;
             bodyMatRel = desc.altBodyMat;
-            modelKey = [bodyMeshRel, bodyMatRel, desc.headMesh, desc.headMat, desc.headY].join('|');
+            modelKey = [bodyMeshRel, bodyMatRel, desc.headMesh, desc.headMat, desc.headY, headVar].join('|');
             crModelCacheRef.current = { key: modelKey, model };
             driver = altDriver;
             rebuild = true;
-            swappedVariant = desc.altLabel;
+            usedAlt = true;
           }
         }
         if (!driver.compatible) driver = null;
@@ -1713,6 +1715,8 @@ export default function App() {
       modelRef.current = model;
       if (renderer.model !== model) renderer.setModel(model, crFramedRef.current);
 
+      let camera = null;
+      let cueCount = null;
       if (driver) {
         renderer.creationDriver = driver;
         driver.bind(renderer);
@@ -1727,12 +1731,11 @@ export default function App() {
         crFramedRef.current = true;
         renderer.playing = settingsRef.current?.autoPlay ?? true;
         setPlayingState(renderer.playing);
-        setCrSegments(driver.segments);
+        setCrSegments([]);
         setCrSegment(-1);
 
-        // Authored camera track — only the long sequence has one, and only it
-        // shares the sequence's frame count.
-        let camera = null;
+        // Authored camera track — only the long sequence has one.
+        // Auto-enable: most of the retail presentation is camera motion.
         if (desc.anim === 'seq') {
           const race = CREATION_RACES.find((r) => r.id === desc.raceId);
           const cams = creationCameraPaths(race);
@@ -1743,12 +1746,21 @@ export default function App() {
               readMotion(pick.matrix).catch(() => null),
             ]);
             const built = buildCreationCamera(fovMo, matMo);
-            if (built && built.frameCount === driver.frameCount) camera = built;
+            if (built && Math.abs(built.frameCount - driver.frameCount) <= 1) camera = built;
+          }
+          const meta = CREATION_SEQUENCE_META[desc.raceId];
+          if (meta?.cue) {
+            try {
+              const cues = parseCreationCues(await readRel(meta.cue));
+              cueCount = cues?.events?.length ?? 0;
+            } catch { /* optional */ }
           }
         }
         setCrHasCamera(!!camera);
-        renderer.creationCamera = crCameraOnRef.current ? camera : null;
         crCameraTrackRef.current = camera;
+        // Do not auto-drive the cinematic camera — skeleton pose must be
+        // judged in orbit view. User can still toggle it on.
+        renderer.creationCamera = crCameraOnRef.current ? camera : null;
       } else {
         renderer.creationDriver = null;
         renderer.setAnimation(null);
@@ -1758,6 +1770,9 @@ export default function App() {
         setCrSegments([]);
         setCrSegment(-1);
         crFramedRef.current = true;
+        setCrHasCamera(false);
+        crCameraTrackRef.current = null;
+        renderer.creationCamera = null;
       }
       appliedPlayRef.current = { kind: null, id: '' };
       setAnims([]);
@@ -1784,9 +1799,9 @@ export default function App() {
           compatible: !!driver,
           movingBones: driver?.movingBoneCount ?? 0,
           totalBones: cr.bones.length,
-          // Set when this clip could only play on the other equipment body.
-          shownOn: swappedVariant,
           repaired: driver?.repairedFrames ?? 0,
+          cues: cueCount,
+          leadIn: 0,
         } : null,
       });
       releaseOverlay();
@@ -1796,7 +1811,9 @@ export default function App() {
         : '';
       setStatusText(driver
         ? `${desc.name} — ${driver.frameCount.toLocaleString()} frames, ${driver.duration.toFixed(1)}s`
-          + `${swappedVariant ? ` (shown on the ${swappedVariant} body — this clip is authored for it)` : ''}`
+          + (desc.anim === 'seq' && camera ? ' · camera on' : '')
+          + (cueCount != null ? ` · ${cueCount} cues` : '')
+          + (usedAlt ? ' · body swapped to match clip skeleton' : '')
         : `${desc.name}${desc.motions ? mismatch : ' — A-pose'}`);
     } catch (err) {
       console.error(err);
@@ -2004,38 +2021,19 @@ export default function App() {
     speed: playbackSpeed, onSpeed: setPlaybackSpeed,
   };
 
-  // Character Creation playback: idle, the long creation presentation, and the
-  // individual poses auto-detected inside it (the file concatenates several,
-  // separated by long holds). '— bind pose —' doubles as the A-pose. Transport,
-  // scrubber and speed ride the same renderer playhead as ordinary clips.
-  const crSecs = (n) => `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, '0')}`;
-  const crFps = rendererRef.current?.creationDriver?.fps || 30;
+  // Character Creation playback. Pose auto-splits removed — they were quiet
+  // holds, not real poses. Sequence skips its own lead-in hold in the driver.
   const creationAnim = {
-    anims: [
-      ...CREATION_CLIPS.map((c) => ({ id: c.id, label: c.label, clip: {} })),
-      // Poses detected inside the long sequence (it concatenates several).
-      ...crSegments.map((s, i) => ({
-        id: `seg:${i}`,
-        label: `  ↳ Pose ${i + 1} (${crSecs(s.start / crFps)}–${crSecs((s.start + s.count) / crFps)})`,
-        clip: {},
-      })),
-    ],
-    currentAnim: crSegment >= 0 ? `seg:${crSegment}` : cr.anim,
+    anims: CREATION_CLIPS.map((c) => ({ id: c.id, label: c.label, clip: {} })),
+    currentAnim: cr.anim,
     onAnimChange: (id) => {
+      setCrSegment(-1);
       const driver = rendererRef.current?.creationDriver;
-      const seg = typeof id === 'string' && id.startsWith('seg:') ? +id.slice(4) : -1;
-      if (seg >= 0 && driver && crSegments[seg]) {
-        driver.setRange(crSegments[seg].start, crSegments[seg].count);
+      if (driver && id === cr.anim) {
+        // Reselect same clip → full authored window (incl. lead-in skip).
         rendererRef.current.setAnimation(driver.clip);
         rendererRef.current.playing = true;
         setPlayingState(true);
-        setCrSegment(seg);
-        return;
-      }
-      setCrSegment(-1);
-      if (driver && id === cr.anim) {   // same clip — back to its full range
-        driver.setRange(0, null);
-        rendererRef.current.setAnimation(driver.clip);
         return;
       }
       cr.setAnim(id ?? '');
@@ -3355,10 +3353,11 @@ export default function App() {
       )}
 
       {/* Only the views that actually put a model on screen get playback
-          controls — Images/Music/SFX have their own right-hand panels. */}
+          controls — Images/Music/SFX have their own right-hand panels.
+          Creation is ORBIT but not browserKind==='entity', so list it explicitly. */}
       {!dataStructOpen && !player.current
-        && (ORBIT_VIEWS.has(leftView) || leftView === 'data')
-        && browserKind === 'entity'
+        && (leftView === 'creation'
+          || ((ORBIT_VIEWS.has(leftView) || leftView === 'data') && browserKind === 'entity'))
         && (
         <AnimationPanel
           pc={leftView === 'pc' ? pc : null}

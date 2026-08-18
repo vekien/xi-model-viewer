@@ -16,32 +16,25 @@
 // conjugated by the same reflection so hierarchy multiplication stays intact.
 
 // ---------------------------------------------------------------------------
-// Race / face / motion table (DATura character_creation_dat_table.h +
-// kCreationSqlePairs / kCreationSqleHeadSets). Paths are game-relative.
-// "Initial Equipment" bodies live two DAT indices after the no-equipment pair.
-// Face A and B share the head mesh and motions; only the material differs.
+// Race / face / motion table. Paths are game-relative.
 //
-// pbBodyEquipped: for Tarutaru/Mithra/Galka the initial-equipment body has a
-// different skeleton (cloth bones), and the long PB creation sequence is
-// authored for THAT skeleton while the standing idle matches the naked one —
-// each animation plays on exactly one equipment variant. Hume/Elvaan bodies
-// share one 299-channel skeleton across both variants, so everything pairs.
+// Each race has EIGHT faces (retail character creation). DAT packing after the
+// body pair is a flat mat+mesh stride of 2: face N uses mesh0+(N-1)*2 and
+// mat = mesh-1, with a motion cluster every +6 from the first face base.
+// (An earlier misread treated pairs of faces as A/B variants of one face —
+// "Face 1B" was actually face 2's head.)
+//
+// "Initial Equipment" bodies live two DAT indices after the no-equipment pair.
+// pbBodyEquipped: Tarutaru/Mithra/Galka equip body has a different skeleton
+// (cloth bones). Long PB seq is authored for equipped; short/idle for naked.
+// Hume/Elvaan share one skeleton across both body variants.
+//
+// headY: neck alignment after Y-reflect — body bone4.y − head bone1.y so the
+// attach points coincide (chin-median was wrong and buried heads in torsos).
+// Face A/B: two full-size faceCHG maps inside the same head DMB (not two meshes).
 // ---------------------------------------------------------------------------
 
-// headY: per-face vertical alignment for the head.
-//
-// A race's faces are NOT authored at a common height: measuring the bottom of
-// each faceShape (the chin) shows Hume male faces 1/2 at -14.69 but face 3 at
-// -15.35 and face 4 at -15.24, and Hume female face 1 at -13.11 against -13.66
-// for its siblings. The body is shared, so a face that sits low buries its chin
-// in the collar and one that sits high floats above it.
-//
-// These values realign each face's chin to the height most of its race's faces
-// already use (measured from the DATs, not eyeballed — see the derivation in
-// scratchpad/chinall2.mjs). They supersede DATura's hand-authored -0.40/-0.50
-// pair, which only ever corrected the two female races and by roughly a fifth
-// of the actual discrepancy.
-const face = (mesh, matA, matB, base, idle, headY = 0) => ({ mesh, matA, matB, base, idle, headY });
+const face = (mesh, mat, base, idle, headY = 0) => ({ mesh, mat, base, idle, headY });
 
 export const CREATION_RACES = [
   {
@@ -49,11 +42,16 @@ export const CREATION_RACES = [
     bodyMesh: 'ROM/63/81.dat', bodyMat: 'ROM/63/80.dat',
     bodyBase: 'ROM/66/16.dat', bodyIdle: 'ROM/66/14.dat',
     cameras: [['ROM/66/8.dat', 'ROM/66/9.dat'], ['ROM/66/10.dat', 'ROM/66/11.dat']],
+    // headY = body bone4.y − head bone1.y (bind, Y-reflected) so necks meet.
     faces: [
-      face('ROM/63/85.dat', 'ROM/63/84.dat', 'ROM/63/86.dat', 'ROM/66/22.dat', 'ROM/66/20.dat'),
-      face('ROM/63/89.dat', 'ROM/63/88.dat', 'ROM/63/90.dat', 'ROM/66/34.dat', 'ROM/66/32.dat'),
-      face('ROM/63/93.dat', 'ROM/63/92.dat', 'ROM/63/94.dat', 'ROM/66/46.dat', 'ROM/66/44.dat', 0.653),
-      face('ROM/63/97.dat', 'ROM/63/96.dat', 'ROM/63/98.dat', 'ROM/66/58.dat', 'ROM/66/56.dat', 0.546),
+      face('ROM/63/85.dat', 'ROM/63/84.dat', 'ROM/66/22.dat', 'ROM/66/20.dat'),
+      face('ROM/63/87.dat', 'ROM/63/86.dat', 'ROM/66/28.dat', 'ROM/66/26.dat'),
+      face('ROM/63/89.dat', 'ROM/63/88.dat', 'ROM/66/34.dat', 'ROM/66/32.dat'),
+      face('ROM/63/91.dat', 'ROM/63/90.dat', 'ROM/66/40.dat', 'ROM/66/38.dat', -0.601),
+      face('ROM/63/93.dat', 'ROM/63/92.dat', 'ROM/66/46.dat', 'ROM/66/44.dat', 0.601),
+      face('ROM/63/95.dat', 'ROM/63/94.dat', 'ROM/66/52.dat', 'ROM/66/50.dat', 0.601),
+      face('ROM/63/97.dat', 'ROM/63/96.dat', 'ROM/66/58.dat', 'ROM/66/56.dat', 0.601),
+      face('ROM/63/99.dat', 'ROM/63/98.dat', 'ROM/66/64.dat', 'ROM/66/62.dat'),
     ],
   },
   {
@@ -62,10 +60,14 @@ export const CREATION_RACES = [
     bodyBase: 'ROM/65/86.dat', bodyIdle: 'ROM/65/84.dat',
     cameras: [['ROM/65/78.dat', 'ROM/65/79.dat'], ['ROM/65/80.dat', 'ROM/65/81.dat']],
     faces: [
-      face('ROM/63/65.dat', 'ROM/63/64.dat', 'ROM/63/66.dat', 'ROM/65/92.dat', 'ROM/65/90.dat', -0.545),
-      face('ROM/63/69.dat', 'ROM/63/68.dat', 'ROM/63/70.dat', 'ROM/65/104.dat', 'ROM/65/102.dat'),
-      face('ROM/63/73.dat', 'ROM/63/72.dat', 'ROM/63/74.dat', 'ROM/65/116.dat', 'ROM/65/114.dat'),
-      face('ROM/63/77.dat', 'ROM/63/76.dat', 'ROM/63/78.dat', 'ROM/66/0.dat', 'ROM/65/126.dat'),
+      face('ROM/63/65.dat', 'ROM/63/64.dat', 'ROM/65/92.dat', 'ROM/65/90.dat', -0.558),
+      face('ROM/63/67.dat', 'ROM/63/66.dat', 'ROM/65/98.dat', 'ROM/65/96.dat'),
+      face('ROM/63/69.dat', 'ROM/63/68.dat', 'ROM/65/104.dat', 'ROM/65/102.dat'),
+      face('ROM/63/71.dat', 'ROM/63/70.dat', 'ROM/65/110.dat', 'ROM/65/108.dat', -0.558),
+      face('ROM/63/73.dat', 'ROM/63/72.dat', 'ROM/65/116.dat', 'ROM/65/114.dat'),
+      face('ROM/63/75.dat', 'ROM/63/74.dat', 'ROM/65/122.dat', 'ROM/65/120.dat'),
+      face('ROM/63/77.dat', 'ROM/63/76.dat', 'ROM/66/0.dat', 'ROM/65/126.dat'),
+      face('ROM/63/79.dat', 'ROM/63/78.dat', 'ROM/66/6.dat', 'ROM/66/4.dat', -0.558),
     ],
   },
   {
@@ -74,10 +76,14 @@ export const CREATION_RACES = [
     bodyBase: 'ROM/64/98.dat', bodyIdle: 'ROM/64/96.dat',
     cameras: [['ROM/64/90.dat', 'ROM/64/91.dat'], ['ROM/64/92.dat', 'ROM/64/93.dat']],
     faces: [
-      face('ROM/63/25.dat', 'ROM/63/24.dat', 'ROM/63/26.dat', 'ROM/64/104.dat', 'ROM/64/102.dat'),
-      face('ROM/63/29.dat', 'ROM/63/28.dat', 'ROM/63/30.dat', 'ROM/64/116.dat', 'ROM/64/114.dat'),
-      face('ROM/63/33.dat', 'ROM/63/32.dat', 'ROM/63/34.dat', 'ROM/65/0.dat', 'ROM/64/126.dat'),
-      face('ROM/63/37.dat', 'ROM/63/36.dat', 'ROM/63/38.dat', 'ROM/65/12.dat', 'ROM/65/10.dat', -0.842),
+      face('ROM/63/25.dat', 'ROM/63/24.dat', 'ROM/64/104.dat', 'ROM/64/102.dat'),
+      face('ROM/63/27.dat', 'ROM/63/26.dat', 'ROM/64/110.dat', 'ROM/64/108.dat'),
+      face('ROM/63/29.dat', 'ROM/63/28.dat', 'ROM/64/116.dat', 'ROM/64/114.dat'),
+      face('ROM/63/31.dat', 'ROM/63/30.dat', 'ROM/64/122.dat', 'ROM/64/120.dat'),
+      face('ROM/63/33.dat', 'ROM/63/32.dat', 'ROM/65/0.dat', 'ROM/64/126.dat'),
+      face('ROM/63/35.dat', 'ROM/63/34.dat', 'ROM/65/6.dat', 'ROM/65/4.dat'),
+      face('ROM/63/37.dat', 'ROM/63/36.dat', 'ROM/65/12.dat', 'ROM/65/10.dat', -0.700),
+      face('ROM/63/39.dat', 'ROM/63/38.dat', 'ROM/65/18.dat', 'ROM/65/16.dat'),
     ],
   },
   {
@@ -86,27 +92,32 @@ export const CREATION_RACES = [
     bodyBase: 'ROM/64/40.dat', bodyIdle: 'ROM/64/38.dat',
     cameras: [['ROM/64/32.dat', 'ROM/64/33.dat'], ['ROM/64/34.dat', 'ROM/64/35.dat']],
     faces: [
-      face('ROM/63/5.dat', 'ROM/63/4.dat', 'ROM/63/6.dat', 'ROM/64/46.dat', 'ROM/64/44.dat', -0.645),
-      face('ROM/63/9.dat', 'ROM/63/8.dat', 'ROM/63/10.dat', 'ROM/64/58.dat', 'ROM/64/56.dat'),
-      face('ROM/63/13.dat', 'ROM/63/12.dat', 'ROM/63/14.dat', 'ROM/64/52.dat', 'ROM/64/50.dat', -0.645),
-      face('ROM/63/17.dat', 'ROM/63/16.dat', 'ROM/63/18.dat', 'ROM/64/82.dat', 'ROM/64/80.dat'),
+      face('ROM/63/5.dat', 'ROM/63/4.dat', 'ROM/64/46.dat', 'ROM/64/44.dat', -0.655),
+      face('ROM/63/7.dat', 'ROM/63/6.dat', 'ROM/64/52.dat', 'ROM/64/50.dat', -0.655),
+      face('ROM/63/9.dat', 'ROM/63/8.dat', 'ROM/64/58.dat', 'ROM/64/56.dat'),
+      face('ROM/63/11.dat', 'ROM/63/10.dat', 'ROM/64/64.dat', 'ROM/64/62.dat', -0.655),
+      face('ROM/63/13.dat', 'ROM/63/12.dat', 'ROM/64/70.dat', 'ROM/64/68.dat', -0.655),
+      face('ROM/63/15.dat', 'ROM/63/14.dat', 'ROM/64/76.dat', 'ROM/64/74.dat'),
+      face('ROM/63/17.dat', 'ROM/63/16.dat', 'ROM/64/82.dat', 'ROM/64/80.dat'),
+      face('ROM/63/19.dat', 'ROM/63/18.dat', 'ROM/64/88.dat', 'ROM/64/86.dat'),
     ],
   },
   {
     id: 'TaruM', label: 'Tarutaru Male', pbBodyEquipped: true,
     bodyMesh: 'ROM/64/13.dat', bodyMat: 'ROM/64/12.dat',
-    // The capture shows Tarutaru male plays 67/58, not 67/4 — the doc had it
-    // sharing Tarutaru FEMALE's body clip, which is why its head never matched
-    // (1315 body frames against 1624 head). 67/58 is 1624, an exact pair.
-    // bodyBase stays 67/4 because the short Motion clips hang off it.
+    // Seq is 67/58 (1624 frames), not bodyBase 67/4 — short clips hang off base.
     seqBody: 'ROM/67/58.dat',
     bodyBase: 'ROM/67/4.dat', bodyIdle: 'ROM/67/2.dat',
     cameras: [['ROM/67/54.dat', 'ROM/67/55.dat'], ['ROM/67/56.dat', 'ROM/67/57.dat']],
     faces: [
-      face('ROM/64/17.dat', 'ROM/64/16.dat', 'ROM/64/18.dat', 'ROM/67/64.dat', 'ROM/67/62.dat', -0.069),
-      face('ROM/64/21.dat', 'ROM/64/20.dat', 'ROM/64/22.dat', 'ROM/67/76.dat', 'ROM/67/74.dat'),
-      face('ROM/64/25.dat', 'ROM/64/24.dat', 'ROM/64/26.dat', 'ROM/67/88.dat', 'ROM/67/86.dat', -0.069),
-      face('ROM/64/29.dat', 'ROM/64/28.dat', 'ROM/64/30.dat', 'ROM/67/100.dat', 'ROM/67/98.dat'),
+      face('ROM/64/17.dat', 'ROM/64/16.dat', 'ROM/67/64.dat', 'ROM/67/62.dat'),
+      face('ROM/64/19.dat', 'ROM/64/18.dat', 'ROM/67/70.dat', 'ROM/67/68.dat'),
+      face('ROM/64/21.dat', 'ROM/64/20.dat', 'ROM/67/76.dat', 'ROM/67/74.dat'),
+      face('ROM/64/23.dat', 'ROM/64/22.dat', 'ROM/67/82.dat', 'ROM/67/80.dat'),
+      face('ROM/64/25.dat', 'ROM/64/24.dat', 'ROM/67/88.dat', 'ROM/67/86.dat'),
+      face('ROM/64/27.dat', 'ROM/64/26.dat', 'ROM/67/94.dat', 'ROM/67/92.dat'),
+      face('ROM/64/29.dat', 'ROM/64/28.dat', 'ROM/67/100.dat', 'ROM/67/98.dat'),
+      face('ROM/64/31.dat', 'ROM/64/30.dat', 'ROM/67/106.dat', 'ROM/67/104.dat'),
     ],
   },
   {
@@ -115,10 +126,14 @@ export const CREATION_RACES = [
     bodyBase: 'ROM/67/4.dat', bodyIdle: 'ROM/67/2.dat',
     cameras: [['ROM/66/124.dat', 'ROM/66/125.dat'], ['ROM/66/126.dat', 'ROM/66/127.dat']],
     faces: [
-      face('ROM/63/125.dat', 'ROM/63/124.dat', 'ROM/63/126.dat', 'ROM/67/10.dat', 'ROM/67/8.dat'),
-      face('ROM/64/1.dat', 'ROM/64/0.dat', 'ROM/64/2.dat', 'ROM/67/22.dat', 'ROM/67/20.dat'),
-      face('ROM/64/5.dat', 'ROM/64/4.dat', 'ROM/64/6.dat', 'ROM/67/34.dat', 'ROM/67/32.dat'),
-      face('ROM/64/9.dat', 'ROM/64/8.dat', 'ROM/64/10.dat', 'ROM/67/46.dat', 'ROM/67/44.dat'),
+      face('ROM/63/125.dat', 'ROM/63/124.dat', 'ROM/67/10.dat', 'ROM/67/8.dat'),
+      face('ROM/63/127.dat', 'ROM/63/126.dat', 'ROM/67/16.dat', 'ROM/67/14.dat'),
+      face('ROM/64/1.dat', 'ROM/64/0.dat', 'ROM/67/22.dat', 'ROM/67/20.dat'),
+      face('ROM/64/3.dat', 'ROM/64/2.dat', 'ROM/67/28.dat', 'ROM/67/26.dat'),
+      face('ROM/64/5.dat', 'ROM/64/4.dat', 'ROM/67/34.dat', 'ROM/67/32.dat'),
+      face('ROM/64/7.dat', 'ROM/64/6.dat', 'ROM/67/40.dat', 'ROM/67/38.dat'),
+      face('ROM/64/9.dat', 'ROM/64/8.dat', 'ROM/67/46.dat', 'ROM/67/44.dat'),
+      face('ROM/64/11.dat', 'ROM/64/10.dat', 'ROM/67/52.dat', 'ROM/67/50.dat'),
     ],
   },
   {
@@ -127,10 +142,14 @@ export const CREATION_RACES = [
     bodyBase: 'ROM/66/74.dat', bodyIdle: 'ROM/66/72.dat',
     cameras: [['ROM/66/66.dat', 'ROM/66/67.dat'], ['ROM/66/68.dat', 'ROM/66/69.dat']],
     faces: [
-      face('ROM/63/105.dat', 'ROM/63/104.dat', 'ROM/63/106.dat', 'ROM/66/80.dat', 'ROM/66/78.dat'),
-      face('ROM/63/109.dat', 'ROM/63/108.dat', 'ROM/63/110.dat', 'ROM/66/92.dat', 'ROM/66/90.dat'),
-      face('ROM/63/113.dat', 'ROM/63/112.dat', 'ROM/63/114.dat', 'ROM/66/104.dat', 'ROM/66/102.dat'),
-      face('ROM/63/117.dat', 'ROM/63/116.dat', 'ROM/63/118.dat', 'ROM/66/116.dat', 'ROM/66/114.dat'),
+      face('ROM/63/105.dat', 'ROM/63/104.dat', 'ROM/66/80.dat', 'ROM/66/78.dat'),
+      face('ROM/63/107.dat', 'ROM/63/106.dat', 'ROM/66/86.dat', 'ROM/66/84.dat'),
+      face('ROM/63/109.dat', 'ROM/63/108.dat', 'ROM/66/92.dat', 'ROM/66/90.dat'),
+      face('ROM/63/111.dat', 'ROM/63/110.dat', 'ROM/66/98.dat', 'ROM/66/96.dat'),
+      face('ROM/63/113.dat', 'ROM/63/112.dat', 'ROM/66/104.dat', 'ROM/66/102.dat'),
+      face('ROM/63/115.dat', 'ROM/63/114.dat', 'ROM/66/110.dat', 'ROM/66/108.dat'),
+      face('ROM/63/117.dat', 'ROM/63/116.dat', 'ROM/66/116.dat', 'ROM/66/114.dat'),
+      face('ROM/63/119.dat', 'ROM/63/118.dat', 'ROM/66/122.dat', 'ROM/66/120.dat'),
     ],
   },
   {
@@ -139,17 +158,32 @@ export const CREATION_RACES = [
     bodyBase: 'ROM/65/28.dat', bodyIdle: 'ROM/65/26.dat',
     cameras: [['ROM/65/20.dat', 'ROM/65/21.dat'], ['ROM/65/22.dat', 'ROM/65/23.dat']],
     faces: [
-      face('ROM/63/45.dat', 'ROM/63/44.dat', 'ROM/63/46.dat', 'ROM/65/34.dat', 'ROM/65/32.dat'),
-      face('ROM/63/49.dat', 'ROM/63/48.dat', 'ROM/63/50.dat', 'ROM/65/40.dat', 'ROM/65/38.dat'),
-      face('ROM/63/53.dat', 'ROM/63/52.dat', 'ROM/63/54.dat', 'ROM/65/46.dat', 'ROM/65/44.dat'),
-      face('ROM/63/57.dat', 'ROM/63/56.dat', 'ROM/63/58.dat', 'ROM/65/52.dat', 'ROM/65/50.dat'),
+      face('ROM/63/45.dat', 'ROM/63/44.dat', 'ROM/65/34.dat', 'ROM/65/32.dat'),
+      face('ROM/63/47.dat', 'ROM/63/46.dat', 'ROM/65/40.dat', 'ROM/65/38.dat'),
+      face('ROM/63/49.dat', 'ROM/63/48.dat', 'ROM/65/46.dat', 'ROM/65/44.dat'),
+      face('ROM/63/51.dat', 'ROM/63/50.dat', 'ROM/65/52.dat', 'ROM/65/50.dat'),
+      face('ROM/63/53.dat', 'ROM/63/52.dat', 'ROM/65/58.dat', 'ROM/65/56.dat'),
+      face('ROM/63/55.dat', 'ROM/63/54.dat', 'ROM/65/64.dat', 'ROM/65/62.dat'),
+      face('ROM/63/57.dat', 'ROM/63/56.dat', 'ROM/65/70.dat', 'ROM/65/68.dat'),
+      face('ROM/63/59.dat', 'ROM/63/58.dat', 'ROM/65/76.dat', 'ROM/65/74.dat'),
     ],
   },
 ];
 
-/** "ROM/63/81.dat" + 2 -> "ROM/63/83.dat" (initial-equipment body derivation). */
+/**
+ * Offset a ROM path by DAT index. FFXI packs 128 files per folder, so
+ * `ROM/66/0.dat - 2` is `ROM/65/126.dat`, not a negative file number.
+ * Used for equipment (+2), face-B mesh (+2), face-B motion cluster (+6),
+ * and every clip offset from a motion base.
+ */
 export function bumpDatIndex(rel, by) {
-  return rel.replace(/\/(\d+)\.dat$/i, (_, n) => `/${+n + by}.dat`);
+  const m = rel.match(/^(.*\/)(\d+)\/(\d+)\.dat$/i);
+  if (!m) return rel.replace(/\/(\d+)\.dat$/i, (_, n) => `/${+n + by}.dat`);
+  let folder = +m[2];
+  let file = +m[3] + by;
+  while (file < 0) { folder -= 1; file += 128; }
+  while (file >= 128) { folder += 1; file -= 128; }
+  return `${m[1]}${folder}/${file}.dat`;
 }
 
 /**
@@ -166,17 +200,32 @@ export function bumpDatIndex(rel, by) {
  * correctly, and they animate far more of the skeleton than the long sequence
  * does (which holds the arms still for its whole duration).
  */
+// equipped: on pbBodyEquipped races (Taru/Mithra/Galka), locomotion FrameChannel
+// clips match the NAKED body skeleton; seq/m4 match INITIAL EQUIPMENT.
+// Hume/Elvaan share one skeleton for both bodies. Wrong pairing = bind pose.
 export const CREATION_CLIPS = [
-  { id: 'm1', offset: -4, label: 'Motion 1' },
-  { id: 'm2', offset: -3, label: 'Motion 2' },
-  { id: 'idle', offset: -2, label: 'Standing idle' },
-  { id: 'm3', offset: -1, label: 'Motion 3' },
-  // Incomplete on purpose: the retail screen runs this pose track underneath a
-  // frame-indexed event track (the "OC:01.00" DAT) that fires ~50-130 actions
-  // from a per-race action table. Without that layer this plays as a stiff,
-  // near-static performance. The four clips above are complete and correct.
-  { id: 'seq', offset: 0, label: 'Creation sequence (incomplete)' },
+  { id: 'm1', offset: -4, label: 'Walk Backwards', equipped: false },
+  { id: 'm2', offset: -3, label: 'Run', equipped: false },
+  { id: 'idle', offset: -2, label: 'Idle', equipped: false },
+  { id: 'm3', offset: -1, label: 'Walk', equipped: false },
+  // Long PB presentation. Retail layers OC:01.00 cues (mostly SFX from rt**
+  // action tables) + two camera tracks on top — body pose alone looks stiff.
+  { id: 'seq', offset: 0, label: 'Creation sequence', equipped: true },
+  // Short PB coda at base+1 — same skeleton as the long sequence.
+  { id: 'm4', offset: 1, label: 'Equip pose', equipped: true },
 ];
+
+/** Per-race OC cue DAT + action-table DAT (rom/67/108–123). */
+export const CREATION_SEQUENCE_META = {
+  HumeM: { cue: 'ROM/67/108.dat', actions: 'ROM/67/116.dat', actionPrefix: 4000 },
+  HumeF: { cue: 'ROM/67/109.dat', actions: 'ROM/67/117.dat', actionPrefix: 5000 },
+  ElvaanM: { cue: 'ROM/67/110.dat', actions: 'ROM/67/118.dat', actionPrefix: 6000 },
+  ElvaanF: { cue: 'ROM/67/111.dat', actions: 'ROM/67/119.dat', actionPrefix: 7000 },
+  TaruM: { cue: 'ROM/67/112.dat', actions: 'ROM/67/120.dat', actionPrefix: 8000 },
+  TaruF: { cue: 'ROM/67/113.dat', actions: 'ROM/67/121.dat', actionPrefix: 9000 },
+  Mithra: { cue: 'ROM/67/114.dat', actions: 'ROM/67/122.dat', actionPrefix: 1000 },
+  Galka: { cue: 'ROM/67/115.dat', actions: 'ROM/67/123.dat', actionPrefix: 0 },
+};
 
 /**
  * The retail client also loads FOUR companion tracks alongside the long
@@ -223,11 +272,8 @@ export function buildCreationCamera(fovMotion, matrixMotion) {
   const at = (frame) => {
     const f = Math.min(Math.max(Math.round(frame), 0), frameCount - 1);
     const o = f * 16;
-    // Row-major 4x4, translation in the last column.
     const m = values.subarray(o, o + 16);
-    // Same Y reflection the meshes get: p -> (x, -y, z), basis conjugated.
     const eye = [m[3], -m[7], m[11]];
-    // Camera looks down its local -Z (the row-2 basis vector), reflected.
     const fwd = [-m[2], m[6], -m[10]];
     const len = Math.hypot(...fwd) || 1;
     return { eye, forward: [fwd[0] / len, fwd[1] / len, fwd[2] / len] };
@@ -237,20 +283,15 @@ export function buildCreationCamera(fovMotion, matrixMotion) {
 
 /**
  * The "OC:01.00" cue track that the creation screen loads next to each
- * sequence. Fully decoded:
+ * sequence:
  *
- *   0x00  "OC:0" "1.00"
+ *   0x00  "OC:01.00"
  *   0x08  u32 1, u32 -1, u32 6, u32 6, u32 -1
  *   0x1c  u32 record count
  *   0x28  records: [u32 frame][u32 actionId][u32 0]
  *
- * Frames are monotonic within the count and land inside the sequence; anything
- * past the count is padding. actionId indexes the per-race action table
- * (the "rthu"/"rtga" DAT), whose entries are numbered 4001+ for Hume male,
- * 0001+ for Galka, 8001+ for Tarutaru male.
- *
- * NOT yet decoded: the action bodies themselves, which are a variable-length
- * bytecode. Until that is cracked this parser is informational only.
+ * actionId indexes the per-race rt** table (ASCII "4001"/"8001"/… entries).
+ * Those entries are mostly SeSep sound events (see parseCreationActions).
  */
 export function parseCreationCues(buf) {
   const u8 = new Uint8Array(buf);
@@ -266,21 +307,71 @@ export function parseCreationCues(buf) {
   return { events };
 }
 
+/**
+ * Parse a race action table (rthu/rtel/rtta/rtmi/rtga). Records are variable
+ * length, each starting with an ASCII 4-digit id ("4001") and containing a
+ * "SeSep" sound block: after the SeSep tag, u32 soundId-ish + u32 size.
+ *
+ * Returns Map<actionId, { soundId, rawOfs }>. soundId is the best-effort
+ * FFXI sound index embedded in the SeSep header (e.g. 24001 for Hume 4001).
+ */
+export function parseCreationActions(buf) {
+  const u8 = new Uint8Array(buf);
+  const d = new DataView(buf);
+  if (u8.length < 64) return null;
+  const map = new Map();
+  // Scan for ASCII 4-digit ids followed by a nearby SeSep.
+  for (let i = 0; i + 32 < u8.length; i++) {
+    const a0 = u8[i], a1 = u8[i + 1], a2 = u8[i + 2], a3 = u8[i + 3];
+    if (a0 < 0x30 || a0 > 0x39 || a1 < 0x30 || a1 > 0x39
+      || a2 < 0x30 || a2 > 0x39 || a3 < 0x30 || a3 > 0x39) continue;
+    // Prefer ids that look like record starts (next dword small-ish size, or zeros).
+    const id = (a0 - 48) * 1000 + (a1 - 48) * 100 + (a2 - 48) * 10 + (a3 - 48);
+    if (id < 1 || id > 9999) continue;
+    // SeSep within the next 32 bytes
+    let sep = -1;
+    for (let k = i + 4; k < i + 32 && k + 5 < u8.length; k++) {
+      if (u8[k] === 0x53 && u8[k + 1] === 0x65 && u8[k + 2] === 0x53
+        && u8[k + 3] === 0x65 && u8[k + 4] === 0x70) { sep = k; break; }
+    }
+    if (sep < 0) continue;
+    // After "SeSep  \0" (8 bytes) : u32 ? , u32 soundCode
+    const soundOfs = sep + 8;
+    if (soundOfs + 8 > u8.length) continue;
+    const soundId = u32(d, soundOfs);
+    if (!map.has(id)) map.set(id, { soundId, rawOfs: i });
+  }
+  return map.size ? map : null;
+}
+
 /** Resolve a clip id to its body/head motion DATs for a race + face. */
 export function creationClipPaths(race, face, clipId) {
   const clip = CREATION_CLIPS.find((c) => c.id === clipId);
   if (!clip || !race || !face) return null;
-  // The sequence uses the retail-confirmed pair; the short clips hang off the
-  // cluster base (which is not always the same file — see TaruM's seqBody).
+  // On pbBodyEquipped races, clip.equipped selects which body skeleton the
+  // motion was authored for (seq/m4 → equip, loco → naked).
+  const equippedBody = !!(race.pbBodyEquipped && clip.equipped);
+  // Long sequence body may differ from the short-clip cluster base (TaruM).
   if (clip.offset === 0) {
-    return { body: creationSequenceBody(race), head: face.base, equippedBody: !!race.pbBodyEquipped };
+    return {
+      body: creationSequenceBody(race),
+      head: face.base,
+      equippedBody,
+    };
+  }
+  // Idle is stored explicitly: some clusters sit on a folder boundary
+  // (HumeF face7 base 66/0 → idle 65/126).
+  if (clip.offset === -2) {
+    return {
+      body: race.bodyIdle ?? bumpDatIndex(race.bodyBase, -2),
+      head: face.idle,
+      equippedBody,
+    };
   }
   return {
     body: bumpDatIndex(race.bodyBase, clip.offset),
     head: bumpDatIndex(face.base, clip.offset),
-    // Only the long sequence is authored against the equipped-body skeleton on
-    // the races whose two body variants differ (see pbBodyEquipped).
-    equippedBody: clip.offset === 0 && !!race.pbBodyEquipped,
+    equippedBody,
   };
 }
 
@@ -581,10 +672,14 @@ function parseSqleSkins(buf) {
 // DMB material / texture
 // ---------------------------------------------------------------------------
 
-function findDmbTextureBlock(u8, d) {
+/**
+ * Face DMBs ship two full-size diffuse maps (faceCHG1 / faceCHG2) at the same
+ * resolution — variant A is the first, B the second. Body mats usually have one.
+ * `variantIndex` 0 = A, 1 = B (falls back to A if only one large map exists).
+ */
+function findDmbTextureBlock(u8, d, variantIndex = 0) {
   if (u8.length < 0x100 || u8[0] !== 0x44 || u8[1] !== 0x4d || u8[2] !== 0x42 || u8[3] !== 0) return -1;
-  let best = -1;
-  let bestScore = -1;
+  const cands = [];
   for (let ofs = 0x20; ofs + 0x460 < u8.length; ofs += 16) {
     const w = i32(d, ofs + 0x40);
     const h = i32(d, ofs + 0x44);
@@ -592,9 +687,6 @@ function findDmbTextureBlock(u8, d) {
     if (w < 16 || h < 16 || w > 2048 || h > 2048) continue;
     if (bpp !== 3 && bpp !== 4) continue;
     if (ofs + 0x60 + w * h * bpp > u8.length) continue;
-    // Score = area + average brightness of a sample window, biggest wins —
-    // DMB carries several plausible blocks and the real diffuse is the large
-    // bright one.
     const pix = ofs + 0x60;
     const n = Math.min(w * h, 4096);
     let sum = 0;
@@ -603,9 +695,15 @@ function findDmbTextureBlock(u8, d) {
       sum += u8[p] + u8[p + 1] + u8[p + 2];
     }
     const score = w * h + (n ? (sum / n) | 0 : 0);
-    if (score > bestScore) { bestScore = score; best = ofs; }
+    cands.push({ ofs, score, area: w * h });
   }
-  return best;
+  if (!cands.length) return -1;
+  cands.sort((a, b) => b.score - a.score || a.ofs - b.ofs);
+  // Among top-scoring maps of the max area, pick by variant index (A/B).
+  const maxArea = cands[0].area;
+  const top = cands.filter((c) => c.area === maxArea);
+  top.sort((a, b) => a.ofs - b.ofs);
+  return top[Math.min(variantIndex, top.length - 1)].ofs;
 }
 
 /**
@@ -650,10 +748,10 @@ function dmbShapeFlags(buf) {
  * 4 * vertexAlpha(0.5) * texAlpha — storing expanded/2 makes the shader's 0.5
  * opaque-pass threshold land exactly on DATura's alpha-test threshold.
  */
-function buildDmbTextures(buf, prefix, isBody) {
+function buildDmbTextures(buf, prefix, isBody, variantIndex = 0) {
   const u8 = new Uint8Array(buf);
   const d = new DataView(buf);
-  const block = findDmbTextureBlock(u8, d);
+  const block = findDmbTextureBlock(u8, d, isBody ? 0 : variantIndex);
   if (block < 0) return null;
   const w = i32(d, block + 0x40);
   const h = i32(d, block + 0x44);
@@ -747,12 +845,10 @@ export function parseSqleMotion(buf) {
   const frameCount = +m[4];
   if (!kind || channelCount <= 0 || frameCount <= 0) return null;
 
-  // FFXI runs these at a flat 30fps; the header's declared time is not the
-  // playback rate. A PBChannel header states time = (frames-1)/30 (derives
-  // 30.01) but a FrameChannel one states time = (frames-2)/60, which derives
-  // ~61 and ran the walk and run clips at double speed. Pinning the rate also
-  // stops it drifting per clip (Mithra's derived 31.2, others 30.5).
-  const fps = 30;
+  // PBChannel headers state time ≈ (frames-1)/30 → 30fps.
+  // FrameChannel headers state time ≈ (frames-2)/60 → ~60fps (not 30 — that
+  // played idles/walks at half speed and felt frozen).
+  const fps = kind === 'frame' ? 60 : 30;
   const info = {
     kind, channelCount, frameCount, fps,
     duration: frameCount / fps,
@@ -898,7 +994,7 @@ export function buildCreationModel(files, sourceName) {
   for (let fi = 0; fi < files.length; fi++) {
     const { mesh, mat, isBody } = files[fi];
     const prefix = `creation_${fi}`;
-    const texSet = mat ? buildDmbTextures(mat, prefix, isBody) : null;
+    const texSet = mat ? buildDmbTextures(mat, prefix, isBody, files[fi].variantIndex ?? 0) : null;
     const flags = mat ? dmbShapeFlags(mat) : [];
     if (texSet) {
       model.textures.set(texSet.opaque.name, texSet.opaque);
@@ -1027,17 +1123,23 @@ export class CreationAnimator {
     this.local = new Float32Array(12);
 
     const sums = model.creation.channelSums;
-    this.compatible = this.motions.length === sums.length && this.motions.every(
-      (mo, i) => mo && mo.values && mo.channelCount === sums[i],
-    );
+    // Exact match, or PREFIX match: equip body = naked bones + cloth extras
+    // (Mithra 99+24). A 335-ch idle drives the shared prefix; cloth stays bind.
+    this.channelLimits = this.motions.map((mo, i) => {
+      if (!mo?.values || !mo.channelCount) return 0;
+      if (mo.channelCount === sums[i]) return mo.channelCount;
+      if (mo.channelCount < sums[i] && mo.channelCount > 0) return mo.channelCount;
+      return 0;
+    });
+    this.compatible = this.motions.length === sums.length
+      && this.channelLimits.every((lim) => lim > 0);
 
     const timing = this.motions[0] ?? this.motions[1];
     this.frameCount = Math.max(1, timing?.frameCount ?? 1);
     this.fps = timing?.fps ?? 30;
     this.duration = timing?.duration ?? 0;
-    // The body drives timing; a head clip of a different length (Tarutaru male:
-    // 1624 head frames against 1315 body frames) is sampled by phase, exactly
-    // as it would be scaled into the body's window.
+    // The body drives timing; a head clip of a different length is sampled by
+    // phase into the body's window.
     this.frameMap = this.motions.map((mo) => (
       !mo || mo.frameCount === this.frameCount
         ? null
@@ -1046,37 +1148,19 @@ export class CreationAnimator {
           (this.frameCount > 1 ? frame / (this.frameCount - 1) : 0) * (mo.frameCount - 1),
         )
     ));
-    // Duck-typed clip for the renderer's generic transport (advance, wrap,
-    // scrub, frame readout) — no joint tracks; the driver does the posing.
-    // `fps` is the clip's own rate: PB sequences run ~30fps but the
-    // FrameChannel idles are ~61fps, so a fixed 30 would halve their speed.
     this.clip = {
       kind: 'creation', lengthInFrames: this.frameCount, fps: this.fps, jointTracks: new Map(),
     };
-    // Frame window currently played (the whole clip until a segment is picked).
     this.rangeStart = 0;
     this.rangeCount = this.frameCount;
-    // Must run before segmenting: the repaired frames are exactly the ones that
-    // otherwise register as huge spikes of motion energy and split a segment.
     this.repairedFrames = this.compatible ? this.#repairQuaternions() : 0;
-    this.segments = this.compatible ? this.#findSegments() : [];
-    // Per-bone: does its OWN local rotation ever change? (A bone whose parent
-    // moves still travels, which hides a bone that never rotates — so this is
-    // measured on the bone's own quaternion, not its world position.)
+    this.segments = [];
     this.staticBones = this.compatible ? this.#findStaticBones() : null;
     this.movingBoneCount = this.staticBones
       ? this.staticBones.reduce((n, s) => n + (s ? 0 : 1), 0) : 0;
 
-    // Head attachment (DATura's offsetWithBones "bone0001" -> body "bone0004").
-    // A head PB track carries a constant positional bias against its body track
-    // — measured over each race's whole sequence it is steady to within 0.2
-    // units (Mithra +3.18 Z, Galka -1.72 Z, Elvaan male +0.64 Z), so it is an
-    // authoring offset, not motion. Re-deriving the shift every frame removes
-    // it without touching anything authored: bone translation is rigid anyway,
-    // so only the head's position moves, never its rotation. Pinning to the
-    // BIND offset rather than to zero keeps the genuine sag on Hume/Elvaan
-    // female heads, whose head bone 1 binds ~0.56 below body bone 4 — the
-    // residual DATura hand-corrected with its face-table Y offsets.
+    // Play the full PB timeline from frame 0 (includes staged holds).
+    // Head attachment (DATura offsetWithBones bone0001 -> body bone0004).
     this.attach = null;
     const files = model.creation.files;
     if (files.length === 2 && files[0].boneCount > 4 && files[1].boneCount > 1) {
@@ -1095,7 +1179,24 @@ export class CreationAnimator {
       };
     }
 
-    if (this.compatible) this.#rebaseRoots();
+    // No upright corrective — creation sequences are authored laying down /
+    // staged for the cinematic camera. Play absolute locals as written.
+    this.corrective = null;
+  }
+
+  /** quat multiply a⊗b (apply b first, then a). */
+  static #qmul(a, b, out) {
+    const ax = a[0], ay = a[1], az = a[2], aw = a[3];
+    const bx = b[0], by = b[1], bz = b[2], bw = b[3];
+    out[0] = aw * bx + ax * bw + ay * bz - az * by;
+    out[1] = aw * by - ax * bz + ay * bw + az * bx;
+    out[2] = aw * bz + ax * by - ay * bx + az * bw;
+    out[3] = aw * bw - ax * bx - ay * by - az * bz;
+  }
+
+  /** out = conjugate(q) for unit quats (= inverse). */
+  static #qconj(q, out) {
+    out[0] = -q[0]; out[1] = -q[1]; out[2] = -q[2]; out[3] = q[3];
   }
 
   /**
@@ -1121,6 +1222,27 @@ export class CreationAnimator {
    *
    * Returns the number of (bone, frame) rotations rebuilt.
    */
+  /** First frame where channel energy clearly exceeds the quiet floor. */
+  #firstMotionFrame() {
+    const mo = this.motions[0];
+    if (!mo?.values || this.frameCount < 30) return 0;
+    const { values, channelCount, frameCount } = mo;
+    const energy = new Float64Array(frameCount);
+    for (let f = 1; f < frameCount; f++) {
+      let s = 0;
+      const a = (f - 1) * channelCount;
+      const b = f * channelCount;
+      for (let c = 0; c < channelCount; c++) s += Math.abs(values[b + c] - values[a + c]);
+      energy[f] = s;
+    }
+    const sorted = [...energy].filter((x) => x > 0).sort((a, b) => a - b);
+    if (!sorted.length) return 0;
+    const peak = sorted[Math.floor(sorted.length * 0.95)];
+    const thresh = peak * 0.15;
+    for (let f = 1; f < frameCount; f++) if (energy[f] >= thresh) return Math.max(0, f - 2);
+    return 0;
+  }
+
   #repairQuaternions() {
     // 5% off unit is far outside quantisation (97.9% of frames land within 1%)
     // and far inside the failures, so it separates them cleanly.
@@ -1130,11 +1252,13 @@ export class CreationAnimator {
     let repaired = 0;
     for (const b of bones) {
       const mo = this.motions[b.fileIndex];
+      const limit = this.channelLimits[b.fileIndex] || 0;
       const cursor = cursors[b.fileIndex];
       let span = 0;
       for (const c of b.counts) span += c;
       cursors[b.fileIndex] = cursor + span;
       if (!mo || mo.kind !== 'pb' || !mo.values || b.counts[1] < 4) continue;
+      if (cursor + span > limit) continue; // cloth / unmapped suffix — leave bind
       const qOfs = cursor + b.counts[0];
       const { values, channelCount, frameCount } = mo;
 
@@ -1333,9 +1457,11 @@ export class CreationAnimator {
     const cursors = [0, 0];
     for (let i = 0; i < bones.length; i++) {
       const b = bones[i];
+      const limit = this.channelLimits[b.fileIndex] || 0;
       const start = cursors[b.fileIndex];
-      cursors[b.fileIndex] = start + b.counts.reduce((a, c) => a + c, 0);
-      if (b.counts[1] !== 4) { out[i] = 1; continue; }   // no rotation channels
+      const span = b.counts.reduce((a, c) => a + c, 0);
+      cursors[b.fileIndex] = start + span;
+      if (b.counts[1] !== 4 || start + span > limit) { out[i] = 1; continue; }
       const mo = this.motions[b.fileIndex];
       const qAt = start + b.counts[0];
       const q0 = [0, 1, 2, 3].map((k) => mo.values[qAt + k]);
@@ -1345,8 +1471,7 @@ export class CreationAnimator {
         const o = f * mo.channelCount + qAt;
         let dot = 0;
         for (let k = 0; k < 4; k++) dot += (q0[k] / n0) * mo.values[o + k];
-        const n = Math.hypot(mo.values[o], mo.values[o+1], mo.values[o+2], mo.values[o+3]) || 1;
-        // ~0.5 degrees
+        const n = Math.hypot(mo.values[o], mo.values[o + 1], mo.values[o + 2], mo.values[o + 3]) || 1;
         if (Math.abs(dot / n) < 0.99999) moved = 1;
       }
       out[i] = moved ? 0 : 1;
@@ -1373,7 +1498,8 @@ export class CreationAnimator {
     const { bones, files } = this.model.creation;
     for (let fi = 0; fi < files.length; fi++) {
       const mo = this.motions[fi];
-      if (!mo || mo.kind !== 'pb') continue;
+      const limit = this.channelLimits[fi] || 0;
+      if (!mo || mo.kind !== 'pb' || limit < 3) continue;
       // Find the file's root bone and its translation channel offsets.
       let cursor = 0;
       let rootChan = -1;
@@ -1383,7 +1509,7 @@ export class CreationAnimator {
         if (b.parent < 0) { rootChan = cursor; root = b; break; }
         for (const c of b.counts) cursor += c;
       }
-      if (root === null || root.counts[0] < 3) continue;
+      if (root === null || root.counts[0] < 3 || rootChan + 3 > limit) continue;
       const { values, channelCount, frameCount } = mo;
       for (const axis of [0, 2]) {
         const ch = rootChan + axis;
@@ -1478,61 +1604,74 @@ export class CreationAnimator {
     const trans = [0, 0, 0];
     const quat = [0, 0, 0, 1];
     const scale = [1, 1, 1];
-    // Per source file: the two frames to blend and the weight between them.
-    // A head clip of a different length is sampled at the same phase.
+
     const spans = this.motions.map((mo, fi) => {
+      if (!mo?.values) return null;
       const src = this.frameMap[fi] ? this.frameMap[fi](frame) : frame;
       const a = Math.min(Math.max(Math.floor(src), 0), mo.frameCount - 1);
       const b = Math.min(a + 1, mo.frameCount - 1);
-      return { a: a * mo.channelCount, b: b * mo.channelCount, t: src - a };
+      return {
+        a: a * mo.channelCount,
+        b: b * mo.channelCount,
+        t: src - a,
+        limit: this.channelLimits[fi],
+        values: mo.values,
+      };
     });
+
     for (let i = 0; i < bones.length; i++) {
       const b = bones[i];
-      const mo = this.motions[b.fileIndex];
       const span = spans[b.fileIndex];
-      const values = mo.values;
       let cursor = cursors[b.fileIndex];
+      const boneCh = b.counts[0] + b.counts[1] + b.counts[2] + b.counts[3] + b.counts[4];
+      const limit = span?.limit ?? 0;
+      const driven = !!(span && cursor + boneCh <= limit);
 
       trans[0] = b.trans[0]; trans[1] = b.trans[1]; trans[2] = b.trans[2];
       quat[0] = b.quat[0]; quat[1] = b.quat[1]; quat[2] = b.quat[2]; quat[3] = b.quat[3];
       scale[0] = b.scale[0]; scale[1] = b.scale[1]; scale[2] = b.scale[2];
-      const groups = [trans, quat, scale];
-      const caps = [3, 4, 3];
-      // Quaternions blend as a unit, with a sign fix so the shorter arc wins;
-      // translation and scale blend component-wise.
-      let qa0 = 0, qa1 = 0, qa2 = 0, qa3 = 1, qb0 = 0, qb1 = 0, qb2 = 0, qb3 = 1;
-      let animatedQuat = false;
-      for (let g = 0; g < 5; g++) {
-        const n = b.counts[g];
-        for (let c = 0; c < n; c++) {
-          if (g < 3 && c < caps[g]) {
-            const va = values[span.a + cursor];
-            const vb = values[span.b + cursor];
-            if (g === 1) {
-              if (c === 0) { qa0 = va; qb0 = vb; animatedQuat = true; }
-              else if (c === 1) { qa1 = va; qb1 = vb; }
-              else if (c === 2) { qa2 = va; qb2 = vb; }
+
+      if (driven) {
+        const values = span.values;
+        let qa0 = 0, qa1 = 0, qa2 = 0, qa3 = 1;
+        let qb0 = 0, qb1 = 0, qb2 = 0, qb3 = 1;
+        let hasQ = false;
+        let c = cursor;
+
+        for (let g = 0; g < 5; g++) {
+          const n = b.counts[g];
+          for (let k = 0; k < n; k++) {
+            const va = values[span.a + c];
+            const vb = values[span.b + c];
+            const v = va + (vb - va) * span.t;
+            if (g === 0 && k < 3) {
+              trans[k] = v;
+            } else if (g === 1 && k < 4) {
+              if (k === 0) { qa0 = va; qb0 = vb; hasQ = true; }
+              else if (k === 1) { qa1 = va; qb1 = vb; }
+              else if (k === 2) { qa2 = va; qb2 = vb; }
               else { qa3 = va; qb3 = vb; }
-            } else {
-              groups[g][c] = va + (vb - va) * span.t;
+            } else if (g === 2 && k < 3) {
+              scale[k] = v;
             }
+            c++;
           }
-          cursor++;
         }
-      }
-      cursors[b.fileIndex] = cursor;
+        cursors[b.fileIndex] = c;
 
-      if (animatedQuat) {
-        const t = span.t;
-        const dot = qa0 * qb0 + qa1 * qb1 + qa2 * qb2 + qa3 * qb3;
-        const s = dot < 0 ? -t : t;
-        quat[0] = qa0 * (1 - t) + qb0 * s;
-        quat[1] = qa1 * (1 - t) + qb1 * s;
-        quat[2] = qa2 * (1 - t) + qb2 * s;
-        quat[3] = qa3 * (1 - t) + qb3 * s;
+        if (hasQ) {
+          const st = span.t;
+          const dot = qa0 * qb0 + qa1 * qb1 + qa2 * qb2 + qa3 * qb3;
+          const ss = dot < 0 ? -st : st;
+          quat[0] = qa0 * (1 - st) + qb0 * ss;
+          quat[1] = qa1 * (1 - st) + qb1 * ss;
+          quat[2] = qa2 * (1 - st) + qb2 * ss;
+          quat[3] = qa3 * (1 - st) + qb3 * ss;
+        }
+      } else {
+        cursors[b.fileIndex] = cursor + boneCh;
       }
 
-      // Normalize the quaternion; a near-zero one falls back to identity.
       const qLen = Math.hypot(quat[0], quat[1], quat[2], quat[3]);
       if (qLen > 1e-6) {
         quat[0] /= qLen; quat[1] /= qLen; quat[2] /= qLen; quat[3] /= qLen;
@@ -1549,9 +1688,7 @@ export class CreationAnimator {
       }
     }
 
-    // Head attachment: restore the bind-pose body4 -> head1 offset by shifting
-    // every head-file bone. Pure translation, so skinning picks it up via the
-    // weighted-translation term.
+    // Head attachment after hierarchy (corrective applied in #computeWorlds).
     const at = this.attach;
     if (at) {
       const bw = this.worlds[at.bodyBone];

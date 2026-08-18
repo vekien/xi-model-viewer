@@ -2,11 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Combo } from './Combo.jsx';
 import { CREATION_RACES, bumpDatIndex, CREATION_CLIPS, creationClipPaths } from '../js/creation.js';
 
-// Assets > Character Creation — the high-poly character-creation preview
-// models: a distinct asset family from ordinary player models (RT/SHAPE +
-// DMB + SQLE), one body per race, four faces with A/B material variants,
-// and matched body/head motion pairs (standing idle + the long authored
-// character-creation presentation).
+// Assets > Character Creation — high-poly RT/SHAPE + DMB + SQLE models.
+// Eight faces × A/B texture variants. Initial-equipment body is mesh/mat +2.
 
 const CR_STATE_KEY = 'creationState';
 
@@ -15,9 +12,10 @@ function loadCrState() {
 }
 
 /**
- * Character-creation composer state. Owns race/face/variant/equipment and the
- * animation choice; assembles the DAT descriptor and calls onLoad whenever it
- * changes. Lives in App so the Animation panel shares one instance.
+ * Equipment ALWAYS picks the body mesh. Animator accepts prefix channel matches
+ * (Mithra equip = naked bones + cloth), so Idle/Walk work on Initial Equipment
+ * when the skeletons share a prefix. Taru equip is a different rig — loco clips
+ * only pair with No Equipment there.
  */
 export function useCreation({ enabled, onLoad, onError }) {
   const saved = useRef(loadCrState());
@@ -26,29 +24,26 @@ export function useCreation({ enabled, onLoad, onError }) {
   ));
   const [faceIdx, setFaceIdx] = useState(() => {
     const f = saved.current.faceIdx;
-    return Number.isInteger(f) && f >= 0 && f < 4 ? f : 0;
+    return Number.isInteger(f) && f >= 0 && f < 8 ? f : 0;
   });
   const [variant, setVariant] = useState(saved.current.variant === 'B' ? 'B' : 'A');
-  // Retail loads the +2 "initial equipment" body for every race on the creation
-  // screen (confirmed by the ProcMon capture), so default to it.
   const [equip, setEquip] = useState(saved.current.equip === 0 ? 0 : 1);
-  // '' = A-pose; otherwise a clip id from CREATION_CLIPS.
-  const [anim, setAnim] = useState(() => (
-    saved.current.anim === '' || CREATION_CLIPS.some((c) => c.id === saved.current.anim)
-      ? saved.current.anim : 'idle'
-  ));
+  const [anim, setAnim] = useState(() => {
+    const a = saved.current.anim;
+    if (a === '' || CREATION_CLIPS.some((c) => c.id === a)) return a ?? 'seq';
+    return 'seq';
+  });
   const lastKey = useRef('');
   const prevEnabled = useRef(false);
   const cbRef = useRef({});
   cbRef.current = { onLoad, onError };
 
   useEffect(() => {
-    try { localStorage.setItem(CR_STATE_KEY, JSON.stringify({ race, faceIdx, variant, equip, anim })); }
-    catch { /* quota */ }
+    try {
+      localStorage.setItem(CR_STATE_KEY, JSON.stringify({ race, faceIdx, variant, equip, anim }));
+    } catch { /* quota */ }
   }, [race, faceIdx, variant, equip, anim]);
 
-  // Re-entering the view must reload even with unchanged selections — another
-  // view will have replaced the model in the meantime.
   useEffect(() => {
     if (enabled && !prevEnabled.current) lastKey.current = '';
     prevEnabled.current = enabled;
@@ -59,58 +54,45 @@ export function useCreation({ enabled, onLoad, onError }) {
     const def = CREATION_RACES.find((r) => r.id === race) ?? CREATION_RACES[0];
     const face = def.faces[faceIdx] ?? def.faces[0];
     const clip = anim ? creationClipPaths(def, face, anim) : null;
-    // "Initial Equipment" bodies sit two DAT indices after the no-equipment pair.
+
     const desc = {
       name: `${def.label} — Face ${faceIdx + 1}${variant}${equip ? ' · Initial Equipment' : ''}`,
       raceId: def.id,
       bodyMesh: equip ? bumpDatIndex(def.bodyMesh, 2) : def.bodyMesh,
       bodyMat: equip ? bumpDatIndex(def.bodyMat, 2) : def.bodyMat,
-      // The other equipment variant. On Tarutaru/Mithra/Galka the two bodies
-      // carry different skeletons and each clip is authored for exactly one of
-      // them, so the loader falls back to this when the chosen one can't play
-      // the selected clip — better than showing a frozen bind pose.
-      altBodyMesh: equip ? def.bodyMesh : bumpDatIndex(def.bodyMesh, 2),
-      altBodyMat: equip ? def.bodyMat : bumpDatIndex(def.bodyMat, 2),
-      altLabel: equip ? 'No Equipment' : 'Initial Equipment',
+      allowAltBody: false,
       headMesh: face.mesh,
-      headMat: variant === 'B' ? face.matB : face.matA,
+      headMat: face.mat,
       headY: face.headY ?? 0,
+      headVariant: variant === 'B' ? 1 : 0,
       motions: clip ? { body: clip.body, head: clip.head } : null,
       anim,
+      equip: !!equip,
     };
-    const key = [desc.bodyMesh, desc.bodyMat, desc.headMesh, desc.headMat, anim].join('|');
+    const key = [desc.bodyMesh, desc.bodyMat, desc.headMesh, desc.headMat, desc.headVariant, anim].join('|');
     if (key === lastKey.current) return;
     lastKey.current = key;
     cbRef.current.onLoad?.(desc);
   }, [enabled, race, faceIdx, variant, equip, anim]);
 
-  return { race, setRace, faceIdx, setFaceIdx, variant, setVariant, equip, setEquip, anim, setAnim };
+  return {
+    race, setRace, faceIdx, setFaceIdx, variant, setVariant,
+    equip, setEquip, anim, setAnim,
+  };
 }
 
 // ---------------------------------------------------------------------------
 
-const FACE_ITEMS = [1, 2, 3, 4].map((n) => ({ id: String(n - 1), label: `Face ${n}` }));
+const FACE_ITEMS = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ id: String(n - 1), label: `Face ${n}` }));
 const VARIANT_ITEMS = [{ id: 'A', label: 'A' }, { id: 'B', label: 'B' }];
 const EQUIP_ITEMS = [{ id: '0', label: 'No Equipment' }, { id: '1', label: 'Initial Equipment' }];
-
 const CAMERA_ITEMS = [{ id: '0', label: 'Camera 1' }, { id: '1', label: 'Camera 2' }];
 
 export function CreationList({ cr, info, camera }) {
-  const { race, setRace, faceIdx, setFaceIdx, variant, setVariant, equip, setEquip } = cr;
+  const {
+    race, setRace, faceIdx, setFaceIdx, variant, setVariant, equip, setEquip,
+  } = cr;
   const raceItems = CREATION_RACES.map((r) => ({ id: r.id, label: r.label }));
-
-  // Tarutaru/Mithra/Galka carry a different skeleton per equipment body, and
-  // each clip is authored against exactly one of them: the long creation
-  // sequence against the Initial Equipment body (Tarutaru 251 channels, Mithra
-  // 407, Galka 389) and every short motion against the No Equipment one
-  // (299/335/349). Hume and Elvaan use 299 for both, which is why it only shows
-  // up on these three. The loader swaps to whichever body can play the clip, so
-  // this reports what happened rather than asking for a change.
-  const def = CREATION_RACES.find((r) => r.id === race);
-  const shownOn = info?.motion?.shownOn;
-  const pairHint = shownOn
-    ? `${def?.label ?? 'This race'} authors this clip for the ${shownOn} body, so it is shown on that one.`
-    : null;
 
   const row = (label, node) => (
     <div className="pc-ctrl" key={label}>
@@ -126,24 +108,25 @@ export function CreationList({ cr, info, camera }) {
         {row('Face', <Combo value={String(faceIdx)} items={FACE_ITEMS} onChange={(id) => setFaceIdx(+id)} />)}
         {row('Variant', <Combo value={variant} items={VARIANT_ITEMS} onChange={setVariant} />)}
         {row('Equipment', <Combo value={String(equip)} items={EQUIP_ITEMS} onChange={(id) => setEquip(+id)} />)}
-        {pairHint && <div className="side-note">{pairHint}</div>}
+
+        {info?.motion && !info.motion.compatible && (
+          <div className="side-note">
+            This clip’s channels don’t fit this body skeleton (Tarutaru equip uses
+            a different rig). Try No Equipment for Idle/Walk, or Creation sequence
+            for Initial Equipment.
+          </div>
+        )}
 
         {cr.anim === 'seq' && (
           <div className="side-note">
-            This clip is the pose track only. The real screen plays it under an
-            event track that fires per-race actions on authored frames — that
-            layer isn’t decoded yet, so this looks stiff. Motions 1–3 and the
-            idle are complete.
+            Creation sequence plays the full PB body+head timeline as authored
+            (including staged floor poses). Use orbit view to inspect motion.
           </div>
         )}
 
         {camera?.available && (
           <>
             <div className="side-separator">Cinematic Camera</div>
-            <div className="side-note">
-              The sequence ships its own camera track — most of the movement you
-              see in the real creation screen is the camera, not the character.
-            </div>
             {row('Use camera', (
               <button
                 type="button"
@@ -177,32 +160,17 @@ export function CreationList({ cr, info, camera }) {
                   {info.motion.kind === 'pb' ? 'PBChannel v.3' : 'FrameChannel v.4'} ·{' '}
                   {info.motion.frames.toLocaleString()} frames · {info.motion.duration.toFixed(2)}s
                   {' '}({info.motion.fps.toFixed(2)} fps)
+                  {info.motion.compatible
+                    ? ` · ${info.motion.movingBones}/${info.motion.totalBones} bones move`
+                    : ' · incompatible'}
+                  {info.motion.leadIn ? ` · skipped ${info.motion.leadIn}s lead-in` : ''}
                 </div>
-                {info.motion.compatible && (
-                  <div className="side-note">
-                    {info.motion.movingBones} of {info.motion.totalBones} bones rotate in this clip
-                    {' '}— turn on View ▸ Skeleton to see them (red = never rotates).
-                  </div>
-                )}
                 <div className="side-note mono">{info.motion.body}</div>
                 <div className="side-note mono">{info.motion.head}</div>
-                {!info.motion.compatible && (
-                  <div className="side-note">
-                    Motion channel counts don&apos;t match this skeleton pair — showing bind pose.
-                  </div>
-                )}
               </>
             )}
           </>
         )}
-
-        <div className="side-separator">About</div>
-        <div className="side-note">
-          High-poly character-creation models. The creation sequence is the full
-          authored presentation each race performs on the selection screen —
-          lengths differ per race (41s to 100s) because they are unique
-          performances, not shared locomotion cycles.
-        </div>
       </div>
     </div>
   );

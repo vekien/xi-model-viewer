@@ -3,6 +3,9 @@ import { useEffect, useMemo, useState } from 'react';
 // zones.json shape (from `xi zone json`): [{ id, name, path, group? }]
 // path is leveleditor-style `game/ROM…/N.DAT`.
 
+// Curated groups (no ROM number of their own) always sort after the ROM groups.
+const TAIL_GROUPS = ['Dev / Prototype', 'Rooms'];
+
 function romOf(z) {
   return (z.path.match(/(?:game\/)?(ROM\d*)\//i)?.[1] || 'ROM').toUpperCase();
 }
@@ -51,9 +54,10 @@ export function ZoneList({ selectedPath, onSelectZone, onError }) {
         || z.path?.toLowerCase().includes(q))
       : zones;
 
+    // ROM groups by number first, then the two curated groups at the bottom.
     const order = [...new Set(filtered.map(groupOf))].sort((a, b) => {
-      if (a === 'Rooms') return 1;
-      if (b === 'Rooms') return -1;
+      const ta = TAIL_GROUPS.indexOf(a), tb = TAIL_GROUPS.indexOf(b);
+      if (ta !== -1 || tb !== -1) return (ta === -1 ? -1 : ta) - (tb === -1 ? -1 : tb);
       return (+a.slice(3) || 1) - (+b.slice(3) || 1);
     });
 
