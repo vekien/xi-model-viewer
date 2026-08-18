@@ -52,6 +52,7 @@ import { classifyDat } from '../js/dat/classify.js';
 import {
   sniffGearRace, RACE_SKELETON_RELS, RACE_SKELETON_LABELS,
 } from '../js/dat/modelids.js';
+import { soundPath } from '../js/particle/audio.js';
 import {
   sniffZoneDat, zoneForFileId, zoneFileIds, parseNpcList, npcNameMap,
   parseEventDat, parseDialogDat, dialogSpeakers, dialogConversations, EVENT_CATEGORIES,
@@ -1659,17 +1660,42 @@ export default function App() {
   const crCameraOnRef = useRef(false);
   const crCameraRef = useRef(0);
   const crCameraTrackRef = useRef(null);
+  // Orbit pose to hand back when cinematic camera is turned off (cinematic
+  // forces camera.mode = 'fly' every frame — leaving that stuck breaks orbit).
+  const crOrbitSnapRef = useRef(null);
   const setCrCameraOn = useCallback((on) => {
     crCameraOnRef.current = on;
     setCrCameraOnState(on);
     const r = rendererRef.current;
-    if (r) r.creationCamera = on ? crCameraTrackRef.current : null;
-    if (!on && r?.creationDriver) {
-      const seq = r.creationDriver.sequenceBounds();
-      if (seq) r.camera.fit(seq.min, seq.max);
-      r.camera.fovDegrees = fovRef.current;
+    if (!r) return;
+    const cam = r.camera;
+    if (on) {
+      // Capture the user's orbit framing before the track takes over.
+      crOrbitSnapRef.current = cam.snapshot();
+      r.creationCamera = crCameraTrackRef.current;
+      return;
     }
-  }, []);
+    r.creationCamera = null;
+    cam.fovDegrees = fovRef.current;
+    // Always return to orbit — creation is an orbit view; fly mode would make
+    // drag update lookDir while eye stays frozen at the last cinematic shot.
+    if (wasdRef.current) {
+      setWasd(false); // setWasd(false) → setMode('orbit')
+    } else {
+      cam.setMode('orbit');
+    }
+    const snap = crOrbitSnapRef.current;
+    if (snap) {
+      cam.restore({ ...snap, mode: 'orbit' });
+    } else if (r.creationDriver) {
+      const seq = r.creationDriver.sequenceBounds();
+      if (seq) cam.fit(seq.min, seq.max);
+      else r.fitCamera();
+    } else {
+      r.fitCamera();
+    }
+    crOrbitSnapRef.current = null;
+  }, [setWasd]);
   const setCrCameraIndex = useCallback((i) => {
     crCameraRef.current = i;
     setCrCameraIndexState(i);
@@ -2154,32 +2180,30 @@ export default function App() {
   };
 
   /**
-   * Jump the File Browser to a DAT (or its parent folder): switch to Assets >
-   * Files, expand the tree to the path, and select the file.
+   * Show a DAT in the OS file manager (Windows Explorer), selected.
+   * Accepts absolute paths or game-relative paths (ROM\…\n.DAT).
    */
-  const showInFileBrowser = useCallback((pathOrRel) => {
+  const revealInExplorer = useCallback(async (pathOrRel) => {
     const settings = settingsRef.current;
-    if (!settings?.gamePath || !pathOrRel) return;
-    let abs = String(pathOrRel).replace(/\//g, '\\');
-    // Relative game path → absolute under the install root.
+    const raw = pathOrRel
+      || shownPathRef.current
+      || selectedDat
+      || null;
+    if (!raw) return;
+    let abs = String(raw).replace(/\//g, '\\');
     if (!/^[a-zA-Z]:[\\/]/.test(abs) && !abs.startsWith('\\\\')) {
+      if (!settings?.gamePath) {
+        setStatusText('Game path not set — open Settings first.');
+        return;
+      }
       abs = `${settings.gamePath}\\${abs.replace(/^\\+/, '')}`;
     }
-    const lower = abs.toLowerCase();
-    setDataStructOpen(false);
-    setLeftView('files');
-    setExplorerOpen(true);
-    setSelectedDat(lower);
-    // Bump reveal even if the same path is re-clicked (re-expand / re-scroll).
-    setRevealTarget('');
-    queueMicrotask(() => setRevealTarget(lower));
-  }, []);
-
-  /** Status-bar path → reveal in the in-app File Browser tree. */
-  const revealInExplorer = () => {
-    const path = shownPathRef.current || selectedDat;
-    if (path) showInFileBrowser(path);
-  };
+    try {
+      await backend.revealPath(abs);
+    } catch (err) {
+      setStatusText(`Could not show in Explorer: ${err.message ?? err}`);
+    }
+  }, [selectedDat]);
 
   // Play a raw DAT clip id (e.g. "at00") by switching to its display group ("at0").
   const playClipId = (rawId) => {
@@ -2474,6 +2498,82 @@ export default function App() {
       return copy;
     });
   }, []);
+
+  // One-shot SFX from Data Struct SoundEffectPointer rows.
+  const [playingSoundKey, setPlayingSoundKey] = useState(null);
+  const dataSfxRef = useRef(null); // { ctx, source, gain }
+
+  const stopDataSound = useCallback(() => {
+    const cur = dataSfxRef.current;
+    dataSfxRef.current = null;
+    setPlayingSoundKey(null);
+    if (!cur) return;
+    try { cur.source?.stop(); } catch { /* already stopped */ }
+    try { cur.ctx?.close(); } catch { /* ok */ }
+  }, []);
+
+  const playDataSound = useCallback(async (res) => {
+    const soundId = res?.soundId;
+    if (soundId == null) {
+      setStatusText(`No sound id on this pointer`);
+      return;
+    }
+    const settings = settingsRef.current;
+    if (!settings?.gamePath) {
+      setStatusText('Game path not set — open Settings first.');
+      return;
+    }
+    const key = `${res.offset ?? ''}:${soundId}`;
+    // Click again on the playing row → stop.
+    if (dataSfxRef.current?.key === key || playingSoundKey === key) {
+      stopDataSound();
+      setStatusText(`se ${soundId} stopped`);
+      return;
+    }
+    // Stop any other one-shot first.
+    stopDataSound();
+
+    const rel = soundPath(soundId);
+    setPlayingSoundKey(key);
+    setStatusText(`Playing se ${soundId}…`);
+    try {
+      const abs = await backend.resolvePrefer(gameCandidates(rel, settings));
+      const buffer = await backend.readFile(abs);
+      const header = parseAudioHeader(buffer);
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') await ctx.resume();
+      let audioBuffer;
+      if (header?.sampleFormat === FMT_ATRAC3) {
+        const wav = await backend.decodeVgmstream(abs);
+        audioBuffer = await ctx.decodeAudioData(wav);
+      } else {
+        audioBuffer = toAudioBuffer(ctx, buffer).audioBuffer;
+      }
+      // Aborted / switched while decoding.
+      if (playingSoundKey !== null && dataSfxRef.current?.key && dataSfxRef.current.key !== key) {
+        try { ctx.close(); } catch { /* ok */ }
+        return;
+      }
+      const gain = ctx.createGain();
+      gain.gain.value = 1;
+      gain.connect(ctx.destination);
+      const source = ctx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(gain);
+      dataSfxRef.current = { ctx, source, gain, key };
+      source.onended = () => {
+        if (dataSfxRef.current?.source === source) dataSfxRef.current = null;
+        setPlayingSoundKey((k) => (k === key ? null : k));
+        try { ctx.close(); } catch { /* ok */ }
+      };
+      source.start();
+      setStatusText(`se ${soundId} · ${audioBuffer.duration.toFixed(2)}s`);
+    } catch (e) {
+      setPlayingSoundKey(null);
+      dataSfxRef.current = null;
+      setStatusText(`Couldn't play se ${soundId}: ${e.message ?? e}`);
+    }
+  }, [playingSoundKey, stopDataSound]);
 
   /** Decode this DAT's 0x20 textures on first click and open the viewer. */
   const openDataTexture = useCallback((name) => {
@@ -3578,7 +3678,9 @@ export default function App() {
             onSelectSource={selectDataSource}
             onOpenTexture={openDataTexture}
             onOpenSkeleton={openDataSkeleton}
-            onRevealPath={showInFileBrowser}
+            onPlaySound={playDataSound}
+            playingSoundKey={playingSoundKey}
+            onRevealPath={revealInExplorer}
             onOpenDat={openDatFromTable}
             onRenderFile={dataDoc?.fullPath ? () => {
               const path = dataDoc.fullPath;
@@ -3709,11 +3811,15 @@ export default function App() {
       {/* Left floating bar: DAT path + Data Struct toggle */}
       <div id="statusFile" className="panel mono">
         {!player.current && modelPath && selectedDat ? (
-          <Tooltip content="Show in File Browser">
-            <button id="statusPath" className="status-path-link" onClick={revealInExplorer}>
-              {modelPath}
-            </button>
-          </Tooltip>
+            <Tooltip content="Show in Explorer">
+              <button
+                id="statusPath"
+                className="status-path-link"
+                onClick={() => revealInExplorer(shownPathRef.current || selectedDat)}
+              >
+                {modelPath}
+              </button>
+            </Tooltip>
         ) : (
           <span id="statusPath">
             {player.current ? relativeName(player.current.path) : (modelPath || '—')}

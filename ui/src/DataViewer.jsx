@@ -16,7 +16,8 @@ const FT_MAX_ROWS = 1000;
  * switches which file File/Contents/Structure describe.
  */
 export function DataViewer({
-  doc, sources, onSelectSource, onOpenTexture, onOpenSkeleton, onRevealPath, onOpenDat, onRenderFile,
+  doc, sources, onSelectSource, onOpenTexture, onOpenSkeleton,
+  onPlaySound, playingSoundKey, onRevealPath, onOpenDat, onRenderFile,
 }) {
   if (!doc) {
     return (
@@ -100,6 +101,8 @@ export function DataViewer({
       onSelectSource={onSelectSource}
       onOpenTexture={onOpenTexture}
       onOpenSkeleton={onOpenSkeleton}
+      onPlaySound={onPlaySound}
+      playingSoundKey={playingSoundKey}
       onRevealPath={onRevealPath}
       onRenderFile={onRenderFile}
     />
@@ -210,7 +213,8 @@ function countRes(node) {
 
 function SectionsView({
   doc, sourceItems, activeSource, onSelectSource,
-  onOpenTexture, onOpenSkeleton, onRevealPath, onRenderFile,
+  onOpenTexture, onOpenSkeleton, onPlaySound, playingSoundKey,
+  onRevealPath, onRenderFile,
 }) {
   const [query, setQuery] = useState('');
   // Reset filter when switching DAT / reloading structure.
@@ -254,6 +258,8 @@ function SectionsView({
               forceOpen={!!query.trim()}
               onOpenTexture={onOpenTexture}
               onOpenSkeleton={onOpenSkeleton}
+              onPlaySound={onPlaySound}
+              playingSoundKey={playingSoundKey}
             />
           )}
         </div>
@@ -1016,7 +1022,7 @@ function GearSlotNode({ node, onOpenDat }) {
   );
 }
 
-function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton }) {
+function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onPlaySound, playingSoundKey }) {
   const [open, setOpen] = useState(depth < 4 || !!forceOpen);
   // While filtering, keep matching branches expanded.
   const expanded = forceOpen || open;
@@ -1059,6 +1065,8 @@ function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton }) {
               forceOpen={forceOpen}
               onOpenTexture={onOpenTexture}
               onOpenSkeleton={onOpenSkeleton}
+              onPlaySound={onPlaySound}
+              playingSoundKey={playingSoundKey}
             />
           )
           : (
@@ -1068,6 +1076,8 @@ function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton }) {
               depth={depth + 1}
               onOpenTexture={onOpenTexture}
               onOpenSkeleton={onOpenSkeleton}
+              onPlaySound={onPlaySound}
+              playingSoundKey={playingSoundKey}
             />
           )
       ))}
@@ -1075,32 +1085,42 @@ function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton }) {
   );
 }
 
-function ResRow({ res, depth, onOpenTexture, onOpenSkeleton }) {
+function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onPlaySound, playingSoundKey }) {
   const isTex = !!(res.isTexture || res.textureName || res.type === 0x20 || res.name === 'Texture');
   // 0x29 Skeleton — accept numeric 41 or hex, name, or inspect flag.
   const isSkel = !!(res.isSkeleton
     || res.type === 0x29 || res.type === 41
     || res.name === 'Skeleton'
     || res.skeletonKind);
+  const isSound = !!(res.isSound || res.type === 0x3D || res.type === 61
+    || res.name === 'SoundEffectPointer');
+  const soundKey = isSound && res.soundId != null
+    ? `${res.offset ?? ''}:${res.soundId}`
+    : null;
+  const soundPlaying = !!(soundKey && playingSoundKey === soundKey);
   const texClick = isTex && !!onOpenTexture;
   const skelClick = isSkel && !!onOpenSkeleton;
-  const clickable = texClick || skelClick;
+  const soundClick = isSound && res.soundId != null && !!onPlaySound;
+  const clickable = texClick || skelClick || soundClick;
   const openKey = res.textureName || res.id?.trim() || null;
   const onActivate = (e) => {
     e?.stopPropagation?.();
-    if (skelClick) onOpenSkeleton(res);
+    if (soundClick) onPlaySound(res);
+    else if (skelClick) onOpenSkeleton(res);
     else if (texClick && openKey) onOpenTexture(openKey);
   };
   const flags = res.flags ?? [];
   return (
     <div
-      className={`data-row data-res-row${isTex ? ' data-res-tex' : ''}${isSkel ? ' data-res-skel' : ''}${clickable ? ' data-res-click' : ''}`}
+      className={`data-row data-res-row${isTex ? ' data-res-tex' : ''}${isSkel ? ' data-res-skel' : ''}${isSound ? ' data-res-sfx' : ''}${soundPlaying ? ' data-res-sfx-play' : ''}${clickable ? ' data-res-click' : ''}`}
       style={{ paddingLeft: 8 + depth * 14 }}
-      title={skelClick
-        ? `Click to view skeleton tree · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
-        : texClick
-          ? `Click to view texture · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
-          : `offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}${flags.length ? ` · ${flags.join(', ')}` : ''}`}
+      title={soundClick
+        ? (soundPlaying ? `Click to stop se ${res.soundId}` : `Click to play se ${res.soundId}`)
+        : skelClick
+          ? `Click to view skeleton tree · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
+          : texClick
+            ? `Click to view texture · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
+            : `offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}${flags.length ? ` · ${flags.join(', ')}` : ''}`}
       onClick={clickable ? onActivate : undefined}
       role={clickable ? 'button' : undefined}
       tabIndex={clickable ? 0 : undefined}
@@ -1109,12 +1129,12 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton }) {
       } : undefined}
     >
       <span className="data-caret-pad" />
-      <span className="icon data-kind">{res.icon}</span>
+      <span className={`icon data-kind${soundPlaying ? ' data-sfx-icon-play' : ''}`}>{res.icon}</span>
       <span className="data-id mono">{res.id || '····'}</span>
       <span className="data-type">{res.name}</span>
       {res.detail && <span className="data-detail mono">{res.detail}</span>}
       {clickable && !res.detail && (
-        <span className="data-detail data-tex-hint">click to view</span>
+        <span className="data-detail data-tex-hint">{soundClick ? 'click to play' : 'click to view'}</span>
       )}
       {flags.length > 0 && <span className="data-flags mono">{flags.join(' ')}</span>}
       <span className="data-size mono">{fmtBytes(res.size)}</span>
@@ -1131,7 +1151,7 @@ function Row({ label, value, mono }) {
   );
 }
 
-/** Clickable path row — jumps the File Browser to that DAT / folder. */
+/** Clickable path row — opens the OS file manager on that DAT. */
 function PathRow({ label, value, mono, onClick }) {
   if (!onClick || !value) return <Row label={label} value={value} mono={mono} />;
   return (
@@ -1140,7 +1160,7 @@ function PathRow({ label, value, mono, onClick }) {
       <button
         type="button"
         className={`details-row-value details-path-link${mono ? ' mono' : ''}`}
-        title="Show in File Browser"
+        title="Show in Explorer"
         onClick={onClick}
       >
         {value}

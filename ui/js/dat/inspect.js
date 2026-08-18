@@ -138,7 +138,11 @@ function peekSoundPointer(bytes, dv, s) {
   const soundId = dv.getUint32(s.dataStart + 8, true);
   const folder = String(Math.floor(soundId / 1000)).padStart(3, '0');
   const file = String(soundId).padStart(6, '0');
-  return { text: `sound ${soundId} → se/${folder}/${file}.spw` };
+  return {
+    text: `sound ${soundId} → se/${folder}/${file}.spw`,
+    isSound: true,
+    soundId,
+  };
 }
 
 function peekSpriteSheet(bytes, dv, s) {
@@ -592,6 +596,8 @@ export function inspectDat(buffer) {
       let detail = null;
       let textureName = null;
       let isTexture = type === 0x20;
+      let isSound = type === 0x3D;
+      let soundId = null;
       const peek = PEEKS[type];
       if (peek) {
         try {
@@ -599,6 +605,8 @@ export function inspectDat(buffer) {
           detail = r?.text ?? null;
           textureName = r?.textureName ?? null;
           if (r?.isTexture) isTexture = true;
+          if (r?.isSound) isSound = true;
+          if (r?.soundId != null) soundId = r.soundId;
         } catch { /* malformed header — list it plain */ }
       }
       // Structure tree shows the 4-char section id; use it as a lookup key when
@@ -610,6 +618,7 @@ export function inspectDat(buffer) {
         icon: SECTION_TYPE_ICONS[type] ?? 'data_object',
         size, offset: pos, flags, detail, textureName, isTexture,
         isSkeleton, skeletonKind: isSkeleton ? 'entity' : null,
+        isSound, soundId,
       });
       const agg = summary.get(type) ?? { count: 0, bytes: 0 };
       agg.count++; agg.bytes += size;
