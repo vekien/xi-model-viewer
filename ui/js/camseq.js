@@ -83,22 +83,35 @@ function catmull1(p0, p1, p2, p3, u) {
     + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
 }
 
+function lerp3(a, b, u) {
+  return [
+    a[0] + (b[0] - a[0]) * u,
+    a[1] + (b[1] - a[1]) * u,
+    a[2] + (b[2] - a[2]) * u,
+  ];
+}
+
+// Kept for older saved docs that still store ease: 'smooth' | 'linear'.
 export const EASINGS = {
   linear: (t) => t,
-  // Smoothstep over the WHOLE timeline, not per segment — easing each segment
-  // would stall at every keyframe. This is what stops a flythrough starting and
-  // stopping with a jolt, which is most of what makes a shot look shot.
-  smooth: (t) => t * t * (3 - 2 * t),
+  smooth: (t) => t,
 };
 
 export class CameraSequence {
   /**
    * `keys` — [{ frame, eye, forward }] in any order.
-   * `totalFrames` — length of the whole sequence; `ease` — key of EASINGS.
+   * `totalFrames` — length of the whole sequence.
+   * `curve` — 'spline' (auto Catmull-Rom through keys) or 'linear' (straight
+   *   segments). Keyframes are ALWAYS hit at their exact frame times; there is
+   *   no whole-timeline ease that warps the clock.
    */
-  constructor(keys, { totalFrames = 300, ease = 'smooth' } = {}) {
+  constructor(keys, { totalFrames = 300, curve = 'spline', ease } = {}) {
     this.totalFrames = Math.max(1, Math.round(totalFrames));
-    this.ease = EASINGS[ease] ? ease : 'linear';
+    // Migrate old `ease` flag: anything that wasn't explicitly linear → spline.
+    if (curve !== 'linear' && curve !== 'spline') {
+      curve = (ease === 'linear' || ease === false) ? 'linear' : 'spline';
+    }
+    this.curve = curve === 'linear' ? 'linear' : 'spline';
     this.keys = keys
       .slice()
       .sort((a, b) => a.frame - b.frame)
@@ -129,20 +142,23 @@ export class CameraSequence {
   get length() { return this.keys.length; }
 
   /**
-   * Playhead frame → the frame the sequence is actually showing. Every track
-   * samples through this so the camera and the scene stay on one clock.
+   * Playhead frame → sample frame. Identity: timing matches the timeline.
+   * Kept so scene/camera stay on one clock without a second code path.
    */
   easedFrame(frame) {
-    return EASINGS[this.ease](clamp(frame / this.totalFrames, 0, 1)) * this.totalFrames;
+    return clamp(frame, 0, this.totalFrames);
   }
 
-  /** Pose at a playhead frame, easing applied. Null when there is nothing to play. */
+  /** Pose at a playhead frame. Null when there is nothing to play. */
   sample(frame) {
     if (!this.keys.length) return null;
     return this.at(this.easedFrame(frame));
   }
 
-  /** Pose at a raw (un-eased) frame — the geometry of the path, not its pacing. */
+  /**
+   * Pose at frame `f`. Lands exactly on keyframe poses at keyframe frames;
+   * between them, either linear lerp or auto Catmull-Rom spline.
+   */
   at(f) {
     const k = this.keys;
     if (!k.length) return null;
@@ -155,6 +171,17 @@ export class CameraSequence {
     const a = k[i];
     const b = k[i + 1];
     const u = (f - a.frame) / ((b.frame - a.frame) || 1);
+
+    if (this.curve === 'linear') {
+      const yaw = a.yaw + (b.yaw - a.yaw) * u;
+      const pitch = clamp(a.pitch + (b.pitch - a.pitch) * u, -1.55, 1.55);
+      const cp = Math.cos(pitch);
+      return {
+        eye: lerp3(a.eye, b.eye, u),
+        forward: [cp * Math.sin(yaw), Math.sin(pitch), cp * Math.cos(yaw)],
+      };
+    }
+
     const p0 = k[Math.max(0, i - 1)];
     const p3 = k[Math.min(k.length - 1, i + 2)];
     const yaw = catmull1(p0.yaw, a.yaw, b.yaw, p3.yaw, u);

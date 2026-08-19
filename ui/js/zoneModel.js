@@ -405,6 +405,8 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
     zoneBounds,
     zonePlacements,
     objectGroups,
+    // Local mesh prims for Live Selection triangle picks (name → prim[]).
+    zoneMeshes: meshes,
     collision,
     zoneStats: {
       meshCount: meshes.size,
@@ -430,4 +432,189 @@ export function zoneDatRelPath(zonePath) {
   return String(zonePath || '')
     .replace(/^game[\\/]/i, '')
     .replace(/\//g, '\\');
+}
+
+/**
+ * Re-bake world zoneDraws from current zonePlacements + zoneMeshes.
+ * Skips placements with `dragHidden` (used while a move-proxy is shown).
+ * Updates model.zoneDraws in place; caller must push batches to the renderer.
+ */
+export function rebuildZoneDraws(model) {
+  if (!model?.zoneMeshes || !model.zonePlacements) return null;
+  const meshes = model.zoneMeshes;
+  // Reuse emit path via a minimal re-run of world placement loop.
+  const draws = [];
+  let triCount = 0;
+
+  const emitPrim = (meshName, prim, matrix) => {
+    // Texture key is the DAT name string; GPU map is already populated from setModel.
+    const texName = prim.textureName || '';
+    const discard = discardThresholdFor(meshName);
+    const wind = !!prim.hasBlendPos;
+    const mirrored = det3(matrix) < 0;
+    const blend = prim.blend;
+    const last = draws[draws.length - 1];
+    let d = last;
+    if (!d || d.texKey !== texName || d.blend !== blend
+      || d.noCull !== prim.noCull || d.discard !== discard || d.wind !== wind) {
+      d = {
+        layer: 'world', texKey: texName, blend, noCull: prim.noCull, discard, wind,
+        positions: [], blendOffsets: [], normals: [], uvs: [], colors: [],
+      };
+      draws.push(d);
+    }
+    const n = prim.positions.length / 3;
+    const order = mirrored ? [0, 2, 1] : [0, 1, 2];
+    for (let t = 0; t + 2 < n; t += 3) {
+      for (const k of order) {
+        const i = t + k;
+        const i3 = i * 3, i2 = i * 2, i4 = i * 4;
+        const [wx, wy, wz] = mulPoint(matrix, prim.positions[i3], prim.positions[i3 + 1], prim.positions[i3 + 2]);
+        const [nx, ny, nz] = mulDir(matrix, prim.normals[i3], prim.normals[i3 + 1], prim.normals[i3 + 2]);
+        const [dx, dy, dz] = toDisplay(wx, wy, wz);
+        const [dnx, dny, dnz] = toDisplay(nx, ny, nz);
+        d.positions.push(dx, dy, dz);
+        d.normals.push(dnx, dny, dnz);
+        d.uvs.push(prim.uvs[i2], prim.uvs[i2 + 1]);
+        d.colors.push(
+          clamp255(prim.colors[i4]),
+          clamp255(prim.colors[i4 + 1]),
+          clamp255(prim.colors[i4 + 2]),
+          clamp255(prim.colors[i4 + 3]),
+        );
+        if (wind) {
+          const [bx, by, bz] = mulDir(matrix, prim.blendOffsets[i3], prim.blendOffsets[i3 + 1], prim.blendOffsets[i3 + 2]);
+          const [dbx, dby, dbz] = toDisplay(bx, by, bz);
+          d.blendOffsets.push(dbx, dby, dbz);
+        } else {
+          d.blendOffsets.push(0, 0, 0);
+        }
+      }
+      triCount += 1;
+    }
+  };
+
+  for (const p of model.zonePlacements) {
+    if (p.kind || p.dragHidden) continue;
+    if (!p.mesh) continue;
+    const prims = meshes.get(p.mesh);
+    if (!prims?.length) continue;
+    const matrix = trsMatrix(p.rawPos || p.pos, p.rot, p.scale);
+    for (const prim of prims) emitPrim(p.mesh, prim, matrix);
+  }
+
+  const zoneDraws = [];
+  let vertexCount = 0;
+  for (const d of draws) {
+    const n = d.positions.length / 3;
+    if (n < 3) continue;
+    vertexCount += n;
+    zoneDraws.push({
+      layer: d.layer,
+      textureName: d.texKey || null,
+      blend: d.blend,
+      noCull: d.noCull,
+      discard: d.discard,
+      wind: d.wind,
+      zBias: d.blend ? 5 : 0,
+      count: n,
+      positions: new Float32Array(d.positions),
+      blendOffsets: new Float32Array(d.blendOffsets),
+      normals: new Float32Array(d.normals),
+      uvs: new Float32Array(d.uvs),
+      colors: new Uint8Array(d.colors),
+    });
+  }
+  model.zoneDraws = zoneDraws;
+  if (model.zoneStats) {
+    model.zoneStats.triCount = triCount;
+    model.zoneStats.vertexCount = vertexCount;
+    model.zoneStats.drawCount = zoneDraws.length;
+  }
+  return zoneDraws;
+}
+
+/** GPU-ready draws for a single placement (move-proxy while dragging). */
+export function buildPlacementDraws(model, placement) {
+  if (!model?.zoneMeshes || !placement?.mesh) return [];
+  const prims = model.zoneMeshes.get(placement.mesh);
+  if (!prims?.length) return [];
+  const matrix = trsMatrix(placement.rawPos || placement.pos, placement.rot, placement.scale);
+  // Temporary mini-model path via rebuild helper with one placement.
+  const tmp = {
+    zoneMeshes: model.zoneMeshes,
+    zonePlacements: [{ ...placement, kind: null, dragHidden: false }],
+    textures: model.textures,
+    zoneStats: {},
+  };
+  rebuildZoneDraws(tmp);
+  return tmp.zoneDraws ?? [];
+}
+
+/** Display pos (−x,−y,z) ↔ raw FFXI pos. */
+export function displayToRaw(dx, dy, dz) {
+  return [-dx, -dy, dz];
+}
+
+/** Move a placement in display space; updates pos, rawPos, and bounds. */
+export function translatePlacementDisplay(placement, ddx, ddy, ddz) {
+  if (!placement) return;
+  const pos = placement.pos || [0, 0, 0];
+  placement.pos = [pos[0] + ddx, pos[1] + ddy, pos[2] + ddz];
+  placement.rawPos = displayToRaw(placement.pos[0], placement.pos[1], placement.pos[2]);
+  if (placement.bounds?.min && placement.bounds?.max) {
+    placement.bounds = {
+      min: [
+        placement.bounds.min[0] + ddx,
+        placement.bounds.min[1] + ddy,
+        placement.bounds.min[2] + ddz,
+      ],
+      max: [
+        placement.bounds.max[0] + ddx,
+        placement.bounds.max[1] + ddy,
+        placement.bounds.max[2] + ddz,
+      ],
+    };
+  }
+}
+
+/** Snapshot pose for undo / reset. */
+export function clonePlacementPose(placement) {
+  if (!placement) return null;
+  return {
+    name: placement.name,
+    pos: placement.pos ? placement.pos.slice() : [0, 0, 0],
+    rawPos: placement.rawPos ? placement.rawPos.slice() : [0, 0, 0],
+    rot: placement.rot ? placement.rot.slice() : [0, 0, 0],
+    scale: placement.scale ? placement.scale.slice() : [1, 1, 1],
+    bounds: placement.bounds?.min && placement.bounds?.max
+      ? {
+        min: placement.bounds.min.slice(),
+        max: placement.bounds.max.slice(),
+      }
+      : null,
+  };
+}
+
+/** Restore a pose snapshot onto a live placement object. */
+export function applyPlacementPose(placement, snap) {
+  if (!placement || !snap) return;
+  placement.pos = snap.pos.slice();
+  placement.rawPos = snap.rawPos.slice();
+  if (snap.rot) placement.rot = snap.rot.slice();
+  if (snap.scale) placement.scale = snap.scale.slice();
+  if (snap.bounds) {
+    placement.bounds = {
+      min: snap.bounds.min.slice(),
+      max: snap.bounds.max.slice(),
+    };
+  }
+}
+
+export function posesEqual(a, b) {
+  if (!a || !b) return false;
+  for (let i = 0; i < 3; i++) {
+    if (Math.abs((a.pos?.[i] ?? 0) - (b.pos?.[i] ?? 0)) > 1e-5) return false;
+  }
+  return true;
 }

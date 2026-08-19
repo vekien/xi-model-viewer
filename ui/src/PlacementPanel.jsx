@@ -8,8 +8,12 @@ const DEFAULT_H = 500;
 
 /**
  * Top-right zone objects panel: mesh types + instances, minimizeable, height-resizable.
+ * Live Selection (viewport click → row highlight) is toggled from the header.
  */
-export function PlacementPanel({ groups, selectedKey, onSelectGroup, onSelectInstance, onClose, showEnv = false }) {
+export function PlacementPanel({
+  groups, selectedKey, onSelectGroup, onSelectInstance, onClose, showEnv = false,
+  liveSelection = false, onToggleLiveSelection, onResetPlacement, isPlacementMoved,
+}) {
   const [query, setQuery] = useState('');
   const [openMesh, setOpenMesh] = useState(null);
   const [minimized, setMinimized] = useState(false);
@@ -18,6 +22,7 @@ export function PlacementPanel({ groups, selectedKey, onSelectGroup, onSelectIns
     return Number.isFinite(v) ? Math.min(Math.max(v, MIN_H), 900) : DEFAULT_H;
   });
   const drag = useRef(null);
+  const selectedRef = useRef(null);
 
   const visibleGroups = useMemo(() => {
     if (!groups?.length) return [];
@@ -42,6 +47,36 @@ export function PlacementPanel({ groups, selectedKey, onSelectGroup, onSelectIns
       })
       .filter(Boolean);
   }, [visibleGroups, query]);
+
+  // Viewport / external selection: clear filter, expand group, un-minimize, scroll.
+  useEffect(() => {
+    if (!selectedKey || !groups?.length) return;
+    // A filter can hide the selected row entirely — drop it so scroll can land.
+    setQuery('');
+    setMinimized(false);
+    if (selectedKey.startsWith('mesh:')) {
+      setOpenMesh(selectedKey.slice(5));
+    } else if (selectedKey.startsWith('inst:')) {
+      const name = selectedKey.slice(5);
+      const g = groups.find((x) => x.instances?.some((p) => p.name === name));
+      if (g) setOpenMesh(g.mesh);
+    }
+  }, [selectedKey, groups]);
+
+  // Scroll after expand/filter clear have committed DOM.
+  useEffect(() => {
+    if (!selectedKey) return undefined;
+    let nested = 0;
+    const id = requestAnimationFrame(() => {
+      nested = requestAnimationFrame(() => {
+        selectedRef.current?.scrollIntoView({ block: 'center', inline: 'nearest' });
+      });
+    });
+    return () => {
+      cancelAnimationFrame(id);
+      if (nested) cancelAnimationFrame(nested);
+    };
+  }, [selectedKey, openMesh, query, minimized]);
 
   const totalInst = visibleGroups.reduce((n, g) => n + g.count, 0);
   const shownInst = filtered.reduce((n, g) => n + g.count, 0);
@@ -89,8 +124,24 @@ export function PlacementPanel({ groups, selectedKey, onSelectGroup, onSelectIns
         <span className="icon">lists</span>
         <span className="plc-title">Objects</span>
         <span className="plc-meta mono">{totalInst.toLocaleString()}</span>
+        {typeof onToggleLiveSelection === 'function' && (
+          <Tooltip content={liveSelection
+            ? 'Live Selection on — hover wireframe, click to select'
+            : 'Live Selection — hover wireframe, click to select'}>
+            <button
+              type="button"
+              className={`icon-btn plc-tool${liveSelection ? ' on' : ''}`}
+              aria-pressed={liveSelection}
+              aria-label="Live Selection"
+              onClick={onToggleLiveSelection}
+            >
+              <span className="icon">arrow_selector_tool</span>
+            </button>
+          </Tooltip>
+        )}
         <Tooltip content={minimized ? 'Restore' : 'Minimize'}>
           <button
+            type="button"
             className="icon-btn plc-tool"
             onClick={() => setMinimized((v) => !v)}
           >
@@ -99,7 +150,7 @@ export function PlacementPanel({ groups, selectedKey, onSelectGroup, onSelectIns
         </Tooltip>
         {onClose && (
           <Tooltip content="Close">
-            <button className="icon-btn plc-tool" onClick={onClose}>
+            <button type="button" className="icon-btn plc-tool" onClick={onClose}>
               <span className="icon">close</span>
             </button>
           </Tooltip>
@@ -133,6 +184,7 @@ export function PlacementPanel({ groups, selectedKey, onSelectGroup, onSelectIns
               return (
                 <div key={`${g.kind || 'w'}:${g.mesh}`} className={`plc-group${isOpen ? ' open' : ''}${groupSel ? ' selected' : ''}${envClass}`}>
                   <div
+                    ref={groupSel ? selectedRef : undefined}
                     className="plc-row plc-mesh"
                     onClick={() => {
                       setOpenMesh(isOpen && openMesh === g.mesh ? null : g.mesh);
@@ -149,16 +201,32 @@ export function PlacementPanel({ groups, selectedKey, onSelectGroup, onSelectIns
                     <div className="plc-instances">
                       {g.instances.map((p) => {
                         const sel = selectedKey === `inst:${p.name}`;
+                        const moved = !!isPlacementMoved?.(p);
                         return (
                           <div
                             key={p.name}
-                            className={`plc-row plc-inst${sel ? ' selected' : ''}`}
+                            ref={sel ? selectedRef : undefined}
+                            className={`plc-row plc-inst${sel ? ' selected' : ''}${moved ? ' moved' : ''}`}
                             onClick={(e) => { e.stopPropagation(); onSelectInstance?.(p); }}
-                            title={`#${p.index}  pos ${fmt3(p.rawPos)}`}
+                            title={`#${p.index}  pos ${fmt3(p.rawPos)}${moved ? ' · moved' : ''}`}
                           >
                             <span className="caret icon" />
                             <span className="kind icon">place</span>
                             <span className="plc-name">{p.name}</span>
+                            {moved && typeof onResetPlacement === 'function' && (
+                              <Tooltip content="Reset object placement">
+                                <button
+                                  type="button"
+                                  className="icon-btn plc-reset"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onResetPlacement(p);
+                                  }}
+                                >
+                                  <span className="icon">restart_alt</span>
+                                </button>
+                              </Tooltip>
+                            )}
                             <span className="mono-small plc-idx">{p.index}</span>
                           </div>
                         );
@@ -175,6 +243,7 @@ export function PlacementPanel({ groups, selectedKey, onSelectGroup, onSelectIns
               {query
                 ? `${filtered.length} types · ${shownInst.toLocaleString()} / ${totalInst.toLocaleString()}`
                 : `${visibleGroups.length} types · ${totalInst.toLocaleString()} placements`}
+
             </div>
           )}
 
@@ -185,6 +254,7 @@ export function PlacementPanel({ groups, selectedKey, onSelectGroup, onSelectIns
           />
         </>
       )}
+
     </div>
   );
 }

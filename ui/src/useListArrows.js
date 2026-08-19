@@ -22,11 +22,20 @@ export function listArrowHandler(items, index, onPick) {
   };
 }
 
-/** Keeps the selected row in view as the arrows walk past the fold. */
-export function useScrollIntoView(selected) {
+/**
+ * Keeps the selected row in view.
+ * @param {*} selected dependency key (changes → scroll)
+ * @param {'nearest'|'center'|'start'|'end'} [block='nearest']
+ */
+export function useScrollIntoView(selected, block = 'nearest') {
   const ref = useRef(null);
   useEffect(() => {
-    if (selected) ref.current?.scrollIntoView({ block: 'nearest' });
-  }, [selected]);
+    if (!selected) return undefined;
+    // Wait a frame so expand/open state has committed DOM for the row.
+    const id = requestAnimationFrame(() => {
+      ref.current?.scrollIntoView({ block, inline: 'nearest' });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [selected, block]);
   return ref;
 }

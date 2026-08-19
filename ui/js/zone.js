@@ -362,22 +362,27 @@ function parseZoneMeshSection(bytes, dv, section) {
 }
 
 // ── 0x1C placement parse ────────────────────────────────────────────────────
-// Modern retail objects are 0x64 bytes. Pre-production MZB zones (mode ≤ 5,
-// ROM/0/28·41·42…) pack the same name/pos/rot/scale fields into 0x54 bytes —
-// using 0x64 there misaligns every entry after the first and yields garbage.
+// Modern retail objects are 0x64 bytes. Pre-production MZB zones pack the same
+// name/pos/rot/scale fields into 0x54. Using the wrong stride misaligns every
+// entry after the first.
+//
+// IMPORTANT: `xi zone` convert_zonedef_to_retail_stride widens records to 0x64
+// but KEAPS the pre-production mode byte. Trusting mode alone then reads a
+// converted DAT (e.g. ROM10/1/4 after patch) as 0x54 and shreds placements.
+// Match xi-tools zonedef_record_size: score printable mesh ids first; mode is
+// only a tie-break. See docs/zone/prototype-zones.md in xi-tools.
 const OBJ_STRIDE_MODERN = 0x64;
 const OBJ_STRIDE_PROTO = 0x54;
 
 function zoneDefObjectStride(bytes, dv, ds, nodeCount) {
   const mode = (u32at(dv, ds) >>> 24) & 0xFF;
-  // Mode 5 (and below, once past the "not encrypted" check) is the prototype
-  // MZB layout. Higher modes use the modern 0x64 stride after decrypt.
-  if (mode > 0 && mode <= 5) return OBJ_STRIDE_PROTO;
-  // Fallback: prefer the stride that yields more printable mesh-id names.
-  if (nodeCount < 2) return OBJ_STRIDE_MODERN;
+  if (nodeCount < 2) {
+    return (mode > 0 && mode <= 5) ? OBJ_STRIDE_PROTO : OBJ_STRIDE_MODERN;
+  }
   const score = (stride) => {
     let n = 0;
-    for (let i = 0; i < Math.min(nodeCount, 32); i++) {
+    const limit = Math.min(nodeCount, 32);
+    for (let i = 0; i < limit; i++) {
       const id = strAt(bytes, ds + 0x20 + i * stride, 0x10);
       if (id.length >= 2 && /^[\x20-\x7e]+$/.test(id)) n++;
     }
@@ -385,7 +390,11 @@ function zoneDefObjectStride(bytes, dv, ds, nodeCount) {
   };
   const s54 = score(OBJ_STRIDE_PROTO);
   const s64 = score(OBJ_STRIDE_MODERN);
-  return s54 > s64 + 2 ? OBJ_STRIDE_PROTO : OBJ_STRIDE_MODERN;
+  // Clear winner wins — same ±2 margin as xi-tools.
+  if (s64 > s54 + 2) return OBJ_STRIDE_MODERN;
+  if (s54 > s64 + 2) return OBJ_STRIDE_PROTO;
+  // Tie: mode ≤ 5 hints proto; otherwise retail.
+  return (mode > 0 && mode <= 5) ? OBJ_STRIDE_PROTO : OBJ_STRIDE_MODERN;
 }
 
 function parseZoneDef(bytes, dv, section, table1) {

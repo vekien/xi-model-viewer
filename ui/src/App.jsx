@@ -36,7 +36,12 @@ import { extractKeyTables, parseZone, parseDatTextures, parseZoneDefAt } from '.
 import { ZoneDefModal } from './ZoneDefModal.jsx';
 import { ParticlePreviewModal } from './ParticlePreviewModal.jsx';
 import { armGeneratorPreview } from '../js/particlePreview.js';
-import { zoneDatRelPath, zoneToModel } from '../js/zoneModel.js';
+import {
+  zoneDatRelPath, zoneToModel, rebuildZoneDraws, buildPlacementDraws, translatePlacementDisplay,
+  clonePlacementPose, applyPlacementPose, posesEqual,
+} from '../js/zoneModel.js';
+import { pickZoneAt } from '../js/zonePick.js';
+import { pickGizmoAxis, axisDragDelta } from '../js/zoneGizmo.js';
 import { parseEnvironments, parseEnvironmentsByRoot, resolveEnvironment, defaultWeather, listWeathers, terrainLightingFromEnv, skyDomeFromEnv, EnvironmentManager } from '../js/environment.js';
 import { parseSections } from '../js/zone.js';
 import { buildDatTree, SEC } from '../js/dat/tree.js';
@@ -526,6 +531,190 @@ export default function App() {
   const [todPlaying, setTodPlaying] = useState(false);
   const [plcSelected, setPlcSelected] = useState('');       // 'mesh:…' | 'inst:…'
   const [plcOpen, setPlcOpen] = useState(true);
+  // Click zone viewport → select Objects row (no camera focus) + hover wireframe.
+  const [liveSelection, setLiveSelection] = useState(() => {
+    try { return localStorage.getItem('liveSelection') === '1'; } catch { return false; }
+  });
+  const liveSelectionRef = useRef(liveSelection);
+  liveSelectionRef.current = liveSelection;
+  const plcSelectedRef = useRef('');
+  const plcHoverRef = useRef(null); // placement or null
+  const gizmoHoverRef = useRef(null); // 'x'|'y'|'z'|null
+  const toggleLiveSelection = useCallback(() => {
+    const next = !liveSelectionRef.current;
+    liveSelectionRef.current = next;
+    try { localStorage.setItem('liveSelection', next ? '1' : '0'); } catch { /* quota */ }
+    setLiveSelection(next);
+    if (!next) {
+      // Leaving Live Selection clears hover, selection, and gizmo.
+      plcHoverRef.current = null;
+      gizmoHoverRef.current = null;
+      plcSelectedRef.current = '';
+      setPlcSelected('');
+      rendererRef.current?.setZonePickHighlight?.(null);
+    }
+  }, []);
+
+  const gizmoDragRef = useRef(null); // { axis, placement, lastX, lastY, startPose }
+  // Undo stack of pose snapshots taken *before* each completed gizmo move.
+  const plcUndoRef = useRef([]);
+  // First-seen pose per placement name (zone load) for "Reset object placement".
+  const plcOriginalRef = useRef(new Map());
+  // Bumps when poses change so the Objects list can show/hide Reset buttons.
+  const [plcMovedTick, setPlcMovedTick] = useState(0);
+  const bumpMoved = useCallback(() => setPlcMovedTick((n) => n + 1), []);
+
+  const isPlacementMoved = useCallback((p) => {
+    if (!p?.name) return false;
+    const orig = plcOriginalRef.current.get(p.name);
+    if (!orig) return false;
+    return !posesEqual(clonePlacementPose(p), orig);
+  }, [plcMovedTick]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const placementGizmoPos = (p) => {
+    if (!p) return null;
+    if (p.pos) return p.pos;
+    if (p.bounds?.min && p.bounds?.max) {
+      return [
+        (p.bounds.min[0] + p.bounds.max[0]) * 0.5,
+        (p.bounds.min[1] + p.bounds.max[1]) * 0.5,
+        (p.bounds.min[2] + p.bounds.max[2]) * 0.5,
+      ];
+    }
+    return null;
+  };
+
+  const syncZonePickHighlight = useCallback(() => {
+    const r = rendererRef.current;
+    if (!r?.setZonePickHighlight) return;
+    const model = modelRef.current;
+    if (model?.kind !== 'zone') {
+      r.setZonePickHighlight(null);
+      return;
+    }
+    const list = model.zonePlacements ?? [];
+    const key = plcSelectedRef.current;
+    let selected = null;
+    if (key.startsWith('inst:')) {
+      const name = key.slice(5);
+      selected = list.find((p) => p.name === name) ?? null;
+    } else if (key.startsWith('mesh:')) {
+      const mesh = key.slice(5);
+      selected = list.find((p) => p.mesh === mesh && !p.kind) ?? null;
+    }
+    const live = liveSelectionRef.current;
+    const hover = live ? plcHoverRef.current : null;
+    const gizmoPos = placementGizmoPos(selected);
+    const activeAxis = gizmoDragRef.current?.axis ?? null;
+    const hoverAxis = gizmoHoverRef.current ?? null;
+    r.setZonePickHighlight({
+      hover: hover && hover !== selected ? hover.bounds : null,
+      selected: selected ? selected.bounds : null,
+      gizmo: gizmoPos ? { pos: gizmoPos, activeAxis, hoverAxis } : null,
+    });
+  }, []);
+
+  const rememberOriginalPose = useCallback((placement) => {
+    if (!placement?.name) return;
+    if (!plcOriginalRef.current.has(placement.name)) {
+      plcOriginalRef.current.set(placement.name, clonePlacementPose(placement));
+    }
+  }, []);
+
+  const applyPlacementAndRebuild = useCallback((placement, snap) => {
+    const model = modelRef.current;
+    const r = rendererRef.current;
+    if (!model || !r || !placement || !snap) return;
+    applyPlacementPose(placement, snap);
+    placement.dragHidden = false;
+    r.setZoneMoveProxy(null);
+    rebuildZoneDraws(model);
+    r.reloadZoneBatches(model);
+    syncZonePickHighlight();
+  }, [syncZonePickHighlight]);
+
+  /** Hide original, show move-proxy, rebuild zone batches. */
+  const beginPlacementDrag = useCallback((placement) => {
+    const model = modelRef.current;
+    const r = rendererRef.current;
+    if (!model || !r || !placement) return;
+    rememberOriginalPose(placement);
+    placement.dragHidden = true;
+    rebuildZoneDraws(model);
+    r.reloadZoneBatches(model);
+    const draws = buildPlacementDraws(model, placement);
+    r.setZoneMoveProxy(draws);
+  }, [rememberOriginalPose]);
+
+  const updatePlacementDragProxy = useCallback((placement) => {
+    const model = modelRef.current;
+    const r = rendererRef.current;
+    if (!model || !r || !placement) return;
+    const draws = buildPlacementDraws(model, placement);
+    r.setZoneMoveProxy(draws);
+    syncZonePickHighlight();
+  }, [syncZonePickHighlight]);
+
+  const endPlacementDrag = useCallback((placement, startPose) => {
+    const model = modelRef.current;
+    const r = rendererRef.current;
+    if (!model || !r) return;
+    if (placement) placement.dragHidden = false;
+    r.setZoneMoveProxy(null);
+    rebuildZoneDraws(model);
+    r.reloadZoneBatches(model);
+    // Push undo if the object actually moved.
+    if (placement && startPose && !posesEqual(startPose, clonePlacementPose(placement))) {
+      plcUndoRef.current.push(startPose);
+      if (plcUndoRef.current.length > 100) plcUndoRef.current.shift();
+      bumpMoved();
+    }
+    syncZonePickHighlight();
+  }, [syncZonePickHighlight, bumpMoved]);
+
+  const undoPlacementMove = useCallback(() => {
+    const snap = plcUndoRef.current.pop();
+    if (!snap) {
+      setStatusText('Nothing to undo');
+      return;
+    }
+    const model = modelRef.current;
+    const placement = model?.zonePlacements?.find((p) => p.name === snap.name);
+    if (!placement) {
+      setStatusText('Undo failed — object gone');
+      return;
+    }
+    applyPlacementAndRebuild(placement, snap);
+    bumpMoved();
+    setStatusText(`Undo · ${snap.name}`);
+  }, [applyPlacementAndRebuild, bumpMoved]);
+  const undoPlacementMoveRef = useRef(undoPlacementMove);
+  undoPlacementMoveRef.current = undoPlacementMove;
+
+  const resetPlacementPose = useCallback((placementOrName) => {
+    const model = modelRef.current;
+    if (!model) return;
+    const name = typeof placementOrName === 'string'
+      ? placementOrName
+      : placementOrName?.name;
+    const placement = model.zonePlacements?.find((p) => p.name === name);
+    if (!placement) return;
+    const orig = plcOriginalRef.current.get(name);
+    if (!orig) {
+      setStatusText(`${name} · already at original placement`);
+      return;
+    }
+    const current = clonePlacementPose(placement);
+    if (posesEqual(current, orig)) {
+      setStatusText(`${name} · already at original placement`);
+      return;
+    }
+    // Undo can restore the pre-reset pose.
+    plcUndoRef.current.push(current);
+    applyPlacementAndRebuild(placement, orig);
+    bumpMoved();
+    setStatusText(`Reset · ${name}`);
+  }, [applyPlacementAndRebuild, bumpMoved]);
   const [loading, setLoading] = useState(null); // { title, detail } | null
 
   const player = useAudioPlayer();
@@ -628,6 +817,12 @@ export default function App() {
     const onKeyDown = (e) => {
       if (isTyping(e.target)) return;
       const k = e.key.toLowerCase();
+      // Ctrl+Z / Cmd+Z — undo last placement move (zone gizmo).
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && k === 'z') {
+        e.preventDefault();
+        undoPlacementMoveRef.current?.();
+        return;
+      }
       if (k === 'f') {
         rendererRef.current?.resetCamera();
         e.preventDefault();
@@ -1741,6 +1936,9 @@ export default function App() {
       setObjectGroups(model.objectGroups ?? []);
       setPlcSelected('');
       setPlcOpen(true);
+      // Fresh zone — drop edit history / originals from the previous area.
+      plcUndoRef.current = [];
+      plcOriginalRef.current = new Map();
       setModelInfo({
         name: displayName,
         joints: 1,
@@ -3806,55 +4004,227 @@ export default function App() {
     }
   }, [leftView, browserKind]);
 
+  /** Highlight Objects row only — no camera move (used by Live Selection). */
+  const selectPlacementGroup = useCallback((group) => {
+    if (!group?.instances?.length) return;
+    const key = `mesh:${group.mesh}`;
+    plcSelectedRef.current = key;
+    setPlcSelected(key);
+    setPlcOpen(true);
+    setStatusText(`${group.mesh} · ${group.count} instance${group.count === 1 ? '' : 's'}`);
+    syncZonePickHighlight();
+  }, [syncZonePickHighlight]);
+
+  const selectPlacementInstance = useCallback((p) => {
+    if (!p) return;
+    const key = `inst:${p.name}`;
+    plcSelectedRef.current = key;
+    setPlcSelected(key);
+    setPlcOpen(true);
+    const pos = (p.rawPos || p.pos || []).map((n) => Number(n).toFixed(1)).join(', ');
+    setStatusText(`${p.name}  #${p.index}${pos ? `  (${pos})` : ''}`);
+    syncZonePickHighlight();
+  }, [syncZonePickHighlight]);
+
+  /** Panel click: select + frame camera (existing behaviour). */
   const focusPlacementGroup = useCallback((group) => {
     if (!group?.instances?.length) return;
-    setPlcSelected(`mesh:${group.mesh}`);
+    selectPlacementGroup(group);
     let min = [Infinity, Infinity, Infinity];
     let max = [-Infinity, -Infinity, -Infinity];
     for (const p of group.instances) {
       const b = p.bounds;
+      if (!b) continue;
       for (let i = 0; i < 3; i++) {
         if (b.min[i] < min[i]) min[i] = b.min[i];
         if (b.max[i] > max[i]) max[i] = b.max[i];
       }
     }
-    focusBounds(min, max);
-    setStatusText(`${group.mesh} · ${group.count} instance${group.count === 1 ? '' : 's'}`);
-  }, [focusBounds]);
+    if (Number.isFinite(min[0])) focusBounds(min, max);
+  }, [focusBounds, selectPlacementGroup]);
 
   const focusPlacementInstance = useCallback((p) => {
     if (!p) return;
-    setPlcSelected(`inst:${p.name}`);
-    focusBounds(p.bounds.min, p.bounds.max);
-    const pos = p.rawPos.map((n) => n.toFixed(1)).join(', ');
-    setStatusText(`${p.name}  #${p.index}  (${pos})`);
-  }, [focusBounds]);
+    selectPlacementInstance(p);
+    if (p.bounds) focusBounds(p.bounds.min, p.bounds.max);
+  }, [focusBounds, selectPlacementInstance]);
 
   const onPointerDown = (e) => {
-    drag.current = { btn: e.button, x: e.clientX, y: e.clientY };
+    drag.current = {
+      btn: e.button, x: e.clientX, y: e.clientY,
+      sx: e.clientX, sy: e.clientY, moved: false, gizmo: false,
+    };
     e.currentTarget.setPointerCapture(e.pointerId);
+
+    // Prefer grabbing the XYZ gizmo over camera orbit / live pick.
+    if (e.button !== 0) return;
+    if (rendererRef.current?.camera?.sequenceLock) return;
+    if (modelRef.current?.kind !== 'zone') return;
+
+    const r = rendererRef.current;
+    const gz = r?.getZoneGizmo?.();
+    if (!gz?.pos) return;
+
+    const axis = pickGizmoAxis(r, gz, e.clientX, e.clientY);
+    if (!axis) return;
+
+    // Resolve selected placement (instance preferred; mesh → first instance).
+    const key = plcSelectedRef.current;
+    const list = modelRef.current.zonePlacements ?? [];
+    let placement = null;
+    if (key.startsWith('inst:')) {
+      placement = list.find((p) => p.name === key.slice(5)) ?? null;
+    } else if (key.startsWith('mesh:')) {
+      const mesh = key.slice(5);
+      placement = list.find((p) => p.mesh === mesh && !p.kind) ?? null;
+    }
+    if (!placement) return;
+
+    gizmoDragRef.current = {
+      axis,
+      placement,
+      lastX: e.clientX,
+      lastY: e.clientY,
+      startPose: clonePlacementPose(placement),
+    };
+    gizmoHoverRef.current = axis;
+    r.setGizmoHoverAxis?.(axis);
+    drag.current.gizmo = true;
+    drag.current.moved = true; // don't treat as object pick / orbit on release
+    beginPlacementDrag(placement);
+    setStatusText(`Move ${placement.name} · ${axis.toUpperCase()}-axis`);
+    e.preventDefault();
   };
   const onPointerUp = (e) => {
-    drag.current.btn = -1;
-    e.currentTarget.releasePointerCapture(e.pointerId);
-  };
-  const onPointerMove = (e) => {
-    if (drag.current.btn < 0) return;
-    if (rendererRef.current?.camera.sequenceLock) return;
-    const dx = e.clientX - drag.current.x;
-    const dy = e.clientY - drag.current.y;
-    drag.current.x = e.clientX;
-    drag.current.y = e.clientY;
-    const cam = rendererRef.current.camera;
-    if (wasdRef.current) {
-      // Fly: any drag looks around (LMB or RMB).
-      if (drag.current.btn === 0 || drag.current.btn === 2) cam.flyLook(dx, dy);
-    } else if (drag.current.btn === 0) {
-      cam.orbit(dx, dy);
+    const d = drag.current;
+    const gizmoDrag = gizmoDragRef.current;
+    if (gizmoDrag) {
+      endPlacementDrag(gizmoDrag.placement, gizmoDrag.startPose);
+      const p = gizmoDrag.placement;
+      const pos = (p.pos || []).map((n) => Number(n).toFixed(1)).join(', ');
+      setStatusText(`${p.name}  #${p.index}${pos ? `  (${pos})` : ''}`);
+      gizmoDragRef.current = null;
+      drag.current = { btn: -1, x: 0, y: 0, sx: 0, sy: 0, moved: false, gizmo: false };
+      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* */ }
+      if (canvasRef.current) {
+        canvasRef.current.style.cursor = liveSelectionRef.current ? 'crosshair' : '';
+      }
+      syncZonePickHighlight();
+      return;
+    }
+
+    const wasClick = d?.btn === 0 && !d.moved && !d.gizmo
+      && Math.hypot(e.clientX - (d.sx ?? e.clientX), e.clientY - (d.sy ?? e.clientY)) <= 5;
+    drag.current = { btn: -1, x: 0, y: 0, sx: 0, sy: 0, moved: false, gizmo: false };
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+
+    // Live Selection: click (not drag) on zone geometry → Objects highlight only.
+    if (!liveSelectionRef.current || !wasClick) return;
+    if (rendererRef.current?.camera?.sequenceLock) return;
+    const model = modelRef.current;
+    if (model?.kind !== 'zone') return;
+    const hit = pickZoneAt(rendererRef.current, model, e.clientX, e.clientY);
+    if (hit) {
+      selectPlacementInstance(hit);
     } else {
-      cam.pan(dx, dy);
+      plcSelectedRef.current = '';
+      setPlcSelected('');
+      setStatusText('No object under cursor');
+      syncZonePickHighlight();
     }
   };
+  const onPointerMove = (e) => {
+    // Gizmo axis drag — screen-projected so mouse direction matches the arrow
+    // (FFXI display X is mirrored; ray-t deltas felt inverted left/right).
+    const gd = gizmoDragRef.current;
+    if (gd) {
+      const r = rendererRef.current;
+      const gz = r?.getZoneGizmo?.() || { pos: gd.placement.pos };
+      const delta = axisDragDelta(r, gz, gd.axis, gd.lastX, gd.lastY, e.clientX, e.clientY);
+      gd.lastX = e.clientX;
+      gd.lastY = e.clientY;
+      if (!delta) return;
+      if (Math.abs(delta.dx) + Math.abs(delta.dy) + Math.abs(delta.dz) < 1e-8) return;
+      translatePlacementDisplay(gd.placement, delta.dx, delta.dy, delta.dz);
+      updatePlacementDragProxy(gd.placement);
+      e.preventDefault();
+      return;
+    }
+
+    const dragging = drag.current.btn >= 0;
+    if (dragging) {
+      if (rendererRef.current?.camera.sequenceLock) return;
+      // Never orbit if this press started on the gizmo.
+      if (drag.current.gizmo) return;
+      const dx = e.clientX - drag.current.x;
+      const dy = e.clientY - drag.current.y;
+      drag.current.x = e.clientX;
+      drag.current.y = e.clientY;
+      if (!drag.current.moved
+        && Math.hypot(e.clientX - drag.current.sx, e.clientY - drag.current.sy) > 5) {
+        drag.current.moved = true;
+      }
+      const cam = rendererRef.current.camera;
+      if (wasdRef.current) {
+        if (drag.current.btn === 0 || drag.current.btn === 2) cam.flyLook(dx, dy);
+      } else if (drag.current.btn === 0) {
+        cam.orbit(dx, dy);
+      } else {
+        cam.pan(dx, dy);
+      }
+      return;
+    }
+
+    // Hover: gizmo axis highlight + cursor, then live object pick.
+    if (rendererRef.current?.camera?.sequenceLock) return;
+    const model = modelRef.current;
+    if (model?.kind === 'zone') {
+      const r = rendererRef.current;
+      const gz = r?.getZoneGizmo?.();
+      if (gz) {
+        const axis = pickGizmoAxis(r, gz, e.clientX, e.clientY);
+        const prevAxis = gizmoHoverRef.current;
+        if (axis !== prevAxis) {
+          gizmoHoverRef.current = axis;
+          r.setGizmoHoverAxis?.(axis);
+        }
+        const canvas = canvasRef.current;
+        if (canvas) {
+          canvas.style.cursor = axis
+            ? (axis === 'y' ? 'ns-resize' : 'ew-resize')
+            : (liveSelectionRef.current ? 'crosshair' : '');
+        }
+        if (axis) return; // don't thrash object hover while aiming at gizmo
+      } else if (gizmoHoverRef.current) {
+        gizmoHoverRef.current = null;
+      }
+    }
+
+    if (!liveSelectionRef.current) return;
+    if (model?.kind !== 'zone') return;
+    const hit = pickZoneAt(rendererRef.current, model, e.clientX, e.clientY);
+    const prev = plcHoverRef.current;
+    if ((hit?.name ?? null) === (prev?.name ?? null)) return;
+    plcHoverRef.current = hit;
+    syncZonePickHighlight();
+  };
+
+  // Keep selected wireframe in sync when panel selection changes without pick.
+  useEffect(() => {
+    plcSelectedRef.current = plcSelected;
+    syncZonePickHighlight();
+  }, [plcSelected, syncZonePickHighlight]);
+
+  // Clear hover when leaving zone view or turning live selection off; keep gizmo if still selected.
+  useEffect(() => {
+    if (leftView !== 'zones' && browserKind !== 'zone') {
+      plcHoverRef.current = null;
+      rendererRef.current?.setZonePickHighlight?.(null);
+      return;
+    }
+    if (!liveSelection) plcHoverRef.current = null;
+    syncZonePickHighlight();
+  }, [liveSelection, leftView, browserKind, syncZonePickHighlight]);
 
   // --- render --------------------------------------------------------------
 
@@ -3863,9 +4233,23 @@ export default function App() {
       <canvas
         id="canvas"
         ref={canvasRef}
+        className={liveSelection && (leftView === 'zones' || browserKind === 'zone') ? 'live-pick' : undefined}
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
         onPointerMove={onPointerMove}
+        onPointerLeave={() => {
+          if (gizmoHoverRef.current) {
+            gizmoHoverRef.current = null;
+            rendererRef.current?.setGizmoHoverAxis?.(null);
+          }
+          if (plcHoverRef.current) {
+            plcHoverRef.current = null;
+            syncZonePickHighlight();
+          }
+          if (canvasRef.current) {
+            canvasRef.current.style.cursor = liveSelectionRef.current ? 'crosshair' : '';
+          }
+        }}
         onContextMenu={(e) => e.preventDefault()}
       />
 
@@ -4128,6 +4512,13 @@ export default function App() {
           onSelectInstance={focusPlacementInstance}
           onClose={() => setPlcOpen(false)}
           showEnv={showSkybox}
+          liveSelection={liveSelection}
+          onToggleLiveSelection={toggleLiveSelection}
+          isPlacementMoved={isPlacementMoved}
+          onResetPlacement={(p) => {
+            rememberOriginalPose(p);
+            resetPlacementPose(p);
+          }}
         />
       )}
 

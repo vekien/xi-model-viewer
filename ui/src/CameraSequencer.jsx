@@ -1,29 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
-import { weatherName } from './WeatherPanel.jsx';
 import { CameraSequence, driveCamera, poseFromCamera, sampleScene } from '../js/camseq.js';
 
 const DOC_KEY = 'camSeq';           // the sequence currently being edited
 const LIB_KEY = 'camSeqLibrary';    // { [name]: doc } — saved sequences
 const POS_KEY = 'camSeqPanelPos';
+const SIZE_KEY = 'camSeqPanelSize';
 const FPS_CHOICES = [24, 30, 60];
 const MIN_FRAMES = 2;
 const MAX_FRAMES = 36000;           // 20 minutes at 30fps — a sanity bound, not a target
 const SCENE_HZ = 10;                // weather/time re-apply rate; see applyScene
-
+const MIN_W = 940;
+const DEFAULT_W = 940;
+const PANEL_H = 300;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-const fmt = (n) => (Math.abs(n) >= 100 ? n.toFixed(0) : n.toFixed(1));
-const fmtTime = (min) => {
-  const h = Math.floor(min / 60) % 24;
-  const m = Math.floor(min % 60);
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-};
 
 const EMPTY_DOC = {
-  name: '', totalFrames: 300, fps: 30, ease: true, loop: false, cine: true,
+  name: '', totalFrames: 300, fps: 30, curve: true, loop: false, cine: true, snap: false,
   camera: [], scene: [],
 };
+const SNAP_FRAMES = 15;
 
 function readJson(key) {
   try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; }
@@ -35,9 +32,14 @@ function writeJson(key, value) {
 /** Normalise anything that comes back out of storage into a full document. */
 function toDoc(raw) {
   if (!raw || typeof raw !== 'object') return { ...EMPTY_DOC };
+  // Migrate old whole-timeline `ease` → path `curve` (spline on/off).
+  let curve = raw.curve;
+  if (curve == null && raw.ease != null) curve = !!raw.ease;
+  if (curve == null) curve = true;
   return {
     ...EMPTY_DOC,
     ...raw,
+    curve: !!curve,
     // `keys` is the pre-timeline field name — carry an old saved sequence over.
     camera: Array.isArray(raw.camera) ? raw.camera : (Array.isArray(raw.keys) ? raw.keys : []),
     scene: Array.isArray(raw.scene) ? raw.scene : [],
@@ -80,16 +82,19 @@ export function CameraSequencer({
   const [doc, setDoc] = useState(() => toDoc(readJson(DOC_KEY)));
   const [library, setLibrary] = useState(() => readJson(LIB_KEY) ?? {});
   const [pos, setPos] = useState(() => readJson(POS_KEY));
+  const [width, setWidth] = useState(() => {
+    const s = readJson(SIZE_KEY);
+    return clamp(Math.round(s?.w ?? s ?? DEFAULT_W), MIN_W, 1600);
+  });
   const [name, setName] = useState(() => toDoc(readJson(DOC_KEY)).name ?? '');
   const [lengthText, setLengthText] = useState(() => String(toDoc(readJson(DOC_KEY)).totalFrames));
-  const [frameText, setFrameText] = useState('');
 
   const [frame, setFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [hidden, setHidden] = useState(false);      // cinematic playback in progress
   const [selected, setSelected] = useState(null);   // { track: 'camera'|'scene', id }
 
-  const { totalFrames, fps, ease, loop, cine } = doc;
+  const { totalFrames, fps, curve, loop, cine, snap } = doc;
 
   const panelRef = useRef(null);
   const bodyRef = useRef(null);
@@ -118,13 +123,14 @@ export function CameraSequencer({
   docRef.current = doc;
 
   const seq = useMemo(
-    () => new CameraSequence(doc.camera, { totalFrames, ease: ease ? 'smooth' : 'linear' }),
-    [doc.camera, totalFrames, ease],
+    () => new CameraSequence(doc.camera, { totalFrames, curve: curve ? 'spline' : 'linear' }),
+    [doc.camera, totalFrames, curve],
   );
   seqRef.current = seq;
 
   useEffect(() => { writeJson(DOC_KEY, { ...doc, name }); }, [doc, name]);
   useEffect(() => { writeJson(POS_KEY, pos); }, [pos]);
+  useEffect(() => { writeJson(SIZE_KEY, { w: width }); }, [width]);
   useEffect(() => { setLengthText(String(totalFrames)); }, [totalFrames]);
 
   const patch = (fields) => setDoc((d) => ({ ...d, ...fields }));
@@ -287,6 +293,26 @@ export function CameraSequencer({
     return () => window.removeEventListener('keydown', onKey, true);
   }, [playing]);
 
+  // Space toggles play / pause (same as the transport button).
+  const playRef = useRef(play);
+  playRef.current = play;
+  useEffect(() => {
+    const isTyping = (t) => {
+      const tag = t?.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t?.isContentEditable;
+    };
+    const onKey = (e) => {
+      if (e.code !== 'Space' && e.key !== ' ') return;
+      if (isTyping(e.target)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (playingRef.current) stopRef.current(false);
+      else playRef.current();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, []);
+
   // Closing the panel must not leave the camera locked or the UI hidden.
   useEffect(() => () => {
     const cam = rendererRef.current?.camera;
@@ -301,7 +327,7 @@ export function CameraSequencer({
 
   /** Record onto `track` at the playhead, replacing whatever is already there. */
   const recordAt = (track, payload) => {
-    const at = clamp(Math.round(frameRef.current), 0, totalFrames);
+    const at = snapFrame(frameRef.current);
     // Reuse the id when overwriting so the row stays the selected one.
     const id = docRef.current[track].find((k) => k.frame === at)?.id ?? idRef.current++;
     setDoc((d) => ({
@@ -321,11 +347,26 @@ export function CameraSequencer({
 
   const removeKey = (track, id) => {
     setDoc((d) => ({ ...d, [track]: d[track].filter((k) => k.id !== id) }));
-    setSelected(null);
+    setSelected((s) => (s && s.track === track && s.id === id ? null : s));
   };
 
+  // Delete / Backspace removes the selected keyframe only (not clear-all).
+  useEffect(() => {
+    if (!selected) return undefined;
+    const onKey = (e) => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      const t = e.target;
+      const tag = t?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t?.isContentEditable) return;
+      e.preventDefault();
+      removeKey(selected.track, selected.id);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected]);
+
   const moveKey = (track, id, toFrame) => {
-    const f = clamp(Math.round(toFrame), 0, totalFrames);
+    const f = snapFrame(toFrame);
     setDoc((d) => ({
       ...d,
       [track]: d[track]
@@ -339,14 +380,23 @@ export function CameraSequencer({
   const selectedKey = selected
     ? doc[selected.track].find((k) => k.id === selected.id) ?? null
     : null;
-  useEffect(() => { setFrameText(selectedKey ? String(selectedKey.frame) : ''); }, [selectedKey?.id, selectedKey?.frame]);
 
   // --- timeline pointer handling -------------------------------------------
+
+  const snapFrame = (f) => {
+    const raw = clamp(Math.round(f), 0, totalFrames);
+    if (!docRef.current.snap) return raw;
+    // Quantize to SNAP_FRAMES; keep 0 and the end frame reachable.
+    if (raw <= 0) return 0;
+    if (raw >= totalFrames) return totalFrames;
+    return clamp(Math.round(raw / SNAP_FRAMES) * SNAP_FRAMES, 0, totalFrames);
+  };
 
   const frameAtClientX = (clientX) => {
     const r = bodyRef.current?.getBoundingClientRect();
     if (!r) return 0;
-    return clamp(Math.round(((clientX - r.left) / (r.width || 1)) * totalFrames), 0, totalFrames);
+    const raw = ((clientX - r.left) / (r.width || 1)) * totalFrames;
+    return snapFrame(raw);
   };
 
   const onBodyDown = (e) => {
@@ -358,22 +408,28 @@ export function CameraSequencer({
   const onBodyMove = (e) => {
     if (!dragRef.current) return;
     const f = frameAtClientX(e.clientX);
-    if (kfDragRef.current) moveKey(kfDragRef.current.track, kfDragRef.current.id, f);
+    if (kfDragRef.current) {
+      const kd = kfDragRef.current;
+      if (!kd.moved && Math.hypot(e.clientX - kd.x0, e.clientY - kd.y0) > 3) kd.moved = true;
+      if (kd.moved) moveKey(kd.track, kd.id, f);
+    }
     goTo(f);
   };
   const onBodyUp = (e) => {
+    // Click (no drag) on a keyframe keeps it selected for Delete.
     dragRef.current = null;
     kfDragRef.current = null;
-    bodyRef.current?.releasePointerCapture(e.pointerId);
+    try { bodyRef.current?.releasePointerCapture(e.pointerId); } catch { /* */ }
   };
 
   const onDotDown = (e, track, k) => {
     e.stopPropagation();
+    e.preventDefault();
     if (playing) stop(false);
     setSelected({ track, id: k.id });
     bodyRef.current.setPointerCapture(e.pointerId);
     dragRef.current = 'keyframe';
-    kfDragRef.current = { track, id: k.id };
+    kfDragRef.current = { track, id: k.id, x0: e.clientX, y0: e.clientY, moved: false };
     goTo(k.frame);
   };
 
@@ -410,30 +466,57 @@ export function CameraSequencer({
 
   const clearAll = () => {
     if (playing) stop(true);
-    setDoc({ ...EMPTY_DOC, fps, totalFrames, ease, loop, cine });
+    setDoc({ ...EMPTY_DOC, fps, totalFrames, curve, loop, cine, snap });
     setSelected(null);
     frameRef.current = 0;
     setFrame(0);
   };
 
-  // --- panel drag -----------------------------------------------------------
+  /** Nudge playhead by ±1 frame (respects Snap when on). */
+  const stepFrame = (dir) => {
+    if (playing) stop(false);
+    const step = docRef.current.snap ? SNAP_FRAMES : 1;
+    goTo(Math.round(frameRef.current) + dir * step);
+  };
+
+  // --- panel drag / resize --------------------------------------------------
 
   const panelDrag = useRef(null);
+  const resizeRef = useRef(null);
   const startDrag = (e) => {
-    if (e.target.closest('button, input, select, a, [role="button"]')) return;
+    if (e.target.closest('button, input, select, a, [role="button"], .cseq-resize')) return;
     const rect = panelRef.current.getBoundingClientRect();
+    // Pin absolute coords so width resize doesn't fight right:auto layout.
+    if (!pos) setPos({ x: rect.left, y: rect.top });
     panelDrag.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
     e.currentTarget.setPointerCapture(e.pointerId);
   };
   const onPanelDrag = (e) => {
     if (!panelDrag.current) return;
     const el = panelRef.current;
+    const w = el?.offsetWidth ?? width;
     setPos({
-      x: clamp(e.clientX - panelDrag.current.dx, 0, Math.max(window.innerWidth - el.offsetWidth, 0)),
-      y: clamp(e.clientY - panelDrag.current.dy, 0, Math.max(window.innerHeight - el.offsetHeight, 0)),
+      x: clamp(e.clientX - panelDrag.current.dx, 0, Math.max(window.innerWidth - w, 0)),
+      y: clamp(e.clientY - panelDrag.current.dy, 0, Math.max(window.innerHeight - PANEL_H, 0)),
     });
   };
   const endDrag = () => { panelDrag.current = null; };
+
+  const startResize = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = panelRef.current.getBoundingClientRect();
+    if (!pos) setPos({ x: rect.left, y: rect.top });
+    resizeRef.current = { x0: e.clientX, w0: rect.width };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onResizeMove = (e) => {
+    if (!resizeRef.current) return;
+    const { x0, w0 } = resizeRef.current;
+    const maxW = Math.max(MIN_W, window.innerWidth - 16);
+    setWidth(clamp(Math.round(w0 + (e.clientX - x0)), MIN_W, maxW));
+  };
+  const endResize = () => { resizeRef.current = null; };
 
   // --- render ---------------------------------------------------------------
 
@@ -442,18 +525,22 @@ export function CameraSequencer({
   const seconds = (totalFrames / fps).toFixed(1);
   const shown = Math.round(frame);
   const canRecordScene = weathers.length > 0;
-  const style = pos ? { left: pos.x, top: pos.y, right: 'auto' } : undefined;
+  const style = {
+    width,
+    ...(pos ? { left: pos.x, top: pos.y, right: 'auto' } : null),
+  };
 
   const dot = (track, k, cls) => {
     const past = k.frame > totalFrames;
+    const sel = selectedKey?.id === k.id && selected?.track === track;
     return (
       <span
         key={k.id}
-        className={`cseq-dot ${cls}${selectedKey?.id === k.id ? ' sel' : ''}${past ? ' past' : ''}`}
+        className={`cseq-dot ${cls}${sel ? ' sel' : ''}${past ? ' past' : ''}`}
         style={{ left: `${(clamp(k.frame, 0, totalFrames) / totalFrames) * 100}%` }}
         title={past
           ? `Frame ${k.frame} — past the end of the sequence`
-          : `Frame ${k.frame} · ${(k.frame / fps).toFixed(2)}s`}
+          : `Frame ${k.frame} · ${(k.frame / fps).toFixed(2)}s · Del to remove`}
         onPointerDown={(e) => onDotDown(e, track, k)}
       />
     );
@@ -571,151 +658,134 @@ export function CameraSequencer({
           </div>
         </div>
 
-        {/* Record + transport */}
-        <div className="cseq-row cseq-transport">
-          <Tooltip content={playing ? 'Pause' : 'Play from the playhead'} placement="top">
-            <button
-              type="button"
-              className={`cseq-play${playing ? ' playing' : ''}`}
-              disabled={doc.camera.length < 2}
-              onClick={() => (playing ? stop(false) : play())}
-            >
-              <span className="icon fill">{playing ? 'pause' : 'play_arrow'}</span>
-            </button>
-          </Tooltip>
-          <Tooltip content="Stop, rewind, and return the camera to where it was" placement="top">
-            <button
-              type="button"
-              className="cseq-stop"
-              onClick={() => { stop(true); frameRef.current = 0; setFrame(0); }}
-            >
-              <span className="icon fill">stop</span>
-            </button>
-          </Tooltip>
-          <span className="cseq-frame mono">
-            <b ref={readoutRef}>{shown}</b> / {totalFrames}
-            <span className="cseq-frame-s">{(shown / fps).toFixed(2)}s</span>
-          </span>
-        </div>
-
-        <div className="cseq-row cseq-records">
-          <Tooltip content="Record the camera's position and rotation at the playhead" placement="top">
-            <button type="button" className="cseq-record" onClick={recordCamera}>
-              <span className="icon fill">radio_button_checked</span>
-              Camera
-            </button>
-          </Tooltip>
-          <Tooltip
-            content={canRecordScene
-              ? 'Record the zone\'s weather and time of day at the playhead'
-              : 'Load a zone with a sky to record weather'}
-            placement="top"
-          >
-            <button
-              type="button"
-              className="cseq-record cseq-record-scene"
-              disabled={!canRecordScene}
-              onClick={recordScene}
-            >
-              <span className="icon fill">radio_button_checked</span>
-              Scene
-            </button>
-          </Tooltip>
-          <Tooltip content="Delete every keyframe on both tracks" placement="top">
-            <button
-              type="button"
-              className="icon-btn cseq-icon cseq-del"
-              aria-label="Clear all keyframes"
-              disabled={!doc.camera.length && !doc.scene.length}
-              onClick={clearAll}
-            >
-              <span className="icon">layers_clear</span>
-            </button>
-          </Tooltip>
-        </div>
-
-        {/* Selected keyframe */}
-        {selectedKey && (
-          <div className="cseq-row cseq-sel">
-            <span className="cseq-sel-tag">{selected.track === 'camera' ? 'Camera' : 'Scene'}</span>
-            <input
-              type="text"
-              inputMode="numeric"
-              className="cseq-text cseq-len mono"
-              value={frameText}
-              onChange={(e) => setFrameText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-              onBlur={() => moveKey(selected.track, selectedKey.id, Number(frameText) || 0)}
-            />
-            <Tooltip content="Move the keyframe to this frame" placement="top">
+        {/* Compact toolbar: transport | record | step | toggles | frame */}
+        <div className="cseq-bar">
+          <div className="cseq-bar-group">
+            <Tooltip content={playing ? 'Pause (Space)' : 'Play (Space)'} placement="top">
               <button
                 type="button"
-                className="cseq-btn"
-                onClick={() => moveKey(selected.track, selectedKey.id, Number(frameText) || 0)}
+                className={`cseq-play${playing ? ' playing' : ''}`}
+                disabled={doc.camera.length < 2}
+                onClick={() => (playing ? stop(false) : play())}
               >
-                Set
+                <span className="icon fill">{playing ? 'pause' : 'play_arrow'}</span>
               </button>
             </Tooltip>
-            <span className="cseq-sel-val mono">
-              {selected.track === 'camera'
-                ? selectedKey.eye.map((n) => fmt(n)).join(', ')
-                : `${selectedKey.weather ? weatherName(selectedKey.weather) : '—'} · ${fmtTime(selectedKey.timeMinutes)}`}
-            </span>
-            <Tooltip content="Replace with the current camera / scene" placement="top">
+            <Tooltip content="Stop and restore camera" placement="top">
               <button
                 type="button"
-                className="icon-btn cseq-icon"
-                aria-label="Update keyframe"
-                onClick={() => (selected.track === 'camera' ? recordCamera() : recordScene())}
+                className="cseq-stop"
+                onClick={() => { stop(true); frameRef.current = 0; setFrame(0); }}
               >
-                <span className="icon">cached</span>
+                <span className="icon fill">stop</span>
               </button>
             </Tooltip>
-            <Tooltip content="Delete this keyframe" placement="top">
+          </div>
+
+          <div className="cseq-bar-sep" />
+
+          <div className="cseq-bar-group">
+            <Tooltip content="Record camera at playhead" placement="top">
+              <button type="button" className="cseq-record" onClick={recordCamera}>
+                <span className="icon fill">radio_button_checked</span>
+                Camera
+              </button>
+            </Tooltip>
+            <Tooltip
+              content={canRecordScene ? 'Record weather & time at playhead' : 'Load a zone with a sky first'}
+              placement="top"
+            >
+              <button
+                type="button"
+                className="cseq-record cseq-record-scene"
+                disabled={!canRecordScene}
+                onClick={recordScene}
+              >
+                <span className="icon fill">radio_button_checked</span>
+                Scene
+              </button>
+            </Tooltip>
+          </div>
+
+          <div className="cseq-bar-sep" />
+
+          <div className="cseq-bar-group">
+            <Tooltip content={snap ? `−${SNAP_FRAMES} frames` : '−1 frame'} placement="top">
+              <button type="button" className="icon-btn cseq-icon" aria-label="Previous frame" onClick={() => stepFrame(-1)}>
+                <span className="icon">skip_previous</span>
+              </button>
+            </Tooltip>
+            <Tooltip content={snap ? `+${SNAP_FRAMES} frames` : '+1 frame'} placement="top">
+              <button type="button" className="icon-btn cseq-icon" aria-label="Next frame" onClick={() => stepFrame(1)}>
+                <span className="icon">skip_next</span>
+              </button>
+            </Tooltip>
+            <Tooltip content="Delete selected keyframe" placement="top">
               <button
                 type="button"
                 className="icon-btn cseq-icon cseq-del"
                 aria-label="Delete keyframe"
-                onClick={() => removeKey(selected.track, selectedKey.id)}
+                disabled={!selectedKey}
+                onClick={() => selectedKey && removeKey(selected.track, selectedKey.id)}
               >
-                <span className="icon">close</span>
+                <span className="icon">delete</span>
+              </button>
+            </Tooltip>
+            <Tooltip content="Clear all keyframes" placement="top">
+              <button
+                type="button"
+                className="icon-btn cseq-icon cseq-del"
+                aria-label="Clear all keyframes"
+                disabled={!doc.camera.length && !doc.scene.length}
+                onClick={clearAll}
+              >
+                <span className="icon">layers_clear</span>
               </button>
             </Tooltip>
           </div>
-        )}
 
-        <div className="cseq-row cseq-toggles">
-          <Tooltip content="Restart from the top instead of stopping at the end" placement="top">
-            <label className="switch cseq-switch">
+          <div className="cseq-bar-sep" />
+
+          <div className="cseq-bar-group cseq-toggles">
+            <label className="switch cseq-switch" title="Loop playback">
               <input type="checkbox" checked={loop} onChange={(e) => patch({ loop: e.target.checked })} />
               <span className="track" />
               <span className="cseq-switch-label">Loop</span>
             </label>
-          </Tooltip>
-          <Tooltip content="Ease the whole sequence in and out, so it doesn't start and stop with a jolt" placement="top">
-            <label className="switch cseq-switch">
-              <input type="checkbox" checked={ease} onChange={(e) => patch({ ease: e.target.checked })} />
+            <label className="switch cseq-switch" title="Spline path through keys (off = straight lines)">
+              <input type="checkbox" checked={!!curve} onChange={(e) => patch({ curve: e.target.checked })} />
               <span className="track" />
-              <span className="cseq-switch-label">Ease</span>
+              <span className="cseq-switch-label">Curve</span>
             </label>
-          </Tooltip>
-          <Tooltip content="Play with every panel hidden — Escape stops and brings them back" placement="top">
-            <label className="switch cseq-switch">
+            <label className="switch cseq-switch" title="Hide UI while playing (Esc restores)">
               <input type="checkbox" checked={cine} onChange={(e) => patch({ cine: e.target.checked })} />
               <span className="track" />
               <span className="cseq-switch-label">Hide UI</span>
             </label>
-          </Tooltip>
+            <label className="switch cseq-switch" title={`Snap to every ${SNAP_FRAMES} frames`}>
+              <input type="checkbox" checked={!!snap} onChange={(e) => patch({ snap: e.target.checked })} />
+              <span className="track" />
+              <span className="cseq-switch-label">Snap</span>
+            </label>
+          </div>
+
+          <span className="cseq-frame mono">
+            <b ref={readoutRef}>{shown}</b>
+            <span className="cseq-frame-dim"> / {totalFrames}</span>
+            <span className="cseq-frame-s">{(shown / fps).toFixed(2)}s</span>
+          </span>
         </div>
 
-        <div className="cseq-hint">
-          {doc.camera.length < 2
-            ? 'Scrub the timeline, then Record — a take lands on the playhead, and recording again on the same frame replaces it.'
-            : cine
-              ? 'Play hides the UI for the take — Escape stops it and puts everything back.'
-              : 'Escape stops playback. Drag a keyframe along the timeline to re-time it.'}
-        </div>
       </div>
+
+      <div
+        className="cseq-resize"
+        title="Resize"
+        onPointerDown={startResize}
+        onPointerMove={onResizeMove}
+        onPointerUp={endResize}
+        onPointerCancel={endResize}
+      />
     </div>
   );
 }

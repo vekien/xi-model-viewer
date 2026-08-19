@@ -56,8 +56,10 @@ const MENUS = [
   },
 ];
 
-/** Quick-toggle strip next to the menus — same View toggles, icon-only. */
-const VIEW_TOOLBAR = MENUS.find((m) => m.label === 'View').items.filter((i) => i.check);
+/** Quick-toggle strip next to the menus — View checks minus a few menu-only items. */
+const TOOLBAR_SKIP = new Set(['toggle-blend-lequal']);
+const VIEW_TOOLBAR = MENUS.find((m) => m.label === 'View').items
+  .filter((i) => i.check && !TOOLBAR_SKIP.has(i.id));
 
 /**
  * Classic menubar: click opens; while open, hovering another top-level button

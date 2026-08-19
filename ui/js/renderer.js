@@ -6,6 +6,7 @@ import { OrbitCamera, mat4Multiply, mat4LookAt, mat4Ortho } from './camera.js';
 import { SkeletonPose } from './pose.js';
 import { ParticleDrawer } from './particleDrawer.js';
 import { Vec3 } from './particle/math.js';
+import { buildSolidGizmoMeshes, gizmoSize } from './zoneGizmo.js';
 
 const MAX_JOINTS = 160;
 
@@ -755,6 +756,10 @@ export class Renderer {
 
     this.collisionOverlay = null; // { vao, vbo, count }
     this.navmeshOverlay = null;
+    this.zonePickOverlay = null; // live-selection hover/selected AABB wireframes
+    this.zoneGizmo = null;       // { pos, size, activeAxis } selected-object XYZ grabber
+    this.gizmoMesh = null;       // solid unit gizmo (triangles)
+    this.zoneMoveProxy = [];     // temporary zone batches while dragging a placement
     this.showCollision = false;
     this.showNavmesh = false;
     this.showSoundMarkers = false;  // zone positional SFX (waterfalls, surf)
@@ -966,6 +971,10 @@ export class Renderer {
     // Navmesh is loaded async and keyed to the zone — clear on every model swap.
     this._freeOverlay(this.navmeshOverlay);
     this.navmeshOverlay = null;
+    this._freeOverlay(this.zonePickOverlay);
+    this.zonePickOverlay = null;
+    this.zoneGizmo = null;
+    this.setZoneMoveProxy(null);
     this.currentAnimation = null;
     this.animFrame = 0;
     this.model = model;
@@ -1953,9 +1962,11 @@ export class Renderer {
       // exactly as xim does it — there is no separate textured sky-shell pass.
       if (this.showSkybox) this._drawSky(viewProj, eye);
       this._drawZone(viewProj, eye, fogFar);
+      this._drawZoneMoveProxy(viewProj, eye, fogFar);
       this._drawParticles();
       this._drawOverlay(viewProj, this.showCollision ? this.collisionOverlay : null, this.collisionOpacity);
       this._drawOverlay(viewProj, this.showNavmesh ? this.navmeshOverlay : null, this.navmeshOpacity);
+      this._drawZonePickOverlay(viewProj);
       if (this.showSoundMarkers) this._drawSoundMarkers(viewProj);
       if (this.showGrid) this._drawGrid(viewProj);
       if (this.showAxes) this._drawAxes(viewProj);
@@ -2713,6 +2724,220 @@ export class Renderer {
     gl.disable(gl.BLEND);
     gl.bindVertexArray(this.skyDome.vao);
     gl.drawArrays(gl.TRIANGLES, 0, this.skyDome.count);
+    gl.bindVertexArray(null);
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthMask(true);
+  }
+
+  /**
+   * Live Selection overlays: AABB wireframes + optional XYZ grabber at a point.
+   * @param {{
+   *   hover?: {min:number[], max:number[]}|null,
+   *   selected?: {min:number[], max:number[]}|null,
+   *   gizmo?: { pos:number[], size?: number }|null,
+   * }|null} boxes
+   */
+  setZonePickHighlight(boxes) {
+    const gl = this.gl;
+    this._freeOverlay(this.zonePickOverlay);
+    this.zonePickOverlay = null;
+    this.zoneGizmo = null;
+    if (!boxes) return;
+    const verts = [];
+    const pushBox = (b, rgb) => {
+      if (!b?.min || !b?.max) return;
+      const [x0, y0, z0] = b.min;
+      const [x1, y1, z1] = b.max;
+      if (![x0, y0, z0, x1, y1, z1].every(Number.isFinite)) return;
+      const c = [
+        [x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0],
+        [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1],
+      ];
+      const edges = [
+        [0, 1], [1, 2], [2, 3], [3, 0],
+        [4, 5], [5, 6], [6, 7], [7, 4],
+        [0, 4], [1, 5], [2, 6], [3, 7],
+      ];
+      const [r, g, bcol] = rgb;
+      for (const [a, bi] of edges) {
+        const pa = c[a]; const pb = c[bi];
+        verts.push(pa[0], pa[1], pa[2], r, g, bcol, pb[0], pb[1], pb[2], r, g, bcol);
+      }
+    };
+    // Selected first so hover drawn after can sit on top when they overlap.
+    pushBox(boxes.selected, [1.0, 0.78, 0.25]);
+    pushBox(boxes.hover, [0.35, 0.85, 1.0]);
+    if (verts.length) {
+      const data = new Float32Array(verts);
+      const vbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0);
+      gl.enableVertexAttribArray(1);
+      gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+      gl.bindVertexArray(null);
+      this.zonePickOverlay = { vao, vbo, count: data.length / 6, mode: 'lines' };
+    }
+
+    const gz = boxes.gizmo;
+    if (gz?.pos && gz.pos.length >= 3 && gz.pos.every(Number.isFinite)) {
+      this.zoneGizmo = {
+        pos: [gz.pos[0], gz.pos[1], gz.pos[2]],
+        size: Number.isFinite(gz.size) && gz.size > 0 ? gz.size : null,
+        // 'x'|'y'|'z' — hover or active drag axis for highlight
+        hoverAxis: gz.hoverAxis || gz.activeAxis || null,
+        activeAxis: gz.activeAxis || null,
+      };
+      this._ensureGizmoMesh();
+    }
+  }
+
+  /** Per-axis solid grabber meshes (base + hot), built once. */
+  _ensureGizmoMesh() {
+    if (this.gizmoParts) return;
+    const gl = this.gl;
+    const meshes = buildSolidGizmoMeshes();
+    const upload = (data) => {
+      const vbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0);
+      gl.enableVertexAttribArray(1);
+      gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+      gl.bindVertexArray(null);
+      return { vao, vbo, count: data.length / 6 };
+    };
+    this.gizmoParts = {
+      x: upload(meshes.x),
+      y: upload(meshes.y),
+      z: upload(meshes.z),
+      center: upload(meshes.center),
+      xHot: upload(meshes.xHot),
+      yHot: upload(meshes.yHot),
+      zHot: upload(meshes.zHot),
+    };
+  }
+
+  /** Current world size of the active gizmo (for hit-testing). */
+  getZoneGizmo() {
+    if (!this.zoneGizmo) return null;
+    return {
+      ...this.zoneGizmo,
+      size: gizmoSize(this, this.zoneGizmo),
+    };
+  }
+
+  /** Update hover axis without rebuilding AABB overlays. */
+  setGizmoHoverAxis(axis) {
+    if (!this.zoneGizmo) return;
+    const next = axis || null;
+    if (this.zoneGizmo.hoverAxis === next) return;
+    this.zoneGizmo.hoverAxis = next;
+  }
+
+  /**
+   * Replace zone GPU batches from model.zoneDraws (after a placement rebuild).
+   * Keeps textures / collision / particle system intact.
+   */
+  reloadZoneBatches(model) {
+    const gl = this.gl;
+    for (const b of this.zoneBatches) {
+      gl.deleteBuffer(b.vbo);
+      if (b.vao) gl.deleteVertexArray(b.vao);
+    }
+    this.zoneBatches = [];
+    if (model?.kind !== 'zone') return;
+    for (const draw of model.zoneDraws ?? []) {
+      const batch = this.buildZoneBatch(draw);
+      if (batch) this.zoneBatches.push(batch);
+    }
+  }
+
+  /** Temporary geometry for the placement being dragged. */
+  setZoneMoveProxy(draws) {
+    const gl = this.gl;
+    for (const b of this.zoneMoveProxy) {
+      gl.deleteBuffer(b.vbo);
+      if (b.vao) gl.deleteVertexArray(b.vao);
+    }
+    this.zoneMoveProxy = [];
+    if (!draws?.length) return;
+    for (const draw of draws) {
+      const batch = this.buildZoneBatch(draw);
+      if (batch) this.zoneMoveProxy.push(batch);
+    }
+  }
+
+  _drawZoneMoveProxy(viewProj, eye, fogFar) {
+    if (!this.zoneMoveProxy.length) return;
+    // Reuse zone draw path by temporarily swapping batches.
+    const saved = this.zoneBatches;
+    this.zoneBatches = this.zoneMoveProxy;
+    this._drawZone(viewProj, eye, fogFar);
+    this.zoneBatches = saved;
+  }
+
+  _drawZonePickOverlay(viewProj) {
+    const gl = this.gl;
+    const o = this.zonePickOverlay;
+    if (o) {
+      gl.useProgram(this.overlayProgram);
+      gl.uniformMatrix4fv(this.overlayUniforms.viewProj, false, viewProj);
+      gl.uniform1f(this.overlayUniforms.opacity, 1);
+      gl.disable(gl.BLEND);
+      gl.enable(gl.DEPTH_TEST);
+      gl.depthMask(false);
+      gl.enable(gl.POLYGON_OFFSET_FILL);
+      gl.polygonOffset(-1, -1);
+      gl.bindVertexArray(o.vao);
+      gl.drawArrays(gl.LINES, 0, o.count);
+      gl.bindVertexArray(null);
+      gl.disable(gl.POLYGON_OFFSET_FILL);
+      gl.polygonOffset(0, 0);
+      gl.depthMask(true);
+    }
+
+    const gz = this.zoneGizmo;
+    if (!gz || !this.gizmoParts) return;
+    const s = gizmoSize(this, gz);
+    const hot = gz.activeAxis || gz.hoverAxis || null;
+    const drawPart = (part, scaleMul = 1) => {
+      if (!part) return;
+      const sc = s * scaleMul;
+      const model = new Float32Array([
+        sc, 0, 0, 0,
+        0, sc, 0, 0,
+        0, 0, sc, 0,
+        gz.pos[0], gz.pos[1], gz.pos[2], 1,
+      ]);
+      const mvp = mat4Multiply(viewProj, model);
+      gl.uniformMatrix4fv(this.overlayUniforms.viewProj, false, mvp);
+      gl.bindVertexArray(part.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, part.count);
+    };
+
+    gl.useProgram(this.overlayProgram);
+    gl.uniform1f(this.overlayUniforms.opacity, 1);
+    gl.disable(gl.CULL_FACE);
+    gl.disable(gl.BLEND);
+    gl.disable(gl.DEPTH_TEST);
+    gl.depthMask(false);
+
+    // Center ball first, then axes (hot axis last + slightly larger).
+    drawPart(this.gizmoParts.center, 1);
+    for (const id of ['x', 'y', 'z']) {
+      const isHot = hot === id;
+      drawPart(this.gizmoParts[isHot ? `${id}Hot` : id], isHot ? 1.18 : 1);
+    }
+
     gl.bindVertexArray(null);
     gl.enable(gl.DEPTH_TEST);
     gl.depthMask(true);

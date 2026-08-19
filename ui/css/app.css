@@ -37,6 +37,8 @@
   touch-action: none;
 }
 #canvas:active { cursor: grabbing; }
+#canvas.live-pick { cursor: crosshair; }
+#canvas.live-pick:active { cursor: crosshair; }
 
 /* --- Menu bar ------------------------------------------------------------- */
 
@@ -930,7 +932,33 @@ body:has(#weather) #placements {
   flex: 0 0 auto;
 }
 .plc-tool:hover { background: rgba(255, 255, 255, 0.1); }
+.plc-tool.on {
+  color: var(--accent);
+  background: rgba(100, 180, 255, 0.14);
+}
+.plc-tool.on:hover { background: rgba(100, 180, 255, 0.22); }
 .plc-tool .icon { font-size: 18px; }
+
+/* Reset button on moved placement rows */
+.plc-reset {
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  flex: 0 0 auto;
+  margin-left: 2px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: #f0b060;
+  opacity: 0.85;
+}
+.plc-reset:hover {
+  opacity: 1;
+  background: rgba(240, 176, 96, 0.16);
+  color: #ffd08a;
+}
+.plc-reset .icon { font-size: 16px; }
+.plc-row.plc-inst.moved .plc-name { color: #f0c080; }
 .plc-search {
   flex: 0 0 auto;
   display: flex; align-items: center; gap: 8px;
@@ -1602,11 +1630,16 @@ input[type='color'] {
    in the gap between the Explorer and the right-hand panels, and remembers
    wherever it gets dragged from there. */
 #camseq {
+  position: fixed;
   top: 62px; left: 360px;
-  width: 424px;
+  width: 940px;
+  height: 300px;
+  min-width: 940px;
   padding: 0;
   z-index: 28;
   display: flex; flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 .cseq-header {
   display: flex; align-items: center; gap: 6px;
@@ -1614,6 +1647,7 @@ input[type='color'] {
   min-height: 38px;
   cursor: grab;
   border-bottom: 1px solid var(--ring);
+  flex: 0 0 auto;
 }
 .cseq-header:active { cursor: grabbing; }
 .cseq-header > .icon { color: var(--accent); font-size: 18px; }
@@ -1621,58 +1655,93 @@ input[type='color'] {
 .cseq-close { width: 26px; height: 26px; background: transparent; border: none; box-shadow: none; }
 .cseq-close:hover { background: rgba(255, 255, 255, 0.1); }
 
-.cseq-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 9px; }
+.cseq-body {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
 .cseq-row { display: flex; align-items: center; gap: 8px; }
 .cseq-label { color: var(--muted); font-size: 12px; flex: 0 0 auto; }
 
 .cseq-icon {
-  width: 24px; height: 24px; min-height: 0;
+  width: 30px; height: 30px; min-height: 30px;
   background: transparent; border: none; box-shadow: none;
   color: var(--muted);
 }
-.cseq-icon .icon { font-size: 15px; }
+.cseq-icon .icon { font-size: 16px; }
 .cseq-icon:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); color: var(--text); border: none; }
 .cseq-icon:disabled { opacity: 0.35; }
 .cseq-del:hover:not(:disabled) { color: #ff7b7b; }
-.cseq-btn { min-height: 26px; padding: 0 10px; font-size: 12px; flex: 0 0 auto; }
+.cseq-btn {
+  min-height: 30px;
+  height: 30px;
+  padding: 0 12px;
+  font-size: 12px;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+}
 
 /* Plain text fields, committed with Enter / blur / Set — a number input fights
    you the moment you try to clear it to type a new value. */
 .cseq-text {
   flex: 1 1 auto; min-width: 0;
+  height: 30px;
+  min-height: 30px;
+  box-sizing: border-box;
   font: 400 12px/1.4 var(--font-ui);
   color: var(--text);
   background: linear-gradient(180deg, var(--gray-900), var(--gray-850));
   border: 1px solid var(--ring);
   border-radius: 6px;
-  min-height: 26px;
-  padding: 3px 8px;
+  padding: 0 8px;
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 .cseq-text:focus { outline: none; border-color: var(--accent); }
 .cseq-len { flex: 0 0 auto; width: 74px; font-family: var(--font-mono); }
-.cseq-load { flex: 0 0 auto; width: 104px; display: flex; }
-.cseq-load .combo-input { width: 100%; min-height: 26px; }
-.cseq-fps { min-height: 26px; padding: 3px 26px 3px 9px; }
+.cseq-load { flex: 0 0 auto; width: 110px; display: flex; align-items: stretch; }
+.cseq-load .combo-input {
+  width: 100%;
+  height: 30px;
+  min-height: 30px;
+  box-sizing: border-box;
+}
+.cseq-fps {
+  height: 30px;
+  min-height: 30px;
+  box-sizing: border-box;
+  padding: 0 26px 0 9px;
+  font-size: 12px;
+}
 .cseq-secs { color: var(--gray-300); font-size: 12px; margin-left: auto; }
 
 /* --- timeline --- */
 
 .cseq-tl {
   display: flex;
-  border: 1px solid var(--ring);
+  flex: 0 0 auto;
+  height: 90px;
+  padding-right: 15px;
+  border: none;
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.28);
+  box-shadow: inset 0 0 10px #00000070;
   overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  box-sizing: border-box;
 }
 .cseq-tl-labels {
   flex: 0 0 58px;
   display: flex; flex-direction: column;
   border-right: 1px solid var(--ring);
 }
-.cseq-tl-spacer { height: 17px; flex: 0 0 auto; }
+.cseq-tl-spacer { height: 22px; flex: 0 0 auto; }
 .cseq-tl-label {
-  height: 22px; flex: 0 0 auto;
+  height: 34px; flex: 0 0 auto;
   display: flex; align-items: center;
   padding: 0 8px;
   font-size: 9.5px; font-weight: 600;
@@ -1680,8 +1749,18 @@ input[type='color'] {
   color: var(--gray-500);
 }
 /* The whole strip is the scrubber: press anywhere to seek, drag to scrub. */
-.cseq-tl-track { position: relative; flex: 1 1 auto; min-width: 0; cursor: pointer; touch-action: none; }
-.cseq-ruler { position: relative; height: 17px; border-bottom: 1px solid var(--ring); }
+.cseq-tl-track {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.cseq-tl-track * { user-select: none; -webkit-user-select: none; }
+.cseq-ruler { position: relative; height: 22px; border-bottom: 1px solid var(--ring); }
 .cseq-tick {
   position: absolute; top: 0; bottom: 0;
   transform: translateX(-50%);
@@ -1690,12 +1769,12 @@ input[type='color'] {
 }
 .cseq-tick i { width: 1px; height: 4px; background: rgba(255, 255, 255, 0.22); }
 .cseq-tick span { margin-top: 1px; font: 9px/1 var(--font-mono); color: var(--gray-500); }
-.cseq-lane { position: relative; height: 22px; }
+.cseq-lane { position: relative; height: 34px; }
 .cseq-lane::after {
   content: ''; position: absolute; left: 0; right: 0; top: 50%;
   height: 1px; background: rgba(255, 255, 255, 0.07);
 }
-.cseq-lane + .cseq-lane { border-top: 1px solid rgba(255, 255, 255, 0.05); }
+.cseq-lane + .cseq-lane { border-top: none; }
 .cseq-dot {
   position: absolute; top: 50%; left: 0;
   width: 11px; height: 11px;
@@ -1725,42 +1804,103 @@ input[type='color'] {
   border-top: 5px solid #ff5a5a;
 }
 
-/* --- transport + record --- */
+/* --- bottom toolbar (single compact bar) --- */
 
-.cseq-transport { border-top: 1px solid var(--ring); padding-top: 10px; margin-top: 1px; }
+.cseq-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--ring);
+  row-gap: 6px;
+}
+.cseq-bar-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.cseq-bar-sep {
+  width: 1px;
+  height: 22px;
+  background: var(--ring);
+  flex: 0 0 auto;
+  margin: 0 2px;
+}
 .cseq-play, .cseq-stop {
   flex: 0 0 auto;
   display: grid; place-items: center;
-  width: 28px; height: 28px; min-height: 0; padding: 0;
+  width: 30px; height: 30px; min-height: 30px; padding: 0;
   border-radius: 999px;
+  box-sizing: border-box;
 }
 .cseq-play .icon, .cseq-stop .icon { font-size: 18px; }
 .cseq-play.playing { color: var(--accent); border-color: var(--accent); }
 .cseq-play:disabled, .cseq-stop:disabled { opacity: 0.4; cursor: default; }
-.cseq-frame { color: var(--gray-300); font-size: 12px; margin-left: auto; }
+.cseq-frame {
+  color: var(--gray-300);
+  font-size: 12px;
+  margin-left: auto;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
 .cseq-frame b { color: var(--text); font-weight: 600; }
+.cseq-frame-dim { color: var(--gray-500); }
 .cseq-frame-s { color: var(--gray-500); margin-left: 8px; }
 
-.cseq-record { flex: 1 1 0; gap: 6px; min-height: 28px; }
+.cseq-record {
+  flex: 0 0 auto;
+  width: 96px;
+  gap: 5px;
+  height: 30px;
+  min-height: 30px;
+  box-sizing: border-box;
+  justify-content: center;
+  padding: 0 8px;
+}
 .cseq-record .icon { font-size: 15px; color: #ff6b6b; }
 .cseq-record-scene .icon { color: #6fc7ff; }
 .cseq-record:disabled .icon { color: var(--gray-600); }
 
-.cseq-sel { padding: 6px 8px; border-radius: 7px; background: rgba(255, 255, 255, 0.05); }
-.cseq-sel-tag {
-  flex: 0 0 auto; font-size: 9.5px; font-weight: 600;
-  letter-spacing: 0.05em; text-transform: uppercase; color: var(--gray-500);
+.cseq-bar .cseq-toggles {
+  gap: 10px;
+  flex-wrap: nowrap;
 }
-.cseq-sel-val {
-  flex: 1 1 auto; min-width: 0;
-  color: var(--gray-300); font-size: 11px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.cseq-switch {
+  font-size: 11px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
 }
-
-.cseq-toggles { gap: 14px; flex-wrap: wrap; }
-.cseq-switch { font-size: 12px; }
 .cseq-switch-label { color: var(--muted); }
-.cseq-hint { color: var(--muted); font-size: 11px; line-height: 1.45; opacity: 0.8; }
+
+/* Width-only resize grip on the right edge */
+.cseq-resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+  z-index: 2;
+}
+.cseq-resize::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  width: 3px;
+  height: 28px;
+  margin-top: -14px;
+  border-radius: 2px;
+  background: var(--gray-500);
+  opacity: 0.45;
+}
+.cseq-resize:hover::after { background: var(--accent); opacity: 0.9; }
 
 /* Cinematic playback: nothing on screen but the render. The panels live inside
    #root; tooltips and menu dropdowns portal to <body>, so both levels go. */
