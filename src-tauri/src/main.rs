@@ -359,39 +359,53 @@ fn open_url(url: String) -> Result<(), String> {
 
 /// Opens the system file manager with `path` selected.
 ///
-/// The path goes in as a single argument and never through a shell, so it can't
-/// be re-read as further arguments. Explorer exits non-zero even when it works,
-/// so spawning is the only thing worth checking.
+/// Explorer's `/select` parsing is fragile: a single `/select,C:\Program Files\…`
+/// arg is split on spaces and dumps you in Documents. Pass `/select,` and the
+/// path as *two* argv entries instead. Also strip a `\\?\` prefix from
+/// canonicalize — explorer rejects those.
 #[tauri::command]
 fn reveal_path(path: String) -> Result<(), String> {
     let target = Path::new(&path);
     if !target.exists() {
         return Err(format!("not found: {path}"));
     }
+    // Prefer a fully resolved path so junctions / relative segments don't confuse Explorer.
+    let canon = std::fs::canonicalize(target).unwrap_or_else(|_| target.to_path_buf());
+    let mut path_str = canon.to_string_lossy().into_owned();
+    if let Some(stripped) = path_str.strip_prefix(r"\\?\") {
+        path_str = stripped.to_string();
+    }
 
     #[cfg(target_os = "windows")]
-    let mut cmd = {
-        let mut c = std::process::Command::new("explorer");
-        c.arg(format!("/select,{}", target.display()));
-        c
-    };
+    {
+        std::process::Command::new("explorer")
+            .arg("/select,")
+            .arg(&path_str)
+            .spawn()
+            .map_err(|e| format!("failed to open file manager: {e}"))?;
+        return Ok(());
+    }
     #[cfg(target_os = "macos")]
-    let mut cmd = {
-        let mut c = std::process::Command::new("open");
-        c.arg("-R").arg(target);
-        c
-    };
+    {
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(&path_str)
+            .spawn()
+            .map_err(|e| format!("failed to open file manager: {e}"))?;
+        return Ok(());
+    }
     // No portable "select the file" on Linux, so settle for its folder.
     #[cfg(all(unix, not(target_os = "macos")))]
-    let mut cmd = {
-        let mut c = std::process::Command::new("xdg-open");
-        c.arg(target.parent().unwrap_or(target));
-        c
-    };
-
-    cmd.spawn()
-        .map_err(|e| format!("failed to open file manager: {e}"))?;
-    Ok(())
+    {
+        let p = Path::new(&path_str);
+        std::process::Command::new("xdg-open")
+            .arg(p.parent().unwrap_or(p))
+            .spawn()
+            .map_err(|e| format!("failed to open file manager: {e}"))?;
+        return Ok(());
+    }
+    #[allow(unreachable_code)]
+    Err("reveal not supported on this platform".into())
 }
 
 #[cfg(test)]

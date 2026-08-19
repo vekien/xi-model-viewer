@@ -58,7 +58,8 @@ import { SkeletonModal } from './SkeletonModal.jsx';
 import { matchTablePath, parseFileTable } from '../js/dat/ftable.js';
 import { classifyDat } from '../js/dat/classify.js';
 import {
-  sniffGearRace, RACE_SKELETON_RELS, RACE_SKELETON_LABELS,
+  sniffGearRace, composerRaceFromFileId, composerRaceFromGearTable,
+  RACE_SKELETON_RELS, RACE_SKELETON_LABELS,
 } from '../js/dat/modelids.js';
 import { soundPath } from '../js/particle/audio.js';
 import {
@@ -163,7 +164,7 @@ const loadSettings = (gamePath) => {
     hdPath,
     hdEnabled: !!hdPath && localStorage.getItem('hdEnabled') === '1',
     bgColor: localStorage.getItem('bgColor') || DEFAULT_BG,
-    autoPlay: localStorage.getItem('autoPlay') !== '0',
+    autoPlay: localStorage.getItem('autoPlay') === '1',
     autoWasdZones: localStorage.getItem('autoWasdZones') !== '0',
     xiPath: localStorage.getItem('xiPath') || '',
   };
@@ -948,9 +949,16 @@ export default function App() {
    *   keepCamera  — don't re-fit the camera (gear swap on the same actor).
    */
   const loadModel = useCallback(async (paths, displayName, opts = {}) => {
-    const { focusPaths = null, weaponSlots = null, battleTable = null, parts = null, keepCamera = false, displayPath = null } = opts;
+    const { focusPaths = null, weaponSlots = null, battleTable = null, parts = null, displayPath = null } = opts;
+    // Keep framing when the caller asks (gear swap) or the user has already
+    // orbit/pan/zoomed on an entity — browsing successive DATs shouldn't yank
+    // the camera. Zone → entity still fits (different scale/up-axis).
+    const prev = modelRef.current;
+    const prevEntity = !!(prev && prev.kind !== 'zone' && !rendererRef.current?.effectMode);
+    const keepCamera = !!(opts.keepCamera
+      || (rendererRef.current?.camera?.userFramed && prevEntity));
     // Gear swaps (keepCamera) are snappy — skip the full-screen overlay there.
-    const showOverlay = !keepCamera;
+    const showOverlay = !opts.keepCamera;
     const gen = ++loadGenRef.current;
     const stillCurrent = () => gen === loadGenRef.current;
     const releaseOverlay = () => {
@@ -1097,7 +1105,7 @@ export default function App() {
           && { schedule: pickSched('main') ?? schedSrc.find((s) => s.clipIds.length) })
         || null;
 
-      const autoPlay = settingsRef.current?.autoPlay ?? true;
+      const autoPlay = settingsRef.current?.autoPlay ?? false;
       if (chosen?.anim) {
         const same = keepCamera && prevPlay.kind === 'anim' && prevPlay.id === chosen.anim.id;
         renderer.setAnimation(chosen.anim.clip, same ? { frame: resumeFrame } : undefined);
@@ -2177,7 +2185,7 @@ export default function App() {
           renderer.snapFloorToFeet({ min: seq.min, max: seq.max, footY: seq.max[1] });
         }
         crFramedRef.current = true;
-        renderer.playing = settingsRef.current?.autoPlay ?? true;
+        renderer.playing = settingsRef.current?.autoPlay ?? false;
         setPlayingState(renderer.playing);
         setCrSegments([]);
         setCrSegment(-1);
@@ -2558,28 +2566,52 @@ export default function App() {
   /**
    * Show a DAT in the OS file manager (Windows Explorer), selected.
    * Accepts absolute paths or game-relative paths (ROM\…\n.DAT).
+   * Resolves through HD/game candidates so the file that actually exists is opened.
    */
   const revealInExplorer = useCallback(async (pathOrRel) => {
     const settings = settingsRef.current;
+    // Prefer the displayed model path (relative ROM\…) + game root — selectedDat
+    // can be a stale lowercased abs from a previous load.
     const raw = pathOrRel
       || shownPathRef.current
+      || modelPath
       || selectedDat
       || null;
-    if (!raw) return;
-    let abs = String(raw).replace(/\//g, '\\');
-    if (!/^[a-zA-Z]:[\\/]/.test(abs) && !abs.startsWith('\\\\')) {
-      if (!settings?.gamePath) {
-        setStatusText('Game path not set — open Settings first.');
-        return;
-      }
-      abs = `${settings.gamePath}\\${abs.replace(/^\\+/, '')}`;
+    if (!raw) {
+      setStatusText('Nothing to show in Explorer.');
+      return;
     }
+    let abs = String(raw).replace(/\//g, '\\').trim();
+    // Strip a leading "game\" leftover from zone-style paths.
+    abs = abs.replace(/^game\\/i, '');
+    const isAbs = /^[a-zA-Z]:[\\/]/.test(abs) || abs.startsWith('\\\\');
     try {
+      if (!isAbs) {
+        if (!settings?.gamePath) {
+          setStatusText('Game path not set — open Settings first.');
+          return;
+        }
+        const rel = abs.replace(/^\\+/, '');
+        const cands = gameCandidates(rel, settings);
+        if (!cands.length) {
+          setStatusText('Game path not set — open Settings first.');
+          return;
+        }
+        abs = await backend.resolvePrefer(cands);
+      } else if (settings?.gamePath || settings?.hdPath) {
+        // Prefer an existing HD twin when the abs path is under game/HD root.
+        const rel = relFromAbs(abs, settings);
+        if (rel && rel.toLowerCase() !== abs.toLowerCase()) {
+          try {
+            abs = await backend.resolvePrefer(gameCandidates(rel, settings));
+          } catch { /* keep original abs */ }
+        }
+      }
       await backend.revealPath(abs);
     } catch (err) {
       setStatusText(`Could not show in Explorer: ${err.message ?? err}`);
     }
-  }, [selectedDat]);
+  }, [selectedDat, modelPath]);
 
   // Play a raw DAT clip id (e.g. "at00") by switching to its display group ("at0").
   const playClipId = (rawId) => {
@@ -2672,6 +2704,8 @@ export default function App() {
   const dataBufRef = useRef(null);                      // raw buffer, for texture decode on click
   const dataTexturesRef = useRef(null);                 // lazy parseDatTextures cache
   const dataTablesRef = useRef(null);                   // merged FTABLE maps (zone DAT cross-refs)
+  /** Composer race id when opening gear from FTABLE (HumeM, …) — beats binary sniff. */
+  const gearRaceHintRef = useRef(null);
 
   /**
    * @param {string} path
@@ -2733,20 +2767,22 @@ export default function App() {
       dataTexturesRef.current = null;
 
       // Zone mesh or companion script: attach file id + the four-DAT bundle.
+      // Never clobber PC/NPC multi-part dataSources when inspecting a gear DAT
+      // that merely has an FTABLE file id (that used to wipe Head/Body/… slots).
       let zoneMeta = {};
       try {
         const tables = await loadMergedTables(settings, dataTablesRef);
         let zonesList = [];
         try { zonesList = await (await fetch('lists/zones.json')).json(); } catch { /* ok */ }
         const bundle = buildZoneDatBundle(rel, tables, zonesList);
-        if (bundle.dats?.length > 1 || bundle.fileId != null || bundle.zoneId != null) {
+        if (bundle.zoneId != null) {
           zoneMeta = {
             fileId: bundle.fileId ?? doc.fileId ?? null,
-            zoneId: bundle.zoneId ?? doc.zoneId ?? null,
+            zoneId: bundle.zoneId,
             zoneName: bundle.zoneName ?? doc.zoneName ?? null,
             zoneDats: bundle.dats,
           };
-          // Keep multi-DAT dropdown in sync (overlay or owned page).
+          // Real zone bundle only — replace the source dropdown with mesh/event/dialog/npc.
           const gp = settings.gamePath;
           if (bundle.dats?.length) {
             setDataSources(bundle.dats.map((d) => ({
@@ -2757,6 +2793,8 @@ export default function App() {
               rel: d.rel,
             })));
           }
+        } else if (doc.fileId == null && bundle.fileId != null) {
+          zoneMeta = { fileId: bundle.fileId };
         } else if (doc.fileId == null) {
           const key = rel.replace(/\\/g, '/').toUpperCase();
           const fid = tables.byPath.get(key);
@@ -2868,11 +2906,18 @@ export default function App() {
     });
   }, [loadDatData, dataStructOpen, browserKind, leftView]);
 
-  /** A row in the file-table view names a DAT — jump the inspector to it. */
-  const openDatFromTable = useCallback((datRel) => {
+  /**
+   * A row in the file-table view names a DAT — jump the inspector to it.
+   * @param {string} datRel
+   * @param {{ tableRace?: string, races?: string[] }} [meta] gear-table race key(s)
+   */
+  const openDatFromTable = useCallback((datRel, meta = {}) => {
     const gamePath = settingsRef.current?.gamePath;
     if (!gamePath) return;
     const abs = `${gamePath}\\${datRel.replace(/\//g, '\\')}`;
+    // Prefer the race the user browsed (tree) over multi-race shared file ids.
+    const tableRace = meta.tableRace || meta.races?.[0] || null;
+    gearRaceHintRef.current = tableRace ? composerRaceFromGearTable(tableRace) : null;
     setRevealTarget(abs.toLowerCase());
     loadDatData(abs);
   }, [loadDatData]);
@@ -3353,66 +3398,53 @@ export default function App() {
         await loadDatData(path, { notice });
       };
 
-      /** Gear DAT with mesh but no skeleton — load race base skeleton + gear only. */
-      const tryGearWithSkeleton = async () => {
-        const race = sniffGearRace(buf);
+      /**
+       * Gear DAT with mesh but no skeleton — pair with the race base skeleton.
+       * Race resolution order: explicit hint (FTABLE browse) → file_id gear
+       * tables → binary section-id sniff (last resort; can false-positive).
+       */
+      const tryGearWithSkeleton = async (raceHint = null) => {
+        // raceHint only from FTABLE browse / Open-in-3D — never a stale leftover.
+        let race = raceHint || null;
+        if (!race) {
+          try {
+            const tables = await loadMergedTables(settings, dataTablesRef);
+            const key = rel.replace(/\\/g, '/').toUpperCase();
+            const fid = tables.byPath.get(key);
+            race = composerRaceFromFileId(fid);
+          } catch { /* tables unavailable */ }
+        }
+        if (!race) race = sniffGearRace(buf);
         if (!race) return null;
         const baseRel = RACE_SKELETON_RELS[race];
         if (!baseRel) return null;
         const baseAbs = `${settings.gamePath}\\${normRel(baseRel)}`;
         const raceLabel = RACE_SKELETON_LABELS[race] || race;
+        const gearAbs = String(path).replace(/\//g, '\\');
         setStatusText(`Gear for ${raceLabel} — loading skeleton…`);
         try {
-          const baseBuf = await readAbs(baseAbs);
-          const baseModel = parseEntity(baseBuf, baseAbs);
-          if (!baseModel.skeleton) return null;
-          // Skeleton + anims from the race; meshes/textures only from the gear DAT.
-          baseModel.meshGroups = [];
-          const gearModel = parseEntity(buf, path);
-          const model = mergeModels([baseModel, gearModel], rel);
-          if (!model.isRenderable) return null;
-          player.stop();
-          setBrowserKind('entity');
-          setDataDoc(null);
-          const renderer = rendererRef.current;
-          modelRef.current = model;
-          renderer.setModel(model, false);
-          setSelectedDat(lower);
-          setModelPath(rel);
-          shownPathRef.current = String(path).replace(/\//g, '\\');
-          sourcePathRef.current = shownPathRef.current;
-          const texList = [...model.textures.values()].map((t) => ({
-            name: t.name, width: t.width, height: t.height, format: t.format, data: t.data,
-          }));
-          setModelInfo({
-            name: `${rel} · ${raceLabel} skeleton`,
-            joints: model.skeleton.joints.length,
-            verts: model.meshGroups.reduce((s, g) => s + g.vertices.length, 0),
-            tris: model.meshGroups.reduce((s, g) => s + g.pieces.reduce(
-              (t, p) => t + (p.topology === 'strip' ? p.corners.length - 2 : p.corners.length / 3), 0), 0),
-            animCount: model.animations.length,
-            scheduleCount: model.schedules?.length ?? 0,
-            textures: texList,
-            parts: [
-              { key: 'race', label: 'Race skeleton', itemLabel: raceLabel, relPaths: [baseRel], joints: baseModel.skeleton.joints.length, verts: 0, tris: 0, animCount: baseModel.animations.length, scheduleCount: 0, textures: [] },
-              { key: 'gear', label: 'Gear', itemLabel: rel, relPaths: [rel], joints: null, verts: model.meshGroups.reduce((s, g) => s + g.vertices.length, 0), tris: 0, animCount: gearModel.animations.length, scheduleCount: 0, textures: texList },
-            ],
-          });
-          setDataSources([
-            { id: 'gear', label: `Gear — ${rel}`, path: String(path).replace(/\//g, '\\') },
-            { id: 'race', label: `Race skeleton — ${raceLabel}`, path: baseAbs },
-          ]);
-          setAnims(groupAnimations(model.animations)
-            .filter((g) => g.clip.jointTracks.size > 0 && g.clip.numFrames > 0));
-          setSchedules([]);
-          setCurrentAnim('');
-          setCurrentSchedule('');
-          setTexWindows([]);
-          setObjectGroups(null);
-          setHasCollision(false);
-          setHasNavmesh(false);
-          setHasSkybox(false);
-          renderer.fitCamera();
+          // Full loadModel path: GPU upload, anim lists, details parts.
+          const result = await loadModel(
+            [baseAbs, gearAbs],
+            `${rel} · ${raceLabel}`,
+            {
+              displayPath: gearAbs,
+              parts: [
+                {
+                  key: 'race', label: 'Race skeleton', itemLabel: raceLabel,
+                  paths: [baseAbs],
+                },
+                {
+                  key: 'gear', label: 'Gear', itemLabel: rel,
+                  paths: [gearAbs],
+                },
+              ],
+            },
+          );
+          if (!result || result.ok === false) return null;
+          // Race base is usually skeleton-only; if it has skin, hide it so the
+          // isolated gear piece is what you inspect.
+          rendererRef.current?.setMeshSourceFilter([gearAbs]);
           setStatusText(`${rel} · ${raceLabel} skeleton (gear only)`);
           return { ok: true };
         } catch (err) {
@@ -3471,7 +3503,7 @@ export default function App() {
         const peek = parseEntity(buf, path);
         // Isolated gear: meshes, no skeleton — pair with the race base DAT.
         if (peek.meshGroups.length && !peek.skeleton) {
-          const geared = await tryGearWithSkeleton();
+          const geared = await tryGearWithSkeleton(opts.raceHint ?? null);
           if (geared?.ok) { setSelectedDat(lower); return; }
         }
         // Skeleton-only race DAT while a multi-part set is known — load the set.
@@ -3487,7 +3519,7 @@ export default function App() {
         if (result && result.ok === false) {
           // Retry gear pairing even if the first sniff/path failed early.
           if (peek.meshGroups.length && !peek.skeleton) {
-            const geared = await tryGearWithSkeleton();
+            const geared = await tryGearWithSkeleton(opts.raceHint ?? null);
             if (geared?.ok) { setSelectedDat(lower); return; }
           }
           if (prevSources.length > 1) setDataSources(prevSources);
@@ -4447,7 +4479,11 @@ export default function App() {
                 dataBufRef.current = null;
                 dataTexturesRef.current = null;
               }
-              loadFromTree(path, { fromOverlay, keepSources: true });
+              loadFromTree(path, {
+                fromOverlay,
+                keepSources: true,
+                raceHint: gearRaceHintRef.current,
+              });
             } : undefined}
           />
         </>
@@ -4556,7 +4592,7 @@ export default function App() {
               <button
                 id="statusPath"
                 className="status-path-link"
-                onClick={() => revealInExplorer(shownPathRef.current || selectedDat)}
+                onClick={() => revealInExplorer(shownPathRef.current || modelPath || selectedDat)}
               >
                 {modelPath}
               </button>
@@ -4727,7 +4763,7 @@ export default function App() {
 
       <SettingsModal
         open={settingsOpen}
-        initial={settings ?? { gamePath: '', hdPath: '', hdEnabled: false, bgColor: DEFAULT_BG, autoPlay: true, autoWasdZones: true, xiPath: '' }}
+        initial={settings ?? { gamePath: '', hdPath: '', hdEnabled: false, bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, xiPath: '' }}
         error={settingsError}
         onSave={saveSettings}
         onClose={() => { setSettingsOpen(false); setSettingsError(''); }}

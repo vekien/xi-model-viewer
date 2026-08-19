@@ -166,17 +166,19 @@ export function FileTree({ rootPath, selectedPath, revealTarget, onSelectFile, o
 }
 
 function TreeNode({ path, name, isDir, defaultOpen, selectedPath, revealTarget, onSelectFile, onError, filterTokens }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(!!defaultOpen);
   const [entries, setEntries] = useState(null);
   const rowRef = useRef(null);
+  // User collapsed this folder — don't fight them by re-opening for the same selection.
+  const pinnedClosedRef = useRef(false);
+  const lastAutoRevealRef = useRef('');
 
   const lowerPath = normPath(path);
   const isSelected = !isDir && sameFile(selectedPath, path);
   const reveal = normPath(revealTarget);
   const onRevealChain = isDir && reveal && (reveal === lowerPath || reveal.startsWith(lowerPath + '\\'));
 
-  const openDir = useCallback(async () => {
-    setOpen(true);
+  const loadEntries = useCallback(async () => {
     if (entries !== null) return;
     try {
       const list = await backend.listDir(path);
@@ -191,17 +193,43 @@ function TreeNode({ path, name, isDir, defaultOpen, selectedPath, revealTarget, 
     }
   }, [entries, path, onError]);
 
+  const openDir = useCallback(() => {
+    pinnedClosedRef.current = false;
+    setOpen(true);
+    loadEntries();
+  }, [loadEntries]);
+
+  // Root default-open once (respects a later user collapse).
   useEffect(() => {
-    if (isDir && (defaultOpen || onRevealChain)) openDir();
-  }, [isDir, defaultOpen, onRevealChain, openDir]);
+    if (!isDir || !defaultOpen || pinnedClosedRef.current) return;
+    setOpen(true);
+    loadEntries();
+  }, [isDir, defaultOpen, loadEntries]);
+
+  // Reveal auto-expand only when the target *changes* to something under us —
+  // not on every render while a selected file still lives in this branch.
+  useEffect(() => {
+    if (!isDir || !onRevealChain) return;
+    if (reveal === lastAutoRevealRef.current) return;
+    lastAutoRevealRef.current = reveal;
+    pinnedClosedRef.current = false;
+    setOpen(true);
+    loadEntries();
+  }, [isDir, onRevealChain, reveal, loadEntries]);
 
   useEffect(() => {
     if (isSelected) rowRef.current?.scrollIntoView({ block: 'nearest' });
   }, [isSelected]);
 
   const handleClick = () => {
-    if (isDir) (open ? setOpen(false) : openDir());
-    else onSelectFile(path);
+    if (isDir) {
+      if (open) {
+        pinnedClosedRef.current = true;
+        setOpen(false);
+      } else {
+        openDir();
+      }
+    } else onSelectFile(path);
   };
 
   const visible = useMemo(() => {

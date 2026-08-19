@@ -90,9 +90,13 @@ class Handler(SimpleHTTPRequestHandler):
             if not target.exists():
                 raise FileNotFoundError(f"not found: {target}")
             if sys.platform == "win32":
-                # Passed as one argument, never through a shell. explorer exits
-                # non-zero even when it works, so the return code says nothing.
-                subprocess.Popen(["explorer", f"/select,{target}"])
+                # Two argv entries: "/select," + path. A single "/select,C:\Program
+                # Files\…" arg is split on spaces and explorer opens Documents.
+                # explorer exits non-zero even when it works.
+                p = str(target.resolve())
+                if p.startswith("\\\\?\\"):
+                    p = p[4:]
+                subprocess.Popen(["explorer", "/select,", p])
             elif sys.platform == "darwin":
                 subprocess.Popen(["open", "-R", str(target)])
             else:

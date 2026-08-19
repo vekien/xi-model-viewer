@@ -949,7 +949,8 @@ export class Renderer {
   setModel(model, keepCamera = false) {
     const gl = this.gl;
     this.effectMode = false;   // any real model/zone load leaves effect mode
-    if (!model) this.meshSourceFilter = null;
+    // Always drop isolation — caller re-applies after PC gear swaps.
+    this.meshSourceFilter = null;
     for (const b of this.batches) {
       gl.deleteBuffer(b.vbo);
       if (b.wireEbo) gl.deleteBuffer(b.wireEbo);

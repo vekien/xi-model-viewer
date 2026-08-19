@@ -1019,13 +1019,16 @@ function DlgUnreferencedNode({ entries }) {
 }
 
 /** One file-table row: model/file id, optional race+slot, DAT path. */
-function FtRow({ e, onOpenDat, indent = 0 }) {
+function FtRow({ e, onOpenDat, indent = 0, tableRace = null }) {
   return (
     <div
       className="data-row data-ft-row"
       style={indent ? { paddingLeft: 8 + indent * 14 } : undefined}
       title={`file id ${e.id} · FTABLE 0x${e.ftVal.toString(16).toUpperCase().padStart(4, '0')} (subdir ${e.ftVal >> 7} · file ${e.ftVal & 0x7f}) — click to inspect`}
-      onClick={() => onOpenDat?.(e.dat)}
+      onClick={() => onOpenDat?.(e.dat, {
+        tableRace: tableRace || e.tableRace || null,
+        races: e.races,
+      })}
     >
       <span className="data-ft-id mono">{e.modelId ?? e.id}</span>
       {e.raceLabel && <span className="data-type">{e.raceLabel} {e.slot}</span>}
@@ -1047,13 +1050,13 @@ function GearRaceNode({ node, onOpenDat }) {
         <span className="data-dir-counts mono">{node.count.toLocaleString()} models</span>
       </div>
       {open && node.slots.map((s) => (
-        <GearSlotNode key={s.slot} node={s} onOpenDat={onOpenDat} />
+        <GearSlotNode key={s.slot} node={s} onOpenDat={onOpenDat} tableRace={node.race} />
       ))}
     </div>
   );
 }
 
-function GearSlotNode({ node, onOpenDat }) {
+function GearSlotNode({ node, onOpenDat, tableRace }) {
   const [open, setOpen] = useState(false);
   const label = node.slot[0].toUpperCase() + node.slot.slice(1);
   return (
@@ -1065,7 +1068,13 @@ function GearSlotNode({ node, onOpenDat }) {
         <span className="data-dir-counts mono">{node.rows.length.toLocaleString()} models</span>
       </div>
       {open && node.rows.map((e) => (
-        <FtRow key={e.id} e={{ ...e, raceLabel: null }} onOpenDat={onOpenDat} indent={3} />
+        <FtRow
+          key={e.id}
+          e={{ ...e, raceLabel: null }}
+          onOpenDat={onOpenDat}
+          indent={3}
+          tableRace={tableRace}
+        />
       ))}
     </div>
   );

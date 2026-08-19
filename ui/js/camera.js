@@ -93,6 +93,8 @@ export class OrbitCamera {
     // Set while the Camera Sequencer is flying a recorded path: WASD, drags and
     // the wheel all stand down rather than fight it for the pose.
     this.sequenceLock = false;
+    // User orbit/pan/zoom/fly — keep this framing across DAT loads until fit().
+    this.userFramed = false;
     this.flySpeedZone = loadFlySpeed('flySpeedZone', FLY_SPEED_ZONE);
     this.flySpeedEntity = loadFlySpeed('flySpeedEntity', FLY_SPEED_ENTITY);
     this.flySpeed = this.flySpeedEntity;
@@ -159,6 +161,7 @@ export class OrbitCamera {
     const yawSign = this.yUp ? -1 : 1;
     this.yaw += yawSign * dx * 0.01;
     this.pitch = Math.min(Math.max(this.pitch + dy * 0.01, -1.55), 1.55);
+    this.userFramed = true;
   }
 
   /**
@@ -171,6 +174,7 @@ export class OrbitCamera {
     const yawSign = this.yUp ? -1 : 1;
     this.yaw += yawSign * dx * sens;
     this.pitch = Math.min(Math.max(this.pitch - dy * sens, -1.55), 1.55);
+    this.userFramed = true;
   }
 
   pan(dx, dy) {
@@ -183,6 +187,7 @@ export class OrbitCamera {
       this.target[1] - right[1] * dx * s + up[1] * dy * s,
       this.target[2] - right[2] * dx * s + up[2] * dy * s,
     ];
+    this.userFramed = true;
   }
 
   zoom(wheelDelta) {
@@ -190,6 +195,7 @@ export class OrbitCamera {
       Math.max(this.distance * Math.pow(0.999, wheelDelta), this.minDistance),
       this.maxDistance,
     );
+    this.userFramed = true;
   }
 
   /**
@@ -285,6 +291,7 @@ export class OrbitCamera {
     const boost = (keys.has('shift') ? 3 : 1);
     const s = (this.flySpeed * boost * dt) / len;
     this.pos = [this.pos[0] + mx * s, this.pos[1] + my * s, this.pos[2] + mz * s];
+    this.userFramed = true;
   }
 
   /** Entity-scale defaults, or zone-scale when `kind === 'zone'`. */
@@ -364,6 +371,7 @@ export class OrbitCamera {
 
   /** Frame an AABB. Optional `opts.distance` overrides the auto radius framing. */
   fit(min, max, opts = {}) {
+    this.userFramed = false;
     this.target = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
     const radius = Math.max(Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) / 2, 0.5);
     this.distance = opts.distance != null

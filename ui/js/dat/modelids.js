@@ -40,11 +40,34 @@ export const RACE_SKELETON_LABELS = {
   Tarutaru: 'Tarutaru', Mithra: 'Mithra', Galka: 'Galka',
 };
 
+/** Gear-table race keys (HumeMale, …) → character-composer ids (HumeM, …). */
+export const GEAR_TABLE_RACE_TO_COMPOSER = {
+  HumeMale: 'HumeM', HumeFemale: 'HumeF',
+  ElvaanMale: 'ElvaanM', ElvaanFemale: 'ElvaanF',
+  TaruMale: 'Tarutaru', TaruFemale: 'Tarutaru',
+  Mithra: 'Mithra', Galka: 'Galka',
+};
+
+export function composerRaceFromGearTable(tableRace) {
+  return GEAR_TABLE_RACE_TO_COMPOSER[tableRace] ?? null;
+}
+
+/** Prefer FTABLE file_id → gear tables over binary sniff (sniff false-positives). */
+export function composerRaceFromFileId(fileId) {
+  if (fileId == null) return null;
+  const g = gearIndex().get(fileId | 0);
+  if (!g?.races?.length) return null;
+  return composerRaceFromGearTable(g.races[0]);
+}
+
 /**
  * Gear DAT section/folder ids encode the race. Retail uses several shapes:
  *   `70hf`  `1hf_`  `hf_k`  `hf_m`  `hh_m`  (Hume Female)
  *   `70hm`  `1hm_`  `hm_m`                   (Hume Male)
  * and the same pattern for em/ef/tm/tf/mi/ga.
+ *
+ * Require a digit prefix OR `_slot` suffix — bare `hf`/`hm` substrings match
+ * random binary noise and pick the wrong skeleton (e.g. male boots → HumeF).
  * Returns a composer race id (HumeF, …) when a tag is found.
  */
 export function sniffGearRace(buffer) {
@@ -57,23 +80,36 @@ export function sniffGearRace(buffer) {
     const c = bytes[i];
     ascii += (c >= 0x20 && c < 0x7f) ? String.fromCharCode(c) : ' ';
   }
-  // `\d{0,3}xx` covers `70hf` / `1hf` / bare `hf_…`. Trailing `_slot` optional.
-  // Require a non-letter boundary so we don't hit random substrings.
+  // score: digit+tag (70hm) beats tag_slot (hm_m). First highest wins.
   const tags = [
-    [/(?:^|[^a-z0-9])(?:\d{1,3})?hf(?:_[a-z0-9]+)?(?![a-z])/i, 'HumeF'],
-    [/(?:^|[^a-z0-9])(?:\d{1,3})?hh(?:_[a-z0-9]+)?(?![a-z])/i, 'HumeF'],
-    [/(?:^|[^a-z0-9])(?:\d{1,3})?hm(?:_[a-z0-9]+)?(?![a-z])/i, 'HumeM'],
-    [/(?:^|[^a-z0-9])(?:\d{1,3})?ef(?:_[a-z0-9]+)?(?![a-z])/i, 'ElvaanF'],
-    [/(?:^|[^a-z0-9])(?:\d{1,3})?em(?:_[a-z0-9]+)?(?![a-z])/i, 'ElvaanM'],
-    [/(?:^|[^a-z0-9])(?:\d{1,3})?tf(?:_[a-z0-9]+)?(?![a-z])/i, 'Tarutaru'],
-    [/(?:^|[^a-z0-9])(?:\d{1,3})?tm(?:_[a-z0-9]+)?(?![a-z])/i, 'Tarutaru'],
-    [/(?:^|[^a-z0-9])(?:\d{1,3})?mi(?:_[a-z0-9]+)?(?![a-z])/i, 'Mithra'],
-    [/(?:^|[^a-z0-9])(?:\d{1,3})?ga(?:_[a-z0-9]+)?(?![a-z])/i, 'Galka'],
+    [/(?:^|[^a-z0-9])\d{1,3}hf(?:_[a-z0-9]+)?(?![a-z])/i, 'HumeF', 3],
+    [/(?:^|[^a-z0-9])hf_[a-z0-9]+(?![a-z])/i, 'HumeF', 2],
+    [/(?:^|[^a-z0-9])\d{1,3}hh(?:_[a-z0-9]+)?(?![a-z])/i, 'HumeF', 3],
+    [/(?:^|[^a-z0-9])hh_[a-z0-9]+(?![a-z])/i, 'HumeF', 2],
+    [/(?:^|[^a-z0-9])\d{1,3}hm(?:_[a-z0-9]+)?(?![a-z])/i, 'HumeM', 3],
+    [/(?:^|[^a-z0-9])hm_[a-z0-9]+(?![a-z])/i, 'HumeM', 2],
+    [/(?:^|[^a-z0-9])\d{1,3}ef(?:_[a-z0-9]+)?(?![a-z])/i, 'ElvaanF', 3],
+    [/(?:^|[^a-z0-9])ef_[a-z0-9]+(?![a-z])/i, 'ElvaanF', 2],
+    [/(?:^|[^a-z0-9])\d{1,3}em(?:_[a-z0-9]+)?(?![a-z])/i, 'ElvaanM', 3],
+    [/(?:^|[^a-z0-9])em_[a-z0-9]+(?![a-z])/i, 'ElvaanM', 2],
+    [/(?:^|[^a-z0-9])\d{1,3}tf(?:_[a-z0-9]+)?(?![a-z])/i, 'Tarutaru', 3],
+    [/(?:^|[^a-z0-9])tf_[a-z0-9]+(?![a-z])/i, 'Tarutaru', 2],
+    [/(?:^|[^a-z0-9])\d{1,3}tm(?:_[a-z0-9]+)?(?![a-z])/i, 'Tarutaru', 3],
+    [/(?:^|[^a-z0-9])tm_[a-z0-9]+(?![a-z])/i, 'Tarutaru', 2],
+    [/(?:^|[^a-z0-9])\d{1,3}mi(?:_[a-z0-9]+)?(?![a-z])/i, 'Mithra', 3],
+    [/(?:^|[^a-z0-9])mi_[a-z0-9]+(?![a-z])/i, 'Mithra', 2],
+    [/(?:^|[^a-z0-9])\d{1,3}ga(?:_[a-z0-9]+)?(?![a-z])/i, 'Galka', 3],
+    [/(?:^|[^a-z0-9])ga_[a-z0-9]+(?![a-z])/i, 'Galka', 2],
   ];
-  for (const [re, race] of tags) {
-    if (re.test(ascii)) return race;
+  let best = null;
+  let bestScore = 0;
+  for (const [re, race, score] of tags) {
+    if (score > bestScore && re.test(ascii)) {
+      best = race;
+      bestScore = score;
+    }
   }
-  return null;
+  return best;
 }
 
 /** {race: {slot: [[base_file_id, count], …]}} — zero-count groups dropped. */
