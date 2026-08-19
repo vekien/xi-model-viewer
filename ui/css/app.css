@@ -689,9 +689,53 @@ button.gs-tool:focus-visible {
 .zone-search input:focus { border-color: var(--accent); }
 .zone-search input::placeholder { color: var(--gray-500); }
 .zone-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.zone-id { color: var(--gray-500); margin-left: auto; flex: 0 0 auto; }
+.zone-id { color: var(--gray-500); margin-left: 6px; flex: 0 0 auto; }
 .node.selected > .row .zone-id { color: rgba(0, 0, 0, 0.5); }
 .zone-count { border-top: 1px solid var(--ring); margin-top: 4px; }
+
+/* Pin control — visible on row hover / when pinned */
+.zone-pin-btn {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  padding: 0;
+  margin-left: 2px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--gray-500);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease, color 0.1s ease, background 0.1s ease;
+}
+.zone-pin-btn .icon { font-size: 15px; }
+.zone-row > .row:hover .zone-pin-btn,
+.zone-row.zone-is-pinned > .row .zone-pin-btn,
+.zone-pin-btn:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.zone-pin-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+  border: none;
+}
+.zone-pin-btn.on,
+.zone-pin-btn.on:hover {
+  color: var(--accent);
+  opacity: 1;
+  pointer-events: auto;
+}
+.node.selected > .row .zone-pin-btn { color: rgba(0, 0, 0, 0.45); }
+.node.selected > .row .zone-pin-btn.on { color: #0b1420; }
+.node.selected > .row .zone-pin-btn:hover { background: rgba(0, 0, 0, 0.12); color: #0b1420; }
+
+.zone-pinned-group > .row .zone-pin-folder-icon { color: var(--accent); }
+.zone-is-pinned > .row .kind { color: var(--accent); }
 
 /* --- Playback panel -------------------------------------------------------- */
 
