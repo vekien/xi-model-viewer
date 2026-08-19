@@ -743,7 +743,7 @@ function parseTexture(r, sec) {
   r.u16();                                // 0x01
   const bitCount = r.u16();
   r.skip(5 * 4);                          // zeros
-  r.u32();                                // 0x10 / 0x20
+  const paletteBits = r.u32();            // bits per palette entry: 0x10 / 0x20
 
   if (width <= 0 || height <= 0 || width > 8192 || height > 8192) return null;
 
@@ -774,8 +774,23 @@ function parseTexture(r, sec) {
       }
     }
   } else {
+    // Prototype zones may store the palette as 16-bit A1R5G5B5 (512 bytes)
+    // instead of 32-bit BGRA (1024). Reading the narrow form as u32 scrambles
+    // the colours and shifts the pixels by 512 bytes -- the bright-green
+    // speckle on rom/0/33's gratest_sizenn / gratest_s00_jew.
     const palette = new Uint32Array(256);
-    for (let i = 0; i < 256; i++) palette[i] = r.u32();
+    if (paletteBits === 0x10) {
+      for (let i = 0; i < 256; i++) {
+        const v = r.u16();
+        const a = (v >>> 15) & 1 ? 0xff : 0x00;
+        const cr = (((v >>> 10) & 0x1f) * 255 / 31) | 0;
+        const cg = (((v >>> 5) & 0x1f) * 255 / 31) | 0;
+        const cb = ((v & 0x1f) * 255 / 31) | 0;
+        palette[i] = ((a << 24) | (cr << 16) | (cg << 8) | cb) >>> 0;
+      }
+    } else {
+      for (let i = 0; i < 256; i++) palette[i] = r.u32();
+    }
     for (let y = 0; y < height; y++) {
       const destRow = height - 1 - y;
       for (let x = 0; x < width; x++) {

@@ -598,9 +598,24 @@ function decodeDxt3(r, width, height) {
   return out;
 }
 
-function decodePalette(r, width, height, paletted) {
+function decodePalette(r, width, height, paletted, paletteBits = 32) {
   const colors = [];
-  if (paletted) for (let i = 0; i < 256; i++) colors.push(r.u32());
+  // Prototype zones may store the palette as 16-bit A1R5G5B5 (512 bytes) rather
+  // than 32-bit BGRA (1024). Reading the narrow form as u32 scrambles the colours
+  // and shifts every pixel by 512 bytes -- the bright-green speckle on rom/0/33's
+  // gratest_sizenn / gratest_s00_jew. Retail is always 32-bit.
+  if (paletted && paletteBits === 0x10) {
+    for (let i = 0; i < 256; i++) {
+      const v = r.u16();
+      const a = (v >>> 15) & 1 ? 0xFF : 0x00;
+      const cr = (((v >>> 10) & 0x1F) * 255 / 31) | 0;
+      const cg = (((v >>> 5) & 0x1F) * 255 / 31) | 0;
+      const cb = ((v & 0x1F) * 255 / 31) | 0;
+      colors.push(((a << 24) | (cr << 16) | (cg << 8) | cb) >>> 0);
+    }
+  } else if (paletted) {
+    for (let i = 0; i < 256; i++) colors.push(r.u32());
+  }
   const out = new Uint8Array(width * height * 4);
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
     const color = paletted ? colors[r.u8()] : r.u32();
@@ -622,7 +637,7 @@ function parseTexture(bytes, dv, section) {
   const width = r.u32(), height = r.u32();
   r.u16(); const bitCount = r.u16();
   for (let i = 0; i < 5; i++) r.u32();
-  r.u32();
+  const paletteBits = r.u32();          // bits per palette entry: 0x10 / 0x20
   let rgba;
   if (texType === 0xA1) {
     const dxtType = r.str(0x4); r.u32(); r.u32();
@@ -630,9 +645,9 @@ function parseTexture(bytes, dv, section) {
     else if (dxtType === '3TXD') rgba = decodeDxt3(r, width, height);
     else return null;
   } else if (texType === 0xB1) {
-    r.u32(); rgba = decodePalette(r, width, height, bitCount !== 32);
+    r.u32(); rgba = decodePalette(r, width, height, bitCount !== 32, paletteBits);
   } else {
-    rgba = decodePalette(r, width, height, bitCount !== 32);
+    rgba = decodePalette(r, width, height, bitCount !== 32, paletteBits);
   }
   return { name: name.trim(), width, height, rgba };
 }
