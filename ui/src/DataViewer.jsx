@@ -15,9 +15,58 @@ const FT_MAX_ROWS = 1000;
  * `sources` — optional multi-DAT set (PC parts, creation files). Dropdown
  * switches which file File/Contents/Structure describe.
  */
+/** Zone multi-DAT tabs — fixed order, always visible while a zone bundle is loaded. */
+const ZONE_TAB_ORDER = [
+  { key: 'zone', label: 'Zone', icon: 'map' },
+  { key: 'events', label: 'Events', icon: 'smart_display' },
+  { key: 'dialog', label: 'Dialog', icon: 'chat' },
+  { key: 'npclist', label: 'NPCs', icon: 'groups' },
+];
+
+function zoneTabKeyFromDoc(doc) {
+  if (doc?.kind === 'events') return 'events';
+  if (doc?.kind === 'dialog') return 'dialog';
+  if (doc?.kind === 'npclist') return 'npclist';
+  return 'zone';
+}
+
+function buildZoneTabs(sources) {
+  if (!sources?.length) return null;
+  const byKey = new Map(sources.map((s) => [s.id, s]));
+  // Need at least mesh + one companion to treat as a zone bundle.
+  if (!byKey.has('zone') || !ZONE_TAB_ORDER.some((t) => t.key !== 'zone' && byKey.has(t.key))) {
+    return null;
+  }
+  return ZONE_TAB_ORDER
+    .filter((t) => byKey.has(t.key))
+    .map((t) => ({ ...t, path: byKey.get(t.key).path, rel: byKey.get(t.key).rel }));
+}
+
+function ZoneTabs({ tabs, activeKey, onSelect }) {
+  if (!tabs?.length) return null;
+  return (
+    <div className="data-zone-tabs" role="tablist" aria-label="Zone DATs">
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          type="button"
+          role="tab"
+          aria-selected={activeKey === t.key}
+          className={`data-zone-tab${activeKey === t.key ? ' on' : ''}`}
+          title={t.rel || t.path}
+          onClick={() => { if (activeKey !== t.key) onSelect?.(t.path); }}
+        >
+          <span className="icon">{t.icon}</span>
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function DataViewer({
-  doc, sources, onSelectSource, onOpenTexture, onOpenSkeleton,
-  onPlaySound, playingSoundKey, onRevealPath, onOpenDat, onRenderFile,
+  doc, sources, onSelectSource, onOpenTexture, onOpenSkeleton, onOpenZoneDef,
+  onOpenParticle, onPlaySound, playingSoundKey, onRevealPath, onOpenDat, onRenderFile,
 }) {
   if (!doc) {
     return (
@@ -36,19 +85,56 @@ export function DataViewer({
     );
   }
 
-  if (doc.kind === 'ftable') return <FtableView doc={doc} onOpenDat={onOpenDat} />;
-  if (doc.kind === 'npclist') return <NpcListView doc={doc} />;
-  if (doc.kind === 'events') return <EventsView doc={doc} />;
-  if (doc.kind === 'dialog') return <DialogView doc={doc} />;
-
-  const sourceItems = (sources?.length > 1)
+  const zoneTabs = buildZoneTabs(sources);
+  const zoneTabKey = zoneTabKeyFromDoc(doc);
+  const sourceItems = (!zoneTabs && sources?.length > 1)
     ? sources.map((s) => ({ id: s.path, label: s.label }))
     : null;
   const activePath = doc.fullPath || '';
   const activeSource = sourceItems
     ? (sourceItems.find((s) => s.id.toLowerCase() === activePath.toLowerCase())?.id
       ?? sourceItems[0]?.id)
-    : '';
+    : (sources?.find((s) => s.path?.toLowerCase() === activePath.toLowerCase())?.path
+      || activePath);
+
+  const zoneChrome = zoneTabs ? (
+    <ZoneTabs tabs={zoneTabs} activeKey={zoneTabKey} onSelect={onSelectSource} />
+  ) : null;
+
+  if (doc.kind === 'ftable') return <FtableView doc={doc} onOpenDat={onOpenDat} />;
+  if (doc.kind === 'npclist') {
+    return (
+      <NpcListView
+        doc={doc}
+        sources={sources}
+        zoneChrome={zoneChrome}
+        onSelectSource={onSelectSource}
+        onRevealPath={onRevealPath}
+      />
+    );
+  }
+  if (doc.kind === 'events') {
+    return (
+      <EventsView
+        doc={doc}
+        sources={sources}
+        zoneChrome={zoneChrome}
+        onSelectSource={onSelectSource}
+        onRevealPath={onRevealPath}
+      />
+    );
+  }
+  if (doc.kind === 'dialog') {
+    return (
+      <DialogView
+        doc={doc}
+        sources={sources}
+        zoneChrome={zoneChrome}
+        onSelectSource={onSelectSource}
+        onRevealPath={onRevealPath}
+      />
+    );
+  }
 
   if (doc.kind === 'other') {
     return (
@@ -57,6 +143,7 @@ export function DataViewer({
           <div className="data-card-title">
             <span className="icon">data_array</span>Structure
           </div>
+          {zoneChrome}
           <StructureToolbar
             sourceItems={sourceItems}
             activeSource={activeSource}
@@ -75,19 +162,14 @@ export function DataViewer({
           </div>
         </div>
         <div className="data-side">
-          <div className="panel data-card">
-            <div className="data-card-title"><span className="icon">description</span>File</div>
-            {sourceItems && (
-              <div className="data-source-combo data-source-combo-side">
-                <Combo value={activeSource} items={sourceItems} onChange={(id) => onSelectSource?.(id)} />
-              </div>
-            )}
-            <PathRow label="Path" value={doc.path} mono onClick={onRevealPath ? () => onRevealPath(doc.fullPath || doc.path) : undefined} />
-            {doc.fullPath && (
-              <PathRow label="Full path" value={doc.fullPath} mono onClick={onRevealPath ? () => onRevealPath(doc.fullPath) : undefined} />
-            )}
-            <Row label="Size" value={fmtBytes(doc.fileSize)} />
-          </div>
+          <FileCard
+            doc={doc}
+            isCreation={false}
+            sourceItems={sourceItems}
+            activeSource={activeSource}
+            onSelectSource={onSelectSource}
+            onRevealPath={onRevealPath}
+          />
         </div>
       </div>
     );
@@ -98,9 +180,12 @@ export function DataViewer({
       doc={doc}
       sourceItems={sourceItems}
       activeSource={activeSource}
+      zoneChrome={zoneChrome}
       onSelectSource={onSelectSource}
       onOpenTexture={onOpenTexture}
       onOpenSkeleton={onOpenSkeleton}
+      onOpenZoneDef={onOpenZoneDef}
+      onOpenParticle={onOpenParticle}
       onPlaySound={onPlaySound}
       playingSoundKey={playingSoundKey}
       onRevealPath={onRevealPath}
@@ -212,8 +297,8 @@ function countRes(node) {
 }
 
 function SectionsView({
-  doc, sourceItems, activeSource, onSelectSource,
-  onOpenTexture, onOpenSkeleton, onPlaySound, playingSoundKey,
+  doc, sourceItems, activeSource, zoneChrome, onSelectSource,
+  onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenParticle, onPlaySound, playingSoundKey,
   onRevealPath, onRenderFile,
 }) {
   const [query, setQuery] = useState('');
@@ -237,8 +322,10 @@ function SectionsView({
       <div className="panel data-main">
         <div className="data-card-title">
           <span className="icon">account_tree</span>Structure
+          {doc.zoneName && <span className="data-zone-tag">{doc.zoneName}</span>}
           <span className="data-card-note mono">{structureNote}</span>
         </div>
+        {zoneChrome}
         <StructureToolbar
           sourceItems={sourceItems}
           activeSource={activeSource}
@@ -258,6 +345,8 @@ function SectionsView({
               forceOpen={!!query.trim()}
               onOpenTexture={onOpenTexture}
               onOpenSkeleton={onOpenSkeleton}
+              onOpenZoneDef={onOpenZoneDef}
+              onOpenParticle={onOpenParticle}
               onPlaySound={onPlaySound}
               playingSoundKey={playingSoundKey}
             />
@@ -266,55 +355,15 @@ function SectionsView({
       </div>
 
       <div className="data-side">
-        <div className="panel data-card">
-          <div className="data-card-title"><span className="icon">description</span>File</div>
-          {sourceItems && (
-            <div className="data-source-combo data-source-combo-side">
-              <Combo value={activeSource} items={sourceItems} onChange={(id) => onSelectSource?.(id)} />
-            </div>
-          )}
-          <PathRow
-            label="Path"
-            value={doc.path}
-            mono
-            onClick={onRevealPath ? () => onRevealPath(doc.fullPath || doc.path) : undefined}
-          />
-          {doc.fullPath && (
-            <PathRow
-              label="Full path"
-              value={doc.fullPath}
-              mono
-              onClick={onRevealPath ? () => onRevealPath(doc.fullPath) : undefined}
-            />
-          )}
-          <Row label="Size" value={fmtBytes(doc.fileSize)} />
-          {isCreation ? (
-            <>
-              <Row label="Format" value={doc.formatLabel || doc.magic || 'creation'} />
-              {doc.magic && <Row label="Magic" value={doc.magic} mono />}
-              <Row label="Entries" value={doc.sectionCount.toLocaleString()} />
-            </>
-          ) : (
-            <>
-              <Row label="Sections" value={doc.sectionCount.toLocaleString()} />
-              <Row label="Folders" value={doc.dirCount.toLocaleString()} />
-              <Row label="Depth" value={doc.maxDepth} />
-            </>
-          )}
-          {(doc.warnings ?? []).map((w, i) => (
-            <div key={i} className="data-warning">
-              <span className="icon">warning</span>{w}
-            </div>
-          ))}
-          {onRenderFile && (
-            <div className="data-card-actions">
-              <button type="button" className="data-open-btn" onClick={onRenderFile}>
-                <span className="icon">view_in_ar</span>
-                Open in 3D viewer
-              </button>
-            </div>
-          )}
-        </div>
+        <FileCard
+          doc={doc}
+          isCreation={isCreation}
+          sourceItems={sourceItems}
+          activeSource={activeSource}
+          onSelectSource={onSelectSource}
+          onRevealPath={onRevealPath}
+          onRenderFile={onRenderFile}
+        />
 
         <div className="panel data-card data-census">
           <div className="data-card-title"><span className="icon">category</span>Contents</div>
@@ -590,23 +639,8 @@ function SearchWrap({ query, setQuery, placeholder, children }) {
   );
 }
 
-/** Right-hand file card shared by the zone-script views. */
-function ZoneFileCard({ doc, rows }) {
-  return (
-    <div className="panel data-card">
-      <div className="data-card-title"><span className="icon">description</span>File</div>
-      <Row label="Path" value={doc.path} mono />
-      <Row label="Size" value={fmtBytes(doc.fileSize)} />
-      {doc.zoneName && <Row label="Zone" value={`${doc.zoneName} (${doc.zoneId})`} />}
-      {!doc.zoneName && doc.zoneId != null && <Row label="Zone ID" value={doc.zoneId} />}
-      {doc.fileId != null && <Row label="File ID" value={doc.fileId.toLocaleString()} mono />}
-      {rows}
-    </div>
-  );
-}
-
 /** Zone NPC list: index · name · server id, with event counts when known. */
-function NpcListView({ doc }) {
+function NpcListView({ doc, sources, zoneChrome, onSelectSource, onRevealPath }) {
   const [query, setQuery] = useState('');
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -622,7 +656,7 @@ function NpcListView({ doc }) {
     <div className="data-viewer">
       <div className="panel data-main">
         <div className="data-card-title">
-          <span className="icon">groups</span>NPC list
+          <span className="icon">groups</span>NPCs
           {doc.zoneName && <span className="data-zone-tag">{doc.zoneName}</span>}
           <span className="data-card-note mono">
             {filtered.length === doc.npcs.length
@@ -630,6 +664,7 @@ function NpcListView({ doc }) {
               : `${filtered.length.toLocaleString()} of ${doc.npcs.length.toLocaleString()}`}
           </span>
         </div>
+        {zoneChrome}
         <SearchWrap query={query} setQuery={setQuery} placeholder="Filter by name or id…" />
         <div className="data-tree">
           {filtered.map((n) => (
@@ -644,7 +679,13 @@ function NpcListView({ doc }) {
         </div>
       </div>
       <div className="data-side">
-        <ZoneFileCard doc={doc} rows={<Row label="NPCs" value={doc.npcs.length.toLocaleString()} />} />
+        <FileCard
+          doc={doc}
+          activeSource={doc.fullPath || ''}
+          onSelectSource={onSelectSource}
+          onRevealPath={onRevealPath}
+          extraRows={<Row label="NPCs" value={doc.npcs.length.toLocaleString()} />}
+        />
       </div>
     </div>
   );
@@ -656,7 +697,7 @@ const CAT_ICONS = {
 };
 
 /** Zone events: actor → event → opcode disassembly. */
-function EventsView({ doc }) {
+function EventsView({ doc, sources, zoneChrome, onSelectSource, onRevealPath }) {
   const [query, setQuery] = useState('');
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -682,6 +723,7 @@ function EventsView({ doc }) {
             {doc.actors.length.toLocaleString()} actors · {doc.stats.events.toLocaleString()} events
           </span>
         </div>
+        {zoneChrome}
         <SearchWrap query={query} setQuery={setQuery} placeholder="Filter by NPC, event id, category or opcode…" />
         <div className="data-tree">
           {filtered.map((a) => (
@@ -691,9 +733,12 @@ function EventsView({ doc }) {
         </div>
       </div>
       <div className="data-side">
-        <ZoneFileCard
+        <FileCard
           doc={doc}
-          rows={(
+          activeSource={doc.fullPath || ''}
+          onSelectSource={onSelectSource}
+          onRevealPath={onRevealPath}
+          extraRows={(
             <>
               <Row label="Actors" value={doc.actors.length.toLocaleString()} />
               <Row label="Events" value={doc.stats.events.toLocaleString()} />
@@ -776,7 +821,7 @@ function EventNode({ ev, dialogTexts, defaultOpen }) {
  * "All lines" is the flat indexed table. Lines no event references (system
  * messages, quest text fired server-side) sit in a collapsed bucket.
  */
-function DialogView({ doc }) {
+function DialogView({ doc, sources, zoneChrome, onSelectSource, onRevealPath }) {
   const [query, setQuery] = useState('');
   const canGroup = !!doc.conversations?.length;
   const [mode, setMode] = useState(canGroup ? 'events' : 'all');
@@ -841,6 +886,7 @@ function DialogView({ doc }) {
                 : `${filteredFlat.length.toLocaleString()} of ${doc.entries.length.toLocaleString()}`}
           </span>
         </div>
+        {zoneChrome}
         <SearchWrap query={query} setQuery={setQuery} placeholder="Filter by text, speaker or index…">
           {canGroup && (
             <div className="data-cats">
@@ -876,9 +922,12 @@ function DialogView({ doc }) {
         </div>
       </div>
       <div className="data-side">
-        <ZoneFileCard
+        <FileCard
           doc={doc}
-          rows={(
+          activeSource={doc.fullPath || ''}
+          onSelectSource={onSelectSource}
+          onRevealPath={onRevealPath}
+          extraRows={(
             <>
               <Row label="Entries" value={doc.entries.length.toLocaleString()} />
               {canGroup && <Row label="In events" value={referenced.size.toLocaleString()} />}
@@ -1022,7 +1071,7 @@ function GearSlotNode({ node, onOpenDat }) {
   );
 }
 
-function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onPlaySound, playingSoundKey }) {
+function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenParticle, onPlaySound, playingSoundKey }) {
   const [open, setOpen] = useState(depth < 4 || !!forceOpen);
   // While filtering, keep matching branches expanded.
   const expanded = forceOpen || open;
@@ -1065,6 +1114,8 @@ function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onPlayS
               forceOpen={forceOpen}
               onOpenTexture={onOpenTexture}
               onOpenSkeleton={onOpenSkeleton}
+              onOpenZoneDef={onOpenZoneDef}
+              onOpenParticle={onOpenParticle}
               onPlaySound={onPlaySound}
               playingSoundKey={playingSoundKey}
             />
@@ -1076,6 +1127,8 @@ function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onPlayS
               depth={depth + 1}
               onOpenTexture={onOpenTexture}
               onOpenSkeleton={onOpenSkeleton}
+              onOpenZoneDef={onOpenZoneDef}
+              onOpenParticle={onOpenParticle}
               onPlaySound={onPlaySound}
               playingSoundKey={playingSoundKey}
             />
@@ -1085,7 +1138,7 @@ function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onPlayS
   );
 }
 
-function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onPlaySound, playingSoundKey }) {
+function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenParticle, onPlaySound, playingSoundKey }) {
   const isTex = !!(res.isTexture || res.textureName || res.type === 0x20 || res.name === 'Texture');
   // 0x29 Skeleton — accept numeric 41 or hex, name, or inspect flag.
   const isSkel = !!(res.isSkeleton
@@ -1094,33 +1147,55 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onPlaySound, playin
     || res.skeletonKind);
   const isSound = !!(res.isSound || res.type === 0x3D || res.type === 61
     || res.name === 'SoundEffectPointer');
+  const isZoneDef = !!(res.isZoneDef || res.type === 0x1C || res.type === 28
+    || res.name === 'ZoneDef');
+  const isParticle = !!(res.isParticleGenerator || res.type === 0x05 || res.type === 5
+    || res.name === 'ParticleGenerator');
   const soundKey = isSound && res.soundId != null
     ? `${res.offset ?? ''}:${res.soundId}`
     : null;
   const soundPlaying = !!(soundKey && playingSoundKey === soundKey);
   const texClick = isTex && !!onOpenTexture;
   const skelClick = isSkel && !!onOpenSkeleton;
+  // ZoneDef / Particle rows stay activatable so a missing handler still logs.
+  const zdefClick = isZoneDef;
+  const particleClick = isParticle;
   const soundClick = isSound && res.soundId != null && !!onPlaySound;
-  const clickable = texClick || skelClick || soundClick;
+  const clickable = texClick || skelClick || soundClick || zdefClick || particleClick;
   const openKey = res.textureName || res.id?.trim() || null;
   const onActivate = (e) => {
+    e?.preventDefault?.();
     e?.stopPropagation?.();
     if (soundClick) onPlaySound(res);
-    else if (skelClick) onOpenSkeleton(res);
+    else if (particleClick) {
+      if (typeof onOpenParticle === 'function') onOpenParticle(res);
+      else console.error('ParticleGenerator click: onOpenParticle handler missing', res);
+    } else if (zdefClick) {
+      if (typeof onOpenZoneDef === 'function') onOpenZoneDef(res);
+      else console.error('ZoneDef click: onOpenZoneDef handler missing', res);
+    } else if (skelClick) onOpenSkeleton(res);
     else if (texClick && openKey) onOpenTexture(openKey);
   };
   const flags = res.flags ?? [];
+  const hint = soundClick ? (soundPlaying ? 'click to stop' : 'click to play')
+    : particleClick ? 'click to play'
+      : zdefClick ? 'click to view placements'
+        : 'click to view';
   return (
     <div
-      className={`data-row data-res-row${isTex ? ' data-res-tex' : ''}${isSkel ? ' data-res-skel' : ''}${isSound ? ' data-res-sfx' : ''}${soundPlaying ? ' data-res-sfx-play' : ''}${clickable ? ' data-res-click' : ''}`}
+      className={`data-row data-res-row${isTex ? ' data-res-tex' : ''}${isSkel ? ' data-res-skel' : ''}${isZoneDef ? ' data-res-zdef' : ''}${isParticle ? ' data-res-fx' : ''}${isSound ? ' data-res-sfx' : ''}${soundPlaying ? ' data-res-sfx-play' : ''}${clickable ? ' data-res-click' : ''}`}
       style={{ paddingLeft: 8 + depth * 14 }}
       title={soundClick
         ? (soundPlaying ? `Click to stop se ${res.soundId}` : `Click to play se ${res.soundId}`)
-        : skelClick
-          ? `Click to view skeleton tree · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
-          : texClick
-            ? `Click to view texture · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
-            : `offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}${flags.length ? ` · ${flags.join(', ')}` : ''}`}
+        : particleClick
+          ? `Click to play particle · ${String(res.id || '').trim() || 'generator'}`
+          : zdefClick
+            ? `Click to view placements · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
+            : skelClick
+              ? `Click to view skeleton tree · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
+              : texClick
+                ? `Click to view texture · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
+                : `offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}${flags.length ? ` · ${flags.join(', ')}` : ''}`}
       onClick={clickable ? onActivate : undefined}
       role={clickable ? 'button' : undefined}
       tabIndex={clickable ? 0 : undefined}
@@ -1134,7 +1209,7 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onPlaySound, playin
       <span className="data-type">{res.name}</span>
       {res.detail && <span className="data-detail mono">{res.detail}</span>}
       {clickable && !res.detail && (
-        <span className="data-detail data-tex-hint">{soundClick ? 'click to play' : 'click to view'}</span>
+        <span className="data-detail data-tex-hint">{hint}</span>
       )}
       {flags.length > 0 && <span className="data-flags mono">{flags.join(' ')}</span>}
       <span className="data-size mono">{fmtBytes(res.size)}</span>
@@ -1151,20 +1226,157 @@ function Row({ label, value, mono }) {
   );
 }
 
+function FileSubhead({ children }) {
+  return <div className="data-file-subhead">{children}</div>;
+}
+
 /** Clickable path row — opens the OS file manager on that DAT. */
-function PathRow({ label, value, mono, onClick }) {
-  if (!onClick || !value) return <Row label={label} value={value} mono={mono} />;
+function PathRow({ label, value, mono, onClick, ellipsis }) {
+  if (!value) return null;
+  if (!onClick) {
+    return (
+      <div className="details-row">
+        <span className="details-row-label">{label}</span>
+        <span
+          className={`details-row-value${mono ? ' mono' : ''}${ellipsis ? ' details-path-ellipsis' : ''}`}
+          title={ellipsis ? value : undefined}
+        >
+          {value}
+        </span>
+      </div>
+    );
+  }
   return (
     <div className="details-row">
       <span className="details-row-label">{label}</span>
       <button
         type="button"
-        className={`details-row-value details-path-link${mono ? ' mono' : ''}`}
-        title="Show in Explorer"
+        className={`details-row-value details-path-link${mono ? ' mono' : ''}${ellipsis ? ' details-path-ellipsis' : ''}`}
+        title={value}
         onClick={onClick}
       >
         {value}
       </button>
+    </div>
+  );
+}
+
+/**
+ * Right-hand File card: zone identity, this DAT's stats, related zone DATs,
+ * full path (ellipsis) at the bottom.
+ */
+function FileCard({
+  doc, isCreation, sourceItems, activeSource, onSelectSource, onRevealPath, onRenderFile, extraRows,
+}) {
+  const zoneDats = doc.zoneDats ?? [];
+  const hasZoneBundle = zoneDats.length > 1;
+  // Prefer gamePath + rel when we know the install root from fullPath.
+  const absOf = (rel) => {
+    if (!rel) return null;
+    const r = String(rel).replace(/\//g, '\\');
+    if (!doc.fullPath || !doc.path) return r;
+    const full = String(doc.fullPath).replace(/\//g, '\\');
+    const cur = String(doc.path).replace(/\//g, '\\');
+    const idx = full.toLowerCase().lastIndexOf(cur.toLowerCase());
+    if (idx < 0) return r;
+    return `${full.slice(0, idx)}${r}`;
+  };
+
+  // Dropdown only when multi-DAT and NOT the zone bundle (Zone DATs list is the switcher).
+  const showCombo = sourceItems?.length > 1 && !hasZoneBundle;
+
+  return (
+    <div className="panel data-card">
+      <div className="data-card-title"><span className="icon">description</span>File</div>
+      {showCombo && (
+        <div className="data-source-combo data-source-combo-side">
+          <Combo value={activeSource} items={sourceItems} onChange={(id) => onSelectSource?.(id)} />
+        </div>
+      )}
+
+      {(doc.zoneName || doc.zoneId != null || doc.fileId != null) && (
+        <>
+          <FileSubhead>Zone</FileSubhead>
+          {doc.zoneName && <Row label="Name" value={doc.zoneName} />}
+          {doc.zoneId != null && <Row label="Zone ID" value={String(doc.zoneId)} mono />}
+          {doc.fileId != null && <Row label="File ID" value={doc.fileId.toLocaleString()} mono />}
+        </>
+      )}
+
+      <FileSubhead>This DAT</FileSubhead>
+      <PathRow
+        label="Path"
+        value={doc.path}
+        mono
+        onClick={onRevealPath ? () => onRevealPath(doc.fullPath || doc.path) : undefined}
+      />
+      {doc.fileSize != null && <Row label="Size" value={fmtBytes(doc.fileSize)} />}
+      {isCreation ? (
+        <>
+          <Row label="Format" value={doc.formatLabel || doc.magic || 'creation'} />
+          {doc.magic && <Row label="Magic" value={doc.magic} mono />}
+          {doc.sectionCount != null && (
+            <Row label="Entries" value={doc.sectionCount.toLocaleString()} />
+          )}
+        </>
+      ) : doc.kind === 'sections' ? (
+        <>
+          <Row label="Sections" value={doc.sectionCount.toLocaleString()} />
+          <Row label="Folders" value={doc.dirCount.toLocaleString()} />
+          <Row label="Depth" value={doc.maxDepth} />
+        </>
+      ) : doc.kind === 'other' ? (
+        <>
+          {doc.label && <Row label="Kind" value={doc.label} />}
+          {doc.magic && <Row label="Magic" value={doc.magic} mono />}
+        </>
+      ) : null}
+      {extraRows}
+
+      {zoneDats.length > 0 && (
+        <>
+          <FileSubhead>Zone DATs</FileSubhead>
+          <div className="data-zone-dat-list">
+            {zoneDats.map((d) => {
+              const abs = absOf(d.rel);
+              const active = !!(activeSource && abs
+                && activeSource.toLowerCase() === abs.toLowerCase());
+              return (
+                <button
+                  key={d.key}
+                  type="button"
+                  className={`data-zone-dat${active ? ' on' : ''}`}
+                  title={abs || d.rel}
+                  onClick={() => {
+                    if (abs && onSelectSource) onSelectSource(abs);
+                  }}
+                >
+                  <span className="data-zone-dat-label">{d.label}</span>
+                  <span className="data-zone-dat-path mono">{d.rel}</span>
+                  {d.fileId != null && (
+                    <span className="data-zone-dat-fid mono">{d.fileId}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {(doc.warnings ?? []).map((w, i) => (
+        <div key={i} className="data-warning">
+          <span className="icon">warning</span>{w}
+        </div>
+      ))}
+
+      {onRenderFile && (
+        <div className="data-card-actions">
+          <button type="button" className="data-open-btn" onClick={onRenderFile}>
+            <span className="icon">view_in_ar</span>
+            Open in 3D viewer
+          </button>
+        </div>
+      )}
     </div>
   );
 }

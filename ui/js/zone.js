@@ -411,6 +411,33 @@ function parseZoneDef(bytes, dv, section, table1) {
   return placements;
 }
 
+/**
+ * Data Struct: parse the 0x1C ZoneDef placement table at `sectionStart`.
+ * Copies the buffer so decryption does not mutate the inspect cache.
+ * Returns { placements, nodeCount, stride } or null.
+ */
+export function parseZoneDefAt(buffer, sectionStart, keyTables) {
+  if (!keyTables?.table1 || sectionStart == null) return null;
+  const src = buffer instanceof Uint8Array
+    ? buffer
+    : new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const bytes = src.slice();
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const sections = parseSections(dv);
+  const section = sections.find((s) => s.start === sectionStart && s.typeCode === 0x1C)
+    ?? sections.find((s) => s.typeCode === 0x1C);
+  if (!section) return null;
+  try {
+    const placements = parseZoneDef(bytes, dv, section, keyTables.table1);
+    const ds = section.dataStart;
+    const nodeCount = u32at(dv, ds + 4) & 0x00FFFFFF;
+    const stride = zoneDefObjectStride(bytes, dv, ds, nodeCount);
+    return { placements, nodeCount: placements.length, stride };
+  } catch {
+    return null;
+  }
+}
+
 // ── 0x36 ZoneInteraction parse ("RID", trigger volumes) ─────────────────────
 // Plaintext (unlike 0x2E/0x1C). Mirrors xim ZoneInteractionSection. Each 0x40-byte
 // entry is an OBB trigger; its sourceId's FIRST CHAR classifies it:

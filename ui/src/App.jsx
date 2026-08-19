@@ -32,7 +32,10 @@ import { HelpModal } from './HelpModal.jsx';
 import { GraphicsModal } from './GraphicsModal.jsx';
 import { CameraSequencer } from './CameraSequencer.jsx';
 import { parseFloorTexture } from '../js/dat.js';
-import { extractKeyTables, parseZone, parseDatTextures } from '../js/zone.js';
+import { extractKeyTables, parseZone, parseDatTextures, parseZoneDefAt } from '../js/zone.js';
+import { ZoneDefModal } from './ZoneDefModal.jsx';
+import { ParticlePreviewModal } from './ParticlePreviewModal.jsx';
+import { armGeneratorPreview } from '../js/particlePreview.js';
 import { zoneDatRelPath, zoneToModel } from '../js/zoneModel.js';
 import { parseEnvironments, parseEnvironmentsByRoot, resolveEnvironment, defaultWeather, listWeathers, terrainLightingFromEnv, skyDomeFromEnv, EnvironmentManager } from '../js/environment.js';
 import { parseSections } from '../js/zone.js';
@@ -54,7 +57,7 @@ import {
 } from '../js/dat/modelids.js';
 import { soundPath } from '../js/particle/audio.js';
 import {
-  sniffZoneDat, zoneForFileId, zoneFileIds, parseNpcList, npcNameMap,
+  sniffZoneDat, zoneForFileId, zoneFileIds, buildZoneDatBundle, parseNpcList, npcNameMap,
   parseEventDat, parseDialogDat, dialogSpeakers, dialogConversations, EVENT_CATEGORIES,
 } from '../js/dat/zonedat.js';
 import { DataViewer } from './DataViewer.jsx';
@@ -394,6 +397,13 @@ export default function App() {
   const texIdRef = useRef(0);
   const [skelWindows, setSkelWindows] = useState([]); // [{ id, joints, title, cascade }]
   const skelIdRef = useRef(0);
+  const [zdefWindows, setZdefWindows] = useState([]); // [{ id, placements, title, cascade }]
+  const zdefIdRef = useRef(0);
+  const zonePlacementsRef = useRef(null); // raw 0x1C list from last loadZone
+  const dataStructOpenRef = useRef(false); // keep loadZone in sync without TDZ
+  // Data Struct ParticleGenerator preview (plays on main canvas).
+  const [fxPreview, setFxPreview] = useState(null); // { genId, title, note, error, ownsScene }
+  const fxPreviewTokenRef = useRef(0);
   const [selectedFloor, setSelectedFloor] = useState('');
   const [playing, setPlayingState] = useState(false);
   // Animation playback rate, 0.1–2.0 (10%–200%). Mirrored to a ref so the
@@ -440,6 +450,12 @@ export default function App() {
     const v = parseFloat(localStorage.getItem('shadowDistance'));
     return Number.isFinite(v) && v >= 20 && v <= 600 ? v : 90;
   });
+  const [fpsCap, setFpsCap] = useState(() => {
+    const v = parseInt(localStorage.getItem('fpsCap'), 10);
+    return v === 30 || v === 60 || v === 120 ? v : 0;
+  });
+  const fpsCapRef = useRef(fpsCap);
+  fpsCapRef.current = fpsCap;
   const [renderHeight, setRenderHeight] = useState(() => {
     const v = parseInt(localStorage.getItem('renderHeight'), 10);
     return Number.isFinite(v) && v > 0 ? v : 0;   // 0 = follow the window
@@ -454,6 +470,7 @@ export default function App() {
   // Camera readouts for the toolbar. Fly speed is mirrored from the camera each
   // frame; FOV is owned here and pushed down, since nothing else writes it.
   const [flySpeed, setFlySpeed] = useState(0);
+  const [fps, setFps] = useState(0);
   const [fov, setFovState] = useState(() => {
     const saved = Number(localStorage.getItem('fovDegrees'));
     return Number.isFinite(saved) && saved >= 20 && saved <= 120 ? saved : 45;
@@ -551,10 +568,20 @@ export default function App() {
 
     let raf;
     let last = performance.now();
+    let lastDraw = last;
     let shownFlySpeed = -1;
+    let shownFps = -1;
+    let fpsFrames = 0;
+    let fpsWindowStart = last;
     const frame = (now) => {
+      raf = requestAnimationFrame(frame);
+      // FPS cap (0 = uncapped): skip the draw when under the target interval.
+      // Still schedule the next rAF so the loop stays alive and input stays live.
+      const cap = fpsCapRef.current;
+      if (cap > 0 && (now - lastDraw) < (1000 / cap) - 0.5) return;
       const dt = Math.min((now - last) / 1000, 0.1);
       last = now;
+      lastDraw = now;
       // A recorded sequence owns the camera outright while it plays.
       camSeqTick.current?.(dt);
       if (wasdRef.current && !renderer.camera.sequenceLock) {
@@ -567,8 +594,16 @@ export default function App() {
       // value, so this is a handful of updates, not one per frame.
       const speed = Math.round(renderer.camera.flySpeed);
       if (speed !== shownFlySpeed) { shownFlySpeed = speed; setFlySpeed(speed); }
+      // FPS: average over ~0.5s windows so the toolbar doesn't thrash.
+      fpsFrames++;
+      const fpsElapsed = now - fpsWindowStart;
+      if (fpsElapsed >= 500) {
+        const next = Math.round((fpsFrames * 1000) / fpsElapsed);
+        if (next !== shownFps) { shownFps = next; setFps(next); }
+        fpsFrames = 0;
+        fpsWindowStart = now;
+      }
       animTick.current?.(renderer.animFrame, renderer.currentAnimation?.lengthInFrames ?? 0);
-      raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
 
@@ -670,6 +705,11 @@ export default function App() {
     if (rendererRef.current) rendererRef.current.renderHeight = renderHeight;
     try { localStorage.setItem('renderHeight', String(renderHeight)); } catch { /* quota */ }
   }, [renderHeight]);
+
+  useEffect(() => {
+    fpsCapRef.current = fpsCap;
+    try { localStorage.setItem('fpsCap', String(fpsCap)); } catch { /* quota */ }
+  }, [fpsCap]);
 
   // Poll the drawing-buffer size only while the panel that shows it is open —
   // the window can be resized under it, and 'Window Size' has no fixed answer.
@@ -1287,6 +1327,99 @@ export default function App() {
     setEffectPlaying(true);
   }, []);
 
+  /** Close Data Struct particle preview modal (does not touch the main view). */
+  const closeFxPreview = useCallback(() => {
+    fxPreviewTokenRef.current += 1;
+    const prev = fxPreview;
+    prev?.system?.clearEffect?.();
+    setFxPreview(null);
+  }, [fxPreview]);
+
+  /**
+   * Data Struct ParticleGenerator row → floating modal with its own WebGL canvas.
+   * Builds a private ParticleSystem from the inspect buffer so the main zone /
+   * effect view is left alone.
+   */
+  const openDataParticle = useCallback(async (res) => {
+    const genId = String(res?.id ?? '').replace(/\0/g, '').trim();
+    if (!genId) {
+      setStatusText('ParticleGenerator has no id');
+      return;
+    }
+    const token = ++fxPreviewTokenRef.current;
+    const title = genId;
+    // Drop any previous preview system before opening a new one.
+    setFxPreview((prev) => {
+      prev?.system?.clearEffect?.();
+      return { genId, title, system: null, textures: null, error: '', loading: true };
+    });
+    setStatusText(`Loading particle ${genId}…`);
+
+    try {
+      if (!dataBufRef.current) {
+        throw new Error('No DAT buffer — reopen Data Struct on this file');
+      }
+      const settings = settingsRef.current;
+      if (!settings?.gamePath) throw new Error('Game path not set');
+
+      const warnings = [];
+      await ensureGlobalEffects(settings, warnings);
+      if (token !== fxPreviewTokenRef.current) return;
+
+      const isZone = modelRef.current?.kind === 'zone';
+      const live = rendererRef.current?.particleSystem;
+      const tree = buildParticleTree(
+        dataBufRef.current,
+        particleParsers(isZone, warnings),
+        warnings,
+      );
+      // Live zone system stores sections as Map<id, section[]>; constructor wants a flat list.
+      let zoneMeshSections = [];
+      if (live?.zoneMeshSections instanceof Map) {
+        for (const list of live.zoneMeshSections.values()) zoneMeshSections.push(...list);
+      } else if (Array.isArray(live?.zoneMeshSections)) {
+        zoneMeshSections = live.zoneMeshSections;
+      }
+      const system = new ParticleSystem({
+        zoneRoot: tree,
+        globalRoot: globalEffectsRef.current?.root ?? null,
+        // Mesh-linked zone gens need the live zone mesh tables when available.
+        zoneMeshIdToName: live?.zoneMeshIdToName ?? new Map(),
+        zoneMeshes: live?.zoneMeshes ?? new Map(),
+        zoneMeshSections,
+        camera: null,
+        environment: null,
+        onWarn: (m) => console.debug('[fx-preview]', m),
+      });
+
+      const ownTextures = parseDatTextures(dataBufRef.current);
+      const textures = new Map(ownTextures);
+      for (const [name, tex] of globalEffectsRef.current?.textures ?? []) {
+        if (!textures.has(name)) textures.set(name, tex);
+      }
+
+      // Direct register at origin (not main-view routine path).
+      const armed = armGeneratorPreview(system, genId);
+      if (token !== fxPreviewTokenRef.current) {
+        system.clearEffect();
+        return;
+      }
+      const note = armed.live > 0
+        ? `${armed.live} particles`
+        : (armed.gen?.invalid ? 'generator invalid' : 'armed · waiting for emit');
+      setFxPreview({
+        genId, title, system, textures, error: '', loading: false, note,
+      });
+      setStatusText(`Particle ${genId} · ${note}`);
+    } catch (e) {
+      console.error('ParticleGenerator preview failed', e);
+      if (token !== fxPreviewTokenRef.current) return;
+      const msg = e?.message ?? String(e);
+      setFxPreview({ genId, title, system: null, textures: null, error: msg, loading: false });
+      setStatusText(`Particle ${genId}: ${msg}`);
+    }
+  }, [ensureGlobalEffects]);
+
   /**
    * Zone BGM from the server's zone_settings (see dev/bake-zone-music.mjs).
    * Each zone names a day and a night track; id 0 means genuine silence, which
@@ -1428,6 +1561,17 @@ export default function App() {
       // its own copy of the bytes taken before that happens.
       const treeBuf = datBuf.slice(0);
       const parsed = parseZone(datBuf, keyTables);
+      // Keep raw placements for Data Struct ZoneDef clicks (before model filters).
+      zonePlacementsRef.current = Array.isArray(parsed.placements)
+        ? parsed.placements.map((p, i) => ({
+          index: p.index ?? i,
+          meshId: p.meshId || '',
+          fileIdLink: p.fileIdLink ?? null,
+          pos: p.pos || [0, 0, 0],
+          rot: p.rot || [0, 0, 0],
+          scale: p.scale || [1, 1, 1],
+        }))
+        : null;
 
       // Xim terrain lighting + procedural sky dome from the 0x2F environment.
       // EnvironmentManager owns the clock and the weather cross-fade; the panel
@@ -1530,7 +1674,30 @@ export default function App() {
       setModelPath(rel);
       shownPathRef.current = resolvedAbs;
       sourcePathRef.current = resolvedAbs;
-      setDataSources([{ id: 'zone', label: rel, path: resolvedAbs }]);
+      // Mesh + Event/Dialog/NPC companions for Data Struct multi-DAT.
+      try {
+        const tables = await loadMergedTables(settingsRef.current, dataTablesRef);
+        let zonesList = [];
+        try { zonesList = await (await fetch('lists/zones.json')).json(); } catch { /* ok */ }
+        const bundle = buildZoneDatBundle(rel, tables, zonesList);
+        const gp = settingsRef.current.gamePath;
+        const src = (bundle.dats?.length ? bundle.dats : [{ key: 'zone', label: 'DAT', rel, fileId: bundle.fileId }])
+          .map((d) => ({
+            id: d.key,
+            label: d.fileId != null ? `${d.label} — ${d.rel} (#${d.fileId})` : `${d.label} — ${d.rel}`,
+            path: `${gp}\\${normRel(d.rel)}`,
+            fileId: d.fileId,
+            rel: d.rel,
+          }));
+        setDataSources(src);
+      } catch {
+        setDataSources([{ id: 'zone', label: rel, path: resolvedAbs }]);
+      }
+      // Keep Data Struct in sync when switching zones while the overlay is open.
+      if (dataStructOpenRef.current) {
+        // loadDatData is declared later; call through a stable ref.
+        queueMicrotask(() => dataStructReloadRef.current?.(resolvedAbs));
+      }
       zoneCamKeyRef.current = key;
       animsRef.current = [];
       setAnims([]);
@@ -2077,7 +2244,8 @@ export default function App() {
     });
   }, []);
 
-  // Escape closes the topmost modal (export → settings → help → top texture).
+  // Escape closes the topmost overlay (modals → skeleton/tex windows).
+  // Data Struct is handled later (after its state is declared).
   useEffect(() => {
     const onKey = (e) => {
       if (e.key !== 'Escape') return;
@@ -2085,6 +2253,16 @@ export default function App() {
       if (settingsOpen) { setSettingsOpen(false); e.preventDefault(); return; }
       if (graphicsOpen) { setGraphicsOpen(false); e.preventDefault(); return; }
       if (helpOpen) { setHelpOpen(false); e.preventDefault(); return; }
+      if (fxPreview) {
+        closeFxPreview();
+        e.preventDefault();
+        return;
+      }
+      if (zdefWindows.length > 0) {
+        setZdefWindows((prev) => prev.slice(0, -1));
+        e.preventDefault();
+        return;
+      }
       if (skelWindows.length > 0) {
         setSkelWindows((prev) => prev.slice(0, -1));
         e.preventDefault();
@@ -2097,7 +2275,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [exportSpec, settingsOpen, graphicsOpen, helpOpen, texWindows.length, skelWindows.length]);
+  }, [exportSpec, settingsOpen, graphicsOpen, helpOpen, texWindows.length, skelWindows.length, zdefWindows.length, fxPreview, closeFxPreview]);
 
   // --- handlers ------------------------------------------------------------
 
@@ -2279,7 +2457,14 @@ export default function App() {
   // ── Assets > Data (DAT structure inspector) ────────────────────────────────
   const [dataDoc, setDataDoc] = useState(null);         // inspectDat result + path
   // Status-bar overlay: peek structure without leaving the live zone/model/etc.
-  const [dataStructOpen, setDataStructOpen] = useState(false);
+  const [dataStructOpen, setDataStructOpenState] = useState(false);
+  const setDataStructOpen = useCallback((v) => {
+    const next = typeof v === 'function' ? v(dataStructOpenRef.current) : !!v;
+    dataStructOpenRef.current = next;
+    setDataStructOpenState(next);
+  }, []);
+  // loadZone (declared earlier) reloads structure via this when a zone changes.
+  const dataStructReloadRef = useRef(null);
   // Multi-DAT context (PC gear parts, creation body/head/motion, multi-file loads).
   const [dataSources, setDataSources] = useState([]);   // [{ id, label, path }]
   const dataSourcesRef = useRef([]);                    // sync for loadFromTree / Open in 3D
@@ -2332,44 +2517,85 @@ export default function App() {
       } else {
         const buf = await readAbs(path);
         if (token !== dataTokenRef.current) return;
-        doc = inspectDat(buf);
         dataBufRef.current = buf;
-        // Non-sectioned DATs may still be a known zone script format.
-        if (doc.kind === 'other') {
-          const bytes = new Uint8Array(buf);
-          const zkind = sniffZoneDat(bytes);
-          if (zkind) {
-            doc = await buildZoneDatDoc(zkind, bytes, rel, settingsRef.current, dataTablesRef);
-            if (token !== dataTokenRef.current) return;
-          }
+        const bytes = buf instanceof Uint8Array
+          ? buf
+          : new Uint8Array(buf instanceof ArrayBuffer ? buf : buf.buffer);
+        // Zone script companions (dialog/events/npc list) must win over the
+        // section walker — dialog tables often look "section-like" and produce
+        // truncated-walk warnings instead of the dialog view.
+        const zkind = sniffZoneDat(bytes);
+        if (zkind) {
+          doc = await buildZoneDatDoc(zkind, bytes, rel, settingsRef.current, dataTablesRef);
+          if (token !== dataTokenRef.current) return;
+        } else {
+          doc = inspectDat(buf);
         }
       }
       dataTexturesRef.current = null;
-      setDataDoc({
+
+      // Zone mesh or companion script: attach file id + the four-DAT bundle.
+      let zoneMeta = {};
+      try {
+        const tables = await loadMergedTables(settings, dataTablesRef);
+        let zonesList = [];
+        try { zonesList = await (await fetch('lists/zones.json')).json(); } catch { /* ok */ }
+        const bundle = buildZoneDatBundle(rel, tables, zonesList);
+        if (bundle.dats?.length > 1 || bundle.fileId != null || bundle.zoneId != null) {
+          zoneMeta = {
+            fileId: bundle.fileId ?? doc.fileId ?? null,
+            zoneId: bundle.zoneId ?? doc.zoneId ?? null,
+            zoneName: bundle.zoneName ?? doc.zoneName ?? null,
+            zoneDats: bundle.dats,
+          };
+          // Keep multi-DAT dropdown in sync (overlay or owned page).
+          const gp = settings.gamePath;
+          if (bundle.dats?.length) {
+            setDataSources(bundle.dats.map((d) => ({
+              id: d.key,
+              label: d.fileId != null ? `${d.label} — ${d.rel} (#${d.fileId})` : `${d.label} — ${d.rel}`,
+              path: `${gp}\\${normRel(d.rel)}`,
+              fileId: d.fileId,
+              rel: d.rel,
+            })));
+          }
+        } else if (doc.fileId == null) {
+          const key = rel.replace(/\\/g, '/').toUpperCase();
+          const fid = tables.byPath.get(key);
+          if (fid != null) zoneMeta = { fileId: fid };
+        }
+      } catch { /* tables unavailable */ }
+
+      const finalDoc = {
         ...doc,
+        ...zoneMeta,
+        fileId: zoneMeta.fileId ?? doc.fileId ?? null,
+        zoneName: zoneMeta.zoneName ?? doc.zoneName ?? null,
+        zoneId: zoneMeta.zoneId ?? doc.zoneId ?? null,
         path: rel,
         fullPath: String(path).replace(/\//g, '\\'),
         notice: opts.notice || null,
-      });
+      };
+      setDataDoc(finalDoc);
       if (!opts.overlay) {
         setSelectedDat(String(path).toLowerCase().replace(/\//g, '\\'));
         setModelPath(rel);
         shownPathRef.current = path;
       }
-      const zoneSuffix = doc.zoneName ? ` · ${doc.zoneName}` : '';
-      const baseStatus = doc.kind === 'sections' && doc.format === 'creation'
-        ? `${doc.formatLabel || 'Creation DAT'} · ${doc.sectionCount.toLocaleString()} entries`
-        : doc.kind === 'sections'
-        ? `${doc.sectionCount.toLocaleString()} sections · ${doc.dirCount.toLocaleString()} folder${doc.dirCount === 1 ? '' : 's'}`
-        : doc.kind === 'ftable'
-          ? `${doc.registered.toLocaleString()} of ${doc.capacity.toLocaleString()} file ids registered`
-          : doc.kind === 'npclist'
-            ? `${doc.npcs.length.toLocaleString()} NPCs${zoneSuffix}`
-            : doc.kind === 'events'
-              ? `${doc.actors.length.toLocaleString()} actors · ${doc.stats.events.toLocaleString()} events${zoneSuffix}`
-              : doc.kind === 'dialog'
-                ? `${doc.entries.length.toLocaleString()} dialog entries${zoneSuffix}`
-                : doc.label;
+      const zoneSuffix = finalDoc.zoneName ? ` · ${finalDoc.zoneName}` : '';
+      const baseStatus = finalDoc.kind === 'sections' && finalDoc.format === 'creation'
+        ? `${finalDoc.formatLabel || 'Creation DAT'} · ${finalDoc.sectionCount.toLocaleString()} entries`
+        : finalDoc.kind === 'sections'
+        ? `${finalDoc.sectionCount.toLocaleString()} sections · ${finalDoc.dirCount.toLocaleString()} folder${finalDoc.dirCount === 1 ? '' : 's'}`
+        : finalDoc.kind === 'ftable'
+          ? `${finalDoc.registered.toLocaleString()} of ${finalDoc.capacity.toLocaleString()} file ids registered`
+          : finalDoc.kind === 'npclist'
+            ? `${finalDoc.npcs.length.toLocaleString()} NPCs${zoneSuffix}`
+            : finalDoc.kind === 'events'
+              ? `${finalDoc.actors.length.toLocaleString()} actors · ${finalDoc.stats.events.toLocaleString()} events${zoneSuffix}`
+              : finalDoc.kind === 'dialog'
+                ? `${finalDoc.entries.length.toLocaleString()} dialog lines${zoneSuffix}`
+                : finalDoc.label;
       if (!opts.overlay) {
         setStatusText(opts.notice ? `${rel} — ${opts.notice}` : baseStatus);
       }
@@ -2415,6 +2641,26 @@ export default function App() {
     // Restore prior status (zone name, etc.) — structure lives in the overlay.
     setStatusText(dataStructStatusRef.current || '');
   }, [dataStructOpen, browserKind, leftView, selectedDat, statusText, loadDatData, player, dataSources]);
+
+  dataStructReloadRef.current = (absPath) => {
+    if (!absPath || !dataStructOpenRef.current) return;
+    loadDatData(absPath, { overlay: true });
+  };
+
+  // Escape closes Data Struct after modals/texture windows (see earlier Escape handler).
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Escape' || !dataStructOpen) return;
+      // Let the earlier handler claim Escape first when a modal/window is open.
+      if (exportSpec || settingsOpen || graphicsOpen || helpOpen) return;
+      if (fxPreview || skelWindows.length || texWindows.length || zdefWindows.length) return;
+      toggleDataStruct();
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [dataStructOpen, toggleDataStruct, exportSpec, settingsOpen, graphicsOpen, helpOpen,
+    skelWindows.length, texWindows.length, zdefWindows.length, fxPreview]);
 
   /** Switch the Data Struct inspector to another DAT in the current multi-file set. */
   const selectDataSource = useCallback(async (path) => {
@@ -2490,6 +2736,107 @@ export default function App() {
 
   const focusSkeletonWin = useCallback((id) => {
     setSkelWindows((prev) => {
+      const i = prev.findIndex((w) => w.id === id);
+      if (i < 0 || i === prev.length - 1) return prev;
+      const copy = prev.slice();
+      const [hit] = copy.splice(i, 1);
+      copy.push(hit);
+      return copy;
+    });
+  }, []);
+
+  /** Collect ZoneDef rows from live model / last loadZone cache (sync). */
+  const collectZonePlacements = useCallback(() => {
+    if (zonePlacementsRef.current?.length) return zonePlacementsRef.current;
+    const live = modelRef.current;
+    const raw = live?.zonePlacements;
+    if (!Array.isArray(raw) || !raw.length) return null;
+    return raw
+      .filter((p) => !p.kind)
+      .map((p, i) => ({
+        index: Number.isFinite(p.index) && p.index >= 0 ? p.index : i,
+        meshId: p.meshId || p.mesh || p.name || '',
+        fileIdLink: p.fileIdLink ?? null,
+        pos: p.rawPos || p.pos || [0, 0, 0],
+        rot: p.rot || [0, 0, 0],
+        scale: p.scale || [1, 1, 1],
+      }));
+  }, []);
+
+  /** Data Struct ZoneDef row → floating placements table. */
+  const openDataZoneDef = useCallback((res) => {
+    const title = (res?.id && String(res.id).trim()) || 'ZoneDef';
+    const key = `zdef:${res?.offset ?? title}`;
+    const cached = collectZonePlacements();
+
+    // Always open UI on the same tick as the click (texture-modal pattern).
+    const pushWin = (partial) => {
+      setZdefWindows((prev) => {
+        const i = prev.findIndex((w) => w.key === key);
+        if (i >= 0) {
+          const copy = prev.slice();
+          copy[i] = { ...copy[i], ...partial, title };
+          const [hit] = copy.splice(i, 1);
+          copy.push(hit);
+          return copy;
+        }
+        return [...prev, {
+          id: ++zdefIdRef.current,
+          key,
+          title,
+          placements: [],
+          loading: false,
+          error: '',
+          cascade: prev.length,
+          ...partial,
+        }];
+      });
+    };
+
+    if (cached?.length) {
+      pushWin({ placements: cached, loading: false, error: '' });
+      setStatusText(`${title} · ${cached.length.toLocaleString()} placements`);
+      return;
+    }
+
+    pushWin({ placements: [], loading: true, error: '' });
+    setStatusText(`Reading ${title} placements…`);
+
+    (async () => {
+      try {
+        if (!dataBufRef.current) {
+          throw new Error('No DAT buffer — reopen Data Struct on the zone mesh DAT');
+        }
+        const keys = await getKeyTables();
+        if (!keys?.table1) throw new Error('FFXiMain.dll keys missing (check game path)');
+        const parsed = parseZoneDefAt(dataBufRef.current, res?.offset ?? 0, keys);
+        const placements = parsed?.placements ?? [];
+        if (!placements.length) throw new Error('No placements in this ZoneDef section');
+        zonePlacementsRef.current = placements.map((p, i) => ({
+          index: p.index ?? i,
+          meshId: p.meshId || '',
+          fileIdLink: p.fileIdLink ?? null,
+          pos: p.pos || [0, 0, 0],
+          rot: p.rot || [0, 0, 0],
+          scale: p.scale || [1, 1, 1],
+        }));
+        pushWin({ placements: zonePlacementsRef.current, loading: false, error: '' });
+        setStatusText(`${title} · ${placements.length.toLocaleString()} placements`);
+      } catch (e) {
+        console.error('ZoneDef open failed', e);
+        const msg = e?.message ?? String(e);
+        pushWin({ placements: [], loading: false, error: msg });
+        setStatusText(`ZoneDef: ${msg}`);
+      }
+    })();
+  }, [getKeyTables, collectZonePlacements]);
+
+  const closeZdefWin = useCallback((id) => {
+    setZdefWindows((prev) => prev.filter((w) => w.id !== id));
+  }, []);
+
+  const focusZdefWin = useCallback((id) => {
+    setZdefWindows((prev) => {
       const i = prev.findIndex((w) => w.id === id);
       if (i < 0 || i === prev.length - 1) return prev;
       const copy = prev.slice();
@@ -3548,6 +3895,7 @@ export default function App() {
           noHdPath: !settings?.hdPath,
         }}
         flySpeed={flySpeed}
+        fps={fps}
         fov={fov}
         onFov={setFov}
         graphicsOpen={graphicsOpen}
@@ -3678,6 +4026,8 @@ export default function App() {
             onSelectSource={selectDataSource}
             onOpenTexture={openDataTexture}
             onOpenSkeleton={openDataSkeleton}
+            onOpenZoneDef={openDataZoneDef}
+            onOpenParticle={openDataParticle}
             onPlaySound={playDataSound}
             playingSoundKey={playingSoundKey}
             onRevealPath={revealInExplorer}
@@ -3957,6 +4307,33 @@ export default function App() {
         />
       ))}
 
+      {zdefWindows.map((w, i) => (
+        <ZoneDefModal
+          key={w.id}
+          placements={w.placements}
+          loading={!!w.loading}
+          error={w.error || ''}
+          title={w.title}
+          cascadeOffset={w.cascade}
+          zIndex={2000 + i}
+          onClose={() => closeZdefWin(w.id)}
+          onFocus={() => focusZdefWin(w.id)}
+        />
+      ))}
+
+      {fxPreview && (
+        <ParticlePreviewModal
+          title={fxPreview.title}
+          genId={fxPreview.genId}
+          system={fxPreview.system}
+          textures={fxPreview.textures}
+          error={fxPreview.error || ''}
+          loading={!!fxPreview.loading}
+          zIndex={2010}
+          onClose={closeFxPreview}
+        />
+      )}
+
       <SettingsModal
         open={settingsOpen}
         initial={settings ?? { gamePath: '', hdPath: '', hdEnabled: false, bgColor: DEFAULT_BG, autoPlay: true, autoWasdZones: true, xiPath: '' }}
@@ -3981,6 +4358,8 @@ export default function App() {
         renderHeight={renderHeight}
         onRenderHeight={setRenderHeight}
         bufferSize={bufferSize}
+        fpsCap={fpsCap}
+        onFpsCap={setFpsCap}
       />
 
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />

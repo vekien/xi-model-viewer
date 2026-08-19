@@ -66,7 +66,7 @@ const VIEW_TOOLBAR = MENUS.find((m) => m.label === 'View').items.filter((i) => i
  * stacking contexts and would otherwise swallow it).
  */
 export function MenuBar({
-  onAction, checks = {}, flySpeed = 0, fov = 45, onFov,
+  onAction, checks = {}, flySpeed = 0, fps = 0, fov = 45, onFov,
   graphicsOpen = false, sequencerOpen = false,
 }) {
   const [active, setActive] = useState(null);   // { label, left, top } | null
@@ -205,6 +205,10 @@ export function MenuBar({
         </Tooltip>
         <Tooltip content="Fly speed — scroll the viewport with WASD on to change" placement="bottom">
           <span className="cam-speed mono">{Math.round(flySpeed)}</span>
+        </Tooltip>
+        <span className="cam-spacer" aria-hidden="true" />
+        <Tooltip content="Frames per second" placement="bottom">
+          <span className="cam-fps mono">FPS: {fps > 0 ? fps : '—'}</span>
         </Tooltip>
       </div>
 

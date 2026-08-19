@@ -133,10 +133,11 @@ function useTriggerWidth() {
 }
 
 function PlainCombo({ value, items, onChange, placeholder, className }) {
-  const current = items.find((i) => i.id === value);
+  // Loose equality so numeric 0 / "0" still resolve (FPS Uncapped, Window Size).
+  const current = items.find((i) => i.id == value);
   const [trigger, panelStyle] = useTriggerWidth();
   return (
-    <Listbox value={value ?? ''} onChange={onChange}>
+    <Listbox value={value ?? null} onChange={onChange}>
       {({ open }) => (
         <div
           style={{ display: 'contents' }}
@@ -158,7 +159,7 @@ function PlainCombo({ value, items, onChange, placeholder, className }) {
 function SearchCombo({ value, items, onChange, placeholder, className }) {
   const [query, setQuery] = useState('');
   const [trigger, panelStyle] = useTriggerWidth();
-  const label = items.find((i) => i.id === value)?.label ?? '';
+  const label = items.find((i) => i.id == value)?.label ?? '';
 
   const shown = useMemo(() => filterItems(items, query), [items, query]);
 
@@ -227,7 +228,7 @@ function GroupedSearchCombo({ value, items: rawItems, onChange, placeholder, cla
   const [open, setOpen] = useState(false);
   const wasOpen = useRef(false);
   const [trigger, panelStyle] = useTriggerWidth();
-  const current = items.find((i) => i.id === value);
+  const current = items.find((i) => i.id == value);
   const label = current?.label ?? '';
   const currentGroup = current?.group && !current.group.startsWith('---') ? current.group : null;
 

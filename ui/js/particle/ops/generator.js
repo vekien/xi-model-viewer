@@ -83,6 +83,7 @@ export class GeneratorRotationUpdater extends GeneratorKeyFrameUpdater {
   }
 }
 
+/** World-space emitter placement curves — stripped in modal preview (zone coords). */
 export class GeneratorBasePositionUpdater extends GeneratorKeyFrameUpdater {
   constructor(axis) { super(); this.axis = axis; }
   apply(elapsed, gen) {

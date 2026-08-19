@@ -30,6 +30,93 @@ export function zoneFileIds(zoneId) {
   return { events: m + 1100, dialog: m + 1700, npclist: m + 2600 };
 }
 
+/** Labels for the four per-zone DATs (mesh + script companions). */
+export const ZONE_DAT_LABELS = {
+  zone: 'DAT',
+  events: 'Event DAT',
+  dialog: 'Dialog DAT',
+  npclist: 'NPC DAT',
+};
+
+/**
+ * Build the zone's four-DAT bundle from FTABLE + zones.json.
+ * `meshRel` is game-relative (ROM\0\121.DAT or ROM/0/121.DAT).
+ * `byFid` / `byPath` come from loadMergedTables (path keys uppercase with `/`).
+ *
+ * Returns {
+ *   zoneId, zoneName, fileId,
+ *   dats: [{ key, label, rel, fileId|null }]  // mesh first, then event/dialog/npc
+ * }
+ */
+export function buildZoneDatBundle(meshRel, { byFid, byPath }, zonesList = []) {
+  const relSlash = String(meshRel || '').replace(/\\/g, '/').replace(/^game\//i, '');
+  const relKey = relSlash.toUpperCase();
+  const fileId = byPath?.get(relKey)
+    ?? byPath?.get(relKey.replace(/^ROM(\d*)\//, (_, n) => (n ? `ROM${n}/` : 'ROM/')))
+    ?? null;
+
+  let zoneId = null;
+  let zoneName = null;
+  const norm = (p) => String(p || '').replace(/\\/g, '/').replace(/^game\//i, '').toLowerCase();
+  const meshNorm = norm(relSlash);
+  for (const z of zonesList) {
+    if (z?.id == null || !z.path) continue;
+    if (norm(z.path) === meshNorm) {
+      zoneId = z.id;
+      zoneName = z.name || null;
+      break;
+    }
+  }
+  // Opened an event/dialog/npc DAT instead of the mesh — recover zone from fid.
+  if (zoneId == null && fileId != null) {
+    const hit = zoneForFileId(fileId);
+    if (hit) {
+      zoneId = hit.zoneId;
+      const z = zonesList.find((x) => x.id === zoneId);
+      zoneName = z?.name ?? null;
+    }
+  }
+
+  const dats = [];
+  const push = (key, rel, fid) => {
+    if (!rel) return;
+    const r = String(rel).replace(/\//g, '\\');
+    if (dats.some((d) => d.rel.toLowerCase() === r.toLowerCase())) return;
+    dats.push({
+      key,
+      label: ZONE_DAT_LABELS[key] || key,
+      rel: r,
+      fileId: fid ?? null,
+    });
+  };
+
+  // Prefer the mesh path the user opened; if we only know companions, still list them.
+  if (zoneId != null) {
+    // Mesh path: from zones list when we recovered via companion fid.
+    let meshRelOut = relSlash.includes('/') || relSlash.includes('\\') ? relSlash : null;
+    if (zonesList.length) {
+      const z = zonesList.find((x) => x.id === zoneId);
+      if (z?.path) meshRelOut = z.path.replace(/^game\//i, '');
+    }
+    const meshFid = meshRelOut
+      ? (byPath?.get(meshRelOut.replace(/\\/g, '/').toUpperCase()) ?? fileId)
+      : fileId;
+    push('zone', meshRelOut || relSlash, meshFid);
+
+    const ids = zoneFileIds(zoneId);
+    for (const key of ['events', 'dialog', 'npclist']) {
+      const fid = ids[key];
+      const dat = byFid?.get(fid);
+      if (dat) push(key, dat, fid);
+    }
+  } else {
+    // Unknown zone — still surface this DAT + file id.
+    push('zone', relSlash, fileId);
+  }
+
+  return { zoneId, zoneName, fileId, dats };
+}
+
 // ── format sniffing ─────────────────────────────────────────────────────────
 
 /** 'dialog' | 'events' | 'npclist' | null for a non-sectioned DAT. */

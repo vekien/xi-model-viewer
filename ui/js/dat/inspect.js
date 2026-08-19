@@ -178,9 +178,20 @@ function peekZoneMesh(bytes, dv, s) {
   return name.length >= 2 && printable(name) ? { text: name } : null;
 }
 
+/** 0x1C — placement table; count is readable before decrypt. */
+function peekZoneDef(bytes, dv, s) {
+  const nodeCount = dv.getUint32(s.dataStart + 4, true) & 0x00FFFFFF;
+  if (nodeCount <= 0 || nodeCount > 200000) return { text: null, isZoneDef: true };
+  return {
+    text: `${nodeCount.toLocaleString()} placement${nodeCount === 1 ? '' : 's'}`,
+    isZoneDef: true,
+  };
+}
+
 const PEEKS = {
   0x07: peekRoutine,
   0x19: peekKeyFrames,
+  0x1C: peekZoneDef,
   0x1F: peekParticleMesh,
   0x20: peekTexture,
   0x21: peekSpriteSheet,
@@ -597,6 +608,8 @@ export function inspectDat(buffer) {
       let textureName = null;
       let isTexture = type === 0x20;
       let isSound = type === 0x3D;
+      let isZoneDef = type === 0x1C;
+      const isParticleGenerator = type === 0x05;
       let soundId = null;
       const peek = PEEKS[type];
       if (peek) {
@@ -606,6 +619,7 @@ export function inspectDat(buffer) {
           textureName = r?.textureName ?? null;
           if (r?.isTexture) isTexture = true;
           if (r?.isSound) isSound = true;
+          if (r?.isZoneDef) isZoneDef = true;
           if (r?.soundId != null) soundId = r.soundId;
         } catch { /* malformed header — list it plain */ }
       }
@@ -618,7 +632,7 @@ export function inspectDat(buffer) {
         icon: SECTION_TYPE_ICONS[type] ?? 'data_object',
         size, offset: pos, flags, detail, textureName, isTexture,
         isSkeleton, skeletonKind: isSkeleton ? 'entity' : null,
-        isSound, soundId,
+        isSound, soundId, isZoneDef, isParticleGenerator,
       });
       const agg = summary.get(type) ?? { count: 0, bytes: 0 };
       agg.count++; agg.bytes += size;

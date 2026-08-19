@@ -24,6 +24,13 @@ const RESOLUTIONS = [
 const SHADOW_MIN = 20;
 const SHADOW_MAX = 600;
 
+const FPS_CAPS = [
+  { id: '0', label: 'Uncapped' },
+  { id: '120', label: '120' },
+  { id: '60', label: '60' },
+  { id: '30', label: '30' },
+];
+
 /**
  * Graphics settings dialog. Unlike Settings, edits apply live — these are
  * "drag it and watch" controls, and a Save round-trip would hide the effect
@@ -35,6 +42,7 @@ export function GraphicsModal({
   shadowsOn = false,
   renderHeight = 0, onRenderHeight,
   bufferSize = null,          // [w, h] the renderer is actually drawing at
+  fpsCap = 0, onFpsCap,
 }) {
   const [pos, setPos] = useState(null);           // null = centered
   const panelRef = useRef(null);
@@ -130,6 +138,19 @@ export function GraphicsModal({
               The picture is scaled to the window either way — above the window
               height this is supersampling (sharper, slower), below it upscaling
               (softer, faster). Width follows the window's aspect.
+            </div>
+          </div>
+
+          <div className="form-row">
+            <label className="form-label">FPS limit</label>
+            <Combo
+              value={String(fpsCap ?? 0)}
+              items={FPS_CAPS}
+              onChange={(id) => onFpsCap?.(Number(id) || 0)}
+            />
+            <div className="form-hint">
+              Caps how often the scene is redrawn. Uncapped follows the display
+              refresh rate via requestAnimationFrame.
             </div>
           </div>
         </div>
