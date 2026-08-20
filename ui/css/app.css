@@ -1048,6 +1048,10 @@ body:has(#weather) #placements {
 .plc-group.env-water .kind { color: #5eb0ff; }
 .plc-group.env-sky.selected > .plc-mesh .plc-name,
 .plc-group.env-water.selected > .plc-mesh .plc-name { color: #0b3a66; }
+.plc-group.env-unplaced .plc-name { color: var(--gray-400); font-style: italic; }
+.plc-group.env-unplaced .kind { color: var(--gray-500); }
+.plc-group.env-unplaced.dim { opacity: 0.45; }
+.plc-group.env-unplaced.selected > .plc-mesh .plc-name { color: var(--text); font-style: normal; }
 .plc-footer {
   flex: 0 0 auto;
   border-top: 1px solid var(--ring);
@@ -1677,7 +1681,7 @@ input[type='color'] {
   position: fixed;
   top: 62px; left: 360px;
   width: 940px;
-  height: 300px;
+  height: 320px;
   min-width: 940px;
   padding: 0;
   z-index: 28;
@@ -1767,7 +1771,7 @@ input[type='color'] {
 .cseq-tl {
   display: flex;
   flex: 0 0 auto;
-  height: 90px;
+  height: 110px;
   padding-right: 15px;
   border: none;
   border-radius: 8px;
@@ -1786,7 +1790,7 @@ input[type='color'] {
 }
 .cseq-tl-spacer { height: 22px; flex: 0 0 auto; }
 .cseq-tl-label {
-  height: 34px; flex: 0 0 auto;
+  height: 25px; flex: 0 0 auto;
   display: flex; align-items: center;
   padding: 0 8px;
   font-size: 9.5px; font-weight: 600;
@@ -1832,7 +1836,7 @@ input[type='color'] {
 }
 .cseq-tick i { width: 1px; height: 4px; background: rgba(255, 255, 255, 0.22); }
 .cseq-tick span { margin-top: 1px; font: 9px/1 var(--font-mono); color: var(--gray-500); }
-.cseq-lane { position: relative; height: 34px; }
+.cseq-lane { position: relative; height: 25px; }
 .cseq-lane::after {
   content: ''; position: absolute; left: 0; right: 0; top: 50%;
   height: 1px; background: rgba(255, 255, 255, 0.07);
@@ -1840,7 +1844,7 @@ input[type='color'] {
 .cseq-lane + .cseq-lane { border-top: none; }
 .cseq-dot {
   position: absolute; top: 50%; left: 0;
-  width: 11px; height: 11px;
+  width: 10px; height: 10px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
   border: 1px solid rgba(0, 0, 0, 0.55);
@@ -1849,7 +1853,9 @@ input[type='color'] {
 .cseq-dot:active { cursor: grabbing; }
 .cseq-dot.cam { background: #ffb648; }
 /* Scene keyframes are cuts, not a path through anything — a diamond says so. */
-.cseq-dot.scn { background: #6fc7ff; border-radius: 2px; transform: translate(-50%, -50%) rotate(45deg); width: 9px; height: 9px; }
+.cseq-dot.scn { background: #6fc7ff; border-radius: 2px; transform: translate(-50%, -50%) rotate(45deg); width: 8px; height: 8px; }
+/* Time-of-day keys lerp the clock — round like camera. */
+.cseq-dot.tod { background: #c4a1ff; }
 .cseq-dot.sel { box-shadow: 0 0 0 2px #fff, 0 0 6px rgba(0, 0, 0, 0.6); }
 .cseq-dot.past { opacity: 0.35; }
 .cseq-playhead {
@@ -1925,6 +1931,7 @@ input[type='color'] {
 }
 .cseq-record .icon { font-size: 15px; color: #ff6b6b; }
 .cseq-record-scene .icon { color: #6fc7ff; }
+.cseq-record-tod .icon { color: #c4a1ff; }
 .cseq-record:disabled .icon { color: var(--gray-600); }
 
 .cseq-bar .cseq-toggles {

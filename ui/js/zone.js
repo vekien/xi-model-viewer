@@ -174,6 +174,21 @@ function looksLikeSubmesh(bytes, dv, p, sectionEnd, stride) {
   return true;
 }
 
+/** True when one AABB axis is nearly flat vs the longest (door/grate/card). */
+function isPlanarPositions(pos) {
+  let minX = Infinity, minY = Infinity, minZ = Infinity;
+  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  for (let i = 0; i + 2 < pos.length; i += 3) {
+    const x = pos[i], y = pos[i + 1], z = pos[i + 2];
+    if (x < minX) minX = x; if (y < minY) minY = y; if (z < minZ) minZ = z;
+    if (x > maxX) maxX = x; if (y > maxY) maxY = y; if (z > maxZ) maxZ = z;
+  }
+  const ex = maxX - minX, ey = maxY - minY, ez = maxZ - minZ;
+  const longest = Math.max(ex, ey, ez, 1e-6);
+  const shortest = Math.min(ex, ey, ez);
+  return shortest / longest < 0.08;
+}
+
 function parseZoneMeshSection(bytes, dv, section) {
   const ds = section.dataStart;
   const config = u32at(dv, ds + 4) & 0xFF;
@@ -295,10 +310,13 @@ function parseZoneMeshSection(bytes, dv, section) {
       // Blank-name prototype meshes (no 0x20 textures in the DAT) often author
       // floor/ceiling winding that back-face culls under our Y flip — two-sided.
       const blankTex = !textureName || !textureName.trim();
+      // Doors/grates/cards are thin slabs and frequently omit 0x2000; zone editor
+      // always uses DoubleSide. Auto two-sided when one AABB axis is ~flat.
+      const planar = isPlanarPositions(positions);
       prims.push({
         textureName: textureName || null,
         blend,
-        noCull: noCull || blankTex,
+        noCull: noCull || blankTex || planar,
         hasBlendPos: vertexBlend,
         positions: new Float32Array(positions),
         blendOffsets: vertexBlend ? new Float32Array(blendOffsets) : null,
@@ -691,12 +709,21 @@ export function resolveMeshName(meshId, meshes) {
   // Prototype zones: mesh DAT name is often "category meshid" (e.g. "twr2bai
   // ue_wallh") while placements store just "ue_wallh".
   const want = norm(meshId);
-  if (want.length >= 2) {
-    for (const key of meshes.keys()) {
-      const k = norm(key);
-      if (k === want) return key;
-      if (k.endsWith(want) || k.split(/\s+/).includes(want) || want.endsWith(k)) return key;
-    }
+  if (want.length < 2) return null;
+  // 1) Exact match after normalize (spaces/underscores).
+  for (const key of meshes.keys()) {
+    if (norm(key) === want) return key;
+  }
+  // 2) Prefix/suffix only when BOTH sides are substantial. Otherwise
+  //    want.endsWith(k) lets "wgtc" latch onto a 1-char section-id alias "c"
+  //    and the gate body vanishes while wgtc_sup still draws.
+  const MIN_FUZZ = 4;
+  if (want.length < MIN_FUZZ) return null;
+  for (const key of meshes.keys()) {
+    const k = norm(key);
+    if (k.length < MIN_FUZZ) continue;
+    if (k.endsWith(want) || want.endsWith(k)) return key;
+    if (k.split(/\s+/).includes(want)) return key;
   }
   return null;
 }
@@ -795,13 +822,21 @@ export function parseZone(datBuffer, keyTables) {
       }
     }
 
-    if (!meshes.has(meshName)) meshes.set(meshName, prims);
+    // Prefer the richer geometry when the same name appears twice (e.g. wgtc has
+    // a ~3KB stub section then a full ~44KB gate body — first-wins hid the gate).
+    const primVertCount = (ps) => ps.reduce((n, p) => n + ((p.positions?.length || 0) / 3), 0);
+    const keepRicher = (key, next) => {
+      const prev = meshes.get(key);
+      if (!prev) { meshes.set(key, next); return; }
+      if (primVertCount(next) > primVertCount(prev)) meshes.set(key, next);
+    };
+    keepRicher(meshName, prims);
     // Aliases for prototype placements that store a short id / section fourcc.
-    if (s.id && !meshes.has(s.id)) meshes.set(s.id, prims);
+    if (s.id) keepRicher(s.id, prims);
     const parts = meshName.split(/\s+/).filter(Boolean);
     if (parts.length > 1) {
       const tail = parts[parts.length - 1];
-      if (tail && !meshes.has(tail)) meshes.set(tail, prims);
+      if (tail) keepRicher(tail, prims);
     }
   }
 

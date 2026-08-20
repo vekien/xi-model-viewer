@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
-import { CameraSequence, driveCamera, poseFromCamera, sampleScene } from '../js/camseq.js';
+import { CameraSequence, driveCamera, poseFromCamera, sampleScene, sampleTod } from '../js/camseq.js';
 
 const DOC_KEY = 'camSeq';           // the sequence currently being edited
 const LIB_KEY = 'camSeqLibrary';    // { [name]: doc } — saved sequences
@@ -13,12 +13,12 @@ const MAX_FRAMES = 36000;           // 20 minutes at 30fps — a sanity bound, n
 const SCENE_HZ = 10;                // weather/time re-apply rate; see applyScene
 const MIN_W = 940;
 const DEFAULT_W = 940;
-const PANEL_H = 300;
+const PANEL_H = 320;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 const EMPTY_DOC = {
   name: '', totalFrames: 300, fps: 30, curve: true, loop: false, cine: true, snap: false,
-  camera: [], scene: [],
+  camera: [], scene: [], tod: [],
 };
 const SNAP_FRAMES = 15;
 const MIN_ZOOM = 1;
@@ -39,13 +39,26 @@ function toDoc(raw) {
   let curve = raw.curve;
   if (curve == null && raw.ease != null) curve = !!raw.ease;
   if (curve == null) curve = true;
+  const scene = Array.isArray(raw.scene) ? raw.scene : [];
+  // Older docs baked time-of-day into scene keys — split onto the tod track once.
+  let tod = Array.isArray(raw.tod) ? raw.tod : null;
+  if (!tod) {
+    tod = scene
+      .filter((k) => k.timeMinutes != null && Number.isFinite(k.timeMinutes))
+      .map((k, i) => ({
+        id: (k.id ?? i) + 1_000_000,
+        frame: k.frame,
+        timeMinutes: Math.round(k.timeMinutes),
+      }));
+  }
   return {
     ...EMPTY_DOC,
     ...raw,
     curve: !!curve,
     // `keys` is the pre-timeline field name — carry an old saved sequence over.
     camera: Array.isArray(raw.camera) ? raw.camera : (Array.isArray(raw.keys) ? raw.keys : []),
-    scene: Array.isArray(raw.scene) ? raw.scene : [],
+    scene,
+    tod,
     totalFrames: clamp(Math.round(raw.totalFrames ?? 300), MIN_FRAMES, MAX_FRAMES),
     fps: FPS_CHOICES.includes(raw.fps) ? raw.fps : 30,
   };
@@ -110,7 +123,7 @@ export function CameraSequencer({
   const dragRef = useRef(null);
   const kfDragRef = useRef(null);
   const idRef = useRef(
-    [...doc.camera, ...doc.scene].reduce((m, k) => Math.max(m, k.id ?? 0), 0) + 1,
+    [...doc.camera, ...doc.scene, ...doc.tod].reduce((m, k) => Math.max(m, k.id ?? 0), 0) + 1,
   );
   // Playback reads these from inside the rAF tick, where React state is stale.
   const playingRef = useRef(false);
@@ -175,24 +188,31 @@ export function CameraSequencer({
   // --- driving the scene ----------------------------------------------------
 
   /**
-   * Push the scene track's weather / time of day for a frame.
+   * Push scene weather + time-of-day tracks for a frame.
    *
-   * Rate-limited: each call re-resolves the environment and rebuilds the sky
-   * dome, which is interactive-rate work, not 60 Hz work (the zone panel's own
-   * day clock ticks at the same 10 Hz for the same reason). A weather *change*
-   * always goes through immediately — that's a 3.33s cross-fade you don't want
-   * starting up to a tenth of a second late.
+   * Time-of-day applies every frame (smooth sun lerp — same path as the slider).
+   * Weather still fires immediately on change; when neither weather nor time
+   * moved, a small throttle avoids redundant work while scrubbing the same spot.
    */
   sceneApplyRef.current = (easedF, force) => {
     const d = docRef.current;
-    if (!d.scene.length || !onScene) return;
-    const s = sampleScene(d.scene, easedF);
-    if (!s) return;
+    if (!onScene) return;
+    const s = d.scene.length ? sampleScene(d.scene, easedF) : null;
+    const t = d.tod.length ? sampleTod(d.tod, easedF) : null;
+    if (!s && !t) return;
+    const w = s?.weather ?? sceneRef.current.weather ?? weather;
+    // Dedicated tod track wins; legacy scene.timeMinutes is the fallback.
+    const minutes = t?.timeMinutes ?? s?.timeMinutes;
+    if (minutes == null && !s) return;
     const now = performance.now();
-    const changed = s.weather !== sceneRef.current.weather;
-    if (!force && !changed && now - sceneRef.current.at < 1000 / SCENE_HZ) return;
-    sceneRef.current = { at: now, weather: s.weather };
-    onScene(s.weather, s.timeMinutes);
+    const prevM = sceneRef.current.minutes;
+    const weatherChanged = w !== sceneRef.current.weather;
+    const timeChanged = minutes != null
+      && (prevM == null || Math.abs(minutes - prevM) > 1e-3);
+    if (!force && !weatherChanged && !timeChanged
+      && now - sceneRef.current.at < 1000 / SCENE_HZ) return;
+    sceneRef.current = { at: now, weather: w, minutes: minutes ?? prevM };
+    onScene(w, minutes != null ? minutes : timeMinutes);
   };
 
   // --- transport ------------------------------------------------------------
@@ -224,15 +244,17 @@ export function CameraSequencer({
 
   const play = () => {
     const cam = camera();
-    if (!cam || doc.camera.length < 2) return;
-    markRestore();
-    onStopClock?.();   // the zone day-clock would fight the scene track
+    const hasCam = doc.camera.length >= 2;
+    const hasTod = doc.tod.length >= 2 || doc.scene.length >= 1;
+    if (!cam || (!hasCam && !hasTod)) return;
+    if (hasCam) markRestore();
+    onStopClock?.();   // the zone day-clock would fight the scene/tod tracks
     // Parked at the end from the last run — start over rather than sit still.
     if (frameRef.current >= totalFrames) { frameRef.current = 0; setFrame(0); }
     playingRef.current = true;
     setPlaying(true);
-    cam.sequenceLock = true;
-    if (cine) enterCinematic();
+    if (hasCam) cam.sequenceLock = true;
+    if (cine && hasCam) enterCinematic();
   };
 
   /** `restore` puts the camera back where it was before the sequence took it. */
@@ -257,7 +279,9 @@ export function CameraSequencer({
       const s = seqRef.current;
       const cam = rendererRef.current?.camera;
       const d = docRef.current;
-      if (!s?.length || !cam) return;
+      if (!cam) return;
+      const hasCam = s?.length >= 2;
+      if (!hasCam && !d.tod?.length && !d.scene?.length) return;
       let f = frameRef.current + dt * d.fps;
       let done = false;
       if (f >= d.totalFrames) {
@@ -265,9 +289,12 @@ export function CameraSequencer({
         else { f = d.totalFrames; done = true; }
       }
       frameRef.current = f;
-      const pose = s.sample(f);
-      if (pose) driveCamera(cam, pose);
-      sceneApplyRef.current(s.easedFrame(f), false);
+      if (hasCam) {
+        const pose = s.sample(f);
+        if (pose) driveCamera(cam, pose);
+      }
+      const easedF = hasCam ? s.easedFrame(f) : f;
+      sceneApplyRef.current(easedF, false);
 
       // The playhead and the readout are written straight to the DOM: a React
       // update per frame would re-render the whole timeline 60 times a second.
@@ -361,7 +388,8 @@ export function CameraSequencer({
     if (cam) recordAt('camera', poseFromCamera(cam));
   };
 
-  const recordScene = () => recordAt('scene', { weather, timeMinutes: Math.round(timeMinutes) });
+  const recordScene = () => recordAt('scene', { weather });
+  const recordTod = () => recordAt('tod', { timeMinutes: Math.round(timeMinutes) });
 
   const selKey = (track, id) => `${track}:${id}`;
 
@@ -372,6 +400,7 @@ export function CameraSequencer({
       ...d,
       camera: d.camera.filter((k) => !drop.has(selKey('camera', k.id))),
       scene: d.scene.filter((k) => !drop.has(selKey('scene', k.id))),
+      tod: d.tod.filter((k) => !drop.has(selKey('tod', k.id))),
     }));
     setSelected((s) => s.filter((x) => !drop.has(selKey(x.track, x.id))));
   };
@@ -401,12 +430,12 @@ export function CameraSequencer({
     const dMax = Math.min(...items.map((it) => totalFrames - it.frame0));
     const d = clamp(Math.round(delta), dMin, dMax);
     setDoc((doc0) => {
-      const byTrack = { camera: new Map(), scene: new Map() };
+      const byTrack = { camera: new Map(), scene: new Map(), tod: new Map() };
       for (const it of items) {
         byTrack[it.track].set(it.id, it.frame0 + d);
       }
       const next = { ...doc0 };
-      for (const track of ['camera', 'scene']) {
+      for (const track of ['camera', 'scene', 'tod']) {
         const moves = byTrack[track];
         if (!moves.size) continue;
         const land = new Set(moves.values());
@@ -663,17 +692,27 @@ export function CameraSequencer({
   const seconds = (totalFrames / fps).toFixed(1);
   const shown = Math.round(frame);
   const canRecordScene = weathers.length > 0;
+  const canPlay = doc.camera.length >= 2 || doc.tod.length >= 2 || doc.scene.length >= 1;
   const style = {
     width,
     ...(pos ? { left: pos.x, top: pos.y, right: 'auto' } : null),
   };
 
+  const fmtTod = (m) => {
+    const mins = ((Math.round(m) % 1440) + 1440) % 1440;
+    const h = Math.floor(mins / 60);
+    const mm = mins % 60;
+    return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+  };
+
   const dot = (track, k, cls) => {
     const past = k.frame > totalFrames;
     const sel = selectedSet.has(selKey(track, k.id));
-    const tip = past
+    let tip = past
       ? `Frame ${k.frame} — past the end of the sequence`
       : `Frame ${k.frame} · ${(k.frame / fps).toFixed(2)}s · Shift+click multi · Del to remove`;
+    if (track === 'tod' && k.timeMinutes != null) tip = `${fmtTod(k.timeMinutes)} · ${tip}`;
+    if (track === 'scene' && k.weather) tip = `${k.weather} · ${tip}`;
     return (
       <Tooltip key={k.id} content={tip} placement="top">
         <span
@@ -799,6 +838,7 @@ export function CameraSequencer({
             <div className="cseq-tl-spacer" />
             <div className="cseq-tl-label">Camera</div>
             <div className="cseq-tl-label">Scene</div>
+            <div className="cseq-tl-label">Time</div>
           </div>
           <div className="cseq-tl-scroll" ref={scrollRef}>
             <div
@@ -820,6 +860,7 @@ export function CameraSequencer({
               </div>
               <div className="cseq-lane">{doc.camera.map((k) => dot('camera', k, 'cam'))}</div>
               <div className="cseq-lane">{doc.scene.map((k) => dot('scene', k, 'scn'))}</div>
+              <div className="cseq-lane">{doc.tod.map((k) => dot('tod', k, 'tod'))}</div>
               <div
                 className="cseq-playhead"
                 ref={playheadRef}
@@ -836,7 +877,7 @@ export function CameraSequencer({
               <button
                 type="button"
                 className={`cseq-play${playing ? ' playing' : ''}`}
-                disabled={doc.camera.length < 2}
+                disabled={!canPlay}
                 onClick={() => (playing ? stop(false) : play())}
               >
                 <span className="icon fill">{playing ? 'pause' : 'play_arrow'}</span>
@@ -863,7 +904,7 @@ export function CameraSequencer({
               </button>
             </Tooltip>
             <Tooltip
-              content={canRecordScene ? 'Record weather & time at playhead' : 'Load a zone with a sky first'}
+              content={canRecordScene ? 'Record weather at playhead' : 'Load a zone with a sky first'}
               placement="top"
             >
               <button
@@ -874,6 +915,20 @@ export function CameraSequencer({
               >
                 <span className="icon fill">radio_button_checked</span>
                 Scene
+              </button>
+            </Tooltip>
+            <Tooltip
+              content={canRecordScene ? 'Record time of day at playhead (lerps between keys)' : 'Load a zone with a sky first'}
+              placement="top"
+            >
+              <button
+                type="button"
+                className="cseq-record cseq-record-tod"
+                disabled={!canRecordScene}
+                onClick={recordTod}
+              >
+                <span className="icon fill">radio_button_checked</span>
+                Time
               </button>
             </Tooltip>
           </div>
@@ -910,7 +965,7 @@ export function CameraSequencer({
                 type="button"
                 className="icon-btn cseq-icon cseq-del"
                 aria-label="Clear all keyframes"
-                disabled={!doc.camera.length && !doc.scene.length}
+                disabled={!doc.camera.length && !doc.scene.length && !doc.tod.length}
                 onClick={clearAll}
               >
                 <span className="icon">layers_clear</span>

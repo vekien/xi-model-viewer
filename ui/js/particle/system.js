@@ -15,7 +15,11 @@ import { ParticleGenerator } from './runtime.js';
 // ── mesh providers (xim ParticleLinkedDataProviders) ───────────────────────
 
 class StaticMeshProvider {
-  constructor(meshes, isParticleMesh) { this.meshes = meshes; this.isParticleMesh = isParticleMesh; }
+  constructor(meshes, isParticleMesh, meshName = '') {
+    this.meshes = meshes;
+    this.isParticleMesh = isParticleMesh;
+    this.meshName = meshName || '';
+  }
   hasMeshes() { return this.meshes.length > 0; }
   getMeshes() { return this.meshes; }
 }
@@ -205,25 +209,54 @@ export class ParticleSystem {
   // ── registration (xim Area.registerEffects) ──────────────────────────────
 
   /**
-   * Register every auto-running generator in the zone's `effe` and `mode`
-   * directories under the zone association. These are the always-on effects:
-   * water surfaces, shoreline spray, fountains, torches.
+   * Register every auto-running generator that belongs to the zone itself
+   * (not a weather folder). Classic retail layout keeps these under
+   * `data/effe` and `data/mode`; prototype / town DATs (e.g. ROM10/2/12)
+   * park windmills (`mil*`), roof vanes (`mi*` → `fu_in`), water, etc.
+   * directly under the area root (`town/`). Weather generators stay in
+   * `weat/<id>/` and are activated by registerWeatherEffects instead.
    */
   registerZoneEffects() {
     const association = ZoneAssociation();
-    const effectRoot = this.areaRoot?.getNullableSubDirectory('data') ?? this.areaRoot;
-    if (!effectRoot) return 0;
+    const area = this.areaRoot;
+    if (!area) return 0;
 
+    const underWeather = (effect) => {
+      for (let d = effect.localDir; d; d = d.parent) {
+        if (d.id === 'weat') return true;
+      }
+      return false;
+    };
+
+    const seen = new Set();
     let n = 0;
-    for (const dirId of ['effe', 'mode']) {
-      const dir = effectRoot.getNullableSubDirectory(dirId);
-      if (!dir) continue;
+    const addFrom = (dir) => {
+      if (!dir) return;
       for (const effect of dir.collectByTypeRecursive(SEC.EFFECT)) {
-        if (!effect.def.autoRun) continue;
-        this.effectManager.register(association, this.createGenerator(effect, association, SINGLETON_EMIT_TIME));
+        if (!effect.def?.autoRun) continue;
+        if (underWeather(effect)) continue;
+        // Identity: same resource object, or same id under the same dir.
+        const key = effect.def?.datId
+          ? `${effect.localDir?.id ?? ''}\0${effect.def.datId}`
+          : effect;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        this.effectManager.register(
+          association,
+          this.createGenerator(effect, association, SINGLETON_EMIT_TIME),
+        );
         n++;
       }
+    };
+
+    // Classic: data/effe + data/mode.
+    const data = area.getNullableSubDirectory?.('data') ?? null;
+    if (data) {
+      addFrom(data.getNullableSubDirectory('effe'));
+      addFrom(data.getNullableSubDirectory('mode'));
     }
+    // Town / prototype: generators on the area root (and any non-weat subtree).
+    addFrom(area);
     return n;
   }
 
@@ -438,9 +471,10 @@ export class ParticleSystem {
     const cached = this._meshCache.get(resource);
     if (cached) return cached;
 
+    const meshName = resource.name || resource.id || link.id || '';
     const provider = resource.kind === 'particleMesh'
-      ? new StaticMeshProvider(resource.meshes, true)
-      : new StaticMeshProvider(resource.meshes, false);
+      ? new StaticMeshProvider(resource.meshes, true, meshName)
+      : new StaticMeshProvider(resource.meshes, false, meshName);
     this._meshCache.set(resource, provider);
     return provider;
   }
@@ -463,11 +497,30 @@ export class ParticleSystem {
       return section._resource;
     }
     // Older path: the id -> name -> geometry maps, which keep one entry per id.
-    const name = this.zoneMeshIdToName.get(key);
-    if (!name) return null;
-    const prims = this.zoneMeshes.get(name);
+    let name = this.zoneMeshIdToName.get(key);
+    // Some generators store a 4-char stem of the mesh name as the link id
+    // (e.g. "mill" / "fu_i") while the 0x2E name field is the full id
+    // ("mill" / "fu_in"). Fall back to a direct name lookup.
+    let prims = name ? this.zoneMeshes.get(name) : null;
+    if (!prims?.length) {
+      prims = this.zoneMeshes.get(key) ?? this.zoneMeshes.get(String(id || '').trim()) ?? null;
+      if (prims?.length) name = key;
+    }
+    if (!prims?.length && key.length >= 3) {
+      // Prefix match: generator link "fu_i" → mesh "fu_in". Require the mesh
+      // name to start with the link (not the reverse) so short keys don't grab
+      // unrelated meshes.
+      for (const [meshName, p] of this.zoneMeshes) {
+        const n = String(meshName).toLowerCase();
+        if (n === key || n.startsWith(key)) {
+          name = meshName;
+          prims = p;
+          break;
+        }
+      }
+    }
     if (!prims?.length) return null;
-    return { kind: 'zoneMesh', id, name, meshes: prims.map(primToMesh) };
+    return { kind: 'zoneMesh', id, name: name || key, meshes: prims.map(primToMesh) };
   }
 
   /**

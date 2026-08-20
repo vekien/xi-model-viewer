@@ -493,6 +493,14 @@ export default function App() {
     try { localStorage.setItem('skybox', next ? '1' : '0'); } catch { /* quota */ }
     if (rendererRef.current) rendererRef.current.showSkybox = next;
   }, []);
+  /** Unplaced 0x2E meshes at origin (orphans). Off by default — can be huge shells. */
+  const [showUnplaced, setShowUnplacedState] = useState(() => localStorage.getItem('unplaced') === '1');
+  const setUnplaced = useCallback((on) => {
+    const next = !!on;
+    setShowUnplacedState(next);
+    try { localStorage.setItem('unplaced', next ? '1' : '0'); } catch { /* quota */ }
+    if (rendererRef.current) rendererRef.current.showUnplaced = next;
+  }, []);
   const [hasCollision, setHasCollision] = useState(false);
   const [hasNavmesh, setHasNavmesh] = useState(false);
   const [hasSkybox, setHasSkybox] = useState(false);
@@ -751,6 +759,8 @@ export default function App() {
     renderer.setFogOverride({ enabled: fogOn, scale: fogScale });
     renderer.camera.fovDegrees = fov;
     renderer.playbackSpeed = playbackSpeedRef.current;
+    renderer.showSkybox = localStorage.getItem('skybox') === '1';
+    renderer.showUnplaced = localStorage.getItem('unplaced') === '1';
     // Restore View > Toggle WASD from last session.
     if (wasdRef.current) renderer.camera.setMode('fly');
     // Seed the toolbar readout so it never shows 0 before the first frame.
@@ -1929,6 +1939,8 @@ export default function App() {
       renderer.showNavmesh = false;
       // Restore the saved skybox preference (off if this zone has no sky).
       setSkybox(hasSky && localStorage.getItem('skybox') === '1');
+      renderer.showUnplaced = localStorage.getItem('unplaced') === '1';
+      setShowUnplacedState(renderer.showUnplaced);
       // Navmesh from public/navmesh/<ZoneName>.nav (async; doesn't block load).
       setHasNavmesh(false);
       loadZoneNavmesh(displayName).then((nav) => {
@@ -3970,62 +3982,99 @@ export default function App() {
     // fit() already reseats fly mode when active
   }, [setWasd]);
 
-  // Drive the EnvironmentManager rather than re-resolving the DAT: changing
-  // weather starts a 3.33s cross-fade of sky, fog, lighting and the two
-  // weathers' particle sets, exactly as the game does it.
+  // Live weather/time for the TOD clock and sequencer (avoid stale closures).
+  const todStateRef = useRef({ weather: '', minutes: 12 * 60 });
+  todStateRef.current = { weather, minutes: timeMinutes };
+  const todUiAtRef = useRef(0);
+  const todMusicHourRef = useRef(-1);
+
+  /**
+   * Drive EnvironmentManager for weather / time of day.
+   *
+   * Weather changes: full switchWeather + sky rebuild (3.33s cross-fade).
+   * Time-only (sequencer TOD play, day clock, slider): lighting every call so
+   * the sun eases smoothly; sky dome rebuilds ~every 30 game-seconds so the
+   * gradient keeps up without hitching on a GPU buffer rebuild each frame.
+   * React state is throttled during rapid ticks so the App tree doesn't re-
+   * render at 60 Hz (the readout still updates ~20×/s).
+   */
   const applyWeatherTime = useCallback((w, tm) => {
-    setWeather(w);
-    setTimeMinutes(tm);
+    const minutes = ((Number(tm) % 1440) + 1440) % 1440;
+    const prev = todStateRef.current;
+    const weatherChanged = w !== prev.weather;
+    todStateRef.current = { weather: w, minutes };
+
+    const now = performance.now();
+    if (weatherChanged || now - todUiAtRef.current > 50) {
+      todUiAtRef.current = now;
+      setWeather(w);
+      setTimeMinutes(minutes);
+    }
+
     const env = zoneEnvManagerRef.current;
     const renderer = rendererRef.current;
     if (!renderer) return;
     try {
       if (env) {
-        if (tm !== env.getTimeMinutes()) env.setTimeMinutes(tm);
-        env.switchWeather(w);
-        // Day/night BGM follows the clock (FFXI flips at 06:00 and 18:00).
-        const hour = Math.floor(tm / 60);
-        resolveZoneTrack(zoneMusicIdRef.current, hour < 6 || hour >= 18);
-        renderer.skyWeather = env.getWeather();
-        // The per-frame update pushes lighting from here on; set it once now so
-        // a paused scene reflects the change immediately.
-        renderer.setTerrainLighting(env.getTerrainLighting());
-        renderer.setSkyDome(env.getSkyDome());
+        if (minutes !== env.getTimeMinutes()) env.setTimeMinutes(minutes);
+        if (weatherChanged) {
+          env.switchWeather(w);
+          renderer.skyWeather = env.getWeather();
+          renderer.setSkyDome(env.getSkyDome());
+          renderer._skyBuiltAt = env.clock.currentTimeOfDayInSeconds();
+        } else {
+          // Smooth sun / ambient every tick; sky colours catch up on a short lag.
+          renderer.setTerrainLighting(env.getTerrainLighting());
+          const tod = env.clock.currentTimeOfDayInSeconds();
+          const built = renderer._skyBuiltAt;
+          if (built == null || Math.abs(tod - built) > 30 || env.weatherTransition) {
+            renderer.setSkyDome(env.getSkyDome());
+            renderer._skyBuiltAt = tod;
+          }
+        }
+        // Day/night BGM flips at 06:00 and 18:00 — only re-resolve on boundary.
+        const hour = Math.floor(minutes / 60);
+        const night = hour < 6 || hour >= 18;
+        const musicHour = night ? 0 : 12;
+        if (weatherChanged || musicHour !== todMusicHourRef.current) {
+          todMusicHourRef.current = musicHour;
+          resolveZoneTrack(zoneMusicIdRef.current, night);
+        }
+        if (weatherChanged) {
+          renderer.setTerrainLighting(env.getTerrainLighting());
+        }
         return;
       }
       const envs = zoneEnvsRef.current;
       if (!envs) return;
-      const resolved = resolveEnvironment(envs, w, tm);
-      renderer.setTerrainLighting(terrainLightingFromEnv(resolved, tm));
-      renderer.setSkyDome(skyDomeFromEnv(resolved));
-      renderer.skyWeather = w;
+      const resolved = resolveEnvironment(envs, w, minutes);
+      renderer.setTerrainLighting(terrainLightingFromEnv(resolved, minutes));
+      if (weatherChanged) {
+        renderer.setSkyDome(skyDomeFromEnv(resolved));
+        renderer.skyWeather = w;
+      }
     } catch (e) { console.warn('weather apply failed', e); }
   }, [resolveZoneTrack]);
 
-  // Mirrored so the clock ticker below can read the live weather/time without
-  // listing them as effect deps — they change on every tick it fires.
-  const todStateRef = useRef({ weather: '', minutes: 12 * 60 });
-  todStateRef.current = { weather, minutes: timeMinutes };
-
   /**
    * Run the game clock: one full FFXI day per TOD_DAY_MS of real time.
-   *
-   * Ticked on a timer rather than per frame — each step re-resolves the
-   * environment and rebuilds the sky dome, which is interactive-rate work, not
-   * 60 Hz work. Reading the time back from state each tick (instead of
-   * accumulating privately) means dragging the slider mid-run just moves the
-   * clock rather than fighting the ticker.
+   * rAF + light time path so the sun eases like the slider, not 10 Hz jumps.
    */
   useEffect(() => {
     if (!todPlaying) return undefined;
     const TOD_DAY_MS = 60000;
-    const TICK_MS = 100;
-    const perTick = (1440 * TICK_MS) / TOD_DAY_MS;
-    const id = setInterval(() => {
+    const perSec = 1440 / (TOD_DAY_MS / 1000);
+    let last = performance.now();
+    let raf = 0;
+    const tick = (now) => {
+      const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+      last = now;
       const { weather: w, minutes } = todStateRef.current;
-      applyWeatherTime(w, (minutes + perTick) % 1440);
-    }, TICK_MS);
-    return () => clearInterval(id);
+      applyWeatherTime(w, (minutes + perSec * dt) % 1440);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
   }, [todPlaying, applyWeatherTime]);
 
   // Leaving the Zones view takes its panel — and the stop button — off screen,
@@ -4548,6 +4597,8 @@ export default function App() {
           onSelectInstance={focusPlacementInstance}
           onClose={() => setPlcOpen(false)}
           showEnv={showSkybox}
+          showUnplaced={showUnplaced}
+          onToggleUnplaced={() => setUnplaced(!showUnplaced)}
           liveSelection={liveSelection}
           onToggleLiveSelection={toggleLiveSelection}
           isPlacementMoved={isPlacementMoved}

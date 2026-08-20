@@ -7,6 +7,7 @@ import { SkeletonPose } from './pose.js';
 import { ParticleDrawer } from './particleDrawer.js';
 import { Vec3 } from './particle/math.js';
 import { buildSolidGizmoMeshes, gizmoSize } from './zoneGizmo.js';
+import { bakeSpinnerDraws } from './zoneModel.js';
 
 const MAX_JOINTS = 160;
 
@@ -677,6 +678,8 @@ export class Renderer {
     this.shadowSunDir = ENTITY_SUN_DAT;   // light dir in the space being drawn
 
     this.zoneBatches = [];
+    this.zoneSpinnerBatches = [];   // live-spin companions (mill on w_mill)
+    this.zoneSpinnerAngle = 0;
     this.zoneDisableCull = false;   // debug: ignore the per-submesh cull flag
     // Coplanar water/overlay submeshes: retail-style LEQUAL lets equal-depth blend
     // fragments pass. Off = strict LESS (old behaviour) for A/B comparison.
@@ -764,6 +767,8 @@ export class Renderer {
     this.showNavmesh = false;
     this.showSoundMarkers = false;  // zone positional SFX (waterfalls, surf)
     this.showSkybox = false;
+    /** Draw 0x2E meshes with no 0x1C placement (at origin). Off by default. */
+    this.showUnplaced = false;
     this.collisionOpacity = 0.45;
     this.navmeshOpacity = 0.40;
 
@@ -960,6 +965,12 @@ export class Renderer {
       gl.deleteBuffer(b.vbo);
       if (b.vao) gl.deleteVertexArray(b.vao);
     }
+    for (const b of this.zoneSpinnerBatches) {
+      gl.deleteBuffer(b.vbo);
+      if (b.vao) gl.deleteVertexArray(b.vao);
+    }
+    this.zoneSpinnerBatches = [];
+    this.zoneSpinnerAngle = 0;
     this.particleDrawer?.disposeMeshes();
     this.particleSystem = null;
     this.particleEnvironment = null;
@@ -1004,6 +1015,7 @@ export class Renderer {
         const batch = this.buildZoneBatch(draw);
         if (batch) this.zoneBatches.push(batch);
       }
+      this._rebuildZoneSpinners();
     }
 
     // Equipment occlusion (xim): a piece is dropped when another equipped mesh
@@ -1897,6 +1909,11 @@ export class Renderer {
     if (this.windFactor >= 1) { this.windFactor = 1; this.windDir = -1; }
     else if (this.windFactor <= 0) { this.windFactor = 0; this.windDir = 1; }
 
+    if (this.model?.kind === 'zone' && this.model.zoneSpinners?.length) {
+      this.zoneSpinnerAngle += dtSeconds;
+      this._rebuildZoneSpinners();
+    }
+
     this._updateEnvironment(dtSeconds);
 
     const aspect = this.canvas.width / this.canvas.height;
@@ -1963,6 +1980,7 @@ export class Renderer {
       // exactly as xim does it — there is no separate textured sky-shell pass.
       if (this.showSkybox) this._drawSky(viewProj, eye);
       this._drawZone(viewProj, eye, fogFar);
+      this._drawZoneSpinners(viewProj, eye, fogFar);
       this._drawZoneMoveProxy(viewProj, eye, fogFar);
       this._drawParticles();
       this._drawOverlay(viewProj, this.showCollision ? this.collisionOverlay : null, this.collisionOpacity);
@@ -2286,6 +2304,8 @@ export class Renderer {
         // difference between a shadow pass that doubles frame time and one
         // that barely shows.
         ax, ay, cx, cy, r: R,
+        // World-space centre of the cascade disc (camera-relative for zones).
+        worldCentre: centre,
       };
     });
     return true;
@@ -2341,15 +2361,27 @@ export class Renderer {
         gl.uniformMatrix4fv(u.lightViewProj, false, cascade.lvp);
         gl.uniform1i(u.texture, 0);
         let curWind = null, curCutout = null, curTex = null;
-        for (const batch of this.zoneBatches) {
+        const zoneCasters = this.zoneSpinnerBatches.length
+          ? this.zoneBatches.concat(this.zoneSpinnerBatches)
+          : this.zoneBatches;
+        for (const batch of zoneCasters) {
           // Water and soft-edge overlays are blended surfaces — casting from
           // them would drop a hard slab of shade over everything beneath the sea.
-          if (batch.blend || batch.layer === 'sky' || batch.celestial) continue;
+          if (batch.blend || batch.layer === 'sky' || batch.layer === 'unplaced' || batch.celestial) continue;
           // Bounding sphere vs this cascade's two light-space slabs. The depth
           // axis is deliberately not tested: a caster far up the light
           // direction is exactly the one that still needs to reach the ground.
           const c = batch.center;
           if (c) {
+            // Sky/env shells enclose the whole cascade disc — their silhouette
+            // paints a huge camera-following arch that grows with shadow range.
+            // If the cascade centre sits well inside the batch sphere, skip.
+            const wc = cascade.worldCentre;
+            if (wc && batch.radius > cascade.r) {
+              const dx = c[0] - wc[0], dy = c[1] - wc[1], dz = c[2] - wc[2];
+              const dist = Math.hypot(dx, dy, dz);
+              if (dist + cascade.r * 1.05 < batch.radius) continue;
+            }
             const reach = cascade.r + batch.radius;
             const px = cascade.ax[0] * c[0] + cascade.ax[1] * c[1] + cascade.ax[2] * c[2];
             if (Math.abs(px - cascade.cx) > reach) continue;
@@ -2364,6 +2396,20 @@ export class Renderer {
           if (tex !== curTex) { gl.bindTexture(gl.TEXTURE_2D, tex); curTex = tex; }
           gl.bindVertexArray(batch.vao);
           gl.drawArrays(gl.TRIANGLES, 0, batch.count);
+        }
+        // Zone particle props (mil* windmills, mi* roof vanes, water, …).
+        if (this.particleSystem && this.showEffects !== false) {
+          try {
+            if (!this.particleDrawer) this.particleDrawer = new ParticleDrawer(gl);
+            this.particleDrawer.setTextures(this.textures);
+            this.particleDrawer.castShadows({
+              system: this.particleSystem,
+              lightViewProj: cascade.lvp,
+              alphaOn,
+            });
+          } catch (e) {
+            console.warn('particle shadow cast failed', e);
+          }
         }
       } else {
         const u = this.shadowEntityUniforms;
@@ -2475,6 +2521,32 @@ export class Renderer {
     * order so overlay/decal submeshes composite over the surfaces drawn before
     * them. Sorting or bucketing here is exactly what breaks that layering.
     */
+  _rebuildZoneSpinners() {
+    const gl = this.gl;
+    for (const b of this.zoneSpinnerBatches) {
+      gl.deleteBuffer(b.vbo);
+      if (b.vao) gl.deleteVertexArray(b.vao);
+    }
+    this.zoneSpinnerBatches = [];
+    const spinners = this.model?.zoneSpinners;
+    if (!spinners?.length) return;
+    for (const sp of spinners) {
+      const angle = this.zoneSpinnerAngle * (sp.spinY || 0);
+      for (const draw of bakeSpinnerDraws(sp, angle)) {
+        const batch = this.buildZoneBatch(draw);
+        if (batch) this.zoneSpinnerBatches.push(batch);
+      }
+    }
+  }
+
+  _drawZoneSpinners(viewProj, eye, fogFar) {
+    if (!this.zoneSpinnerBatches.length) return;
+    const saved = this.zoneBatches;
+    this.zoneBatches = this.zoneSpinnerBatches;
+    this._drawZone(viewProj, eye, fogFar);
+    this.zoneBatches = saved;
+  }
+
   _drawZone(viewProj, eye, fogFar) {
     const gl = this.gl;
     if (this.zoneBatches.length === 0) return;
@@ -2515,8 +2587,9 @@ export class Renderer {
     let curDepthFunc = gl.LESS;
 
     for (const batch of this.zoneBatches) {
-      // Everything here is placed world geometry; sky shells and 0x05 effect
-      // meshes are drawn by the particle system, not from this list.
+      // Unplaced orphans (layer 'unplaced') sit at the origin — optional debug.
+      if (batch.layer === 'unplaced' && !this.showUnplaced) continue;
+      // Sky/water shells and 0x05 effects are not in this list (particle system).
 
       // Alpha toggled off in the viewer: draw blend submeshes as solids.
       const blend = alphaOn && batch.blend;
@@ -2860,6 +2933,7 @@ export class Renderer {
       const batch = this.buildZoneBatch(draw);
       if (batch) this.zoneBatches.push(batch);
     }
+    this._rebuildZoneSpinners();
   }
 
   /** Temporary geometry for the placement being dragged. */

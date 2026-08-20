@@ -12,6 +12,7 @@ const DEFAULT_H = 500;
  */
 export function PlacementPanel({
   groups, selectedKey, onSelectGroup, onSelectInstance, onClose, showEnv = false,
+  showUnplaced = false, onToggleUnplaced,
   liveSelection = false, onToggleLiveSelection, onResetPlacement, isPlacementMoved,
 }) {
   const [query, setQuery] = useState('');
@@ -24,10 +25,16 @@ export function PlacementPanel({
   const drag = useRef(null);
   const selectedRef = useRef(null);
 
+  const hasUnplaced = useMemo(
+    () => !!groups?.some((g) => g.kind === 'unplaced'),
+    [groups],
+  );
+
   const visibleGroups = useMemo(() => {
     if (!groups?.length) return [];
-    // Env (sky/water) only appear when Toggle Skybox is on.
-    return groups.filter((g) => !g.kind || showEnv);
+    // Env (sky/water) only when Toggle Skybox is on.
+    // Unplaced orphans always list; draw is gated by showUnplaced in the renderer.
+    return groups.filter((g) => !g.kind || g.kind === 'unplaced' || showEnv);
   }, [groups, showEnv]);
 
   const filtered = useMemo(() => {
@@ -139,6 +146,21 @@ export function PlacementPanel({
             </button>
           </Tooltip>
         )}
+        {hasUnplaced && typeof onToggleUnplaced === 'function' && (
+          <Tooltip content={showUnplaced
+            ? 'Hide unplaced meshes (origin orphans)'
+            : 'Show unplaced meshes at origin'}>
+            <button
+              type="button"
+              className={`icon-btn plc-tool${showUnplaced ? ' on' : ''}`}
+              aria-pressed={showUnplaced}
+              aria-label="Show unplaced meshes"
+              onClick={onToggleUnplaced}
+            >
+              <span className="icon">visibility</span>
+            </button>
+          </Tooltip>
+        )}
         <Tooltip content={minimized ? 'Restore' : 'Minimize'}>
           <button
             type="button"
@@ -180,7 +202,9 @@ export function PlacementPanel({
             {filtered.map((g) => {
               const isOpen = openMesh === g.mesh || (!!query && g.instances.length <= 40);
               const groupSel = selectedKey === `mesh:${g.mesh}`;
-              const envClass = g.kind === 'water' ? ' env-water' : g.kind === 'sky' ? ' env-sky' : '';
+              const envClass = g.kind === 'water' ? ' env-water'
+                : g.kind === 'sky' ? ' env-sky'
+                  : g.kind === 'unplaced' ? ` env-unplaced${showUnplaced ? '' : ' dim'}` : '';
               return (
                 <div key={`${g.kind || 'w'}:${g.mesh}`} className={`plc-group${isOpen ? ' open' : ''}${groupSel ? ' selected' : ''}${envClass}`}>
                   <div
@@ -190,10 +214,9 @@ export function PlacementPanel({
                       setOpenMesh(isOpen && openMesh === g.mesh ? null : g.mesh);
                       onSelectGroup?.(g);
                     }}
-                    title={`${displayLabel(g)} — ${g.count} instance${g.count === 1 ? '' : 's'}`}
                   >
                     <span className="caret icon">chevron_right</span>
-                    <span className="kind icon">{g.kind === 'water' ? 'water' : g.kind === 'sky' ? 'cloud' : 'deployed_code'}</span>
+                    <span className="kind icon">{g.kind === 'water' ? 'water' : g.kind === 'sky' ? 'cloud' : g.kind === 'unplaced' ? 'visibility_off' : 'deployed_code'}</span>
                     <span className="plc-name">{displayLabel(g)}</span>
                     <span className="badge">{g.count}</span>
                   </div>
@@ -267,5 +290,6 @@ function fmt3(v) {
 function displayLabel(g) {
   if (g.kind === 'water') return `(WATER) ${g.mesh}`;
   if (g.kind === 'sky') return `(SKYBOX) ${g.mesh}`;
+  if (g.kind === 'unplaced') return `(UNPLACED) ${g.mesh}`;
   return g.mesh;
 }

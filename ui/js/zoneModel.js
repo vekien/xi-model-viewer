@@ -251,22 +251,33 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
       rot: p.rot || [0, 0, 0],
       scale: p.scale || [1, 1, 1],
       bounds,
-      kind, // null | 'sky' | 'water'
+      kind, // null | 'sky' | 'water' | 'unplaced'
     });
   };
 
   // World geometry: 0x1C placements. Anything with a real placement is world
   // geometry and draws in world space, sky-ish name or not — `kind` only
   // classifies it for the objects panel.
+  /** @type {{ meshId: string, resolved: string, pos: number[], rot: number[], scale: number[], matrix: Float32Array }[]} */
+  const placedWorld = [];
   for (const p of placements) {
     if (!isSanePlacement(p)) { skippedWild++; continue; }
     const resolved = resolveMeshName(p.meshId, meshes);
     if (!resolved) { skippedMissing++; continue; }
     placedMeshes.add(resolved);
+    // Aliases (section id / short tail) count as placed too.
+    placedMeshes.add(p.meshId);
     const kind = envKindOf(resolved);
     const matrix = trsMatrix(p.pos, p.rot, p.scale);
     emitMesh(resolved, matrix, 'world');
     pushPlacement(p, resolved, matrix, kind);
+    if (!kind) {
+      placedWorld.push({
+        meshId: p.meshId, resolved,
+        pos: p.pos, rot: p.rot || [0, 0, 0], scale: p.scale || [1, 1, 1],
+        matrix,
+      });
+    }
   }
 
   // 0x05 effect geometry — water surfaces, spray, godrays, thunder — is no
@@ -306,6 +317,114 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
       bounds: local ? transformBoundsDisplay(local, IDENTITY) : { min: [-1, -1, -1], max: [1, 1, 1] },
       kind: 'sky',
     });
+  }
+
+  // Unplaced 0x2E meshes (no 0x1C record).
+  // Companion attach is intentionally NARROW — a loose "stem startsWith" rule
+  // was instancing every roof_* onto every roof placement and hanging loads.
+  //
+  // Windmill kit on w_mill:
+  //   mill     = full wheel → companion + live Y-spin (mil* gens use the same
+  //              mesh at OTHER world positions via the particle system)
+  //   mil_pol  = axle, static
+  //   mil_wing = HALF wheel only (local X ≤ 0) — never attach (looks broken)
+  // fu_in is particle-only (mi* gens). mil_wing is a half-mesh leftover — hide.
+  // Other orphans → layer 'unplaced'.
+  const isParticleOnlyMesh = (name) => {
+    const n = String(name || '').toLowerCase();
+    return n === 'fu_in' || n === 'fu_i' || n === 'mil_wing';
+  };
+  const isMillCompanion = (placedName, unplacedName) => {
+    const p = String(placedName || '').toLowerCase();
+    const u = String(unplacedName || '').toLowerCase();
+    if (p !== 'w_mill') return false;
+    return u === 'mill' || u === 'mil_pol';
+  };
+  const isMillSpinner = (name) => String(name || '').toLowerCase() === 'mill';
+
+  let unplacedCompanions = 0;
+  let unplacedOrphans = 0;
+  /** @type {{ meshName: string, prims: object[], pos: number[], rot: number[], scale: number[], spinY: number }[]} */
+  const zoneSpinners = [];
+  // meshes Map stores aliases (section id / name tail) → same prims array.
+  const seenPrims = new Set();
+  for (const meshName of meshes.keys()) {
+    const prims = meshes.get(meshName);
+    if (!prims?.length || seenPrims.has(prims)) continue;
+    seenPrims.add(prims);
+    if (placedMeshes.has(meshName)) continue;
+    // If any alias of this prims set was placed, skip.
+    let already = false;
+    for (const [k, v] of meshes) {
+      if (v === prims && placedMeshes.has(k)) { already = true; break; }
+    }
+    if (already) continue;
+    if (envKindOf(meshName)) continue;
+    if (meshName.length < 3) continue;
+    // Particle system draws these (pos + rotation) — no static/unplaced copy.
+    if (isParticleOnlyMesh(meshName)) continue;
+    // mill is both particle-driven (mil1..6) and a w_mill companion spinner.
+    // Skip origin orphan; companions handled below when hosts exist.
+    if (isMillSpinner(meshName)) {
+      const hosts = placedWorld.filter(
+        (h) => isMillCompanion(h.resolved, meshName) || isMillCompanion(h.meshId, meshName),
+      );
+      if (hosts.length) {
+        for (const h of hosts) {
+          // ~0.01745 rad/frame @ 30fps — same as mil* RotationVelocitySetup.
+          zoneSpinners.push({
+            meshName,
+            prims,
+            pos: h.pos,
+            rot: h.rot,
+            scale: h.scale,
+            spinY: 0.0174533 * 30,
+          });
+          pushPlacement(
+            { meshId: meshName, index: -1, pos: h.pos, rot: h.rot, scale: h.scale },
+            meshName,
+            h.matrix,
+            null,
+          );
+          unplacedCompanions++;
+        }
+        placedMeshes.add(meshName);
+      }
+      continue;
+    }
+
+    const hosts = placedWorld.filter(
+      (h) => isMillCompanion(h.resolved, meshName) || isMillCompanion(h.meshId, meshName),
+    );
+    if (hosts.length) {
+      for (const h of hosts) {
+        emitMesh(meshName, h.matrix, 'world');
+        pushPlacement(
+          { meshId: meshName, index: -1, pos: h.pos, rot: h.rot, scale: h.scale },
+          meshName,
+          h.matrix,
+          null,
+        );
+        unplacedCompanions++;
+      }
+      placedMeshes.add(meshName);
+      continue;
+    }
+
+    // Orphan at origin — layer 'unplaced' so the renderer can toggle visibility
+    // (off by default; avoids grey sky-shells through the zone).
+    if (!localBounds.has(meshName)) {
+      const b = meshLocalBounds(prims);
+      if (b) localBounds.set(meshName, b);
+    }
+    emitMesh(meshName, IDENTITY, 'unplaced');
+    pushPlacement(
+      { meshId: meshName, index: -1, pos: [0, 0, 0], rot: [0, 0, 0], scale: [1, 1, 1] },
+      meshName,
+      IDENTITY,
+      'unplaced',
+    );
+    unplacedOrphans++;
   }
 
   // Freeze the ordered draw list into GPU-ready typed arrays. zBias mirrors xim:
@@ -398,6 +517,8 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
     // draws zoneDraws in order with per-draw GL state (xim GLDrawer.drawXim).
     meshGroups: [],
     zoneDraws,
+    // Live-spin companions (mill on w_mill). Renderer re-bakes each frame.
+    zoneSpinners,
     textures: outTextures,
     animations: [],
     schedules: [],
@@ -410,7 +531,9 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
     collision,
     zoneStats: {
       meshCount: meshes.size,
-      placementCount: zonePlacements.filter((p) => !p.kind).length,
+      placementCount: zonePlacements.filter((p) => !p.kind || p.kind === 'unplaced').length,
+      unplacedCompanions,
+      unplacedOrphans,
       envCount: zonePlacements.filter((p) => p.kind).length,
       placementTotal: placements.length,
       skippedWild,
@@ -423,8 +546,70 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
       collTris: collision?.triCount ?? 0,
     },
   };
-  model.isRenderable = zoneDraws.length > 0;
+  model.isRenderable = zoneDraws.length > 0 || zoneSpinners.length > 0;
   return model;
+}
+
+/**
+ * Bake one spinner instance at angleY (radians, FFXI local Y) into zoneDraws-
+ * shaped entries. Vane cards are two-sided (noCull forced).
+ */
+export function bakeSpinnerDraws(spinner, angleY = 0) {
+  const prims = spinner?.prims;
+  if (!prims?.length) return [];
+  const [px, py, pz] = spinner.pos || [0, 0, 0];
+  const [rx, ry0, rz] = spinner.rot || [0, 0, 0];
+  const sc = spinner.scale || [1, 1, 1];
+  const matrix = trsMatrix([px, py, pz], [rx, ry0 + angleY, rz], sc);
+  const mirrored = det3(matrix) < 0;
+  const order = mirrored ? [0, 2, 1] : [0, 1, 2];
+  const out = [];
+  for (const prim of prims) {
+    const texName = prim.textureName || null;
+    const positions = [];
+    const normals = [];
+    const uvs = [];
+    const colors = [];
+    const blendOffsets = [];
+    const n = prim.positions.length / 3;
+    for (let t = 0; t + 2 < n; t += 3) {
+      for (const k of order) {
+        const i = t + k;
+        const i3 = i * 3, i2 = i * 2, i4 = i * 4;
+        const [wx, wy, wz] = mulPoint(matrix, prim.positions[i3], prim.positions[i3 + 1], prim.positions[i3 + 2]);
+        const [nx, ny, nz] = mulDir(matrix, prim.normals[i3], prim.normals[i3 + 1], prim.normals[i3 + 2]);
+        const [dx, dy, dz] = toDisplay(wx, wy, wz);
+        const [dnx, dny, dnz] = toDisplay(nx, ny, nz);
+        positions.push(dx, dy, dz);
+        normals.push(dnx, dny, dnz);
+        uvs.push(prim.uvs[i2], prim.uvs[i2 + 1]);
+        colors.push(
+          clamp255(prim.colors[i4]),
+          clamp255(prim.colors[i4 + 1]),
+          clamp255(prim.colors[i4 + 2]),
+          clamp255(prim.colors[i4 + 3]),
+        );
+        blendOffsets.push(0, 0, 0);
+      }
+    }
+    if (positions.length < 9) continue;
+    out.push({
+      layer: 'world',
+      textureName: texName,
+      blend: !!prim.blend,
+      noCull: true,
+      discard: discardThresholdFor(spinner.meshName),
+      wind: false,
+      zBias: prim.blend ? 5 : 0,
+      count: positions.length / 3,
+      positions: new Float32Array(positions),
+      blendOffsets: new Float32Array(blendOffsets),
+      normals: new Float32Array(normals),
+      uvs: new Float32Array(uvs),
+      colors: new Uint8Array(colors),
+    });
+  }
+  return out;
 }
 
 /** Strip leveleditor `game/` prefix → path relative to the install root. */

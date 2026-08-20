@@ -216,27 +216,51 @@ function poseOf(k) {
 }
 
 /**
- * Scene track: [{ frame, weather, timeMinutes }] → the zone state at frame `f`.
+ * Scene track: [{ frame, weather, timeMinutes? }] → weather (and legacy time).
  *
  * Weather STEPS — it is an id, there is nothing between "Rain" and "Clear", and
  * the environment manager runs its own 3.33s cross-fade when the id changes.
- * Time of day LERPS between keyframes, which is what makes a sunset possible
- * over the length of a shot. Nothing before the first keyframe: an empty track
- * leaves the zone exactly as the user set it.
+ * Time of day lives on the dedicated `tod` track (`sampleTod`); older saves
+ * that baked minutes into scene keys still expose `timeMinutes` here as a
+ * fallback. Empty track → leave the zone as the user set it.
  */
 export function sampleScene(keys, f) {
   if (!keys?.length) return null;
   const k = keys.slice().sort((a, b) => a.frame - b.frame);
-  if (f <= k[0].frame) return { weather: k[0].weather, timeMinutes: k[0].timeMinutes };
+  if (f <= k[0].frame) {
+    return { weather: k[0].weather, timeMinutes: k[0].timeMinutes };
+  }
   const last = k[k.length - 1];
-  if (f >= last.frame) return { weather: last.weather, timeMinutes: last.timeMinutes };
+  if (f >= last.frame) {
+    return { weather: last.weather, timeMinutes: last.timeMinutes };
+  }
   let i = 0;
   while (i < k.length - 2 && f > k[i + 1].frame) i++;
   const a = k[i];
   const b = k[i + 1];
   const u = (f - a.frame) / ((b.frame - a.frame) || 1);
+  const ta = a.timeMinutes, tb = b.timeMinutes;
   return {
     weather: a.weather,
-    timeMinutes: a.timeMinutes + (b.timeMinutes - a.timeMinutes) * u,
+    timeMinutes: (ta != null && tb != null) ? ta + (tb - ta) * u : ta ?? tb,
   };
+}
+
+/**
+ * Time-of-day track: [{ frame, timeMinutes }] → minutes past midnight at `f`.
+ * Lerps between keys so a sunset can span a shot. Empty → null (caller keeps
+ * the live clock).
+ */
+export function sampleTod(keys, f) {
+  if (!keys?.length) return null;
+  const k = keys.slice().sort((a, b) => a.frame - b.frame);
+  if (f <= k[0].frame) return { timeMinutes: k[0].timeMinutes };
+  const last = k[k.length - 1];
+  if (f >= last.frame) return { timeMinutes: last.timeMinutes };
+  let i = 0;
+  while (i < k.length - 2 && f > k[i + 1].frame) i++;
+  const a = k[i];
+  const b = k[i + 1];
+  const u = (f - a.frame) / ((b.frame - a.frame) || 1);
+  return { timeMinutes: a.timeMinutes + (b.timeMinutes - a.timeMinutes) * u };
 }

@@ -9,7 +9,21 @@
 
 import { Mat4, Vec3 } from './particle/math.js';
 import { BlendFunc, LinkedDataType } from './particle/types.js';
-import { resolveTexture } from './zone.js';
+import { resolveTexture, isSkyName, isWaterName } from './zone.js';
+
+/** Approx local-space radius of a particle mesh (AABB half-diagonal). */
+function meshRadius(mesh) {
+  const p = mesh?.positions;
+  if (!p?.length) return 0;
+  let lo0 = Infinity, lo1 = Infinity, lo2 = Infinity;
+  let hi0 = -Infinity, hi1 = -Infinity, hi2 = -Infinity;
+  for (let i = 0; i < p.length; i += 3) {
+    const x = p[i], y = p[i + 1], z = p[i + 2];
+    if (x < lo0) lo0 = x; if (y < lo1) lo1 = y; if (z < lo2) lo2 = z;
+    if (x > hi0) hi0 = x; if (y > hi1) hi1 = y; if (z > hi2) hi2 = z;
+  }
+  return Math.hypot(hi0 - lo0, hi1 - lo1, hi2 - lo2) * 0.5;
+}
 
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -63,6 +77,36 @@ void main() {
 //   stage1 = (2 * stage0.rgb * tf.rgb, 4 * stage0.a * tf.a)
 // The doubled multipliers are why FFXI vertex colours sit around 0x80 for
 // "neutral"; dropping them washes every effect out.
+// Depth-only for zone-mesh particles (windmills, roof vanes, etc.) so they cast
+// into the same cascade maps as the rest of the zone. Model matrix is already
+// in display space (DAT × DISPLAY_ROT).
+const SHADOW_VERTEX_SHADER = `#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPos;
+layout(location=2) in vec2 aUV;
+layout(location=3) in vec4 aColor;
+uniform mat4 uLightViewProj;
+uniform mat4 uModelMatrix;
+out vec2 vUV;
+out float vAlpha;
+void main() {
+  vUV = aUV;
+  vAlpha = aColor.a;
+  gl_Position = uLightViewProj * uModelMatrix * vec4(aPos, 1.0);
+}
+`;
+
+const SHADOW_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+in vec2 vUV;
+in float vAlpha;
+uniform sampler2D uTexture;
+uniform float uCutout;
+void main() {
+  if (uCutout > 0.0 && 4.0 * vAlpha * texture(uTexture, vUV).a < uCutout) discard;
+}
+`;
+
 const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 
@@ -241,6 +285,14 @@ export class ParticleDrawer {
     this.textures = new Map();      // texture name -> GLTexture
     this.lastStats = { drawn: 0, particles: 0 };
 
+    this.shadowProgram = buildProgram(gl, SHADOW_VERTEX_SHADER, SHADOW_FRAGMENT_SHADER);
+    this.shadowU = {
+      lightViewProj: gl.getUniformLocation(this.shadowProgram, 'uLightViewProj'),
+      model: gl.getUniformLocation(this.shadowProgram, 'uModelMatrix'),
+      texture: gl.getUniformLocation(this.shadowProgram, 'uTexture'),
+      cutout: gl.getUniformLocation(this.shadowProgram, 'uCutout'),
+    };
+
     // xim binds a single-colour 0x80 texture for any mesh without one. 0x80 is
     // the *neutral* value in this pipeline — stage0 doubles the texel, so grey
     // maps to 1.0. Binding white instead makes every untextured particle twice
@@ -331,7 +383,83 @@ export class ParticleDrawer {
     this.flareQueries.clear();
     this.gl.deleteProgram(this.flareProgram);
     this.gl.deleteProgram(this.flashProgram);
+    this.gl.deleteProgram(this.shadowProgram);
     this.gl.deleteProgram(this.program);
+  }
+
+  /**
+   * Cast zone-mesh particles (windmills, roof vanes, fountains, …) into a
+   * shadow cascade. Sprite-sheet / additive-only / camera-space particles are
+   * skipped — they either don't belong in the map or would cast as solid cards.
+   *
+   * @param {Object} opts
+   * @param {Object} opts.system
+   * @param {Float32Array} opts.lightViewProj  4×4 light VP for this cascade
+   * @param {boolean} [opts.alphaOn=true]
+   */
+  castShadows({ system, lightViewProj, alphaOn = true }) {
+    if (!system || !lightViewProj) return;
+    const gl = this.gl;
+    const contexts = system.getAllParticles();
+    if (!contexts.length) return;
+
+    gl.useProgram(this.shadowProgram);
+    gl.uniformMatrix4fv(this.shadowU.lightViewProj, false, lightViewProj);
+    gl.uniform1i(this.shadowU.texture, 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LESS);
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
+    gl.disable(gl.CULL_FACE);
+
+    const model = new Mat4();
+    for (const { particle } of contexts) {
+      if (particle.isExpired?.() || particle.drawDistanceCulled) continue;
+      if (!particle.hasMeshes?.()) continue;
+      const cfg = particle.config;
+      if (!cfg) continue;
+      if (cfg.linkedDataType === LinkedDataType.PointLight) continue;
+      if (particle.isLensFlare?.()) continue;
+      if (cfg.localPositionInCameraSpace) continue;
+      if (cfg.followCamera) continue;
+      if (particle.isSunOrMoon?.()) continue;
+      // Zone static meshes only (mill, fu_in, …). Sprite sheets cast as
+      // billboards and look wrong as solid cards.
+      if (particle.meshProvider?.isParticleMesh !== false) continue;
+      // Sky shells / clouds / water planes: huge or coplanar — they paint the
+      // whole cascade black if allowed to cast (see town sky-dome shadow).
+      const meshName = particle.meshProvider?.meshName
+        || cfg.linkedDataId?.id
+        || '';
+      if (isSkyName(meshName) || isWaterName(meshName)) continue;
+
+      const meshes = particle.getMeshes();
+      if (!meshes?.length) continue;
+      // Enclosing shells (unnamed sky domes): local radius >> typical props.
+      // Casting them fills the cascade with a camera-tracking arch.
+      let maxR = 0;
+      for (const mesh of meshes) {
+        const r = meshRadius(mesh);
+        if (r > maxR) maxR = r;
+      }
+      if (maxR > 80) continue;
+
+      particle.getWorldSpaceTransform().multiply(particle.getParticleSpaceOrientationTransform(), model);
+      DISPLAY_ROT.multiply(model, model);
+      gl.uniformMatrix4fv(this.shadowU.model, false, model.m);
+
+      const cutout = alphaOn ? 0.5 : 0;
+      gl.uniform1f(this.shadowU.cutout, cutout);
+
+      for (const mesh of meshes) {
+        const entry = this.#upload(mesh);
+        gl.bindTexture(gl.TEXTURE_2D, this.#texture(entry));
+        gl.bindVertexArray(entry.vao);
+        gl.drawArrays(gl.TRIANGLES, 0, entry.count);
+      }
+    }
+    gl.bindVertexArray(null);
   }
 
   #upload(mesh) {
