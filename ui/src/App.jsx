@@ -73,6 +73,7 @@ import { ImageViewer } from './ImageViewer.jsx';
 import { WeatherPanel } from './WeatherPanel.jsx';
 import { Tooltip } from './Tooltip.jsx';
 import { loadZoneNavmesh } from '../js/navmesh.js';
+import { launchZoneRel } from '../js/launch.js';
 
 const DEFAULT_DAT_SUFFIX = 'ROM\\5\\3.DAT';
 const DEFAULT_BG = '#303438';
@@ -306,7 +307,15 @@ async function buildZoneDatDoc(kind, bytes, relPath, settings, tablesRef) {
   return { ...base, entries, obfuscated, conversations };
 }
 
-export default function App() {
+export default function App({ launch = null }) {
+  // Zone preview launch (`--zone <dat> [--minimal]`, see js/launch.js). Minimal
+  // mode drops the whole app chrome — menu bar, asset panel, status bars,
+  // object browser — leaving the viewport and the Zone panel (weather, time of
+  // day, fog, brightness, audio). The prop never changes for a given run, so
+  // everything below can branch on it freely.
+  const launchRef = useRef(launch);
+  const minimal = !!launch?.zone && !!launch?.minimal;
+
   const canvasRef = useRef(null);
   const rendererRef = useRef(null);
   const modelRef = useRef(null);
@@ -341,6 +350,7 @@ export default function App() {
   // auto-open it again. A missing/false 'booted' flag means this install has
   // never launched before.
   const [helpOpen, setHelpOpen] = useState(() => {
+    if (minimal) return false;    // a preview window is not a first launch
     const firstBoot = localStorage.getItem('booted') !== '1';
     if (firstBoot) {
       try { localStorage.setItem('booted', '1'); } catch { /* quota */ }
@@ -349,6 +359,11 @@ export default function App() {
   });
   const [exportSpec, setExportSpec] = useState(null);
   const [leftView, setLeftViewState] = useState(() => {
+    // A launch zone arrives on the Zones page. Set as the *initial* view, not a
+    // switch: switching runs the view-change cleanup, which would unload the
+    // zone mid-load. Not persisted either — a preview isn't a page the user
+    // navigated to.
+    if (launch?.zone) return 'zones';
     const v = localStorage.getItem(LAST_VIEW_KEY);
     return VIEWS.includes(v) ? v : 'files';
   });
@@ -1741,7 +1756,8 @@ export default function App() {
    * Otherwise restores the last saved camera for this zone, if any.
    */
   const loadZone = useCallback(async (zone, opts = {}) => {
-    const { keepCamera = false, cameraSnap = null } = opts;
+    // `remember: false` keeps a one-off preview out of the session restore.
+    const { keepCamera = false, cameraSnap = null, remember = true } = opts;
     const settings = settingsRef.current;
     if (!settings?.gamePath) {
       setStatusText('Game path not set — open Settings first.');
@@ -1986,12 +2002,14 @@ export default function App() {
       setTexWindows([]);
       releaseOverlay();
       setStatusText('');   // zone stats live in Details
-      try {
-        localStorage.setItem(LAST_DAT_KEY, JSON.stringify({
-          kind: 'zone',
-          zone: { id: zone.id, name: zone.name, path: zone.path },
-        }));
-      } catch { /* quota */ }
+      if (remember) {
+        try {
+          localStorage.setItem(LAST_DAT_KEY, JSON.stringify({
+            kind: 'zone',
+            zone: { id: zone.id, name: zone.name, path: zone.path },
+          }));
+        } catch { /* quota */ }
+      }
       return { ok: true };
     } catch (err) {
       console.error(err);
@@ -2328,6 +2346,64 @@ export default function App() {
     onError: (msg) => setStatusText(msg),
   });
 
+  // --- zone preview launch -------------------------------------------------
+
+  // Why the launch zone couldn't be opened (minimal mode has no status bar to
+  // say it in).
+  const [launchError, setLaunchError] = useState('');
+  // --weather / --time / --clock, applied once the zone's environment is up.
+  const pendingLaunchSceneRef = useRef(null);
+
+  /**
+   * Open the zone named on the launch line: a DAT path (game-relative,
+   * `game/ROM/…`, or absolute) or a zone id. Called on startup, and again after
+   * the game path is filled in — a preview launch on a fresh install should
+   * still land on its zone rather than the demo model.
+   */
+  const openLaunchZone = useCallback(async () => {
+    const opts = launchRef.current;
+    if (!opts?.zone) return false;
+    const raw = String(opts.zone).trim();
+    let zones = [];
+    try { zones = await (await fetch('lists/zones.json')).json(); } catch { /* baked list unavailable */ }
+
+    let zone;
+    if (/^\d+$/.test(raw)) {
+      const hit = zones.find((z) => z.id === Number(raw));
+      if (!hit) {
+        setLaunchError(`No zone with id ${raw}.`);
+        setStatusText(`Zone id ${raw} not found.`);
+        return false;
+      }
+      zone = { id: hit.id, name: hit.name, path: hit.path };
+    } else {
+      const s = settingsRef.current;
+      const rel = launchZoneRel(raw, [s?.hdPath, s?.gamePath]);
+      // Prefer the baked entry: it carries the zone name and the id the BGM
+      // lookup needs. An unlisted DAT (a prototype zone) still opens by path.
+      const hit = zones.find((z) => zoneDatRelPath(z.path).toLowerCase() === rel.toLowerCase());
+      zone = hit
+        ? { id: hit.id, name: hit.name, path: hit.path }
+        : { id: null, name: rel, path: `game/${rel.replace(/\\/g, '/')}` };
+    }
+
+    setLaunchError('');
+    pendingLaunchSceneRef.current = (opts.weather || opts.timeMinutes != null || opts.clock)
+      ? { weather: opts.weather, timeMinutes: opts.timeMinutes, clock: opts.clock }
+      : null;
+    // A preview is a side trip — don't overwrite the session's last-opened DAT.
+    const result = await loadZone(zone, { remember: !opts.minimal });
+    if (result?.ok === false) {
+      pendingLaunchSceneRef.current = null;
+      setLaunchError(`Could not open ${zone.name} — ${result.reason}.`);
+      return false;
+    }
+    // The window is the preview of one zone; name it so in the taskbar.
+    if (opts.minimal) document.title = `${zone.name} — XI Model Viewer`;
+    if (settingsRef.current?.autoWasdZones !== false) setWasd(true);
+    return true;
+  }, [loadZone, setWasd]);
+
   // --- startup -------------------------------------------------------------
 
   useEffect(() => {
@@ -2354,6 +2430,13 @@ export default function App() {
           setSettingsError(`Game path not found:\n${gamePath}`);
           setSettingsOpen(true);
           setStatusText('Game path not found — open Settings to fix it.');
+          return;
+        }
+
+        // Launched as a zone preview — that zone is the whole session; the
+        // last-opened DAT and the restored page have no say in it.
+        if (launchRef.current?.zone) {
+          await openLaunchZone();
           return;
         }
 
@@ -2418,7 +2501,7 @@ export default function App() {
         setStatusText(`Startup failed: ${err.message ?? err}`);
       }
     })();
-  }, [loadModel, loadZone, setWasd]);
+  }, [loadModel, loadZone, setWasd, openLaunchZone]);
 
   // Debug/verification hook (used by the headless capture flow)
   useEffect(() => {
@@ -3728,6 +3811,12 @@ export default function App() {
     if (gamePath.toLowerCase() !== prevPath.toLowerCase() || !modelRef.current) {
       keyTablesRef.current = null;   // FFXiMain.dll keys are install-specific
       globalEffectsRef.current = null;
+      // Preview launch that had nowhere to read from until now: open the zone
+      // it was started for, not the demo model.
+      if (launchRef.current?.zone) {
+        await openLaunchZone();
+        return;
+      }
       const dat = `${gamePath}\\${DEFAULT_DAT_SUFFIX}`;
       await loadModel([dat], DEFAULT_DAT_SUFFIX);
       setRevealTarget(dat.toLowerCase());
@@ -4077,6 +4166,24 @@ export default function App() {
     return () => cancelAnimationFrame(raf);
   }, [todPlaying, applyWeatherTime]);
 
+  /**
+   * Apply `--weather` / `--time` / `--clock` from the launch line. Deferred to
+   * here because the weather has to exist in the zone before it can be
+   * switched to, and that list only arrives when the zone has finished loading.
+   */
+  useEffect(() => {
+    const pending = pendingLaunchSceneRef.current;
+    if (!pending || !zoneEnvManagerRef.current) return;
+    pendingLaunchSceneRef.current = null;
+    let w = weather;
+    if (pending.weather) {
+      if (weatherList.includes(pending.weather)) w = pending.weather;
+      else console.warn(`launch: this zone has no '${pending.weather}' weather — keeping ${weather || 'its default'}`);
+    }
+    applyWeatherTime(w, pending.timeMinutes ?? timeMinutes);
+    if (pending.clock) setTodPlaying(true);
+  }, [weatherList, weather, timeMinutes, applyWeatherTime]);
+
   // Leaving the Zones view takes its panel — and the stop button — off screen,
   // so don't leave the clock running where it can't be stopped.
   useEffect(() => {
@@ -4309,30 +4416,102 @@ export default function App() {
 
   // --- render --------------------------------------------------------------
 
+  // The viewport, hoisted so the minimal tree below mounts the same element
+  // (and therefore the same GL context) as the full one.
+  const viewport = (
+    <canvas
+      id="canvas"
+      ref={canvasRef}
+      className={liveSelection && (leftView === 'zones' || browserKind === 'zone') ? 'live-pick' : undefined}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerMove={onPointerMove}
+      onPointerLeave={() => {
+        if (gizmoHoverRef.current) {
+          gizmoHoverRef.current = null;
+          rendererRef.current?.setGizmoHoverAxis?.(null);
+        }
+        if (plcHoverRef.current) {
+          plcHoverRef.current = null;
+          syncZonePickHighlight();
+        }
+        if (canvasRef.current) {
+          canvasRef.current.style.cursor = liveSelectionRef.current ? 'crosshair' : '';
+        }
+      }}
+      onContextMenu={(e) => e.preventDefault()}
+    />
+  );
+
+  const zonePanel = (
+    <WeatherPanel
+      weathers={weatherList}
+      weather={weather}
+      timeMinutes={timeMinutes}
+      onChange={applyWeatherTime}
+      todPlaying={todPlaying}
+      onToggleTod={setTodPlaying}
+      skyboxOn={showSkybox}
+      onToggleSkybox={setSkybox}
+      hasSkybox={hasSkybox}
+      heading={minimal ? (modelInfo?.name || 'Zone') : 'Zone'}
+      objectsOpen={!minimal && !!objectGroups && plcOpen}
+      bgColor={settings?.bgColor ?? DEFAULT_BG}
+      onBg={setBg}
+      brightness={zoneBrightness}
+      onBrightness={setZoneBrightness}
+      fogOn={fogOn}
+      onFogOn={setFogOn}
+      fogScale={fogScale}
+      onFogScale={setFogScale}
+      musicVolume={player.volume}
+      onMusicVolume={player.setVolume}
+      sfxVolume={sfxVolume}
+      onSfxVolume={setSfxVolume}
+      sfxOn={sfxOn}
+      onToggleSfx={toggleSfx}
+      zoneTrack={zoneTrack}
+      zoneTrackPlaying={
+        !!zoneTrack && player.playing
+        && player.current?.file === zoneTrack.file && player.current?.root === zoneTrack.root
+      }
+      onToggleZoneMusic={toggleZoneMusic}
+    />
+  );
+
+  // Zone preview (`--zone … --minimal`): the viewport and the Zone panel, and
+  // nothing else. Settings still mount — a preview launched before the game
+  // path was ever set needs somewhere to set it.
+  if (minimal) {
+    return (
+      <>
+        {viewport}
+        {modelInfo?.zone && zonePanel}
+        {launchError && (
+          <div id="launchError" className="panel" role="alert">
+            <span className="icon">error</span>
+            <span>{launchError}</span>
+          </div>
+        )}
+        <SettingsModal
+          open={settingsOpen}
+          initial={settings ?? { gamePath: '', hdPath: '', hdEnabled: false, bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, xiPath: '' }}
+          error={settingsError}
+          onSave={saveSettings}
+          onClose={() => { setSettingsOpen(false); setSettingsError(''); }}
+        />
+        <LoadingOverlay
+          open={!!loading}
+          title={loading?.title}
+          detail={loading?.detail}
+        />
+      </>
+    );
+  }
+
   return (
     <>
-      <canvas
-        id="canvas"
-        ref={canvasRef}
-        className={liveSelection && (leftView === 'zones' || browserKind === 'zone') ? 'live-pick' : undefined}
-        onPointerDown={onPointerDown}
-        onPointerUp={onPointerUp}
-        onPointerMove={onPointerMove}
-        onPointerLeave={() => {
-          if (gizmoHoverRef.current) {
-            gizmoHoverRef.current = null;
-            rendererRef.current?.setGizmoHoverAxis?.(null);
-          }
-          if (plcHoverRef.current) {
-            plcHoverRef.current = null;
-            syncZonePickHighlight();
-          }
-          if (canvasRef.current) {
-            canvasRef.current.style.cursor = liveSelectionRef.current ? 'crosshair' : '';
-          }
-        }}
-        onContextMenu={(e) => e.preventDefault()}
-      />
+      {viewport}
 
       <MenuBar
         onAction={handleMenuAction}
@@ -4553,40 +4732,7 @@ export default function App() {
 
       {/* Stays visible while zone music plays — the play button lives in here,
           so taking the panel over would pull the controls out from under it. */}
-      {!dataStructOpen && (leftView === 'zones' || browserKind === 'zone') && (
-        <WeatherPanel
-          weathers={weatherList}
-          weather={weather}
-          timeMinutes={timeMinutes}
-          onChange={applyWeatherTime}
-          todPlaying={todPlaying}
-          onToggleTod={setTodPlaying}
-          skyboxOn={showSkybox}
-          onToggleSkybox={setSkybox}
-          hasSkybox={hasSkybox}
-          objectsOpen={!!objectGroups && plcOpen}
-          bgColor={settings?.bgColor ?? DEFAULT_BG}
-          onBg={setBg}
-          brightness={zoneBrightness}
-          onBrightness={setZoneBrightness}
-          fogOn={fogOn}
-          onFogOn={setFogOn}
-          fogScale={fogScale}
-          onFogScale={setFogScale}
-          musicVolume={player.volume}
-          onMusicVolume={player.setVolume}
-          sfxVolume={sfxVolume}
-          onSfxVolume={setSfxVolume}
-          sfxOn={sfxOn}
-          onToggleSfx={toggleSfx}
-          zoneTrack={zoneTrack}
-          zoneTrackPlaying={
-            !!zoneTrack && player.playing
-            && player.current?.file === zoneTrack.file && player.current?.root === zoneTrack.root
-          }
-          onToggleZoneMusic={toggleZoneMusic}
-        />
-      )}
+      {!dataStructOpen && (leftView === 'zones' || browserKind === 'zone') && zonePanel}
 
       {!dataStructOpen && objectGroups && plcOpen
         && (leftView === 'zones' || browserKind === 'zone') && (

@@ -823,6 +823,19 @@ button.gs-tool:focus-visible {
 }
 .status-path-link:hover { background: none; color: var(--accent); text-decoration: underline; }
 
+/* --- Zone preview launch (--zone … --minimal) ------------------------------ */
+/* The minimal window has no status bar, so a failed launch says so here. */
+#launchError {
+  bottom: 12px; left: 12px; right: 12px;
+  margin: 0 auto;
+  max-width: 640px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px;
+  color: var(--gray-100);
+  font-size: 13px;
+}
+#launchError > .icon { color: #e07068; font-size: 18px; flex: 0 0 auto; }
+
 /* --- Zone objects panel (top-right, same band as viewbar) ----------------- */
 
 /* --- Zone weather / time-of-day panel (top-right, above Objects) ----------- */
@@ -1125,10 +1138,16 @@ body:has(#placements) #animbar { right: 344px; }
    so every floating panel's header matches. The blue icon beside it stays. */
 .details-title, .plc-title, .wx-title {
   flex: 1 1 auto;
+  min-width: 0;
   color: var(--gray-500);
   font: 600 11px/1.4 var(--font-ui);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  /* The preview launch puts the zone's own name here, which can outrun the
+     header — keep it on one line rather than pushing the sky toggle out. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .details-close { width: 24px; height: 24px; min-height: 0; background: transparent; border: none; box-shadow: none; }
 .details-close:hover { background: rgba(255, 255, 255, 0.1); }

@@ -21,9 +21,11 @@ const fmtTime = (min) => {
 /**
  * Zone scene controls (top-right): weather/time when the zone has a skybox,
  * plus always-on background colour and lighting brightness (default → unlit).
+ * `heading` names the panel — "Zone" in the app, the zone's own name when this
+ * is the only panel on screen (the --minimal preview launch).
  */
 export function WeatherPanel({
-  weathers = [], weather, timeMinutes, onChange,
+  weathers = [], weather, timeMinutes, onChange, heading = 'Zone',
   todPlaying = false, onToggleTod,
   skyboxOn, onToggleSkybox, hasSkybox = false, objectsOpen,
   bgColor, onBg,
@@ -89,7 +91,7 @@ export function WeatherPanel({
     <div id="weather" ref={rootRef} className={`panel${objectsOpen ? ' with-objects' : ''}`}>
       <div className="wx-header">
         <span className="icon">landscape</span>
-        <span className="wx-title">Zone</span>
+        <span className="wx-title">{heading}</span>
         {showSkyControls && <span className="wx-time mono">{fmtTime(timeMinutes)}</span>}
         {showSkyControls && (
           <Tooltip content="Show sky" placement="bottom">
