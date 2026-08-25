@@ -692,8 +692,10 @@ button.gs-tool:focus-visible {
 .zone-id { color: var(--gray-500); margin-left: 6px; flex: 0 0 auto; }
 .node.selected > .row .zone-id { color: rgba(0, 0, 0, 0.5); }
 .zone-count { border-top: 1px solid var(--ring); margin-top: 4px; }
+/* File tree file name — flex so the pin button sits on the right. */
+.tree-file-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
-/* Pin control — visible on row hover / when pinned */
+/* Pin control — visible on row hover / when pinned (zones + file tree) */
 .zone-pin-btn {
   flex: 0 0 auto;
   width: 22px;
@@ -2458,6 +2460,11 @@ button.data-zone-tab.on .icon { color: var(--accent); }
 .data-res-zdef .data-type,
 .data-res-zdef .data-detail { color: #6ed4e0; }
 .data-res-zdef .data-kind { opacity: 1; }
+.data-res-route .data-kind,
+.data-res-route .data-id,
+.data-res-route .data-type,
+.data-res-route .data-detail { color: #ffb242; }
+.data-res-route .data-kind { opacity: 1; }
 .data-res-fx .data-kind,
 .data-res-fx .data-id,
 .data-res-fx .data-type,
@@ -2485,6 +2492,10 @@ button.data-zone-tab.on .icon { color: var(--accent); }
 .data-res-zdef.data-res-click:hover .data-id,
 .data-res-zdef.data-res-click:hover .data-type,
 .data-res-zdef.data-res-click:hover .data-detail { color: #9aebf4; }
+.data-res-route.data-res-click:hover .data-kind,
+.data-res-route.data-res-click:hover .data-id,
+.data-res-route.data-res-click:hover .data-type,
+.data-res-route.data-res-click:hover .data-detail { color: #ffd08a; }
 .data-res-fx.data-res-click:hover .data-kind,
 .data-res-fx.data-res-click:hover .data-id,
 .data-res-fx.data-res-click:hover .data-type,
@@ -2514,14 +2525,24 @@ button.data-zone-tab.on .icon { color: var(--accent); }
 .data-res-tex .data-tex-hint { color: #8fd9a8; }
 .data-res-skel .data-tex-hint { color: #c4a8ef; }
 .data-res-zdef .data-tex-hint { color: #6ed4e0; }
+.data-res-route .data-tex-hint { color: #ffb242; }
 .data-res-fx .data-tex-hint { color: #e0a0ff; }
 .data-res-sfx .data-tex-hint { color: #f0b060; }
 .data-res-click:hover .data-tex-hint { color: var(--accent); opacity: 1; font-style: normal; }
 .data-res-tex.data-res-click:hover .data-tex-hint { color: #b6efc8; }
 .data-res-skel.data-res-click:hover .data-tex-hint { color: #dbc8ff; }
 .data-res-zdef.data-res-click:hover .data-tex-hint { color: #9aebf4; }
+.data-res-route.data-res-click:hover .data-tex-hint { color: #ffd08a; }
 .data-res-fx.data-res-click:hover .data-tex-hint { color: #efc0ff; }
 .data-res-sfx.data-res-click:hover .data-tex-hint { color: #ffd08a; }
+
+/* Route modal reuses .zdef-modal chrome; accent the count. */
+.route-modal .route-count {
+  flex: 0 0 auto;
+  margin-right: 4px;
+  color: #ffb242;
+  font-size: 11px;
+}
 
 /* ZoneDef placements modal */
 .zdef-modal {

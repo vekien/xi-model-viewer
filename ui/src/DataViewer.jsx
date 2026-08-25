@@ -66,7 +66,7 @@ function ZoneTabs({ tabs, activeKey, onSelect }) {
 
 export function DataViewer({
   doc, sources, onSelectSource, onOpenTexture, onOpenSkeleton, onOpenZoneDef,
-  onOpenParticle, onPlaySound, playingSoundKey, onRevealPath, onOpenDat, onRenderFile,
+  onOpenRoute, onOpenParticle, onPlaySound, playingSoundKey, onRevealPath, onOpenDat, onRenderFile,
 }) {
   if (!doc) {
     return (
@@ -185,6 +185,7 @@ export function DataViewer({
       onOpenTexture={onOpenTexture}
       onOpenSkeleton={onOpenSkeleton}
       onOpenZoneDef={onOpenZoneDef}
+      onOpenRoute={onOpenRoute}
       onOpenParticle={onOpenParticle}
       onPlaySound={onPlaySound}
       playingSoundKey={playingSoundKey}
@@ -298,7 +299,8 @@ function countRes(node) {
 
 function SectionsView({
   doc, sourceItems, activeSource, zoneChrome, onSelectSource,
-  onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenParticle, onPlaySound, playingSoundKey,
+  onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenRoute,
+  onOpenParticle, onPlaySound, playingSoundKey,
   onRevealPath, onRenderFile,
 }) {
   const [query, setQuery] = useState('');
@@ -346,6 +348,7 @@ function SectionsView({
               onOpenTexture={onOpenTexture}
               onOpenSkeleton={onOpenSkeleton}
               onOpenZoneDef={onOpenZoneDef}
+              onOpenRoute={onOpenRoute}
               onOpenParticle={onOpenParticle}
               onPlaySound={onPlaySound}
               playingSoundKey={playingSoundKey}
@@ -369,23 +372,12 @@ function SectionsView({
           <div className="data-card-title"><span className="icon">category</span>Contents</div>
           <div className="data-census-rows">
             {(doc.summary ?? []).map((row) => {
-              const texClick = (row.type === 0x20 || row.name === 'Texture') && onOpenTexture;
               const q = query.trim().toLowerCase();
               const dim = q && !row.name.toLowerCase().includes(q);
               return (
                 <div
                   key={row.type}
-                  className={`data-census-row${texClick ? ' data-census-click' : ''}${dim ? ' data-census-dim' : ''}`}
-                  role={texClick ? 'button' : undefined}
-                  tabIndex={texClick ? 0 : undefined}
-                  title={texClick ? 'Click to view texture' : undefined}
-                  onClick={texClick ? () => onOpenTexture(null) : undefined}
-                  onKeyDown={texClick ? (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      onOpenTexture(null);
-                    }
-                  } : undefined}
+                  className={`data-census-row${dim ? ' data-census-dim' : ''}`}
                 >
                   <span className="icon">{row.icon}</span>
                   <span className="data-census-name">{row.name}</span>
@@ -1080,7 +1072,7 @@ function GearSlotNode({ node, onOpenDat, tableRace }) {
   );
 }
 
-function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenParticle, onPlaySound, playingSoundKey }) {
+function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenRoute, onOpenParticle, onPlaySound, playingSoundKey }) {
   const [open, setOpen] = useState(depth < 4 || !!forceOpen);
   // While filtering, keep matching branches expanded.
   const expanded = forceOpen || open;
@@ -1124,6 +1116,7 @@ function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onOpenZ
               onOpenTexture={onOpenTexture}
               onOpenSkeleton={onOpenSkeleton}
               onOpenZoneDef={onOpenZoneDef}
+              onOpenRoute={onOpenRoute}
               onOpenParticle={onOpenParticle}
               onPlaySound={onPlaySound}
               playingSoundKey={playingSoundKey}
@@ -1137,6 +1130,7 @@ function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onOpenZ
               onOpenTexture={onOpenTexture}
               onOpenSkeleton={onOpenSkeleton}
               onOpenZoneDef={onOpenZoneDef}
+              onOpenRoute={onOpenRoute}
               onOpenParticle={onOpenParticle}
               onPlaySound={onPlaySound}
               playingSoundKey={playingSoundKey}
@@ -1147,8 +1141,10 @@ function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onOpenZ
   );
 }
 
-function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenParticle, onPlaySound, playingSoundKey }) {
-  const isTex = !!(res.isTexture || res.textureName || res.type === 0x20 || res.name === 'Texture');
+function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenRoute, onOpenParticle, onPlaySound, playingSoundKey }) {
+  const isTex = !!(res.isTexture || res.textureName
+    || res.type === 0x20 || res.type === 0x5D
+    || res.name === 'Texture' || res.name === 'BumpMap');
   // 0x29 Skeleton — accept numeric 41 or hex, name, or inspect flag.
   const isSkel = !!(res.isSkeleton
     || res.type === 0x29 || res.type === 41
@@ -1158,6 +1154,8 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
     || res.name === 'SoundEffectPointer');
   const isZoneDef = !!(res.isZoneDef || res.type === 0x1C || res.type === 28
     || res.name === 'ZoneDef');
+  const isRoute = !!(res.isRoute || res.type === 0x06 || res.type === 6
+    || res.name === 'Route');
   const isParticle = !!(res.isParticleGenerator || res.type === 0x05 || res.type === 5
     || res.name === 'ParticleGenerator');
   const soundKey = isSound && res.soundId != null
@@ -1166,11 +1164,12 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
   const soundPlaying = !!(soundKey && playingSoundKey === soundKey);
   const texClick = isTex && !!onOpenTexture;
   const skelClick = isSkel && !!onOpenSkeleton;
-  // ZoneDef / Particle rows stay activatable so a missing handler still logs.
+  // ZoneDef / Particle / Route rows stay activatable so a missing handler still logs.
   const zdefClick = isZoneDef;
+  const routeClick = isRoute;
   const particleClick = isParticle;
   const soundClick = isSound && res.soundId != null && !!onPlaySound;
-  const clickable = texClick || skelClick || soundClick || zdefClick || particleClick;
+  const clickable = texClick || skelClick || soundClick || zdefClick || particleClick || routeClick;
   const openKey = res.textureName || res.id?.trim() || null;
   const onActivate = (e) => {
     e?.preventDefault?.();
@@ -1179,6 +1178,9 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
     else if (particleClick) {
       if (typeof onOpenParticle === 'function') onOpenParticle(res);
       else console.error('ParticleGenerator click: onOpenParticle handler missing', res);
+    } else if (routeClick) {
+      if (typeof onOpenRoute === 'function') onOpenRoute(res);
+      else console.error('Route click: onOpenRoute handler missing', res);
     } else if (zdefClick) {
       if (typeof onOpenZoneDef === 'function') onOpenZoneDef(res);
       else console.error('ZoneDef click: onOpenZoneDef handler missing', res);
@@ -1188,23 +1190,26 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
   const flags = res.flags ?? [];
   const hint = soundClick ? (soundPlaying ? 'click to stop' : 'click to play')
     : particleClick ? 'click to play'
-      : zdefClick ? 'click to view placements'
-        : 'click to view';
+      : routeClick ? 'click to view path'
+        : zdefClick ? 'click to view placements'
+          : 'click to view';
   return (
     <div
-      className={`data-row data-res-row${isTex ? ' data-res-tex' : ''}${isSkel ? ' data-res-skel' : ''}${isZoneDef ? ' data-res-zdef' : ''}${isParticle ? ' data-res-fx' : ''}${isSound ? ' data-res-sfx' : ''}${soundPlaying ? ' data-res-sfx-play' : ''}${clickable ? ' data-res-click' : ''}`}
+      className={`data-row data-res-row${isTex ? ' data-res-tex' : ''}${isSkel ? ' data-res-skel' : ''}${isZoneDef ? ' data-res-zdef' : ''}${isRoute ? ' data-res-route' : ''}${isParticle ? ' data-res-fx' : ''}${isSound ? ' data-res-sfx' : ''}${soundPlaying ? ' data-res-sfx-play' : ''}${clickable ? ' data-res-click' : ''}`}
       style={{ paddingLeft: 8 + depth * 14 }}
       title={soundClick
         ? (soundPlaying ? `Click to stop se ${res.soundId}` : `Click to play se ${res.soundId}`)
         : particleClick
           ? `Click to play particle · ${String(res.id || '').trim() || 'generator'}`
-          : zdefClick
-            ? `Click to view placements · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
-            : skelClick
-              ? `Click to view skeleton tree · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
-              : texClick
-                ? `Click to view texture · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
-                : `offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}${flags.length ? ` · ${flags.join(', ')}` : ''}`}
+          : routeClick
+            ? `Click to view camera path · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
+            : zdefClick
+              ? `Click to view placements · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
+              : skelClick
+                ? `Click to view skeleton tree · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
+                : texClick
+                  ? `Click to view texture · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
+                  : `offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}${flags.length ? ` · ${flags.join(', ')}` : ''}`}
       onClick={clickable ? onActivate : undefined}
       role={clickable ? 'button' : undefined}
       tabIndex={clickable ? 0 : undefined}

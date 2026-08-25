@@ -671,19 +671,59 @@ function parseTexture(bytes, dv, section) {
 }
 
 /**
- * Every 0x20 texture in a DAT, keyed by name, in the shape the renderer uploads
- * (matching zoneToModel's texture map). Used for the shared effects DAT
- * (ROM/0/0.DAT), whose textures back particle meshes that zones link to but
- * don't carry themselves.
+ * 0x5D BumpMap — raw 8-bit height field → tangent-space normal map (xim
+ * BumpMapSection: Sobel dX/dY, strength=1, wrap edges). Display/upload as RGBA32.
+ */
+function parseBumpMap(bytes, dv, section) {
+  const r = new Reader(dv, section.dataStart);
+  r.u32();
+  const width = r.u16(), height = r.u16();
+  r.u32(); r.u32();
+  const name = r.str(0x10).trim();
+  if (width <= 0 || height <= 0 || width > 8192 || height > 8192) return null;
+  const need = width * height;
+  if (r.pos + need > dv.byteLength) return null;
+  const heightMap = new Uint8Array(dv.buffer, dv.byteOffset + r.pos, need);
+  const strength = 1;
+  const rgba = new Uint8Array(need * 4);
+  const hAt = (x, y) => heightMap[((y + height) % height) * width + ((x + width) % width)] / 255;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const upLeft = hAt(x - 1, y - 1);
+      const centerLeft = hAt(x - 1, y);
+      const bottomLeft = hAt(x - 1, y + 1);
+      const upRight = hAt(x + 1, y - 1);
+      const centerRight = hAt(x + 1, y);
+      const bottomRight = hAt(x + 1, y + 1);
+      const centerTop = hAt(x, y - 1);
+      const centerBottom = hAt(x, y + 1);
+      let dX = (upRight + 2 * centerRight + bottomRight) - (upLeft + 2 * centerLeft + bottomLeft);
+      let dY = (bottomLeft + 2 * centerBottom + bottomRight) - (upLeft + 2 * centerTop + upRight);
+      let dZ = 1 / strength;
+      const len = Math.hypot(dX, dY, dZ) || 1;
+      dX /= len; dY /= len; dZ /= len;
+      const o = (y * width + x) * 4;
+      rgba[o] = Math.round((dX * 0.5 + 0.5) * 255);
+      rgba[o + 1] = Math.round((dY * 0.5 + 0.5) * 255);
+      rgba[o + 2] = Math.round(dZ * 255);
+      rgba[o + 3] = 255;
+    }
+  }
+  return { name, width, height, rgba };
+}
+
+/**
+ * Every 0x20 texture (and 0x5D bump→normal) in a DAT, keyed by name, in the
+ * shape the renderer uploads (matching zoneToModel's texture map). Used for
+ * the shared effects DAT (ROM/0/0.DAT), whose textures back particle meshes
+ * that zones link to but don't carry themselves — and for Data Struct clicks.
  */
 export function parseDatTextures(datBuffer) {
   const bytes = new Uint8Array(datBuffer instanceof ArrayBuffer ? datBuffer : datBuffer.buffer);
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const out = new Map();
-  for (const s of parseSections(dv)) {
-    if (s.typeCode !== 0x20) continue;
-    const img = parseTexture(bytes, dv, s);
-    if (!img) continue;
+  const put = (img, s) => {
+    if (!img) return;
     const entry = {
       name: img.name, width: img.width, height: img.height,
       format: 'rgba32', data: img.rgba,
@@ -694,6 +734,10 @@ export function parseDatTextures(datBuffer) {
     // Also the 8+8 category/name halves ("twr2bai tower_25" → "tower_25").
     const half = img.name.length > 8 ? img.name.slice(8).trim() : '';
     if (half && !out.has(half)) out.set(half, entry);
+  };
+  for (const s of parseSections(dv)) {
+    if (s.typeCode === 0x20) put(parseTexture(bytes, dv, s), s);
+    else if (s.typeCode === 0x5D) put(parseBumpMap(bytes, dv, s), s);
   }
   return out;
 }
