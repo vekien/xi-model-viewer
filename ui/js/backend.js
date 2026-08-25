@@ -134,6 +134,21 @@ export const backend = {
     window.open(url, '_blank', 'noopener,noreferrer');
   },
 
+  /**
+   * The command line the app was launched with (argv[0] dropped). Browser dev
+   * mode has no argv — the same options arrive as a query string there, which
+   * js/launch.js reads directly.
+   */
+  async launchArgs() {
+    if (!isTauri()) return [];
+    try {
+      const argv = await tauriInvoke('launch_args');
+      return Array.isArray(argv) ? argv : [];
+    } catch {
+      return [];   // older shell without the command — no launch options
+    }
+  },
+
   /** Shows a file in the system file manager (Explorer/Finder), selected. */
   async revealPath(path) {
     if (isTauri()) return tauriInvoke('reveal_path', { path });

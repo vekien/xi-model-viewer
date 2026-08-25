@@ -333,6 +333,21 @@ fn xi_mesh_export(
     }
 }
 
+/// Command-line arguments the app was launched with (argv[0] dropped).
+///
+/// Parsed on the frontend (`ui/js/launch.js`) so one parser covers both the
+/// Tauri shell and browser dev mode, where the same options arrive as a query
+/// string. Used by the zone-preview launch: `xi-model-viewer --zone ROM/171/34.DAT`.
+#[tauri::command]
+fn launch_args() -> Vec<String> {
+    // args_os + lossy: a path the shell handed us in some other encoding is
+    // worth showing mangled, but never worth panicking over.
+    std::env::args_os()
+        .skip(1)
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect()
+}
+
 #[tauri::command]
 fn default_game_path() -> String {
     // XI_GAME_DIR is returned as-is so a mistyped override is visible in the
@@ -512,7 +527,8 @@ fn main() {
             xi_mesh_export,
             xi_available,
             open_url,
-            reveal_path
+            reveal_path,
+            launch_args
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
