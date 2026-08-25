@@ -620,8 +620,9 @@ export function zoneDatRelPath(zonePath) {
 }
 
 /**
- * Re-bake world zoneDraws from current zonePlacements + zoneMeshes.
- * Skips placements with `dragHidden` (used while a move-proxy is shown).
+ * Re-bake zoneDraws from current zonePlacements + zoneMeshes.
+ * Skips placements with `dragHidden` (move-proxy) or `userHidden` (Objects list eye).
+ * Sky panel-only rows are not geometry (particle system). Unplaced re-emits as layer 'unplaced'.
  * Updates model.zoneDraws in place; caller must push batches to the renderer.
  */
 export function rebuildZoneDraws(model) {
@@ -631,7 +632,7 @@ export function rebuildZoneDraws(model) {
   const draws = [];
   let triCount = 0;
 
-  const emitPrim = (meshName, prim, matrix) => {
+  const emitPrim = (meshName, prim, matrix, layer = 'world') => {
     // Texture key is the DAT name string; GPU map is already populated from setModel.
     const texName = prim.textureName || '';
     const discard = discardThresholdFor(meshName);
@@ -640,10 +641,10 @@ export function rebuildZoneDraws(model) {
     const blend = prim.blend;
     const last = draws[draws.length - 1];
     let d = last;
-    if (!d || d.texKey !== texName || d.blend !== blend
+    if (!d || d.layer !== layer || d.texKey !== texName || d.blend !== blend
       || d.noCull !== prim.noCull || d.discard !== discard || d.wind !== wind) {
       d = {
-        layer: 'world', texKey: texName, blend, noCull: prim.noCull, discard, wind,
+        layer, texKey: texName, blend, noCull: prim.noCull, discard, wind,
         positions: [], blendOffsets: [], normals: [], uvs: [], colors: [],
       };
       draws.push(d);
@@ -680,12 +681,15 @@ export function rebuildZoneDraws(model) {
   };
 
   for (const p of model.zonePlacements) {
-    if (p.kind || p.dragHidden) continue;
+    // Panel-only sky rows — particle system draws those, not zone batches.
+    if (p.kind === 'sky') continue;
+    if (p.dragHidden || p.userHidden) continue;
     if (!p.mesh) continue;
     const prims = meshes.get(p.mesh);
     if (!prims?.length) continue;
     const matrix = trsMatrix(p.rawPos || p.pos, p.rot, p.scale);
-    for (const prim of prims) emitPrim(p.mesh, prim, matrix);
+    const layer = p.kind === 'unplaced' ? 'unplaced' : 'world';
+    for (const prim of prims) emitPrim(p.mesh, prim, matrix, layer);
   }
 
   const zoneDraws = [];

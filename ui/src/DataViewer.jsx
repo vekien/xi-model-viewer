@@ -37,9 +37,22 @@ function buildZoneTabs(sources) {
   if (!byKey.has('zone') || !ZONE_TAB_ORDER.some((t) => t.key !== 'zone' && byKey.has(t.key))) {
     return null;
   }
+  // Always surface every companion tab that exists in the bundle — empty
+  // event/NPC DATs still get a tab so the chrome doesn't collapse mid-switch.
   return ZONE_TAB_ORDER
     .filter((t) => byKey.has(t.key))
     .map((t) => ({ ...t, path: byKey.get(t.key).path, rel: byKey.get(t.key).rel }));
+}
+
+/** Centered empty-state for zone script tabs with nothing to list. */
+function ZoneEmptyState({ icon, title, sub }) {
+  return (
+    <div className="data-empty data-zone-empty">
+      <span className="icon">{icon}</span>
+      <div className="data-empty-title">{title}</div>
+      {sub && <div className="data-empty-sub">{sub}</div>}
+    </div>
+  );
 }
 
 function ZoneTabs({ tabs, activeKey, onSelect }) {
@@ -657,18 +670,28 @@ function NpcListView({ doc, sources, zoneChrome, onSelectSource, onRevealPath })
           </span>
         </div>
         {zoneChrome}
-        <SearchWrap query={query} setQuery={setQuery} placeholder="Filter by name or id…" />
-        <div className="data-tree">
-          {filtered.map((n) => (
-            <div key={n.index} className="data-row" title={`record ${n.index} · target index ${n.id & 0x3ff}`}>
-              <span className="data-ft-id mono">{n.index}</span>
-              <span className="data-id mono">{n.name}</span>
-              {n.events > 0 && <span className="data-ev-badge mono">{n.events} event{n.events === 1 ? '' : 's'}</span>}
-              <span className="data-size mono">0x{n.id.toString(16).toUpperCase().padStart(8, '0')}</span>
+        {!doc.npcs.length ? (
+          <ZoneEmptyState
+            icon="groups"
+            title="No NPCs for this Zone"
+            sub="This zone's NPC DAT has no entity records."
+          />
+        ) : (
+          <>
+            <SearchWrap query={query} setQuery={setQuery} placeholder="Filter by name or id…" />
+            <div className="data-tree">
+              {filtered.map((n) => (
+                <div key={n.index} className="data-row" title={`record ${n.index} · target index ${n.id & 0x3ff}`}>
+                  <span className="data-ft-id mono">{n.index}</span>
+                  <span className="data-id mono">{n.name}</span>
+                  {n.events > 0 && <span className="data-ev-badge mono">{n.events} event{n.events === 1 ? '' : 's'}</span>}
+                  <span className="data-size mono">0x{n.id.toString(16).toUpperCase().padStart(8, '0')}</span>
+                </div>
+              ))}
+              {filtered.length === 0 && <div className="data-ft-more">No NPCs match “{query}”.</div>}
             </div>
-          ))}
-          {filtered.length === 0 && <div className="data-ft-more">No NPCs match “{query}”.</div>}
-        </div>
+          </>
+        )}
       </div>
       <div className="data-side">
         <FileCard
@@ -716,13 +739,23 @@ function EventsView({ doc, sources, zoneChrome, onSelectSource, onRevealPath }) 
           </span>
         </div>
         {zoneChrome}
-        <SearchWrap query={query} setQuery={setQuery} placeholder="Filter by NPC, event id, category or opcode…" />
-        <div className="data-tree">
-          {filtered.map((a) => (
-            <EventActorNode key={a.actorId} actor={a} dialogTexts={doc.dialogTexts} forceOpen={!!query.trim()} />
-          ))}
-          {filtered.length === 0 && <div className="data-ft-more">Nothing matches “{query}”.</div>}
-        </div>
+        {!doc.actors.length ? (
+          <ZoneEmptyState
+            icon="smart_display"
+            title="No Events"
+            sub="This zone's Event DAT has no actor scripts."
+          />
+        ) : (
+          <>
+            <SearchWrap query={query} setQuery={setQuery} placeholder="Filter by NPC, event id, category or opcode…" />
+            <div className="data-tree">
+              {filtered.map((a) => (
+                <EventActorNode key={a.actorId} actor={a} dialogTexts={doc.dialogTexts} forceOpen={!!query.trim()} />
+              ))}
+              {filtered.length === 0 && <div className="data-ft-more">Nothing matches “{query}”.</div>}
+            </div>
+          </>
+        )}
       </div>
       <div className="data-side">
         <FileCard
@@ -879,39 +912,49 @@ function DialogView({ doc, sources, zoneChrome, onSelectSource, onRevealPath }) 
           </span>
         </div>
         {zoneChrome}
-        <SearchWrap query={query} setQuery={setQuery} placeholder="Filter by text, speaker or index…">
-          {canGroup && (
-            <div className="data-cats">
-              <button className={`data-cat${mode === 'events' ? ' on' : ''}`} onClick={() => setMode('events')}>By event</button>
-              <button className={`data-cat${mode === 'all' ? ' on' : ''}`} onClick={() => setMode('all')}>All lines</button>
-            </div>
-          )}
-        </SearchWrap>
-        <div className="data-tree">
-          {mode === 'events' ? (
-            <>
-              {filteredConvos.map((g) => (
-                <DlgActorNode key={g.actorId} group={g} entries={doc.entries} />
-              ))}
-              {filteredConvos.length === 0 && query && (
-                <div className="data-ft-more">Nothing matches “{query}”.</div>
-              )}
-              {!query && unreferenced.length > 0 && (
-                <DlgUnreferencedNode entries={unreferenced} />
-              )}
-            </>
-          ) : (
-            <>
-              {shown.map((e) => <DlgLine key={e.index} entry={e} speaker={e.speakers?.length ? e.speakers.join(', ') : '—'} />)}
-              {filteredFlat.length > FT_MAX_ROWS && (
-                <div className="data-ft-more">
-                  Showing the first {FT_MAX_ROWS.toLocaleString()} of {filteredFlat.length.toLocaleString()} — narrow the filter to see the rest.
+        {!doc.entries.length ? (
+          <ZoneEmptyState
+            icon="chat"
+            title="No Dialog"
+            sub="This zone's Dialog DAT has no message lines."
+          />
+        ) : (
+          <>
+            <SearchWrap query={query} setQuery={setQuery} placeholder="Filter by text, speaker or index…">
+              {canGroup && (
+                <div className="data-cats">
+                  <button className={`data-cat${mode === 'events' ? ' on' : ''}`} onClick={() => setMode('events')}>By event</button>
+                  <button className={`data-cat${mode === 'all' ? ' on' : ''}`} onClick={() => setMode('all')}>All lines</button>
                 </div>
               )}
-              {filteredFlat.length === 0 && <div className="data-ft-more">No entries match “{query}”.</div>}
-            </>
-          )}
-        </div>
+            </SearchWrap>
+            <div className="data-tree">
+              {mode === 'events' ? (
+                <>
+                  {filteredConvos.map((g) => (
+                    <DlgActorNode key={g.actorId} group={g} entries={doc.entries} />
+                  ))}
+                  {filteredConvos.length === 0 && query && (
+                    <div className="data-ft-more">Nothing matches “{query}”.</div>
+                  )}
+                  {!query && unreferenced.length > 0 && (
+                    <DlgUnreferencedNode entries={unreferenced} />
+                  )}
+                </>
+              ) : (
+                <>
+                  {shown.map((e) => <DlgLine key={e.index} entry={e} speaker={e.speakers?.length ? e.speakers.join(', ') : '—'} />)}
+                  {filteredFlat.length > FT_MAX_ROWS && (
+                    <div className="data-ft-more">
+                      Showing the first {FT_MAX_ROWS.toLocaleString()} of {filteredFlat.length.toLocaleString()} — narrow the filter to see the rest.
+                    </div>
+                  )}
+                  {filteredFlat.length === 0 && <div className="data-ft-more">No entries match “{query}”.</div>}
+                </>
+              )}
+            </div>
+          </>
+        )}
       </div>
       <div className="data-side">
         <FileCard

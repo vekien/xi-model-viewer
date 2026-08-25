@@ -985,6 +985,43 @@ body:has(#weather) #placements {
 }
 .plc-header > .icon { color: var(--accent); font-size: 18px; }
 .plc-meta { color: var(--gray-400); font-size: 11px; margin-right: 2px; }
+.plc-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 12px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--ring);
+}
+/* Kill global `button` / `button.active` chrome (inset top highlight, gradient). */
+.plc-tab,
+.plc-tab:hover,
+.plc-tab:active,
+.plc-tab.active {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 6px 2px 7px;
+  margin: 0;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--gray-500);
+  font: 500 12px/1.2 var(--font-ui);
+  cursor: pointer;
+}
+.plc-tab .icon { font-size: 15px; opacity: 0.85; }
+.plc-tab:hover { color: var(--text); }
+.plc-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.plc-tab.active .icon { color: var(--accent); opacity: 1; }
+.plc-group.env-weather .plc-name { color: #9ec8ff; }
+.plc-group.env-weather .kind { color: #9ec8ff; }
 .plc-tool {
   width: 26px; height: 26px; min-height: 0;
   background: transparent; border: none; box-shadow: none;
@@ -997,6 +1034,31 @@ body:has(#weather) #placements {
 }
 .plc-tool.on:hover { background: rgba(100, 180, 255, 0.22); }
 .plc-tool .icon { font-size: 18px; }
+
+/* Per-row visibility eye (before name) */
+.plc-vis {
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: var(--gray-400);
+  opacity: 0.75;
+}
+.plc-vis:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+.plc-vis.off { color: var(--gray-500); opacity: 0.55; }
+.plc-vis.mixed { color: var(--accent); opacity: 0.9; }
+.plc-vis .icon { font-size: 15px; }
+.plc-row.vis-off .plc-name,
+.plc-group.vis-off > .plc-mesh .plc-name { opacity: 0.45; }
 
 /* Reset button on moved placement rows */
 .plc-reset {
@@ -2842,6 +2904,8 @@ button.data-zone-tab.on .icon { color: var(--accent); }
 .data-empty .icon { font-size: 42px; color: var(--gray-600); }
 .data-empty-title { font-size: 15px; font-weight: 600; color: var(--gray-200); }
 .data-empty-sub { font-size: 12px; max-width: 400px; line-height: 1.5; }
+/* Zone Events / Dialog / NPCs tabs with nothing to list — keep chrome, fill the pane. */
+.data-zone-empty { min-height: 180px; }
 
 /* Data view — FTABLE/VTABLE listing */
 .data-ft-row { cursor: pointer; }

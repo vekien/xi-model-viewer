@@ -196,6 +196,10 @@ export class ParticleSystem {
     // Standalone spell/ability effect playback (see playEffectRoutine).
     this._effect = null;
     this._effectAssociation = null;
+
+    // Objects panel → Visual Effects: catalog + per-key hide set.
+    this._effectCatalog = [];
+    this._hiddenEffectKeys = new Set();
   }
 
   warn(msg) {
@@ -208,43 +212,49 @@ export class ParticleSystem {
 
   // ── registration (xim Area.registerEffects) ──────────────────────────────
 
+  /** Weather folder id an effect sits under, or null for zone-owned VFX. */
+  #weatherIdOf(effect) {
+    for (let d = effect?.localDir; d; d = d.parent) {
+      if (d.parent?.id === 'weat') return d.id || null;
+    }
+    return null;
+  }
+
   /**
-   * Register every auto-running generator that belongs to the zone itself
-   * (not a weather folder). Classic retail layout keeps these under
-   * `data/effe` and `data/mode`; prototype / town DATs (e.g. ROM10/2/12)
-   * park windmills (`mil*`), roof vanes (`mi*` → `fu_in`), water, etc.
-   * directly under the area root (`town/`). Weather generators stay in
-   * `weat/<id>/` and are activated by registerWeatherEffects instead.
+   * Same gate as xi-zone-editor: list/run auto-running emitters and continuous
+   * singletons (sea planes, fixed glows). One-shot non-autoRun stay out so things
+   * like Qufim thunder spawners don't loop forever.
+   */
+  #isListableEffect(def) {
+    if (!def || def.parseError) return false;
+    return !!(def.autoRun || def.continuousSingleton);
+  }
+
+  /**
+   * Register every auto-running / continuous-singleton generator that belongs
+   * to the zone itself (not a weather folder). Classic retail keeps these under
+   * `data/effe` and `data/mode`; town DATs park them on the area root.
    */
   registerZoneEffects() {
     const association = ZoneAssociation();
     const area = this.areaRoot;
     if (!area) return 0;
 
-    const underWeather = (effect) => {
-      for (let d = effect.localDir; d; d = d.parent) {
-        if (d.id === 'weat') return true;
-      }
-      return false;
-    };
-
     const seen = new Set();
     let n = 0;
     const addFrom = (dir) => {
       if (!dir) return;
       for (const effect of dir.collectByTypeRecursive(SEC.EFFECT)) {
-        if (!effect.def?.autoRun) continue;
-        if (underWeather(effect)) continue;
+        if (!this.#isListableEffect(effect.def)) continue;
+        if (this.#weatherIdOf(effect)) continue;
         // Identity: same resource object, or same id under the same dir.
         const key = effect.def?.datId
           ? `${effect.localDir?.id ?? ''}\0${effect.def.datId}`
           : effect;
         if (seen.has(key)) continue;
         seen.add(key);
-        this.effectManager.register(
-          association,
-          this.createGenerator(effect, association, SINGLETON_EMIT_TIME),
-        );
+        const gen = this.createGenerator(effect, association, SINGLETON_EMIT_TIME);
+        this.effectManager.register(association, gen);
         n++;
       }
     };
@@ -257,6 +267,7 @@ export class ParticleSystem {
     }
     // Town / prototype: generators on the area root (and any non-weat subtree).
     addFrom(area);
+    this.rebuildEffectCatalog();
     return n;
   }
 
@@ -268,14 +279,185 @@ export class ParticleSystem {
    */
   registerWeatherEffects(weatherId) {
     const dir = this.getWeatherDirectory(weatherId);
-    if (!dir) return 0;
+    if (!dir) {
+      this.rebuildEffectCatalog();
+      return 0;
+    }
     const association = WeatherAssociation(weatherId);
     let n = 0;
     for (const effect of dir.collectByTypeRecursive(SEC.EFFECT)) {
-      this.effectManager.register(association, this.createGenerator(effect, association, SINGLETON_EMIT_TIME));
+      const gen = this.createGenerator(effect, association, SINGLETON_EMIT_TIME);
+      this.effectManager.register(association, gen);
       n++;
     }
+    this.rebuildEffectCatalog();
     return n;
+  }
+
+  /**
+   * Build Objects → Visual Effects rows from the full DAT tree (not only live
+   * generators). Matches xi-zone-editor: every autoRun / continuousSingleton
+   * 0x05, including weather folders. Hide keys bind to live gens by id+pos.
+   */
+  rebuildEffectCatalog() {
+    const area = this.areaRoot;
+    const catalog = [];
+    const seen = new Set();
+    if (area) {
+      for (const effect of area.collectByTypeRecursive(SEC.EFFECT)) {
+        if (!this.#isListableEffect(effect.def)) continue;
+        const weatherId = this.#weatherIdOf(effect);
+        const association = weatherId
+          ? WeatherAssociation(weatherId)
+          : ZoneAssociation();
+        const entry = this.#catalogEntry(effect, association);
+        if (!entry || seen.has(entry.key)) continue;
+        seen.add(entry.key);
+        catalog.push(entry);
+      }
+    }
+    this._effectCatalog = catalog;
+
+    // Stamp listKey + hide flag onto every live top-level generator.
+    this.effectManager.forEachGenerator((gen) => {
+      const key = this.#matchCatalogKey(gen);
+      if (key) {
+        gen.listKey = key;
+        if (this._hiddenEffectKeys.has(key)) gen.setUserHidden(true);
+        else if (gen.userHidden && !this._hiddenEffectKeys.has(key)) gen.setUserHidden(false);
+      }
+    });
+    return catalog.length;
+  }
+
+  #catalogEntry(effect, association) {
+    const cfg = effect.def?.particleConfiguration;
+    const linkRaw = cfg?.linkedDataId?.id ?? cfg?.linkedDataId?.link?.id ?? '';
+    const linkId = linkRaw != null ? String(linkRaw).replace(/\0+$/, '').trim() : '';
+    const datId = String(effect.def?.datId || effect.id || '').replace(/\0+$/, '').trim();
+    const bp = cfg?.basePosition;
+    const rawPos = bp
+      ? [Number(bp.x) || 0, Number(bp.y) || 0, Number(bp.z) || 0]
+      : [0, 0, 0];
+    // Display frame (−x, −y, z), same as zone placements.
+    const pos = [-rawPos[0], -rawPos[1], rawPos[2]];
+    let meshName = '';
+    if (linkId) {
+      const k = datKey(linkId);
+      meshName = this.zoneMeshIdToName.get(k) || '';
+      if (!meshName && this.zoneMeshes.has(k)) meshName = k;
+      if (!meshName) {
+        for (const name of this.zoneMeshes.keys()) {
+          const n = String(name).toLowerCase();
+          if (n === k || n.startsWith(k)) { meshName = name; break; }
+        }
+      }
+      if (!meshName) meshName = linkId;
+    }
+    const name = meshName || datId || 'effect';
+    const key = `${association.key}\0${datId}\0${rawPos.map((n) => n.toFixed(3)).join(',')}`;
+    return {
+      key,
+      id: datId,
+      name,
+      kind: association.kind === 'weather' ? 'weather' : 'zone',
+      weatherId: association.weatherId || null,
+      dir: dirPath(effect.localDir),
+      pos,
+      rawPos,
+      autoRun: !!effect.def?.autoRun,
+      continuousSingleton: !!effect.def?.continuousSingleton,
+    };
+  }
+
+  #matchCatalogKey(gen) {
+    if (gen.listKey && this._effectCatalog.some((e) => e.key === gen.listKey)) {
+      return gen.listKey;
+    }
+    const datId = String(gen.datId || gen.def?.datId || '').replace(/\0+$/, '').trim();
+    const bp = gen.def?.particleConfiguration?.basePosition;
+    const raw = bp
+      ? `${(Number(bp.x) || 0).toFixed(3)},${(Number(bp.y) || 0).toFixed(3)},${(Number(bp.z) || 0).toFixed(3)}`
+      : '0.000,0.000,0.000';
+    const assocKey = gen.association?.key || '';
+    const exact = this._effectCatalog.find(
+      (e) => e.id === datId && e.key.startsWith(`${assocKey}\0`) && e.key.endsWith(`\0${raw}`),
+    );
+    if (exact) return exact.key;
+    // Fallback: same datId under any association (weather re-bind).
+    return this._effectCatalog.find((e) => e.id === datId)?.key ?? null;
+  }
+
+  /** Flat catalog for the Objects panel (hidden flags included). */
+  listEffects() {
+    if (!this._effectCatalog.length) this.rebuildEffectCatalog();
+    return this._effectCatalog.map((e) => ({
+      ...e,
+      hidden: this._hiddenEffectKeys.has(e.key),
+    }));
+  }
+
+  /**
+   * Group catalog by display name for expandable rows (same shape as objectGroups).
+   * @returns {{ name: string, kind: string|null, count: number, instances: object[] }[]}
+   */
+  listEffectGroups() {
+    if (!this._effectCatalog.length) this.rebuildEffectCatalog();
+    const by = new Map();
+    for (const e of this.listEffects()) {
+      const gkey = `${e.kind || 'zone'}\0${e.name}`;
+      let g = by.get(gkey);
+      if (!g) {
+        g = {
+          name: e.name,
+          mesh: e.name,
+          kind: e.kind === 'weather' ? 'weather' : null,
+          instances: [],
+        };
+        by.set(gkey, g);
+      }
+      const label = e.id && e.id !== e.name ? `${e.name} [${e.id}]` : e.name;
+      g.instances.push({
+        ...e,
+        name: label,
+        index: g.instances.length,
+        userHidden: e.hidden,
+      });
+    }
+    return [...by.values()]
+      .map((g) => {
+        // Disambiguate multi-instance labels.
+        if (g.instances.length > 1) {
+          g.instances = g.instances.map((inst, i) => ({
+            ...inst,
+            name: `${inst.name}.${String(i + 1).padStart(3, '0')}`,
+          }));
+        }
+        return { ...g, count: g.instances.length };
+      })
+      .sort((a, b) => {
+        const aw = a.kind === 'weather' ? 1 : 0;
+        const bw = b.kind === 'weather' ? 1 : 0;
+        if (aw !== bw) return aw - bw;
+        return b.count - a.count || a.name.localeCompare(b.name);
+      });
+  }
+
+  setEffectHidden(key, hidden) {
+    if (!key) return;
+    if (hidden) this._hiddenEffectKeys.add(key);
+    else this._hiddenEffectKeys.delete(key);
+    this.effectManager.forEachGenerator((gen) => {
+      const gk = gen.listKey || this.#matchCatalogKey(gen);
+      if (gk === key) {
+        gen.listKey = key;
+        gen.setUserHidden(hidden);
+      }
+    });
+  }
+
+  setEffectsHidden(keys, hidden) {
+    for (const key of keys) this.setEffectHidden(key, hidden);
   }
 
   getWeatherDirectory(weatherId) {

@@ -257,7 +257,8 @@ async function buildZoneDatDoc(kind, bytes, relPath, settings, tablesRef) {
   const base = { kind, fileSize: bytes.byteLength, zoneId, zoneName, fileId: fid };
 
   if (kind === 'npclist') {
-    const npcs = parseNpcList(bytes);
+    let npcs = [];
+    try { npcs = parseNpcList(bytes); } catch { npcs = []; }
     // Per-NPC event counts from the zone's event DAT, when it parses.
     const evBytes = await readSibling('events');
     if (evBytes) {
@@ -272,8 +273,10 @@ async function buildZoneDatDoc(kind, bytes, relPath, settings, tablesRef) {
 
   if (kind === 'events') {
     const npcBytes = await readSibling('npclist');
-    const names = npcBytes ? npcNameMap(parseNpcList(npcBytes)) : null;
-    const actors = parseEventDat(bytes, names);
+    let names = null;
+    try { names = npcBytes ? npcNameMap(parseNpcList(npcBytes)) : null; } catch { names = null; }
+    let actors = [];
+    try { actors = parseEventDat(bytes, names); } catch { actors = []; }
     const dlgBytes = await readSibling('dialog');
     let dialogTexts = null;
     if (dlgBytes) {
@@ -292,7 +295,14 @@ async function buildZoneDatDoc(kind, bytes, relPath, settings, tablesRef) {
   }
 
   // dialog
-  const { entries, obfuscated } = parseDialogDat(bytes);
+  let entries = [];
+  let obfuscated = false;
+  try {
+    ({ entries, obfuscated } = parseDialogDat(bytes));
+  } catch {
+    entries = [];
+    obfuscated = false;
+  }
   let conversations = null;
   const evBytes = await readSibling('events');
   if (evBytes) {
@@ -511,15 +521,10 @@ export default function App({ launch = null }) {
     try { localStorage.setItem('skybox', next ? '1' : '0'); } catch { /* quota */ }
     if (rendererRef.current) rendererRef.current.showSkybox = next;
   }, []);
-  /** Unplaced 0x2E meshes at origin (orphans). Off by default — can be huge shells. */
-  const [showUnplaced, setShowUnplacedState] = useState(() => localStorage.getItem('unplaced') === '1');
-  const setUnplaced = useCallback((on) => {
-    const next = !!on;
-    setShowUnplacedState(next);
-    try { localStorage.setItem('unplaced', next ? '1' : '0'); } catch { /* quota */ }
-    if (rendererRef.current) rendererRef.current.showUnplaced = next;
-  }, []);
   const [hasCollision, setHasCollision] = useState(false);
+  /** Zone particle effects for Objects → Visual Effects tab. */
+  const [effectGroups, setEffectGroups] = useState(null);
+  const [vfxHiddenTick, setVfxHiddenTick] = useState(0);
   const [hasNavmesh, setHasNavmesh] = useState(false);
   const [hasSkybox, setHasSkybox] = useState(false);
   const [selectedDat, setSelectedDat] = useState('');
@@ -631,12 +636,13 @@ export default function App({ launch = null }) {
     }
     const live = liveSelectionRef.current;
     const hover = live ? plcHoverRef.current : null;
-    const gizmoPos = placementGizmoPos(selected);
+    const selOk = selected && !selected.userHidden;
+    const gizmoPos = selOk ? placementGizmoPos(selected) : null;
     const activeAxis = gizmoDragRef.current?.axis ?? null;
     const hoverAxis = gizmoHoverRef.current ?? null;
     r.setZonePickHighlight({
-      hover: hover && hover !== selected ? hover.bounds : null,
-      selected: selected ? selected.bounds : null,
+      hover: hover && hover !== selected && !hover.userHidden ? hover.bounds : null,
+      selected: selOk ? selected.bounds : null,
       gizmo: gizmoPos ? { pos: gizmoPos, activeAxis, hoverAxis } : null,
     });
   }, []);
@@ -742,6 +748,68 @@ export default function App({ launch = null }) {
     bumpMoved();
     setStatusText(`Reset · ${name}`);
   }, [applyPlacementAndRebuild, bumpMoved]);
+
+  // Bumps so Objects list eye icons re-render after mutating placement.userHidden.
+  const [plcHiddenTick, setPlcHiddenTick] = useState(0);
+
+  const rebuildAfterVisibility = useCallback(() => {
+    const model = modelRef.current;
+    const r = rendererRef.current;
+    if (!model || !r || model.kind !== 'zone') return;
+    rebuildZoneDraws(model);
+    r.reloadZoneBatches(model);
+    syncZonePickHighlight();
+    setPlcHiddenTick((n) => n + 1);
+  }, [syncZonePickHighlight]);
+
+  /** Toggle one placement's draw visibility (Objects list eye). */
+  const togglePlacementVisible = useCallback((placement) => {
+    if (!placement) return;
+    placement.userHidden = !placement.userHidden;
+    // Sky panel rows are particle-only — flag is UI-only.
+    if (placement.kind === 'sky') setPlcHiddenTick((n) => n + 1);
+    else rebuildAfterVisibility();
+    setStatusText(placement.userHidden
+      ? `Hidden · ${placement.name}`
+      : `Shown · ${placement.name}`);
+  }, [rebuildAfterVisibility]);
+
+  /** Toggle all instances in a mesh group. If any visible → hide all; else show all. */
+  const togglePlacementGroupVisible = useCallback((group) => {
+    const list = group?.instances;
+    if (!list?.length) return;
+    const anyVisible = list.some((p) => !p.userHidden);
+    for (const p of list) p.userHidden = anyVisible;
+    if (group.kind === 'sky') setPlcHiddenTick((n) => n + 1);
+    else rebuildAfterVisibility();
+    const label = group.mesh || 'group';
+    setStatusText(anyVisible ? `Hidden · ${label}` : `Shown · ${label}`);
+  }, [rebuildAfterVisibility]);
+
+  const refreshEffectGroups = useCallback(() => {
+    const sys = rendererRef.current?.particleSystem;
+    setEffectGroups(sys?.listEffectGroups?.() ?? []);
+    setVfxHiddenTick((n) => n + 1);
+  }, []);
+
+  const toggleEffectVisible = useCallback((entry) => {
+    const sys = rendererRef.current?.particleSystem;
+    if (!sys || !entry?.key) return;
+    const next = !(entry.userHidden || entry.hidden);
+    sys.setEffectHidden(entry.key, next);
+    refreshEffectGroups();
+    setStatusText(next ? `Hidden · ${entry.name}` : `Shown · ${entry.name}`);
+  }, [refreshEffectGroups]);
+
+  const toggleEffectGroupVisible = useCallback((group) => {
+    const sys = rendererRef.current?.particleSystem;
+    const list = group?.instances;
+    if (!sys || !list?.length) return;
+    const anyVisible = list.some((p) => !(p.userHidden || p.hidden));
+    sys.setEffectsHidden(list.map((p) => p.key).filter(Boolean), anyVisible);
+    refreshEffectGroups();
+    setStatusText(anyVisible ? `Hidden · ${group.name}` : `Shown · ${group.name}`);
+  }, [refreshEffectGroups]);
   const [loading, setLoading] = useState(null); // { title, detail } | null
 
   const player = useAudioPlayer();
@@ -778,7 +846,8 @@ export default function App({ launch = null }) {
     renderer.camera.fovDegrees = fov;
     renderer.playbackSpeed = playbackSpeedRef.current;
     renderer.showSkybox = localStorage.getItem('skybox') === '1';
-    renderer.showUnplaced = localStorage.getItem('unplaced') === '1';
+    // Unplaced orphans use per-row eyes in Objects (always eligible to draw).
+    renderer.showUnplaced = true;
     // Restore View > Toggle WASD from last session.
     if (wasdRef.current) renderer.camera.setMode('fly');
     // Seed the toolbar readout so it never shows 0 before the first frame.
@@ -1226,6 +1295,7 @@ export default function App({ launch = null }) {
 
       setTexWindows([]);   // close texture windows from the previous model
       setObjectGroups(null);
+      setEffectGroups(null);
       setPlcSelected('');
       setHasCollision(false);
       setHasNavmesh(false);
@@ -1887,6 +1957,8 @@ export default function App({ launch = null }) {
       // installs the camera adapter, which the weather generators need.
       renderer.setParticleSystem(particleSystem, environment);
       environment?.activateInitialWeather();
+      // Catalog every listable 0x05 (zone + all weather folders) for Objects → VFX.
+      particleSystem?.rebuildEffectCatalog?.();
       zoneEnvManagerRef.current = environment;
       if (particleSystem && environment) {
         const audio = getWeatherAudio();
@@ -1958,8 +2030,15 @@ export default function App({ launch = null }) {
       renderer.showNavmesh = false;
       // Restore the saved skybox preference (off if this zone has no sky).
       setSkybox(hasSky && localStorage.getItem('skybox') === '1');
-      renderer.showUnplaced = localStorage.getItem('unplaced') === '1';
-      setShowUnplacedState(renderer.showUnplaced);
+      // Unplaced: always drawable; default hidden via per-row userHidden eyes.
+      renderer.showUnplaced = true;
+      for (const p of model.zonePlacements ?? []) {
+        if (p.kind === 'unplaced') p.userHidden = true;
+      }
+      if ((model.zonePlacements ?? []).some((p) => p.kind === 'unplaced')) {
+        rebuildZoneDraws(model);
+        renderer.reloadZoneBatches(model);
+      }
       // Navmesh from public/navmesh/<ZoneName>.nav (async; doesn't block load).
       setHasNavmesh(false);
       loadZoneNavmesh(displayName).then((nav) => {
@@ -1973,6 +2052,7 @@ export default function App({ launch = null }) {
         }
       }).catch(() => { setHasNavmesh(false); });
       setObjectGroups(model.objectGroups ?? []);
+      setEffectGroups(particleSystem?.listEffectGroups?.() ?? []);
       setPlcSelected('');
       setPlcOpen(true);
       // Fresh zone — drop edit history / originals from the previous area.
@@ -2859,7 +2939,28 @@ export default function App({ launch = null }) {
         // Zone script companions (dialog/events/npc list) must win over the
         // section walker — dialog tables often look "section-like" and produce
         // truncated-walk warnings instead of the dialog view.
-        const zkind = sniffZoneDat(bytes);
+        // Prefer the zone-tab source id (events/dialog/npclist) over sniff so
+        // empty companions still open the right view instead of a broken
+        // section walk that steals the Zone tab.
+        const pathNorm = String(path).replace(/\//g, '\\').toLowerCase();
+        const srcHit = (dataSourcesRef.current || []).find(
+          (s) => String(s.path || '').replace(/\//g, '\\').toLowerCase() === pathNorm,
+        );
+        const kindFromTab = (srcHit?.id === 'events' || srcHit?.id === 'dialog' || srcHit?.id === 'npclist')
+          ? srcHit.id
+          : null;
+        let zkind = kindFromTab || sniffZoneDat(bytes);
+        // Empty/stub companions fail sniff (0-byte NPC, etc.) — recover kind from
+        // FTABLE so the Events/Dialog/NPCs tab still opens instead of a broken
+        // section walk that looks like Zone.
+        if (!zkind) {
+          try {
+            const tables = await loadMergedTables(settingsRef.current, dataTablesRef);
+            const fid = tables.byPath.get(rel.replace(/\\/g, '/').toUpperCase());
+            const hit = fid != null ? zoneForFileId(fid) : null;
+            if (hit) zkind = hit.kind;
+          } catch { /* tables unavailable */ }
+        }
         if (zkind) {
           doc = await buildZoneDatDoc(zkind, bytes, rel, settingsRef.current, dataTablesRef);
           if (token !== dataTokenRef.current) return;
@@ -3366,6 +3467,7 @@ export default function App({ launch = null }) {
     setCurrentSchedule('');
     setPlayingState(false);
     setObjectGroups(null);
+    setEffectGroups(null);
     setPlcOpen(false);
     setPlcSelected('');
     setWeatherList([]);
@@ -4124,6 +4226,37 @@ export default function App({ launch = null }) {
     // fit() already reseats fly mode when active
   }, [setWasd]);
 
+  const focusEffectInstance = useCallback((entry) => {
+    if (!entry?.pos) return;
+    const [x, y, z] = entry.pos;
+    const pad = 4;
+    focusBounds([x - pad, y - pad, z - pad], [x + pad, y + pad, z + pad]);
+    setStatusText(`${entry.name}${entry.id ? `  [${entry.id}]` : ''}`);
+  }, [focusBounds]);
+
+  const focusEffectGroup = useCallback((group) => {
+    const list = group?.instances;
+    if (!list?.length) return;
+    let min = [Infinity, Infinity, Infinity];
+    let max = [-Infinity, -Infinity, -Infinity];
+    let any = false;
+    for (const p of list) {
+      const pos = p.pos;
+      if (!pos) continue;
+      any = true;
+      for (let i = 0; i < 3; i++) {
+        if (pos[i] < min[i]) min[i] = pos[i];
+        if (pos[i] > max[i]) max[i] = pos[i];
+      }
+    }
+    if (!any) return;
+    const pad = 4;
+    focusBounds(
+      [min[0] - pad, min[1] - pad, min[2] - pad],
+      [max[0] + pad, max[1] + pad, max[2] + pad],
+    );
+  }, [focusBounds]);
+
   // Live weather/time for the TOD clock and sequencer (avoid stale closures).
   const todStateRef = useRef({ weather: '', minutes: 12 * 60 });
   todStateRef.current = { weather, minutes: timeMinutes };
@@ -4164,6 +4297,10 @@ export default function App({ launch = null }) {
           renderer.skyWeather = env.getWeather();
           renderer.setSkyDome(env.getSkyDome());
           renderer._skyBuiltAt = env.clock.currentTimeOfDayInSeconds();
+          // Live gens changed; catalog is tree-wide so just refresh hide stamps + UI.
+          renderer.particleSystem?.rebuildEffectCatalog?.();
+          setEffectGroups(renderer.particleSystem?.listEffectGroups?.() ?? []);
+          setVfxHiddenTick((n) => n + 1);
         } else {
           // Smooth sun / ambient every tick; sky colours catch up on a short lag.
           renderer.setTerrainLighting(env.getTerrainLighting());
@@ -4290,12 +4427,141 @@ export default function App({ launch = null }) {
     if (p.bounds) focusBounds(p.bounds.min, p.bounds.max);
   }, [focusBounds, selectPlacementInstance]);
 
+  // Right-look / camera drag gesture — survives after end so contextmenu can
+  // suppress the native menu when release lands on a panel (same fix as xi-zone-editor).
+  const camGestureRef = useRef({ active: false, moved: false, btn: -1, pointerId: null });
+
+  const endPointerDrag = useCallback((opts = {}) => {
+    const {
+      fromCanvasClick = false,
+      clientX = 0,
+      clientY = 0,
+      pointerId = null,
+    } = opts;
+    const d = drag.current;
+    const gest = camGestureRef.current;
+    const gizmoDrag = gizmoDragRef.current;
+
+    if (gizmoDrag) {
+      endPlacementDrag(gizmoDrag.placement, gizmoDrag.startPose);
+      const p = gizmoDrag.placement;
+      const pos = (p.pos || []).map((n) => Number(n).toFixed(1)).join(', ');
+      setStatusText(`${p.name}  #${p.index}${pos ? `  (${pos})` : ''}`);
+      gizmoDragRef.current = null;
+      drag.current = { btn: -1, x: 0, y: 0, sx: 0, sy: 0, moved: false, gizmo: false };
+      gest.active = false;
+      gest.moved = false;
+      gest.btn = -1;
+      gest.pointerId = null;
+      const canvas = canvasRef.current;
+      if (canvas && pointerId != null) {
+        try { canvas.releasePointerCapture(pointerId); } catch { /* */ }
+      }
+      if (canvas) {
+        canvas.style.cursor = liveSelectionRef.current ? 'crosshair' : '';
+      }
+      syncZonePickHighlight();
+      return;
+    }
+
+    // No active camera/gizmo drag — nothing to tear down.
+    if (!(d?.btn >= 0) && !gest.active) return;
+
+    const wasClick = fromCanvasClick
+      && d?.btn === 0 && !d.moved && !d.gizmo
+      && Math.hypot(clientX - (d.sx ?? clientX), clientY - (d.sy ?? clientY)) <= 5;
+
+    drag.current = { btn: -1, x: 0, y: 0, sx: 0, sy: 0, moved: false, gizmo: false };
+    // Keep gest.moved until contextmenu so a look-drag can still swallow the menu.
+    gest.active = false;
+    gest.btn = -1;
+    gest.pointerId = null;
+
+    const canvas = canvasRef.current;
+    if (canvas && pointerId != null) {
+      try { canvas.releasePointerCapture(pointerId); } catch { /* already released */ }
+    }
+
+    // Live Selection: genuine canvas click only (not window teardown over UI).
+    if (!fromCanvasClick || !liveSelectionRef.current || !wasClick) return;
+    if (rendererRef.current?.camera?.sequenceLock) return;
+    const model = modelRef.current;
+    if (model?.kind !== 'zone') return;
+    const hit = pickZoneAt(rendererRef.current, model, clientX, clientY);
+    if (hit) {
+      selectPlacementInstance(hit);
+    } else {
+      plcSelectedRef.current = '';
+      setPlcSelected('');
+      setStatusText('No object under cursor');
+      syncZonePickHighlight();
+    }
+  }, [endPlacementDrag, selectPlacementInstance, syncZonePickHighlight]);
+
+  // Robust camera-drag teardown (ported from xi-zone-editor): releasing RMB over a
+  // panel used to open that UI's context menu and never deliver canvas pointerup,
+  // leaving orbit/fly stuck. Window capture + blur + lostcapture always end it;
+  // contextmenu is swallowed when the gesture was a look-drag.
+  useEffect(() => {
+    const releaseOverCanvas = (e) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return false;
+      const r = canvas.getBoundingClientRect();
+      return e.clientX >= r.left && e.clientX < r.right
+        && e.clientY >= r.top && e.clientY < r.bottom;
+    };
+    const onWinPointerUp = (e) => {
+      if (e.button !== 0 && e.button !== 2 && e.button !== 1) return;
+      if (!(drag.current?.btn >= 0) && !gizmoDragRef.current && !camGestureRef.current.active) return;
+      // Capture-phase so we win even when release is over a panel. Live-pick only
+      // if the cursor is still over the viewport (not a UI chrome release).
+      endPointerDrag({
+        fromCanvasClick: e.button === 0 && releaseOverCanvas(e),
+        clientX: e.clientX,
+        clientY: e.clientY,
+        pointerId: e.pointerId,
+      });
+    };
+    const onWinBlur = () => endPointerDrag();
+    const onLostCapture = () => endPointerDrag();
+    const onWinContextMenu = (e) => {
+      const g = camGestureRef.current;
+      const dragging = drag.current?.btn >= 0 || g.active || !!gizmoDragRef.current;
+      if (g.moved || dragging) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      g.moved = false;
+      g.active = false;
+      endPointerDrag({ pointerId: g.pointerId });
+    };
+    window.addEventListener('pointerup', onWinPointerUp, true);
+    window.addEventListener('pointercancel', onWinPointerUp, true);
+    window.addEventListener('blur', onWinBlur);
+    window.addEventListener('contextmenu', onWinContextMenu, true);
+    const canvas = canvasRef.current;
+    canvas?.addEventListener('lostpointercapture', onLostCapture);
+    return () => {
+      window.removeEventListener('pointerup', onWinPointerUp, true);
+      window.removeEventListener('pointercancel', onWinPointerUp, true);
+      window.removeEventListener('blur', onWinBlur);
+      window.removeEventListener('contextmenu', onWinContextMenu, true);
+      canvas?.removeEventListener('lostpointercapture', onLostCapture);
+    };
+  }, [endPointerDrag]);
+
   const onPointerDown = (e) => {
     drag.current = {
       btn: e.button, x: e.clientX, y: e.clientY,
       sx: e.clientX, sy: e.clientY, moved: false, gizmo: false,
     };
-    e.currentTarget.setPointerCapture(e.pointerId);
+    camGestureRef.current = {
+      active: true,
+      moved: false,
+      btn: e.button,
+      pointerId: e.pointerId,
+    };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* */ }
 
     // Prefer grabbing the XYZ gizmo over camera orbit / live pick.
     if (e.button !== 0) return;
@@ -4332,47 +4598,20 @@ export default function App({ launch = null }) {
     r.setGizmoHoverAxis?.(axis);
     drag.current.gizmo = true;
     drag.current.moved = true; // don't treat as object pick / orbit on release
+    camGestureRef.current.moved = true;
     beginPlacementDrag(placement);
     setStatusText(`Move ${placement.name} · ${axis.toUpperCase()}-axis`);
     e.preventDefault();
   };
   const onPointerUp = (e) => {
-    const d = drag.current;
-    const gizmoDrag = gizmoDragRef.current;
-    if (gizmoDrag) {
-      endPlacementDrag(gizmoDrag.placement, gizmoDrag.startPose);
-      const p = gizmoDrag.placement;
-      const pos = (p.pos || []).map((n) => Number(n).toFixed(1)).join(', ');
-      setStatusText(`${p.name}  #${p.index}${pos ? `  (${pos})` : ''}`);
-      gizmoDragRef.current = null;
-      drag.current = { btn: -1, x: 0, y: 0, sx: 0, sy: 0, moved: false, gizmo: false };
-      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* */ }
-      if (canvasRef.current) {
-        canvasRef.current.style.cursor = liveSelectionRef.current ? 'crosshair' : '';
-      }
-      syncZonePickHighlight();
-      return;
-    }
-
-    const wasClick = d?.btn === 0 && !d.moved && !d.gizmo
-      && Math.hypot(e.clientX - (d.sx ?? e.clientX), e.clientY - (d.sy ?? e.clientY)) <= 5;
-    drag.current = { btn: -1, x: 0, y: 0, sx: 0, sy: 0, moved: false, gizmo: false };
-    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* already released */ }
-
-    // Live Selection: click (not drag) on zone geometry → Objects highlight only.
-    if (!liveSelectionRef.current || !wasClick) return;
-    if (rendererRef.current?.camera?.sequenceLock) return;
-    const model = modelRef.current;
-    if (model?.kind !== 'zone') return;
-    const hit = pickZoneAt(rendererRef.current, model, e.clientX, e.clientY);
-    if (hit) {
-      selectPlacementInstance(hit);
-    } else {
-      plcSelectedRef.current = '';
-      setPlcSelected('');
-      setStatusText('No object under cursor');
-      syncZonePickHighlight();
-    }
+    // Window capture-phase handler usually ends the drag first; this is a
+    // fallback if that listener isn't mounted yet. Idempotent once cleared.
+    endPointerDrag({
+      fromCanvasClick: e.button === 0,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      pointerId: e.pointerId,
+    });
   };
   const onPointerMove = (e) => {
     // Gizmo axis drag — screen-projected so mouse direction matches the arrow
@@ -4404,6 +4643,11 @@ export default function App({ launch = null }) {
       if (!drag.current.moved
         && Math.hypot(e.clientX - drag.current.sx, e.clientY - drag.current.sy) > 5) {
         drag.current.moved = true;
+        camGestureRef.current.moved = true;
+      }
+      // Also mark moved while RMB is held even if events arrive via window.
+      if ((e.buttons & 2) && (Math.abs(dx) > 0 || Math.abs(dy) > 0)) {
+        camGestureRef.current.moved = true;
       }
       const cam = rendererRef.current.camera;
       if (wasdRef.current) {
@@ -4797,11 +5041,19 @@ export default function App({ launch = null }) {
           onSelectInstance={focusPlacementInstance}
           onClose={() => setPlcOpen(false)}
           showEnv={showSkybox}
-          showUnplaced={showUnplaced}
-          onToggleUnplaced={() => setUnplaced(!showUnplaced)}
           liveSelection={liveSelection}
           onToggleLiveSelection={toggleLiveSelection}
           isPlacementMoved={isPlacementMoved}
+          isPlacementHidden={(p) => !!p?.userHidden}
+          hiddenTick={plcHiddenTick}
+          onTogglePlacementVisible={togglePlacementVisible}
+          onToggleGroupVisible={togglePlacementGroupVisible}
+          effectGroups={effectGroups}
+          vfxHiddenTick={vfxHiddenTick}
+          onToggleEffectVisible={toggleEffectVisible}
+          onToggleEffectGroupVisible={toggleEffectGroupVisible}
+          onSelectEffect={focusEffectInstance}
+          onSelectEffectGroup={focusEffectGroup}
           onResetPlacement={(p) => {
             rememberOriginalPose(p);
             resetPlacementPose(p);

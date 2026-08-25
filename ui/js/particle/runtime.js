@@ -425,6 +425,9 @@ export class ParticleGenerator {
     this.rotation = new Vec3();
     this.emitCulled = false;
     this.transitionLink = null;
+    /** Objects-panel eye toggle (zone VFX list). */
+    this.userHidden = false;
+    this.listKey = null;
 
     this.updateAssociatedPosition(0);
     this.updateAssociatedFacing(0);
@@ -439,17 +442,33 @@ export class ParticleGenerator {
 
   stopEmitting() { this.stopEmittingFlag = true; }
 
+  /** Hide/show from the Objects → Visual Effects list. */
+  setUserHidden(hidden) {
+    this.userHidden = !!hidden;
+    if (!this.userHidden) return;
+    for (const p of this.activeParticles) {
+      p.forceExpired = true;
+      for (const a of p.emittedAudio ?? []) a.stop?.();
+      p.emittedAudio = [];
+    }
+    this.activeParticles = [];
+  }
+
   /** Advance this generator and everything it owns. */
   update(elapsedFrames) {
+    if (this.userHidden) {
+      this.activeParticles = [];
+      return;
+    }
     this.emit(elapsedFrames);
     for (const p of this.activeParticles) p.update(elapsedFrames);
     this.activeParticles = this.activeParticles.filter((p) => !p.isComplete());
   }
 
-  getActiveParticles() { return this.activeParticles; }
+  getActiveParticles() { return this.userHidden ? [] : this.activeParticles; }
 
   emit(elapsedFrames, preInitialize = null) {
-    if (this.invalid) return [];
+    if (this.invalid || this.userHidden) return [];
 
     this.activeParticles = this.activeParticles.filter((p) => !p.isComplete());
 

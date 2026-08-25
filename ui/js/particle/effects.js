@@ -116,6 +116,7 @@ export class EffectManager {
     for (const routines of this.routines.values()) {
       const opacity = routines.fadeParameters.getOpacity();
       for (const gen of routines.generators) {
+        if (gen.userHidden) continue;
         for (const p of gen.getActiveParticles()) {
           out.push({ particle: p, opacity });
           for (const child of p.getChildrenRecursively()) out.push({ particle: child, opacity });
@@ -129,10 +130,18 @@ export class EffectManager {
     let n = 0;
     for (const routines of this.routines.values()) {
       for (const gen of routines.generators) {
+        if (gen.userHidden) continue;
         for (const p of gen.getActiveParticles()) n += 1 + p.getChildrenRecursively().length;
       }
     }
     return n;
+  }
+
+  /** Live top-level generators (for Objects-panel VFX toggles). */
+  forEachGenerator(fn) {
+    for (const routines of this.routines.values()) {
+      for (const gen of routines.generators) fn(gen);
+    }
   }
 
   #get(association) {

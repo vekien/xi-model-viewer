@@ -170,6 +170,7 @@ export function pickZonePlacement(placements, origin, dir, meshes = null) {
 
   for (const p of placements) {
     if (p.kind) continue;
+    if (p.userHidden || p.dragHidden) continue;
     const b = p.bounds;
     if (!b?.min || !b?.max) continue;
     const m = boundsMetrics(b.min, b.max);

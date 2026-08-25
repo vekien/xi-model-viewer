@@ -122,11 +122,19 @@ export function buildZoneDatBundle(meshRel, { byFid, byPath }, zonesList = []) {
 /** 'dialog' | 'events' | 'npclist' | null for a non-sectioned DAT. */
 export function sniffZoneDat(bytes) {
   const n = bytes.byteLength;
-  if (n >= 8 && ((bytes[0] | (bytes[1] << 8) | (bytes[2] << 16)) + 4 === n)) return 'dialog';
 
-  if (n >= 12) {
+  // Empty companions are still valid zone script DATs (dev zones often ship none).
+  if (n === 0) return null; // caller should use path/bundle kind
+
+  // Dialog: u24 end-of-table + 4-byte pad; empty table is just the terminator.
+  if (n >= 4 && ((bytes[0] | (bytes[1] << 8) | (bytes[2] << 16)) + 4 === n)) return 'dialog';
+
+  // Events: u32 actor-block count, then per-block size table + payloads.
+  // bc === 0 → 4-byte empty event DAT (no actors).
+  if (n >= 4) {
     const dv = new DataView(bytes.buffer, bytes.byteOffset, n);
     const bc = dv.getUint32(0, true);
+    if (bc === 0 && n === 4) return 'events';
     if (bc >= 1 && bc < 65536 && 4 + 4 * bc <= n) {
       let total = 4 + 4 * bc;
       for (let i = 0; i < bc; i++) total += dv.getUint32(4 + 4 * i, true);
@@ -134,6 +142,8 @@ export function sniffZoneDat(bytes) {
     }
   }
 
+  // NPC list: 32-byte records. Empty file is 0 bytes (handled above); all-zero
+  // padding still matches size, so require at least one plausible name+id.
   if (n >= 32 && n % 32 === 0) {
     // Sample records: printable ASCII name + server id with the high byte set.
     const count = Math.min(8, n / 32);
@@ -162,6 +172,7 @@ const SJIS = new TextDecoder('shift_jis');
 
 export function parseNpcList(bytes) {
   const npcs = [];
+  if (!bytes || bytes.byteLength < 32) return npcs;
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const total = Math.floor(bytes.byteLength / 32);
   for (let r = 0; r < total; r++) {
@@ -398,8 +409,11 @@ export function categorizeEvent(ev) {
  * zone's NPC list) labels actors and opcode operands when available.
  */
 export function parseEventDat(bytes, names = null) {
+  // Empty / stub event DATs (dev zones): 0 bytes or a lone u32 blockCount=0.
+  if (!bytes || bytes.byteLength < 4) return [];
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const blockCount = dv.getUint32(0, true);
+  if (blockCount === 0) return [];
   if (blockCount > 65535 || 4 + 4 * blockCount > bytes.byteLength) {
     throw new Error(`implausible blockCount ${blockCount} — not an event DAT`);
   }
@@ -553,7 +567,9 @@ export function decodeEventString(raw) {
 
 /** Parse an event-message (dialog) DAT → { entries, obfuscated }. */
 export function parseDialogDat(bytes) {
-  const n = bytes.byteLength;
+  const n = bytes?.byteLength ?? 0;
+  // Empty stub (dev zones) — no message table yet.
+  if (n === 0) return { entries: [], obfuscated: false };
   if (n < 8 || ((bytes[0] | (bytes[1] << 8) | (bytes[2] << 16)) + 4) !== n) {
     throw new Error('not an event-message table');
   }

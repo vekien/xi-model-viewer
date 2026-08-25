@@ -3,10 +3,13 @@ import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
 import { CameraSequence, driveCamera, poseFromCamera, sampleScene, sampleTod } from '../js/camseq.js';
 
-const DOC_KEY = 'camSeq';           // the sequence currently being edited
+// Working draft is intentionally NOT restored on open — a leftover camSeq used
+// to auto-paint the last flythrough on the zone whenever the panel mounted.
+// Named sequences live in the library and load only via the Load control.
 const LIB_KEY = 'camSeqLibrary';    // { [name]: doc } — saved sequences
 const POS_KEY = 'camSeqPanelPos';
 const SIZE_KEY = 'camSeqPanelSize';
+const LEGACY_DOC_KEY = 'camSeq';     // old auto-restored draft — cleared once
 const FPS_CHOICES = [24, 30, 60];
 const MIN_FRAMES = 2;
 const MAX_FRAMES = 36000;           // 20 minutes at 30fps — a sanity bound, not a target
@@ -96,15 +99,21 @@ export function CameraSequencer({
   onClose, rendererRef, tickRef,
   weathers = [], weather = '', timeMinutes = 720, onScene, onStopClock,
 }) {
-  const [doc, setDoc] = useState(() => toDoc(readJson(DOC_KEY)));
+  // Always start blank. Load a saved sequence from the library explicitly.
+  const [doc, setDoc] = useState(() => ({ ...EMPTY_DOC }));
   const [library, setLibrary] = useState(() => readJson(LIB_KEY) ?? {});
   const [pos, setPos] = useState(() => readJson(POS_KEY));
   const [width, setWidth] = useState(() => {
     const s = readJson(SIZE_KEY);
     return clamp(Math.round(s?.w ?? s ?? DEFAULT_W), MIN_W, 1600);
   });
-  const [name, setName] = useState(() => toDoc(readJson(DOC_KEY)).name ?? '');
-  const [lengthText, setLengthText] = useState(() => String(toDoc(readJson(DOC_KEY)).totalFrames));
+  const [name, setName] = useState('');
+  const [lengthText, setLengthText] = useState(() => String(EMPTY_DOC.totalFrames));
+
+  // Drop the legacy auto-restored draft so a refresh never resurrects it.
+  useEffect(() => {
+    try { localStorage.removeItem(LEGACY_DOC_KEY); } catch { /* quota */ }
+  }, []);
 
   const [frame, setFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -148,7 +157,6 @@ export function CameraSequencer({
   );
   seqRef.current = seq;
 
-  useEffect(() => { writeJson(DOC_KEY, { ...doc, name }); }, [doc, name]);
   useEffect(() => { writeJson(POS_KEY, pos); }, [pos]);
   useEffect(() => { writeJson(SIZE_KEY, { w: width }); }, [width]);
   useEffect(() => { setLengthText(String(totalFrames)); }, [totalFrames]);
