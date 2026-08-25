@@ -53,8 +53,9 @@ import { EffectList } from './EffectList.jsx';
 import { WeatherAudio } from '../js/particle/audio.js';
 import { toAudioBuffer, parseAudioHeader, FMT_ATRAC3 } from '../js/audio.js';
 import { parseImageDat, textureForSet } from '../js/images.js';
-import { inspectDat, parseInspectSkeleton } from '../js/dat/inspect.js';
+import { inspectDat, parseInspectSkeleton, parseInspectRoute } from '../js/dat/inspect.js';
 import { SkeletonModal } from './SkeletonModal.jsx';
+import { RouteModal } from './RouteModal.jsx';
 import { matchTablePath, parseFileTable } from '../js/dat/ftable.js';
 import { classifyDat } from '../js/dat/classify.js';
 import {
@@ -420,6 +421,8 @@ export default function App({ launch = null }) {
   const skelIdRef = useRef(0);
   const [zdefWindows, setZdefWindows] = useState([]); // [{ id, placements, title, cascade }]
   const zdefIdRef = useRef(0);
+  const [routeWindows, setRouteWindows] = useState([]); // [{ id, route, title }]
+  const routeIdRef = useRef(0);
   const zonePlacementsRef = useRef(null); // raw 0x1C list from last loadZone
   const dataStructOpenRef = useRef(false); // keep loadZone in sync without TDZ
   // Data Struct ParticleGenerator preview (plays on main canvas).
@@ -2559,6 +2562,11 @@ export default function App({ launch = null }) {
         e.preventDefault();
         return;
       }
+      if (routeWindows.length > 0) {
+        setRouteWindows((prev) => prev.slice(0, -1));
+        e.preventDefault();
+        return;
+      }
       if (zdefWindows.length > 0) {
         setZdefWindows((prev) => prev.slice(0, -1));
         e.preventDefault();
@@ -2576,7 +2584,7 @@ export default function App({ launch = null }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [exportSpec, settingsOpen, graphicsOpen, helpOpen, texWindows.length, skelWindows.length, zdefWindows.length, fxPreview, closeFxPreview]);
+  }, [exportSpec, settingsOpen, graphicsOpen, helpOpen, texWindows.length, skelWindows.length, zdefWindows.length, routeWindows.length, fxPreview, closeFxPreview]);
 
   // --- handlers ------------------------------------------------------------
 
@@ -3099,6 +3107,51 @@ export default function App({ launch = null }) {
         rot: p.rot || [0, 0, 0],
         scale: p.scale || [1, 1, 1],
       }));
+  }, []);
+
+  /** Data Struct 0x06 Route → camera path preview (+ optional scene overlay). */
+  const openDataRoute = useCallback((res) => {
+    const title = (res?.id && String(res.id).trim()) || 'Route';
+    if (!dataBufRef.current || res?.offset == null) {
+      setStatusText("Couldn't parse route (no DAT buffer)");
+      return;
+    }
+    let route = null;
+    try {
+      route = parseInspectRoute(dataBufRef.current, res.offset);
+    } catch (e) {
+      console.warn('parseInspectRoute', e);
+    }
+    if (!route?.keys?.length) {
+      setStatusText(`Couldn't parse route ${title}`);
+      return;
+    }
+    const key = `route:${res.offset}`;
+    setRouteWindows((prev) => {
+      const i = prev.findIndex((w) => w.key === key);
+      if (i >= 0) {
+        const copy = prev.slice();
+        const [hit] = copy.splice(i, 1);
+        copy.push(hit);
+        return copy;
+      }
+      return [...prev, { id: ++routeIdRef.current, key, title, route }];
+    });
+  }, []);
+
+  const closeRouteWin = useCallback((id) => {
+    setRouteWindows((prev) => prev.filter((w) => w.id !== id));
+  }, []);
+
+  const focusRouteWin = useCallback((id) => {
+    setRouteWindows((prev) => {
+      const i = prev.findIndex((w) => w.id === id);
+      if (i < 0 || i === prev.length - 1) return prev;
+      const copy = prev.slice();
+      const [hit] = copy.splice(i, 1);
+      copy.push(hit);
+      return copy;
+    });
   }, []);
 
   /** Data Struct ZoneDef row → floating placements table. */
@@ -4671,6 +4724,7 @@ export default function App({ launch = null }) {
             onOpenTexture={openDataTexture}
             onOpenSkeleton={openDataSkeleton}
             onOpenZoneDef={openDataZoneDef}
+            onOpenRoute={openDataRoute}
             onOpenParticle={openDataParticle}
             onPlaySound={playDataSound}
             playingSoundKey={playingSoundKey}
@@ -4942,6 +4996,17 @@ export default function App({ launch = null }) {
           zIndex={2000 + i}
           onClose={() => closeZdefWin(w.id)}
           onFocus={() => focusZdefWin(w.id)}
+        />
+      ))}
+
+      {routeWindows.map((w, i) => (
+        <RouteModal
+          key={w.id}
+          route={w.route}
+          title={w.title}
+          zIndex={2100 + i}
+          onClose={() => closeRouteWin(w.id)}
+          onFocus={() => focusRouteWin(w.id)}
         />
       ))}
 

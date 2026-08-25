@@ -6,13 +6,13 @@ import { decodeTextureRGBA } from '../js/renderer.js';
  * Draggable floating window showing a single decoded texture on a checkerboard
  * (so alpha is visible). Opened from the Details panel's texture list; title is
  * the texture's name. Small textures are upscaled with crisp nearest-neighbour.
- * Multiple instances can be open at once (cascadeOffset + zIndex from App).
+ * Always opens centered; drag to move. zIndex from App stacks focus order.
  */
-export function TextureModal({ tex, onClose, onFocus, cascadeOffset = 0, zIndex = 210 }) {
+export function TextureModal({ tex, onClose, onFocus, zIndex = 210 }) {
   const canvasRef = useRef(null);
   const panelRef = useRef(null);
   const dragState = useRef(null);
-  const [pos, setPos] = useState(null);   // null = centered (+ cascade)
+  const [pos, setPos] = useState(null);   // null = centered
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -42,11 +42,10 @@ export function TextureModal({ tex, onClose, onFocus, cascadeOffset = 0, zIndex 
   // Upscale small textures to ~256px on the long edge; leave large ones ~1:1.
   const scale = Math.max(1, Math.round(256 / Math.max(tex.width, tex.height)));
   const dispW = tex.width * scale, dispH = tex.height * scale;
-  const cascade = cascadeOffset * 28;
 
   const style = pos
     ? { left: pos.x, top: pos.y, transform: 'none', zIndex }
-    : { left: `calc(50% + ${cascade}px)`, top: `calc(44% + ${cascade}px)`, transform: 'translate(-50%, -50%)', zIndex };
+    : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex };
 
   return (
     <div className="tex-modal" ref={panelRef} style={style} onPointerDown={onFocus}>

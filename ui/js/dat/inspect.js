@@ -89,6 +89,94 @@ function peekTexture(bytes, dv, s) {
   };
 }
 
+/** Interp mode labels (xiclient CameraSmoothType / xi-tools scene docs). */
+const ROUTE_MODES = {
+  0: 'linear', 1: 'decel', 2: 'accel', 3: 'decel-accel', 4: 's-curve',
+};
+
+/**
+ * 0x06 Route — camera path (scene DAT) or start→end segment list.
+ * Layout: 32B header (count@+0x10, mode@+0x14) + N×48B keyframes
+ * (eye xyz, focal length, look-at xyz, roll, time 0..1, 12B pad).
+ * Some retail rows stash flags in count's high half — use low 16 bits and
+ * clamp by section size (see ROM/490/0.DAT a001).
+ */
+export function parseInspectRoute(buffer, offset) {
+  const bytes = buffer instanceof Uint8Array
+    ? buffer
+    : new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const start = offset | 0;
+  if (start + 0x30 > bytes.length) return null;
+  const meta = dv.getUint32(start + 4, true);
+  const size = ((meta >>> 7) & 0x7ffff) * 0x10;
+  const dataStart = start + 0x10;
+  const bodyEnd = Math.min(start + size, bytes.length);
+  if (bodyEnd - dataStart < 32) return null;
+  let count = dv.getUint32(dataStart + 0x10, true) & 0xffff;
+  const mode = dv.getUint32(dataStart + 0x14, true);
+  const maxBySize = Math.floor((bodyEnd - dataStart - 32) / 48);
+  if (count > maxBySize) count = maxBySize;
+  if (count <= 0 || count > 4096) return null;
+  const keys = [];
+  for (let i = 0; i < count; i++) {
+    const o = dataStart + 32 + i * 48;
+    if (o + 48 > bodyEnd) break;
+    keys.push({
+      eye: [
+        dv.getFloat32(o, true), dv.getFloat32(o + 4, true), dv.getFloat32(o + 8, true),
+      ],
+      focal: dv.getFloat32(o + 12, true),
+      look: [
+        dv.getFloat32(o + 16, true), dv.getFloat32(o + 20, true), dv.getFloat32(o + 24, true),
+      ],
+      roll: dv.getFloat32(o + 28, true),
+      time: dv.getFloat32(o + 32, true),
+    });
+  }
+  if (!keys.length) return null;
+  const id = fourcc(bytes, start).trim();
+  return { id, mode, modeName: ROUTE_MODES[mode] ?? `mode ${mode}`, keys };
+}
+
+/** Vertical FOV degrees from Route focal length (client: 2·atan2(192, focal)). */
+export function routeFocalToFov(focal) {
+  if (!(focal > 0)) return null;
+  return (2 * Math.atan2(192, focal) * 180) / Math.PI;
+}
+
+function peekRoute(bytes, dv, s) {
+  const route = parseInspectRoute(bytes, s.start);
+  if (!route) return { text: null, isRoute: true };
+  const n = route.keys.length;
+  const still = n === 1 ? 'still' : `${n} keys`;
+  const f0 = route.keys[0]?.focal;
+  const fov = routeFocalToFov(f0);
+  const fovTxt = fov != null ? ` · FOV ${fov.toFixed(0)}°` : '';
+  return {
+    text: `${still} · ${route.modeName}${fovTxt}`,
+    isRoute: true,
+  };
+}
+
+/** 0x5D — 8-bit height field; xim converts to a tangent-space normal map. */
+function peekBumpMap(bytes, dv, s) {
+  const d = s.dataStart;
+  if (d + 0x20 > bytes.length) return { text: null, textureName: null, isTexture: true };
+  const width = dv.getUint16(d + 4, true);
+  const height = dv.getUint16(d + 6, true);
+  const name = strAt(bytes, d + 0x10, 0x10).trim();
+  if (width <= 0 || height <= 0 || width > 8192 || height > 8192) {
+    return { text: name || null, textureName: name || null, isTexture: true };
+  }
+  const dims = `${width}×${height} height→normal`;
+  return {
+    text: name ? `${name} · ${dims}` : dims,
+    textureName: name || null,
+    isTexture: true,
+  };
+}
+
 function peekSkeleton(bytes, dv, s) {
   const joints = bytes[s.dataStart + 0x02];
   return { text: `${joints} joints` };
@@ -189,6 +277,7 @@ function peekZoneDef(bytes, dv, s) {
 }
 
 const PEEKS = {
+  0x06: peekRoute,
   0x07: peekRoutine,
   0x19: peekKeyFrames,
   0x1C: peekZoneDef,
@@ -201,6 +290,7 @@ const PEEKS = {
   0x2E: peekZoneMesh,
   0x3D: peekSoundPointer,
   0x45: peekInfo,
+  0x5D: peekBumpMap,
 };
 
 // ── high-poly character-creation formats (RT/SHAPE, DMB, SQLE) ────────────────
@@ -606,9 +696,10 @@ export function inspectDat(buffer) {
     } else {
       let detail = null;
       let textureName = null;
-      let isTexture = type === 0x20;
+      let isTexture = type === 0x20 || type === 0x5D;
       let isSound = type === 0x3D;
       let isZoneDef = type === 0x1C;
+      let isRoute = type === 0x06;
       const isParticleGenerator = type === 0x05;
       let soundId = null;
       const peek = PEEKS[type];
@@ -620,6 +711,7 @@ export function inspectDat(buffer) {
           if (r?.isTexture) isTexture = true;
           if (r?.isSound) isSound = true;
           if (r?.isZoneDef) isZoneDef = true;
+          if (r?.isRoute) isRoute = true;
           if (r?.soundId != null) soundId = r.soundId;
         } catch { /* malformed header — list it plain */ }
       }
@@ -632,7 +724,7 @@ export function inspectDat(buffer) {
         icon: SECTION_TYPE_ICONS[type] ?? 'data_object',
         size, offset: pos, flags, detail, textureName, isTexture,
         isSkeleton, skeletonKind: isSkeleton ? 'entity' : null,
-        isSound, soundId, isZoneDef, isParticleGenerator,
+        isSound, soundId, isZoneDef, isParticleGenerator, isRoute,
       });
       const agg = summary.get(type) ?? { count: 0, bytes: 0 };
       agg.count++; agg.bytes += size;
