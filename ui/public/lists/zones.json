@@ -3003,5 +3003,137 @@
     "name": "ya01",
     "path": "game/ROM/1/83.DAT",
     "group": "Rooms"
+  },
+  {
+    "id": 405,
+    "name": "405 — Dev Test Plane",
+    "path": "game/ROM10/100/0.DAT",
+    "group": "Dev / XI Modified"
+  },
+  {
+    "id": 406,
+    "name": "406 — Castle prototype — very early?",
+    "path": "game/ROM10/100/4.DAT",
+    "group": "Dev / XI Modified"
+  },
+  {
+    "id": 407,
+    "name": "407 — Character Creation",
+    "path": "game/ROM10/100/8.DAT",
+    "group": "Dev / XI Modified"
+  },
+  {
+    "id": 408,
+    "name": "408 — Dev Town — windmill + bridge",
+    "path": "game/ROM10/100/12.DAT",
+    "group": "Dev / XI Modified"
+  },
+  {
+    "id": 409,
+    "name": "409 — Dev Snowfield",
+    "path": "game/ROM10/100/16.DAT",
+    "group": "Dev / XI Modified"
+  },
+  {
+    "id": 410,
+    "name": "410 — Dev Snowfield 2",
+    "path": "game/ROM10/100/20.DAT",
+    "group": "Dev / XI Modified"
+  },
+  {
+    "id": 411,
+    "name": "411 — Dev Cave + Waterfall",
+    "path": "game/ROM10/100/24.DAT",
+    "group": "Dev / XI Modified"
+  },
+  {
+    "id": 412,
+    "name": "412 — Dev Boss Test",
+    "path": "game/ROM10/100/28.DAT",
+    "group": "Dev / XI Modified"
+  },
+  {
+    "id": 413,
+    "name": "413 — Dev Castle Town",
+    "path": "game/ROM10/100/32.DAT",
+    "group": "Dev / XI Modified"
+  },
+  {
+    "id": 414,
+    "name": "414 — Dev Desert",
+    "path": "game/ROM10/100/36.DAT",
+    "group": "Dev / XI Modified"
+  },
+  {
+    "id": 415,
+    "name": "415 — Dev Forest — moss test",
+    "path": "game/ROM10/100/40.DAT",
+    "group": "Dev / XI Modified"
+  },
+  {
+    "id": 416,
+    "name": "416 — Dev Cliffs + Forest",
+    "path": "game/ROM10/100/44.DAT",
+    "group": "Dev / XI Modified"
+  },
+  {
+    "id": 417,
+    "name": "417 — Dev World Map / diorama?",
+    "path": "game/ROM10/100/48.DAT",
+    "group": "Dev / XI Modified"
+  },
+  {
+    "id": 418,
+    "name": "418 — Dev Mountain Terrain",
+    "path": "game/ROM10/100/52.DAT",
+    "group": "Dev / XI Modified"
+  },
+  {
+    "id": 419,
+    "name": "419 — Fort Ghelsba prototype?",
+    "path": "game/ROM10/100/56.DAT",
+    "group": "Dev / XI Modified"
+  },
+  {
+    "id": 420,
+    "name": "420 — Tower prototype?",
+    "path": "game/ROM10/100/60.DAT",
+    "group": "Dev / XI Modified"
+  },
+  {
+    "id": 421,
+    "name": "421 — Northern San d'Oria prototype?",
+    "path": "game/ROM10/100/64.DAT",
+    "group": "Dev / XI Modified"
+  },
+  {
+    "id": 422,
+    "name": "422 — Bastok interior prototype?",
+    "path": "game/ROM10/100/68.DAT",
+    "group": "Dev / XI Modified"
+  },
+  {
+    "id": 423,
+    "name": "423 — Ru'Lude Gardens prototype (untextured)",
+    "path": "game/ROM10/100/72.DAT",
+    "group": "Dev / XI Modified"
+  },
+  {
+    "id": 424,
+    "name": "424 — Chateau d'Oraguille prototype?",
+    "path": "game/ROM10/100/76.DAT",
+    "group": "Dev / XI Modified"
+  },
+  {
+    "id": 425,
+    "name": "425 — Selbina prototype (untextured)",
+    "path": "game/ROM10/100/80.DAT",
+    "group": "Dev / XI Modified"
+  },
+  {
+    "id": 426,
+    "name": "426 — Ship / airship room prototype?",
+    "path": "game/ROM10/100/84.DAT",
+    "group": "Dev / XI Modified"
   }
 ]

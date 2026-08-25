@@ -4,8 +4,10 @@ import { Tooltip } from './Tooltip.jsx';
 // zones.json shape (from `xi zone json`): [{ id, name, path, group? }]
 // path is leveleditor-style `game/ROM…/N.DAT`.
 
-// Curated groups (no ROM number of their own) always sort after the ROM groups.
-const TAIL_GROUPS = ['Dev / Prototype', 'Rooms'];
+// Curated groups (no ROM number of their own) always sort after the ROM groups,
+// then alphabetically among themselves — so related ones ("Dev / …") sit together
+// and a new curated group needs no code change here.
+const isRomGroup = (g) => /^ROM\d*$/i.test(g);
 const PIN_KEY = 'pinnedZones';
 
 function romOf(z) {
@@ -94,11 +96,12 @@ export function ZoneList({ selectedPath, onSelectZone, onError }) {
       .slice()
       .sort(byName);
 
-    // ROM groups by number first, then the two curated groups at the bottom.
+    // ROM groups by number first, then curated groups alphabetically.
     const order = [...new Set(filtered.map(groupOf))].sort((a, b) => {
-      const ta = TAIL_GROUPS.indexOf(a), tb = TAIL_GROUPS.indexOf(b);
-      if (ta !== -1 || tb !== -1) return (ta === -1 ? -1 : ta) - (tb === -1 ? -1 : tb);
-      return (+a.slice(3) || 1) - (+b.slice(3) || 1);
+      const ra = isRomGroup(a), rb = isRomGroup(b);
+      if (ra !== rb) return ra ? -1 : 1;
+      if (ra) return (+a.slice(3) || 1) - (+b.slice(3) || 1);
+      return a.localeCompare(b);
     });
 
     const rest = order.map((g) => ({
