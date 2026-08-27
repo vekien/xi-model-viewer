@@ -85,11 +85,25 @@ async function fetchLatestRelease() {
     if (!res.ok) return null;               // 403 = rate limited, 404 = no releases yet
     const data = await res.json();
     if (!data?.tag_name || data.draft || data.prerelease) return null;
+    // Prefer the release .exe asset (only one is published). Fall back to the
+    // release page if the asset list is empty or the API omits browser_download_url.
+    const assets = Array.isArray(data.assets) ? data.assets : [];
+    const exe = assets.find((a) => /\.exe$/i.test(String(a?.name || '')))
+      || assets.find((a) => /\.exe$/i.test(String(a?.browser_download_url || '')));
+    const downloadUrl = exe?.browser_download_url
+      ? String(exe.browser_download_url)
+      : '';
+    const downloadName = exe?.name ? String(exe.name) : '';
+    // GitHub assets[].size is bytes (integer).
+    const downloadBytes = Number.isFinite(Number(exe?.size)) ? Number(exe.size) : 0;
     return {
       version: normalizeVersion(data.tag_name),
       tag: String(data.tag_name),
       name: String(data.name || '').trim(),
       url: data.html_url || RELEASES_URL,
+      downloadUrl,
+      downloadName,
+      downloadBytes,
       notes: String(data.body || '').trim(),
       publishedAt: data.published_at || '',
     };
@@ -119,5 +133,40 @@ export async function checkForUpdate() {
     return { ...latest, current };
   } catch {
     return null;
+  }
+}
+
+/**
+ * File → Check for Updates. Ignores prior dismissals so the panel can reopen.
+ * Never throws.
+ *
+ * @returns {{
+ *   upToDate: true, current: string, latest: string
+ * } | {
+ *   upToDate: false, info: object
+ * } | {
+ *   error: true, message: string, current?: string
+ * }}
+ */
+export async function checkForUpdateManual() {
+  try {
+    const current = await backend.appVersion();
+    const latest = await fetchLatestRelease();
+    if (!latest) {
+      return {
+        error: true,
+        current,
+        message: 'Could not reach GitHub for updates. Check your connection and try again.',
+      };
+    }
+    if (compareVersions(latest.version, current) <= 0) {
+      return { upToDate: true, current, latest: latest.version };
+    }
+    return { upToDate: false, info: { ...latest, current } };
+  } catch {
+    return {
+      error: true,
+      message: 'Could not check for updates.',
+    };
   }
 }

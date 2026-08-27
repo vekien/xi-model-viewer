@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Tooltip } from './Tooltip.jsx';
+import { ScenePanel } from './ScenePanel.jsx';
 
 const MENUS = [
   {
@@ -10,6 +11,8 @@ const MENUS = [
       { id: 'reload-dat', label: 'Reload DAT', icon: 'refresh' },
       { id: 'export', label: 'Export', icon: 'download' },
       { id: 'settings', label: 'Settings', icon: 'settings' },
+      { sep: true },
+      { id: 'check-updates', label: 'Check for Updates…', icon: 'system_update_alt' },
       { id: 'help', label: 'About', icon: 'star' },
     ],
   },
@@ -50,7 +53,6 @@ const MENUS = [
       { id: 'assets-images', label: 'Images', icon: 'image' },
       { id: 'assets-music', label: 'Music', icon: 'music_note' },
       { id: 'assets-sfx', label: 'Sound FX', icon: 'graphic_eq' },
-      { id: 'assets-scene', label: 'Scene', icon: 'grass' },
       // Set apart at the bottom: still work in progress (the creation sequence
       // needs its event layer, and per-shape textures are not mapped yet).
       { sep: true },
@@ -73,12 +75,15 @@ const VIEW_TOOLBAR = MENUS.find((m) => m.label === 'View').items
 export function MenuBar({
   onAction, checks = {}, flySpeed = 0, fps = 0, fov = 45, onFov,
   graphicsOpen = false, sequencerOpen = false,
+  bgColor = '#1a1a24', onBgColor, onFloor, onClearFloor, selectedFloor = '',
 }) {
   const [active, setActive] = useState(null);   // { label, left, top } | null
   const [camera, setCamera] = useState(null);   // { left, top } | null
+  const [scene, setScene] = useState(null);     // { left, top } | null — FOV-style popover
   const barRef = useRef(null);
   const panelRef = useRef(null);
   const camRef = useRef(null);
+  const sceneRef = useRef(null);
 
   useEffect(() => {
     if (!active) return;
@@ -114,9 +119,26 @@ export function MenuBar({
     };
   }, [camera]);
 
+  useEffect(() => {
+    if (!scene) return;
+    const close = (e) => {
+      if (barRef.current?.contains(e.target)) return;
+      if (sceneRef.current?.contains(e.target)) return;
+      setScene(null);
+    };
+    const onKey = (e) => e.key === 'Escape' && setScene(null);
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [scene]);
+
   const openMenu = (label, target) => {
     const rect = target.getBoundingClientRect();
     setCamera(null);
+    setScene(null);
     setActive({ label, left: rect.left, top: rect.bottom + 10 });
   };
 
@@ -124,7 +146,16 @@ export function MenuBar({
     if (camera) { setCamera(null); return; }
     const rect = target.getBoundingClientRect();
     setActive(null);
+    setScene(null);
     setCamera({ left: rect.left, top: rect.bottom + 10 });
+  };
+
+  const toggleScene = (target) => {
+    if (scene) { setScene(null); return; }
+    const rect = target.getBoundingClientRect();
+    setActive(null);
+    setCamera(null);
+    setScene({ left: rect.left, top: rect.bottom + 10 });
   };
 
   const activate = (id, label) => {
@@ -182,7 +213,7 @@ export function MenuBar({
             type="button"
             className="view-tool"
             aria-label="Reload DAT"
-            onClick={() => { setActive(null); setCamera(null); onAction('reload-dat', 'Reload DAT'); }}
+            onClick={() => { setActive(null); setCamera(null); setScene(null); onAction('reload-dat', 'Reload DAT'); }}
           >
             <span className="icon">refresh</span>
           </button>
@@ -194,9 +225,20 @@ export function MenuBar({
             className={`view-tool${graphicsOpen ? ' on' : ''}`}
             aria-label="Graphics Settings"
             aria-expanded={graphicsOpen}
-            onClick={() => { setActive(null); setCamera(null); onAction('graphics', 'Graphics Settings'); }}
+            onClick={() => { setActive(null); setCamera(null); setScene(null); onAction('graphics', 'Graphics Settings'); }}
           >
             <span className="icon">display_settings</span>
+          </button>
+        </Tooltip>
+        <Tooltip content="Scene — background & floor" placement="bottom">
+          <button
+            type="button"
+            className={`view-tool${scene ? ' on' : ''}`}
+            aria-label="Scene"
+            aria-expanded={!!scene}
+            onClick={(e) => toggleScene(e.currentTarget)}
+          >
+            <span className="icon">grass</span>
           </button>
         </Tooltip>
         <Tooltip content="Camera Sequencer" placement="bottom">
@@ -205,7 +247,7 @@ export function MenuBar({
             className={`view-tool${sequencerOpen ? ' on' : ''}`}
             aria-label="Camera Sequencer"
             aria-expanded={sequencerOpen}
-            onClick={() => { setActive(null); setCamera(null); onAction('camera-sequencer', 'Camera Sequencer'); }}
+            onClick={() => { setActive(null); setCamera(null); setScene(null); onAction('camera-sequencer', 'Camera Sequencer'); }}
           >
             <span className="icon">movie</span>
           </button>
@@ -250,6 +292,24 @@ export function MenuBar({
             <button type="button" className="cam-reset" onClick={() => onFov?.(45)}>
               Reset to 45°
             </button>
+          </div>,
+          document.body,
+        )}
+
+      {scene &&
+        createPortal(
+          <div
+            className="menu-panel cam-panel scene-panel-pop"
+            ref={sceneRef}
+            style={{ position: 'fixed', left: scene.left, top: scene.top }}
+          >
+            <ScenePanel
+              bgColor={bgColor}
+              onBg={onBgColor}
+              onFloor={onFloor}
+              onClearFloor={onClearFloor}
+              selectedFloor={selectedFloor}
+            />
           </div>,
           document.body,
         )}

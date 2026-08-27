@@ -19,7 +19,7 @@ import { Combo } from './Combo.jsx';
 import { MusicList, useAudioPlayer } from './MusicList.jsx';
 import { MusicPlayer } from './MusicPlayer.jsx';
 import { SfxList } from './SfxList.jsx';
-import { SceneList } from './SceneList.jsx';
+
 import { ZoneList } from './ZoneList.jsx';
 import { PlacementPanel } from './PlacementPanel.jsx';
 import { LoadingOverlay } from './LoadingOverlay.jsx';
@@ -37,7 +37,7 @@ import { extractKeyTables, parseZone, parseDatTextures, parseZoneDefAt } from '.
 import { ZoneDefModal } from './ZoneDefModal.jsx';
 import { ParticlePreviewModal } from './ParticlePreviewModal.jsx';
 import { armGeneratorPreview } from '../js/particlePreview.js';
-import { checkForUpdate, dismissUpdate } from '../js/update.js';
+import { checkForUpdate, checkForUpdateManual, dismissUpdate } from '../js/update.js';
 import {
   zoneDatRelPath, zoneToModel, rebuildZoneDraws, buildPlacementDraws, translatePlacementDisplay,
   clonePlacementPose, applyPlacementPose, posesEqual,
@@ -114,15 +114,13 @@ function readZoneCamera(key) {
   const snap = readZoneCamMap()[key];
   return snap && Array.isArray(snap.target) ? snap : null;
 }
-const VIEWS = ['files', 'npc', 'pc', 'creation', 'music', 'sfx', 'scene', 'zones', 'images', 'effects', 'data'];
+const VIEWS = ['files', 'npc', 'pc', 'creation', 'music', 'sfx', 'zones', 'images', 'effects', 'data'];
 /** Views that browse individual models, where fly controls are a hindrance. */
 const ORBIT_VIEWS = new Set(['files', 'npc', 'pc', 'creation']);
 /** Views with a Details panel — model/zone stats, or an effect's sprite images. */
 const DETAIL_VIEWS = new Set([...ORBIT_VIEWS, 'effects', 'zones']);
-// Zones and Scene are two panels onto the same loaded zone, so moving between
-// them keeps it. Every other view change is a fresh page: whatever the last one
-// had running gets torn down.
-const ZONE_VIEWS = new Set(['zones', 'scene']);
+// Zone list keeps a loaded zone when staying on Zones. Other view changes tear down.
+const ZONE_VIEWS = new Set(['zones']);
 // The only views that own the audio player. A zone's BGM plays through the same
 // player, so leaving Zones has to stop it too — hence "was it an audio view",
 // not just "is it one now".
@@ -3816,7 +3814,7 @@ export default function App({ launch = null }) {
     const nextAudio = AUDIO_VIEWS.has(leftView)
       || ((leftView === 'files' || leftView === 'data') && (browserKind === 'music' || browserKind === 'sfx'));
 
-    // Zones <-> Scene share one zone; anything else starts empty. Characters
+    // Zones keeps a loaded zone; anything else starts empty. Characters
     // reloads itself on arrival, so unloading here just clears the old actor.
     if (!(prevZone && nextZone)) unloadModel();
     if (!(prevAudio && nextAudio)) player.stop();
@@ -4402,6 +4400,27 @@ export default function App({ launch = null }) {
         setSettingsError('');
         setSettingsOpen(true);
         break;
+      case 'check-updates': {
+        setStatusText('Checking for updates…');
+        checkForUpdateManual().then((result) => {
+          if (result?.upToDate) {
+            setUpdate({
+              upToDate: true,
+              current: result.current,
+              latest: result.latest,
+            });
+            setStatusText(`All up to date (v${result.current || '?'}).`);
+            return;
+          }
+          if (result?.upToDate === false && result.info) {
+            setUpdate(result.info);
+            setStatusText(`Update available: v${result.info.version}`);
+            return;
+          }
+          setStatusText(result?.message || 'Could not check for updates.');
+        });
+        break;
+      }
       case 'export': {
         const spec = buildExportSpec();
         if (spec) setExportSpec(spec);
@@ -4617,9 +4636,7 @@ export default function App({ launch = null }) {
       case 'assets-sfx':
         setLeftView('sfx');
         break;
-      case 'assets-scene':
-        setLeftView('scene');
-        break;
+
       case 'assets-zones':
         setLeftView('zones');
         break;
@@ -5282,6 +5299,11 @@ export default function App({ launch = null }) {
         onFov={setFov}
         graphicsOpen={graphicsOpen}
         sequencerOpen={sequencerOpen}
+        bgColor={settings?.bgColor ?? DEFAULT_BG}
+        onBgColor={setBg}
+        onFloor={loadFloor}
+        onClearFloor={clearFloor}
+        selectedFloor={selectedFloor}
       />
 
       {/* Mounted only while open: unmounting is what releases the camera lock,
@@ -5346,16 +5368,6 @@ export default function App({ launch = null }) {
           hdPath={settings?.hdPath ?? ''}
           hdEnabled={!!settings?.hdEnabled}
           player={player}
-          onError={(msg) => setStatusText(msg)}
-        />
-      )}
-      {explorerOpen && leftView === 'scene' && (
-        <SceneList
-          bgColor={settings?.bgColor ?? DEFAULT_BG}
-          selectedFloor={selectedFloor}
-          onBg={setBg}
-          onFloor={loadFloor}
-          onClearFloor={clearFloor}
           onError={(msg) => setStatusText(msg)}
         />
       )}
@@ -5869,7 +5881,8 @@ export default function App({ launch = null }) {
         open={!!update && !helpOpen}
         info={update}
         onClose={() => {
-          dismissUpdate(update?.version);
+          // Only remember skip for a real available update, not "up to date".
+          if (update?.version && !update.upToDate) dismissUpdate(update.version);
           setUpdate(null);
         }}
       />

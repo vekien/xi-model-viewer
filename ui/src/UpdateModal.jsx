@@ -4,21 +4,25 @@ import { backend } from '../js/backend.js';
 import { RELEASES_URL } from '../js/update.js';
 import { Tooltip } from './Tooltip.jsx';
 
-// Auto-generated release notes open with a "What's Changed" heading and a
-// changelog link nobody needs in a popup; show the middle and let the release
-// page carry the rest.
-const NOTES_LIMIT = 900;
-
 const openLink = (e, url) => {
   e.preventDefault();
   backend.openUrl(url);
 };
 
+/** Format asset size from GitHub (bytes) for the download button. */
+function fmtSize(bytes) {
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 /**
- * "A new version is available" notice, raised by the boot update check
- * (js/update.js). OK dismisses it for this version — the next release asks again.
+ * Update notice from boot check or File → Check for Updates.
+ * `info.upToDate` shows a compact "All up to date!" panel (no download).
  *
- * @param info {{ version, name, url, notes, current }} from checkForUpdate()
+ * @param info {{ upToDate?: boolean, version?, name?, url?, downloadUrl?, downloadName?, downloadBytes?, current?, latest? }}
  */
 export function UpdateModal({ open, info, onClose }) {
   const [pos, setPos] = useState(null);
@@ -54,8 +58,50 @@ export function UpdateModal({ open, info, onClose }) {
     ? { left: pos.x, top: pos.y, transform: 'none' }
     : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' };
 
+  if (info.upToDate) {
+    const ver = info.current || info.latest || '';
+    return (
+      <div className="modal-backdrop" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+        <div className="modal update-modal update-modal-ok" ref={panelRef} style={style}>
+          <div
+            className="modal-header"
+            onPointerDown={startDrag}
+            onPointerMove={onDrag}
+            onPointerUp={endDrag}
+          >
+            <span className="icon">check_circle</span>
+            <span className="modal-title">Check for Updates</span>
+            <Tooltip content="Close" placement="left">
+              <Button className="icon-btn modal-close" aria-label="Close" onClick={onClose}>
+                <span className="icon">close</span>
+              </Button>
+            </Tooltip>
+          </div>
+
+          <div className="modal-body update-body">
+            <div className="update-ok-hero">
+              <span className="icon update-ok-hero-icon">verified</span>
+              <div className="update-ok-title">All up to date!</div>
+              {ver ? (
+                <div className="update-ok-ver mono">You're running v{ver}</div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="modal-actions">
+            <Button className="update-dismiss" onClick={onClose}>OK</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const url = info.url || RELEASES_URL;
-  const notes = trimNotes(info.notes);
+  const downloadUrl = info.downloadUrl || '';
+  const downloadLabel = info.downloadName
+    || (downloadUrl ? downloadUrl.split('/').pop() : '')
+    || `XI-Model-Viewer-v${info.version}.exe`;
+  const sizeLabel = fmtSize(info.downloadBytes);
 
   return (
     <div className="modal-backdrop" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -78,6 +124,7 @@ export function UpdateModal({ open, info, onClose }) {
         <div className="modal-body update-body">
           <div className="update-lede">
             A new version of XI Model Viewer has been released.
+            Click the button below to download, or click OK to continue and skip this update.
           </div>
 
           <div className="update-versions">
@@ -92,45 +139,40 @@ export function UpdateModal({ open, info, onClose }) {
             </div>
           </div>
 
-          {notes && <pre className="update-notes mono">{notes}</pre>}
+          {downloadUrl ? (
+            <button
+              type="button"
+              className="update-dl-btn"
+              onClick={(e) => openLink(e, downloadUrl)}
+            >
+              <span className="icon update-dl-icon">download</span>
+              <span className="update-dl-text">
+                <span className="update-dl-title">Download update</span>
+                <span className="update-dl-meta mono">
+                  {downloadLabel}
+                  {sizeLabel ? ` · ${sizeLabel}` : ''}
+                </span>
+              </span>
+            </button>
+          ) : null}
 
-          <a className="help-link" href={url} onClick={(e) => openLink(e, url)}>
-            <span className="icon">download</span>
-            <span>{info.name || `XI Model Viewer v${info.version}`} — open on GitHub</span>
+          <a className="help-link update-link update-link-secondary" href={url} onClick={(e) => openLink(e, url)}>
+            <span className="icon">open_in_new</span>
+            <span>View release on GitHub</span>
           </a>
         </div>
 
         <div className="modal-actions">
-          <Button className="active" onClick={onClose}>OK</Button>
+          <Button onClick={onClose}>OK</Button>
         </div>
       </div>
     </div>
   );
 }
 
-/**
- * Generated release notes as plain text: drop the boilerplate heading/footer,
- * turn markdown bullets into real ones, shrink the full PR URLs each line ends
- * with down to `#12`, and cap the length. No markdown renderer for four lines of
- * changelog — anyone wanting the real thing has the GitHub link below it.
- */
-function trimNotes(body) {
-  let text = String(body || '')
-    .replace(/^#{1,6}\s*What's Changed\s*/i, '')
-    .replace(/\*\*Full Changelog\*\*:.*$/is, '')
-    .replace(/https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/(\d+)/g, '#$1')
-    .replace(/^[ \t]*[*-][ \t]+/gm, '• ')
-    .replace(/\*\*(.+?)\*\*/g, '$1')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-  if (!text) return '';
-  if (text.length > NOTES_LIMIT) text = `${text.slice(0, NOTES_LIMIT).trimEnd()}…`;
-  return text;
-}
-
 function clamp(p, panel) {
   const w = panel?.offsetWidth ?? 420;
-  const h = panel?.offsetHeight ?? 320;
+  const h = panel?.offsetHeight ?? 280;
   return {
     x: Math.min(Math.max(p.x, 0), Math.max(window.innerWidth - w, 0)),
     y: Math.min(Math.max(p.y, 0), Math.max(window.innerHeight - h, 0)),
