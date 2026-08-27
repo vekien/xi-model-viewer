@@ -719,6 +719,15 @@ fn default_game_path() -> String {
     }
 }
 
+/// The running build's version, e.g. `1.0.8`. Read by the boot update check
+/// (`ui/js/update.js`) to compare against the newest GitHub release. The release
+/// workflow stamps Cargo.toml and tauri.conf.json from the same input, so this
+/// is the version the released exe reports.
+#[tauri::command]
+fn app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
     // Empty title arg so `start` treats the URL as the target, not a window title.
@@ -888,7 +897,8 @@ fn main() {
             xi_setup,
             open_url,
             reveal_path,
-            launch_args
+            launch_args,
+            app_version
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

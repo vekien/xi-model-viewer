@@ -3,6 +3,10 @@
 
 const isTauri = () => !!window.__TAURI__;
 
+// Build version, injected by vite from ui/package.json. Only used in browser dev
+// mode — the Tauri shell reports its own (release-stamped) version instead.
+const BUILD_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '';
+
 async function tauriInvoke(cmd, args) {
   return window.__TAURI__.core.invoke(cmd, args);
 }
@@ -191,6 +195,20 @@ export const backend = {
     } catch {
       return [];
     }
+  },
+
+  /**
+   * The running app version ("1.0.8"), for the update check. Browser dev mode
+   * has no shell to ask, so the vite-injected build version stands in.
+   */
+  async appVersion() {
+    if (isTauri()) {
+      try {
+        const v = await tauriInvoke('app_version');
+        if (v) return String(v).trim();
+      } catch { /* older shell without the command — fall through */ }
+    }
+    return BUILD_VERSION;
   },
 
   /** Opens a URL in the system browser. */
