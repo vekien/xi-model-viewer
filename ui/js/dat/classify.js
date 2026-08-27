@@ -69,6 +69,10 @@ export function classifyDat(buffer, path = '') {
     return { kind: 'image', label: 'Image' };
   }
 
+  if (strAt(bytes, 0, 8) === 'XISTRING') {
+    return { kind: 'data', label: 'XISTRING menu strings', dataKind: 'xistring' };
+  }
+
   const counts = sectionTypeCounts(bytes);
   if (counts) {
     const has = (t) => (counts.get(t) ?? 0) > 0;

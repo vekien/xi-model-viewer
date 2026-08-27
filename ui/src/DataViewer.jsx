@@ -149,6 +149,18 @@ export function DataViewer({
     );
   }
 
+  if (doc.kind === 'xistring') {
+    return (
+      <XistringView
+        doc={doc}
+        sources={sources}
+        zoneChrome={zoneChrome}
+        onSelectSource={onSelectSource}
+        onRevealPath={onRevealPath}
+      />
+    );
+  }
+
   if (doc.kind === 'other') {
     return (
       <div className="data-viewer">
@@ -846,6 +858,109 @@ function EventNode({ ev, dialogTexts, defaultOpen }) {
 }
 
 /**
+ * XISTRING menu/lobby/config string table (ROM/97/*.DAT etc.).
+ * Flat index → text; searchable. Not a sectioned resource DAT.
+ */
+function XistringView({ doc, sources, zoneChrome, onSelectSource, onRevealPath }) {
+  const [query, setQuery] = useState('');
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return doc.entries;
+    return doc.entries.filter((e) =>
+      String(e.index) === q
+      || e.text.toLowerCase().includes(q)
+      || `0x${e.offset.toString(16)}`.includes(q));
+  }, [doc, query]);
+  const shown = filtered.length > FT_MAX_ROWS ? filtered.slice(0, FT_MAX_ROWS) : filtered;
+
+  return (
+    <div className="data-viewer">
+      <div className="panel data-main">
+        <div className="data-card-title">
+          <span className="icon">translate</span>XISTRING
+          <span className="data-card-note mono">
+            {filtered.length === doc.entries.length
+              ? `${doc.entries.length.toLocaleString()} strings`
+              : `${filtered.length.toLocaleString()} of ${doc.entries.length.toLocaleString()}`}
+          </span>
+        </div>
+        {zoneChrome}
+        {!doc.entries.length ? (
+          <ZoneEmptyState
+            icon="translate"
+            title="No strings"
+            sub="This XISTRING file has an empty index."
+          />
+        ) : (
+          <>
+            <SearchWrap query={query} setQuery={setQuery} placeholder="Filter by index or text…" />
+            <div className="data-tree">
+              {shown.map((e) => (
+                <div
+                  key={e.index}
+                  className="data-dlg-entry"
+                  title={`#${e.index} · blob+0x${e.blobOffset.toString(16).toUpperCase()} · file 0x${e.offset.toString(16).toUpperCase()} · len ${e.length}${e.flags ? ` · flags 0x${e.flags.toString(16)}` : ''}`}
+                >
+                  <div className="data-dlg-head">
+                    <span className="data-ft-id mono">{e.index}</span>
+                    <span className="data-dlg-speaker mono">
+                      0x{e.offset.toString(16).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="data-dlg-text">
+                    {e.text
+                      ? e.text.split('\n').map((line, i) => (
+                        <span key={i}>
+                          {i > 0 && <br />}
+                          {line}
+                        </span>
+                      ))
+                      : <span className="data-dlg-empty">(empty)</span>}
+                  </div>
+                </div>
+              ))}
+              {filtered.length > FT_MAX_ROWS && (
+                <div className="data-ft-more">
+                  Showing the first {FT_MAX_ROWS.toLocaleString()} of {filtered.length.toLocaleString()} — narrow the filter to see the rest.
+                </div>
+              )}
+              {filtered.length === 0 && (
+                <div className="data-ft-more">No strings match “{query}”.</div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+      <div className="data-side">
+        <FileCard
+          doc={doc}
+          activeSource={doc.fullPath || ''}
+          onSelectSource={onSelectSource}
+          onRevealPath={onRevealPath}
+          extraRows={(
+            <>
+              <Row label="Blob base" value={`0x${doc.blobBase.toString(16).toUpperCase()}`} />
+              <Row label="Index" value={`${doc.indexBytes.toLocaleString()} B`} />
+              {doc.idWord != null && doc.idWord !== 0 && (
+                <Row label="Id word" value={`0x${doc.idWord.toString(16).toUpperCase()}`} />
+              )}
+            </>
+          )}
+        />
+        {doc.warnings?.length > 0 && (
+          <div className="panel data-card">
+            <div className="data-card-title"><span className="icon">warning</span>Warnings</div>
+            <div className="data-empty-sub" style={{ padding: '8px 12px' }}>
+              {doc.warnings.map((w, i) => <div key={i}>{w}</div>)}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
  * Zone dialog. Two ways in: "By event" groups lines under the actor + event
  * that prints them, in playback order (the level editor's Lines-tab shape);
  * "All lines" is the flat indexed table. Lines no event references (system
@@ -1413,6 +1528,12 @@ function FileCard({
         <>
           {doc.label && <Row label="Kind" value={doc.label} />}
           {doc.magic && <Row label="Magic" value={doc.magic} mono />}
+        </>
+      ) : doc.kind === 'xistring' ? (
+        <>
+          <Row label="Kind" value={doc.label || 'XISTRING'} />
+          <Row label="Magic" value="XISTRING" mono />
+          <Row label="Strings" value={doc.entries.length.toLocaleString()} />
         </>
       ) : null}
       {extraRows}

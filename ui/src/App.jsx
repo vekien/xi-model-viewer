@@ -3086,7 +3086,9 @@ export default function App({ launch = null }) {
               ? `${finalDoc.actors.length.toLocaleString()} actors · ${finalDoc.stats.events.toLocaleString()} events${zoneSuffix}`
               : finalDoc.kind === 'dialog'
                 ? `${finalDoc.entries.length.toLocaleString()} dialog lines${zoneSuffix}`
-                : finalDoc.label;
+                : finalDoc.kind === 'xistring'
+                  ? `${finalDoc.entries.length.toLocaleString()} XISTRING entries`
+                  : finalDoc.label;
       if (!opts.overlay) {
         setStatusText(opts.notice ? `${rel} — ${opts.notice}` : baseStatus);
       }

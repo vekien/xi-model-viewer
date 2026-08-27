@@ -895,6 +895,114 @@ export function inspectCreationDat(buffer) {
  * `root` is { kind:'dir', id, children:[dir|res] }; a res is
  * { kind:'res', id, type, name, icon, size, offset, flags, detail, textureName }.
  */
+/** Decode XISTRING blob bytes (ASCII / latin1, or Shift-JIS for JP menus). */
+function decodeXistringBytes(u8) {
+  if (!u8?.length) return '';
+  let hasHigh = false;
+  for (let i = 0; i < u8.length; i++) {
+    if (u8[i] >= 0x80) { hasHigh = true; break; }
+  }
+  try {
+    return new TextDecoder(hasHigh ? 'shift_jis' : 'latin1').decode(u8);
+  } catch {
+    try {
+      return new TextDecoder('latin1').decode(u8);
+    } catch {
+      let s = '';
+      for (let i = 0; i < u8.length; i++) {
+        const c = u8[i];
+        if (c === 0) break;
+        s += c >= 0x20 && c < 0x7f ? String.fromCharCode(c) : (c === 0x0a || c === 0x0d || c === 0x09 ? String.fromCharCode(c) : '·');
+      }
+      return s;
+    }
+  }
+}
+
+/**
+ * Menu / lobby / config string tables (`XISTRING` — ROM/97/*.DAT, some ROM/165, etc.).
+ * Index is 12 bytes/entry at 0x38; offsets are relative to the string blob base.
+ * See xi-tools docs/dats/ROM_97_menu_strings.md.
+ */
+export function inspectXistring(buffer) {
+  const bytes = new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const fileSize = bytes.byteLength;
+  if (fileSize < 0x38) return null;
+  if (strAt(bytes, 0, 8) !== 'XISTRING') return null;
+
+  const declaredSize = dv.getUint32(0x20, true);
+  const count = dv.getUint32(0x24, true);
+  const indexBytes = dv.getUint32(0x28, true);
+  const secondaryOff = dv.getUint32(0x2c, true);
+  const idWord = dv.getUint32(0x34, true);
+
+  if (count <= 0 || count > 100_000) return null;
+  if (indexBytes !== 0 && indexBytes !== count * 12) {
+    // tolerate mismatch but require room for the index
+  }
+  const indexBase = 0x38;
+  const blobBase = indexBase + count * 12;
+  if (blobBase > fileSize) return null;
+
+  const warnings = [];
+  if (declaredSize && declaredSize !== fileSize) {
+    warnings.push(`header size ${declaredSize.toLocaleString()} ≠ file ${fileSize.toLocaleString()}`);
+  }
+
+  const entries = [];
+  for (let i = 0; i < count; i++) {
+    const io = indexBase + i * 12;
+    if (io + 12 > fileSize) {
+      warnings.push(`index truncated at entry ${i}`);
+      break;
+    }
+    const off = dv.getUint32(io, true);
+    const length = dv.getUint32(io + 4, true);
+    const flags = dv.getUint32(io + 8, true);
+    const abs = blobBase + off;
+    let text = '';
+    let rawLen = 0;
+    if (length > 0 && abs < fileSize) {
+      const end = Math.min(abs + length, fileSize);
+      const slice = bytes.subarray(abs, end);
+      // length usually includes trailing NUL
+      let n = slice.length;
+      while (n > 0 && slice[n - 1] === 0) n--;
+      rawLen = n;
+      text = decodeXistringBytes(slice.subarray(0, n));
+    } else if (length === 0) {
+      text = '';
+    } else {
+      warnings.push(`entry ${i}: offset 0x${off.toString(16)} past blob`);
+    }
+    entries.push({
+      index: i,
+      offset: abs,
+      blobOffset: off,
+      length,
+      flags,
+      text,
+      byteLength: rawLen,
+    });
+  }
+
+  return {
+    kind: 'xistring',
+    label: 'XISTRING menu strings',
+    magic: 'XISTRING',
+    fileSize,
+    declaredSize,
+    count: entries.length,
+    indexBytes: count * 12,
+    secondaryOff,
+    idWord,
+    blobBase,
+    entries,
+    warnings,
+  };
+}
+
 export function inspectDat(buffer) {
   const bytes = new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -905,6 +1013,9 @@ export function inspectDat(buffer) {
   const head8 = strAt(bytes, 0, 8);
   if (head8.startsWith('SeWave')) return { kind: 'other', label: 'Sound sample (SeWave)', magic: 'SeWave', fileSize };
   if (strAt(bytes, 0, 12).startsWith('BGMStream')) return { kind: 'other', label: 'Music stream (BGMStream)', magic: 'BGMStream', fileSize };
+
+  const xistring = inspectXistring(buffer);
+  if (xistring) return xistring;
 
   // Character-creation formats (before the section walker confuses them).
   const creation = inspectCreationDat(buffer);
