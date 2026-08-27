@@ -895,8 +895,148 @@ export function inspectCreationDat(buffer) {
  * `root` is { kind:'dir', id, children:[dir|res] }; a res is
  * { kind:'res', id, type, name, icon, size, offset, flags, detail, textureName }.
  */
-/** Decode XISTRING blob bytes (ASCII / latin1, or Shift-JIS for JP menus). */
+/**
+ * Decode one XISTRING payload for display.
+ * ASCII + SJIS (81 40 fullwidth space, JP text) + FFXI UI controls:
+ *   FA 40 8B …  → {n}   numeric runtime value
+ *   FA 40 8C …  → {s}   string runtime value
+ *   FA 40 83 …  → {#}   plural / branch selector
+ *   FA 40 86 nn + nn bytes → singular form text
+ *   FA 40 84 nn + nn bytes → plural form text
+ *   ED 40 xx    → {icon:XX}  (e.g. ED 40 2F = PS button glyph)
+ *   %s %c %d    kept as printf-style placeholders
+ */
 function decodeXistringBytes(u8) {
+  if (!u8?.length) return '';
+  let out = '';
+  let i = 0;
+  const n = u8.length;
+  const pushAsciiRun = () => {
+    const start = i;
+    while (i < n) {
+      const c = u8[i];
+      if (c === 0) break;
+      if (c === 0x0a || c === 0x0d || c === 0x09) break;
+      if (c >= 0x20 && c < 0x7f) { i++; continue; }
+      break;
+    }
+    if (i > start) out += String.fromCharCode(...u8.subarray(start, i));
+  };
+  while (i < n) {
+    const c = u8[i];
+    if (c === 0) break;
+    if (c === 0x0a) { out += '\n'; i++; continue; }
+    if (c === 0x0d) { i++; continue; }
+    if (c === 0x09) { out += '\t'; i++; continue; }
+
+    // FA 40 — UI param / grammar controls (not SJIS)
+    if (c === 0xfa && i + 1 < n && u8[i + 1] === 0x40) {
+      const op = i + 2 < n ? u8[i + 2] : 0;
+      if (op === 0x8b) {
+        // FA 40 8B 01 81  — numeric insert
+        i += 5;
+        if (i <= n && u8[i - 1] !== 0x81) {
+          // fallback: skip FA 40 8B + up to 3 high/control bytes
+          i = Math.min(n, i - 5 + 3);
+          while (i < n && u8[i] >= 0x80) i++;
+        }
+        out += '{n}';
+        continue;
+      }
+      if (op === 0x8c) {
+        // FA 40 8C 03 81 80 / 80 80 — string insert
+        i += 6;
+        if (i > n) i = n;
+        out += '{s}';
+        continue;
+      }
+      if (op === 0x83) {
+        // FA 40 83 01 81 03 81 80 — plural selector before 86/84 forms (8 bytes)
+        i += 8;
+        if (i > n) i = n;
+        out += '{#}';
+        continue;
+      }
+      if (op === 0x86 || op === 0x84) {
+        // FA 40 86/84 NN + form text. NN is a form id; length is unreliable for
+        // 86, so take printable run until the next FA/ED/NUL. For 84, prefer NN
+        // bytes when they are a clean ASCII word (shared suffix stays outside).
+        const nn = i + 3 < n ? u8[i + 3] : 0;
+        const start = i + 4;
+        let end = start;
+        if (op === 0x84 && nn > 0 && start + nn <= n) {
+          let ok = true;
+          for (let k = start; k < start + nn; k++) {
+            const b = u8[k];
+            if (b < 0x20 || b >= 0x7f) { ok = false; break; }
+          }
+          if (ok) end = start + nn;
+        }
+        if (end === start) {
+          while (end < n) {
+            const b = u8[end];
+            if (b === 0) break;
+            if (b === 0xfa || b === 0xed) break;
+            if (b >= 0x20 && b < 0x7f) { end++; continue; }
+            if (b === 0x0a || b === 0x0d) break;
+            break;
+          }
+        }
+        const form = decodeXistringPlain(u8.subarray(start, end));
+        if (op === 0x86) out += form || '{sg}';
+        else out += '|' + (form || '{pl}');
+        i = end;
+        continue;
+      }
+      // unknown FA 40 op — skip FA 40 op and following high bytes
+      i += 3;
+      while (i < n && u8[i] >= 0x80) i++;
+      out += '{?}';
+      continue;
+    }
+
+    // ED 40 — special icon glyph (PS button etc.); following byte is normal text
+    if (c === 0xed && i + 1 < n && u8[i + 1] === 0x40) {
+      i += 2;
+      out += '{PS}';
+      continue;
+    }
+
+    // SJIS fullwidth space 81 40
+    if (c === 0x81 && i + 1 < n && u8[i + 1] === 0x40) {
+      out += '　';
+      i += 2;
+      continue;
+    }
+
+    // Other SJIS 2-byte (lead 81–9F, E0–FC except FA/ED handled above)
+    if (((c >= 0x81 && c <= 0x9f) || (c >= 0xe0 && c <= 0xfc)) && i + 1 < n) {
+      const trail = u8[i + 1];
+      if (trail >= 0x40 && trail !== 0x7f && trail <= 0xfc) {
+        try {
+          out += new TextDecoder('shift_jis').decode(u8.subarray(i, i + 2));
+        } catch {
+          out += '·';
+        }
+        i += 2;
+        continue;
+      }
+    }
+
+    if (c >= 0x20 && c < 0x7f) {
+      pushAsciiRun();
+      continue;
+    }
+
+    // stray high / control
+    out += '·';
+    i++;
+  }
+  return out;
+}
+
+/** Plain SJIS/ASCII decode for grammar-form payloads (no FA/ED recursion needed usually). */
+function decodeXistringPlain(u8) {
   if (!u8?.length) return '';
   let hasHigh = false;
   for (let i = 0; i < u8.length; i++) {
@@ -905,17 +1045,13 @@ function decodeXistringBytes(u8) {
   try {
     return new TextDecoder(hasHigh ? 'shift_jis' : 'latin1').decode(u8);
   } catch {
-    try {
-      return new TextDecoder('latin1').decode(u8);
-    } catch {
-      let s = '';
-      for (let i = 0; i < u8.length; i++) {
-        const c = u8[i];
-        if (c === 0) break;
-        s += c >= 0x20 && c < 0x7f ? String.fromCharCode(c) : (c === 0x0a || c === 0x0d || c === 0x09 ? String.fromCharCode(c) : '·');
-      }
-      return s;
+    let s = '';
+    for (let i = 0; i < u8.length; i++) {
+      const c = u8[i];
+      if (c === 0) break;
+      if (c >= 0x20 && c < 0x7f) s += String.fromCharCode(c);
     }
+    return s;
   }
 }
 
@@ -957,16 +1093,19 @@ export function inspectXistring(buffer) {
       warnings.push(`index truncated at entry ${i}`);
       break;
     }
+    // 12-byte row: offset u32, length u16, flags u16, extra u32 (usually 0).
+    // Older notes treated length as u32 — the high half is actually flags
+    // (e.g. 0x00010023 → length 35, flag 1 for strings with FA 40 controls).
     const off = dv.getUint32(io, true);
-    const length = dv.getUint32(io + 4, true);
-    const flags = dv.getUint32(io + 8, true);
+    const length = dv.getUint16(io + 4, true);
+    const flags = dv.getUint16(io + 6, true);
+    const extra = dv.getUint32(io + 8, true);
     const abs = blobBase + off;
     let text = '';
     let rawLen = 0;
     if (length > 0 && abs < fileSize) {
       const end = Math.min(abs + length, fileSize);
       const slice = bytes.subarray(abs, end);
-      // length usually includes trailing NUL
       let n = slice.length;
       while (n > 0 && slice[n - 1] === 0) n--;
       rawLen = n;
@@ -982,6 +1121,7 @@ export function inspectXistring(buffer) {
       blobOffset: off,
       length,
       flags,
+      extra,
       text,
       byteLength: rawLen,
     });
