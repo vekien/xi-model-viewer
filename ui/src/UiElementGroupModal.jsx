@@ -1,19 +1,42 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@headlessui/react';
 import { Tooltip } from './Tooltip.jsx';
+import {
+  getNote, loadNotes, setNote,
+  uiEgSectionKey,
+} from '../js/notes.js';
 
 /**
  * Draggable inspector for a 0x31 UiElementGroup — set header + sprite layout rows
- * (owner / parent / dest / src). Same chrome as UiMenuModal / RouteModal.
+ * (owner / parent / dest / src). Free-text notes per group (AppData notes.json).
  */
 export function UiElementGroupModal({
   group, title = 'UiElementGroup', onClose, onFocus, zIndex = 2130,
 }) {
   const panelRef = useRef(null);
   const dragState = useRef(null);
+  const notesDirtyRef = useRef(false);
   const [pos, setPos] = useState(null);
   const [query, setQuery] = useState('');
   const [ownerFilter, setOwnerFilter] = useState('');
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [notesTick, setNotesTick] = useState(0);
+  const [notesSaving, setNotesSaving] = useState(false);
+
+  const sectionKey = useMemo(() => uiEgSectionKey(group), [group]);
+
+  useEffect(() => {
+    notesDirtyRef.current = false;
+    setNotesOpen(false);
+    loadNotes().catch(() => {});
+  }, [sectionKey]);
+
+  useEffect(() => {
+    if (!notesOpen) return;
+    if (notesDirtyRef.current) return;
+    setNoteDraft(getNote(sectionKey));
+  }, [notesOpen, sectionKey, notesTick]);
 
   if (!group) return null;
 
@@ -44,9 +67,12 @@ export function UiElementGroupModal({
     group.textureRef ? `tex ${group.textureRef}` : null,
   ].filter(Boolean).join(' · ');
 
+  void notesTick;
+  const sectionNote = getNote(sectionKey);
+
   const startDrag = (e) => {
     onFocus?.();
-    if (e.target.closest('button, input, a, select, [role="button"]')) return;
+    if (e.target.closest('button, input, a, select, textarea, [role="button"]')) return;
     const rect = panelRef.current.getBoundingClientRect();
     dragState.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -59,6 +85,25 @@ export function UiElementGroupModal({
     }, panelRef.current));
   };
   const endDrag = () => { dragState.current = null; };
+
+  const saveNotesPanel = async () => {
+    setNotesSaving(true);
+    try {
+      await setNote(sectionKey, noteDraft);
+      notesDirtyRef.current = false;
+      setNotesTick((n) => n + 1);
+    } finally {
+      setNotesSaving(false);
+    }
+  };
+
+  const toggleNotes = () => {
+    setNotesOpen((v) => {
+      const next = !v;
+      if (next && !notesDirtyRef.current) setNoteDraft(getNote(sectionKey));
+      return next;
+    });
+  };
 
   const style = pos
     ? {
@@ -86,12 +131,25 @@ export function UiElementGroupModal({
         </Button>
       </div>
 
-      <div className="uieg-toolbar">
+      <div className="uieg-toolbar uimenu-toolbar">
         <div className="uieg-meta mono-small">
           <span>set <b>{group.setLabel || '—'}</b></span>
           <span>texture ref <b>{group.textureRef || '—'}</b></span>
           <span>section <b>{group.id || '—'}</b> @0x{(group.offset >>> 0).toString(16)}</span>
         </div>
+        <div className="uimenu-actions">
+          <Button
+            type="button"
+            className={`uimenu-btn${notesOpen ? ' on' : ''}${sectionNote || notesDirtyRef.current ? ' has-note' : ''}`}
+            onClick={toggleNotes}
+            title="Free-text notes for this UiElementGroup"
+          >
+            Notes
+          </Button>
+        </div>
+      </div>
+
+      <div className="uieg-toolbar">
         <div className="uieg-filters">
           <select
             className="uieg-select mono"
@@ -114,6 +172,35 @@ export function UiElementGroupModal({
           />
         </div>
       </div>
+
+      {notesOpen && (
+        <div className="uimenu-notes">
+          <div className="uimenu-notes-head">
+            <span className="uimenu-notes-title">Notes · {title}</span>
+            <div className="uimenu-notes-actions">
+              <Button
+                type="button"
+                className="uimenu-btn active"
+                disabled={notesSaving}
+                onClick={saveNotesPanel}
+              >
+                {notesSaving ? 'Saving…' : 'Save notes'}
+              </Button>
+            </div>
+          </div>
+          <textarea
+            className="uimenu-notepad"
+            spellCheck={false}
+            rows={6}
+            placeholder={`Notes for ${title} — free text for this UiElementGroup…`}
+            value={noteDraft}
+            onChange={(e) => {
+              notesDirtyRef.current = true;
+              setNoteDraft(e.target.value);
+            }}
+          />
+        </div>
+      )}
 
       <div className="zdef-table-wrap">
         <table className="zdef-table">

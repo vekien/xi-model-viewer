@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Checkbox, Field, Label } from '@headlessui/react';
 import { backend } from '../js/backend.js';
+import { loadNotes, notesFilePath, revealNotesFile } from '../js/notes.js';
 
 const UV_INSTALL_URL = 'https://docs.astral.sh/uv/getting-started/installation/';
 const XI_README_HINT = 'https://github.com/vekien/xi-tools#getting-started';
@@ -14,6 +15,8 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
   const [draft, setDraft] = useState(initial);
   const [pos, setPos] = useState(null);
   const [xiStatus, setXiStatus] = useState(null); // null | { busy, ok, status, message, detail, … }
+  const [notesPath, setNotesPath] = useState('');
+  const [notesErr, setNotesErr] = useState('');
   const panelRef = useRef(null);
   const dragState = useRef(null);
   const setupGen = useRef(0);
@@ -23,6 +26,10 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
       setDraft(initial);
       setPos(null);
       setXiStatus(null);
+      setNotesErr('');
+      loadNotes()
+        .then(() => setNotesPath(notesFilePath() || ''))
+        .catch(() => setNotesPath(''));
       if ((initial?.xiPath || '').trim()) {
         // Lightweight check on open (no install) so the badge is current.
         runXiSetup(initial.xiPath, false);
@@ -228,40 +235,61 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
                 </div>
               </div>
 
-              <div className={`xi-status${badge ? ` ${badge.cls}` : ''}${xiStatus?.busy ? ' busy' : ''}`}>
+              <div className={`xi-status xi-status-compact${badge ? ` ${badge.cls}` : ''}${xiStatus?.busy ? ' busy' : ''}`}>
                 <span className={`icon${xiStatus?.busy ? ' spin' : ''}`}>{badge?.icon || 'info'}</span>
-                <div className="xi-status-body">
-                  <div className="xi-status-msg">
-                    {xiStatus?.message
-                      || 'Link the xi-tools repo for model glTF/FBX export. Requires Python 3.14 + uv.'}
-                  </div>
-                  {xiStatus?.python && (
-                    <div className="xi-status-meta mono">{xiStatus.python}</div>
-                  )}
-                  {xiStatus?.detail && xiStatus.status === 'error' && (
-                    <pre className="xi-status-detail mono">{xiStatus.detail.slice(0, 800)}</pre>
-                  )}
-                  <div className="xi-status-actions">
-                    <Button
-                      className="xi-action"
-                      disabled={xiStatus?.busy || !(draft.xiPath || '').trim()}
-                      onClick={() => runXiSetup(draft.xiPath, true)}
-                    >
-                      <span className="icon">build</span>
-                      {xiStatus?.busy ? 'Working…' : 'Check / Install'}
+                <span className="xi-status-msg">
+                  {xiStatus?.message
+                    || 'Link xi-tools for model export (Python 3.14 + uv).'}
+                </span>
+                <div className="xi-status-actions">
+                  <Button
+                    className="xi-action"
+                    disabled={xiStatus?.busy || !(draft.xiPath || '').trim()}
+                    onClick={() => runXiSetup(draft.xiPath, true)}
+                    title="Check / Install"
+                  >
+                    <span className="icon">build</span>
+                    {xiStatus?.busy ? '…' : 'Check'}
+                  </Button>
+                  {xiStatus?.status === 'missing_uv' && (
+                    <Button className="xi-action" onClick={() => backend.openUrl(UV_INSTALL_URL)} title="Install uv">
+                      <span className="icon">open_in_new</span>
                     </Button>
-                    {xiStatus?.status === 'missing_uv' && (
-                      <Button className="xi-action" onClick={() => backend.openUrl(UV_INSTALL_URL)}>
-                        <span className="icon">open_in_new</span>
-                        Install uv
-                      </Button>
-                    )}
-                    <Button className="xi-action ghost" onClick={() => backend.openUrl(XI_README_HINT)}>
-                      <span className="icon">menu_book</span>
-                      Setup guide
-                    </Button>
-                  </div>
+                  )}
+                  <Button className="xi-action ghost" onClick={() => backend.openUrl(XI_README_HINT)} title="Setup guide">
+                    <span className="icon">menu_book</span>
+                  </Button>
                 </div>
+              </div>
+              {xiStatus?.detail && xiStatus.status === 'error' && (
+                <pre className="xi-status-detail mono">{xiStatus.detail.slice(0, 600)}</pre>
+              )}
+
+              <div className="form-row">
+                <Field className="check-field">
+                  <Checkbox
+                    checked={draft.showXiConsole !== false}
+                    onChange={(v) => setDraft({ ...draft, showXiConsole: v })}
+                    className="checkbox"
+                  >
+                    <span className="icon check-icon">check</span>
+                  </Checkbox>
+                  <Label className="check-label">Show console output</Label>
+                </Field>
+              </div>
+
+              <div className="form-row">
+                <Field className="check-field">
+                  <Checkbox
+                    checked={!!draft.autoCloseXiConsole}
+                    onChange={(v) => setDraft({ ...draft, autoCloseXiConsole: v })}
+                    className="checkbox"
+                    disabled={draft.showXiConsole === false}
+                  >
+                    <span className="icon check-icon">check</span>
+                  </Checkbox>
+                  <Label className="check-label">Auto-close console (10s)</Label>
+                </Field>
               </div>
             </div>
 
@@ -310,37 +338,35 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
                 <div className="form-hint">Only the whole-DAT Notes window (status bar), not UiMenu notes.</div>
               </div>
 
-              <div className="settings-sep" role="separator" />
-
-              <div className="settings-col-title">xi-tools</div>
-
               <div className="form-row">
-                <Field className="check-field">
-                  <Checkbox
-                    checked={draft.showXiConsole !== false}
-                    onChange={(v) => setDraft({ ...draft, showXiConsole: v })}
-                    className="checkbox"
+                <label className="form-label">Notes file</label>
+                <div className="form-inline">
+                  <input
+                    type="text"
+                    readOnly
+                    className="mono"
+                    value={notesPath || '%LOCALAPPDATA%\\XiModelViewer\\notes.json'}
+                    spellCheck={false}
+                  />
+                  <Button
+                    onClick={async () => {
+                      setNotesErr('');
+                      try {
+                        await revealNotesFile();
+                        setNotesPath(notesFilePath() || notesPath);
+                      } catch (e) {
+                        setNotesErr(e?.message || String(e));
+                      }
+                    }}
                   >
-                    <span className="icon check-icon">check</span>
-                  </Checkbox>
-                  <Label className="check-label">Show console output in bottom corner</Label>
-                </Field>
-                <div className="form-hint">Bottom-left panel for xi command output (e.g. title menu Save).</div>
-              </div>
-
-              <div className="form-row">
-                <Field className="check-field">
-                  <Checkbox
-                    checked={!!draft.autoCloseXiConsole}
-                    onChange={(v) => setDraft({ ...draft, autoCloseXiConsole: v })}
-                    className="checkbox"
-                    disabled={draft.showXiConsole === false}
-                  >
-                    <span className="icon check-icon">check</span>
-                  </Checkbox>
-                  <Label className="check-label">Auto-close console output</Label>
-                </Field>
-                <div className="form-hint">Dismiss the panel after 10 seconds (progress bar on the panel).</div>
+                    <span className="icon">folder_open</span>
+                    Open file
+                  </Button>
+                </div>
+                <div className="form-hint">
+                  Shared notes for DATs, UiMenus, and UiElementGroups.
+                  {notesErr ? ` ${notesErr}` : ''}
+                </div>
               </div>
             </div>
           </div>

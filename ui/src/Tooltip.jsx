@@ -1,6 +1,8 @@
 import Tippy from '@tippyjs/react';
 import 'tippy.js/dist/tippy.css';
 
+const tippyRoot = () => document.body;
+
 const DEFAULTS = {
   delay: [0, 0],
   duration: [120, 80],
@@ -10,6 +12,9 @@ const DEFAULTS = {
   animation: 'fade',
   theme: 'xi',
   touch: ['hold', 400],
+  // Escape modal/panel stacking contexts so tips always paint on top.
+  appendTo: tippyRoot,
+  zIndex: 100000,
 };
 
 /**
@@ -23,6 +28,8 @@ export function Tooltip({
   placement,
   delay,
   disabled,
+  appendTo,
+  zIndex,
   ...rest
 }) {
   const label = content ?? title;
@@ -38,6 +45,8 @@ export function Tooltip({
       animation={DEFAULTS.animation}
       theme={DEFAULTS.theme}
       touch={DEFAULTS.touch}
+      appendTo={appendTo ?? DEFAULTS.appendTo}
+      zIndex={zIndex ?? DEFAULTS.zIndex}
       {...rest}
     >
       {children}

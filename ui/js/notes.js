@@ -61,6 +61,13 @@ export function uiMenuSectionKey(menu) {
   return noteKey('uimenu', tag || bare, bare || tag);
 }
 
+/** UiElementGroup notepad key — section tag + set label. */
+export function uiEgSectionKey(group) {
+  const tag = (group?.id || '').trim() || '';
+  const label = (group?.setLabel || group?.bareName || '').replace(/\s+/g, '') || '';
+  return noteKey('uieg', tag || label, label || tag);
+}
+
 export function uiMenuRowKey(menu, row) {
   const base = uiMenuSectionKey(menu);
   if (!row) return base;

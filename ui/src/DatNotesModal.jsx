@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@headlessui/react';
 import {
-  getNote, loadNotes, notesFilePath, revealNotesFile, setNote,
+  getNote, loadNotes, setNote,
 } from '../js/notes.js';
 
 /**
@@ -68,14 +68,6 @@ export function DatNotesModal({
     }
   };
 
-  const openFile = async () => {
-    try {
-      await revealNotesFile();
-    } catch (e) {
-      setErr(e?.message || String(e));
-    }
-  };
-
   const style = pos
     ? {
       position: 'fixed', left: pos.x, top: pos.y, transform: 'none', zIndex,
@@ -85,10 +77,6 @@ export function DatNotesModal({
       position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex,
       width: 'min(480px, 94vw)', maxHeight: 'min(70vh, 520px)',
     };
-
-  const pathHint = notesFilePath()
-    ? notesFilePath().replace(/^.*[\\/]XiModelViewer[\\/]/i, '…/XiModelViewer/')
-    : '';
 
   return (
     <div className="zdef-modal dat-notes-modal" ref={panelRef} style={style} onPointerDown={onFocus}>
@@ -107,11 +95,7 @@ export function DatNotesModal({
       </div>
 
       <div className="dat-notes-toolbar">
-        <span className="dat-notes-path mono" title={notesFilePath() || ''}>
-          {pathHint || 'AppData notes.json'}
-        </span>
         <div className="dat-notes-actions">
-          <Button type="button" className="uimenu-btn" onClick={openFile}>Open file</Button>
           <Button type="button" className="uimenu-btn active" disabled={saving} onClick={save}>
             {saving ? 'Saving…' : 'Save'}
           </Button>

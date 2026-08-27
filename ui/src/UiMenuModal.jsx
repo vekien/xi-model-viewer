@@ -3,7 +3,7 @@ import { Button } from '@headlessui/react';
 import { backend } from '../js/backend.js';
 import { resolveWritableDat, rootKindForAbs } from '../js/gamePath.js';
 import {
-  getNote, loadNotes, notesFilePath, revealNotesFile, setNote,
+  getNote, loadNotes, setNote,
   uiMenuSectionKey,
 } from '../js/notes.js';
 
@@ -279,14 +279,6 @@ export function UiMenuModal({
     });
   };
 
-  const openNotesFile = async () => {
-    try {
-      await revealNotesFile();
-    } catch (e) {
-      setErr(e?.message || String(e));
-    }
-  };
-
   return (
     <div className="zdef-modal uimenu-modal" ref={panelRef} style={style} onPointerDown={onFocus}>
       <div
@@ -357,15 +349,7 @@ export function UiMenuModal({
         <div className="uimenu-notes">
           <div className="uimenu-notes-head">
             <span className="uimenu-notes-title">Notes · {title}</span>
-            <span className="uimenu-notes-path mono" title={notesFilePath() || ''}>
-              {notesFilePath()
-                ? notesFilePath().replace(/^.*[\\/]XiModelViewer[\\/]/i, '…/XiModelViewer/')
-                : 'localStorage (no AppData yet)'}
-            </span>
             <div className="uimenu-notes-actions">
-              <Button type="button" className="uimenu-btn" onClick={openNotesFile} title="Open notes.json in Explorer">
-                Open file
-              </Button>
               <Button
                 type="button"
                 className="uimenu-btn active"
