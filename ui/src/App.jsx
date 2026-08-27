@@ -30,6 +30,7 @@ import { SkeletonPanel } from './SkeletonPanel.jsx';
 import { TextureModal } from './TextureModal.jsx';
 import { HelpModal } from './HelpModal.jsx';
 import { UpdateModal } from './UpdateModal.jsx';
+import { LightGizmo, DEFAULT_LIGHT_DIR } from './LightGizmo.jsx';
 import { GraphicsModal } from './GraphicsModal.jsx';
 import { CameraSequencer } from './CameraSequencer.jsx';
 import { parseFloorTexture } from '../js/dat.js';
@@ -519,6 +520,16 @@ export default function App({ launch = null }) {
   const [showUnlit, setShowUnlit] = useState(false);
   // Cast shadows from a single sun. Not a retail feature — a viewer toggle.
   const [showShadows, setShowShadows] = useState(() => localStorage.getItem('shadows') === '1');
+  // Display-space sun aim from the light gizmo (null = default / zone env).
+  const [customSunDir, setCustomSunDir] = useState(() => {
+    try {
+      const raw = localStorage.getItem('customSunDir');
+      if (!raw) return null;
+      const v = JSON.parse(raw);
+      if (Array.isArray(v) && v.length === 3 && v.every((n) => Number.isFinite(n))) return v;
+    } catch { /* */ }
+    return null;
+  });
   // Graphics Settings (toolbar icon): shadow draw distance + render resolution.
   const [graphicsOpen, setGraphicsOpen] = useState(false);
   const [sequencerOpen, setSequencerOpen] = useState(false);
@@ -888,6 +899,9 @@ export default function App({ launch = null }) {
     // captured instance goes stale the moment the second one takes over.
     if (import.meta.env.DEV) window.__xiRendererRef = rendererRef;
     renderer.setFogOverride({ enabled: fogOn, scale: fogScale });
+    renderer.showShadows = showShadows;
+    renderer.shadowRange = shadowDistance;
+    renderer.setCustomSunDir(customSunDir);
     renderer.camera.fovDegrees = fov;
     renderer.playbackSpeed = playbackSpeedRef.current;
     renderer.showSkybox = localStorage.getItem('skybox') === '1';
@@ -1033,6 +1047,14 @@ export default function App({ launch = null }) {
   useEffect(() => {
     if (rendererRef.current) rendererRef.current.showShadows = showShadows;
   }, [showShadows]);
+
+  useEffect(() => {
+    if (rendererRef.current) rendererRef.current.setCustomSunDir(customSunDir);
+    try {
+      if (customSunDir) localStorage.setItem('customSunDir', JSON.stringify(customSunDir));
+      else localStorage.removeItem('customSunDir');
+    } catch { /* quota */ }
+  }, [customSunDir]);
 
   useEffect(() => {
     if (rendererRef.current) rendererRef.current.shadowRange = shadowDistance;
@@ -5704,6 +5726,15 @@ export default function App({ launch = null }) {
         <SkeletonPanel
           pose={rendererRef.current?.pose ?? null}
           onClose={() => setSkeletonOpen(false)}
+        />
+      )}
+
+      {showShadows && (
+        <LightGizmo
+          dir={customSunDir || DEFAULT_LIGHT_DIR}
+          detailsOpen={detailsOpen && !!modelInfo}
+          onChange={(d) => setCustomSunDir(d)}
+          onReset={() => setCustomSunDir(null)}
         />
       )}
 

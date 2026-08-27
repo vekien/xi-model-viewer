@@ -1511,6 +1511,36 @@ body:has(#weather) #placements {
 body.plc-resizing .plc-resize::after { background: var(--accent); }
 body.plc-resizing { cursor: ns-resize !important; user-select: none; }
 
+/* --- Light gizmo (shadow sun aim) — above status, above Details when open --- */
+
+#light-gizmo,
+.light-gizmo {
+  position: fixed;
+  right: 12px;
+  bottom: 56px;
+  z-index: 28;
+  width: 88px;
+  height: 88px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 40%),
+    rgba(16, 20, 26, 0.82);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.light-gizmo:active { cursor: grabbing; }
+.light-gizmo canvas { display: block; width: 88px; height: 88px; }
+/* Sit just left of Details when that panel is open */
+body:has(#details) .light-gizmo.details-open {
+  right: 340px; /* 12 + 320 + 8 */
+  bottom: 56px;
+}
+
 /* --- Details panel --------------------------------------------------------- */
 
 #details {

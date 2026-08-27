@@ -676,6 +676,10 @@ export class Renderer {
     // model views one (the fit is already tighter than any split would be).
     this.shadowCascades = [];
     this.shadowSunDir = ENTITY_SUN_DAT;   // light dir in the space being drawn
+    // Optional user override from the light gizmo (display-space, Y-up, toward
+    // the light). null = use zone env sun / default entity key. Zones keep the
+    // vector as-is; entity models map it into DAT space (DISPLAY_ROT).
+    this.customSunDir = null;
 
     this.zoneBatches = [];
     this.zoneSpinnerBatches = [];   // live-spin companions (mill on w_mill)
@@ -903,10 +907,33 @@ export class Renderer {
    * Zone lighting uniforms. Blends terrain env lighting toward unlit
    * (ambient white, no sun/moon) by lightBrightness 0..1. View > Unlit = 1.
    */
+  /**
+   * Display-space sun (Y-up, toward light). null clears the gizmo override and
+   * restores zone env / default entity key.
+   */
+  setCustomSunDir(dir) {
+    if (!dir) {
+      this.customSunDir = null;
+      return;
+    }
+    const n = Math.hypot(dir[0], dir[1], dir[2]);
+    if (!(n > 1e-6)) {
+      this.customSunDir = null;
+      return;
+    }
+    this.customSunDir = [dir[0] / n, dir[1] / n, dir[2] / n];
+  }
+
+  /** Display → entity DAT sun (same map as ENTITY_SUN_DISPLAY → ENTITY_SUN_DAT). */
+  _displaySunToDat(d) {
+    return [-d[0], -d[1], d[2]];
+  }
+
   _zoneLightUniforms() {
     const L = this.terrainLighting;
+    const sunDir = this.customSunDir || L.sunDir;
     const t = this.unlit ? 1 : Math.min(1, Math.max(0, this.lightBrightness || 0));
-    if (t <= 0) return L;
+    if (t <= 0) return { ...L, sunDir };
     const lerp3 = (a, b) => [
       a[0] + (b[0] - a[0]) * t,
       a[1] + (b[1] - a[1]) * t,
@@ -914,7 +941,7 @@ export class Renderer {
     ];
     return {
       ambient: lerp3(L.ambient, [1, 1, 1]),
-      sunDir: L.sunDir,
+      sunDir,
       sunColor: lerp3(L.sunColor || [0, 0, 0], [0, 0, 0]),
       moonDir: L.moonDir,
       moonColor: lerp3(L.moonColor || [0, 0, 0], [0, 0, 0]),
@@ -2195,9 +2222,14 @@ export class Renderer {
    */
   _updateShadowCascades(eye) {
     const isZone = this.model?.kind === 'zone';
-    // Zones follow the live 0x2F sun, so the shadow swings with the game clock.
-    // Entity/creation views have no environment and get the fixed DAT-space key.
-    const raw = isZone ? this.terrainLighting.sunDir : ENTITY_SUN_DAT;
+    // Custom gizmo (display-space) wins. Else zones follow live 0x2F sun; entity
+    // views use the fixed DAT-space key.
+    let raw;
+    if (this.customSunDir) {
+      raw = isZone ? this.customSunDir : this._displaySunToDat(this.customSunDir);
+    } else {
+      raw = isZone ? this.terrainLighting.sunDir : ENTITY_SUN_DAT;
+    }
     const ln = raw ? Math.hypot(raw[0], raw[1], raw[2]) : 0;
     if (!(ln > 1e-4)) return false;
     const L = [raw[0] / ln, raw[1] / ln, raw[2] / ln];
