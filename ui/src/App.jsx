@@ -29,6 +29,7 @@ import { DetailsPanel } from './DetailsPanel.jsx';
 import { SkeletonPanel } from './SkeletonPanel.jsx';
 import { TextureModal } from './TextureModal.jsx';
 import { HelpModal } from './HelpModal.jsx';
+import { UpdateModal } from './UpdateModal.jsx';
 import { GraphicsModal } from './GraphicsModal.jsx';
 import { CameraSequencer } from './CameraSequencer.jsx';
 import { parseFloorTexture } from '../js/dat.js';
@@ -36,6 +37,7 @@ import { extractKeyTables, parseZone, parseDatTextures, parseZoneDefAt } from '.
 import { ZoneDefModal } from './ZoneDefModal.jsx';
 import { ParticlePreviewModal } from './ParticlePreviewModal.jsx';
 import { armGeneratorPreview } from '../js/particlePreview.js';
+import { checkForUpdate, dismissUpdate } from '../js/update.js';
 import {
   zoneDatRelPath, zoneToModel, rebuildZoneDraws, buildPlacementDraws, translatePlacementDisplay,
   clonePlacementPose, applyPlacementPose, posesEqual,
@@ -380,6 +382,20 @@ export default function App({ launch = null }) {
     }
     return firstBoot;
   });
+  // A newer GitHub release than this build, once the boot check finds one.
+  const [update, setUpdate] = useState(null);
+  // Background update check. Deliberately its own effect and never awaited by
+  // startup: the app finishes booting whether GitHub answers, is slow, or is
+  // unreachable. checkForUpdate() swallows every failure and resolves to null,
+  // and it already filters out versions the user has dismissed.
+  useEffect(() => {
+    if (minimal) return undefined;   // a zone-preview window is not the place for it
+    let alive = true;
+    checkForUpdate().then((info) => {
+      if (alive && info) setUpdate(info);
+    });
+    return () => { alive = false; };
+  }, [minimal]);
   const [exportSpec, setExportSpec] = useState(null);
   const [leftView, setLeftViewState] = useState(() => {
     // A launch zone arrives on the Zones page. Set as the *initial* view, not a
@@ -5845,6 +5861,16 @@ export default function App({ launch = null }) {
       />
 
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
+
+      {/* Queued behind the first-launch About panel rather than stacked on it. */}
+      <UpdateModal
+        open={!!update && !helpOpen}
+        info={update}
+        onClose={() => {
+          dismissUpdate(update?.version);
+          setUpdate(null);
+        }}
+      />
 
       <LoadingOverlay
         open={!!loading}

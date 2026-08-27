@@ -11,6 +11,10 @@ per frame).
 
 Get the latest release by going to: [Github Releases](https://github.com/vekien/xi-model-viewer/releases)
 
+The app checks for a newer release in the background on start — nothing waits on
+it, and if one is out you get a notice with a link to it. **OK** dismisses that
+notice until the next release.
+
 ## Features
 
 - **Zones** — full zone geometry with day/night time-of-day and weather
