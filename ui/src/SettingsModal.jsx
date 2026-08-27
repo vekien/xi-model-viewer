@@ -1,25 +1,36 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Checkbox, Field, Label } from '@headlessui/react';
 import { backend } from '../js/backend.js';
 
+const UV_INSTALL_URL = 'https://docs.astral.sh/uv/getting-started/installation/';
+const XI_README_HINT = 'https://github.com/vekien/xi-tools#getting-started';
+
 /**
- * Draggable settings dialog. Dragged by its header and clamped so it can
- * never leave the viewport. Edits a draft; Save commits, Cancel discards.
+ * Draggable settings dialog. Two columns:
+ *   left  — Game / HD / Pivot paths
+ *   right — options + xi-tools setup
  */
 export function SettingsModal({ open, initial, onSave, onClose, error }) {
   const [draft, setDraft] = useState(initial);
-  const [pos, setPos] = useState(null);           // null = centered
+  const [pos, setPos] = useState(null);
+  const [xiStatus, setXiStatus] = useState(null); // null | { busy, ok, status, message, detail, … }
   const panelRef = useRef(null);
   const dragState = useRef(null);
+  const setupGen = useRef(0);
 
   useEffect(() => {
     if (open) {
       setDraft(initial);
       setPos(null);
+      setXiStatus(null);
+      if ((initial?.xiPath || '').trim()) {
+        // Lightweight check on open (no install) so the badge is current.
+        runXiSetup(initial.xiPath, false);
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initial]);
 
-  // Keep the panel on screen when the window shrinks
   useEffect(() => {
     if (!open) return;
     const clampNow = () => setPos((p) => (p ? clamp(p, panelRef.current) : p));
@@ -27,11 +38,51 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
     return () => window.removeEventListener('resize', clampNow);
   }, [open]);
 
+  const runXiSetup = useCallback(async (folder, install) => {
+    const path = (folder || '').trim();
+    if (!path) {
+      setXiStatus({
+        busy: false,
+        ok: false,
+        status: 'missing_folder',
+        message: 'Choose the xi-tools repo folder.',
+        detail: '',
+      });
+      return null;
+    }
+    const gen = ++setupGen.current;
+    setXiStatus((s) => ({
+      ...(s || {}),
+      busy: true,
+      ok: false,
+      status: 'working',
+      message: install
+        ? 'Checking / installing (uv, Python 3.14, deps)…'
+        : 'Checking xi-tools…',
+      detail: s?.detail || '',
+    }));
+    try {
+      const report = await backend.xiSetup(path, install);
+      if (gen !== setupGen.current) return null;
+      setXiStatus({ busy: false, ...report });
+      return report;
+    } catch (e) {
+      if (gen !== setupGen.current) return null;
+      const msg = e?.message || String(e);
+      setXiStatus({
+        busy: false,
+        ok: false,
+        status: 'error',
+        message: msg,
+        detail: '',
+      });
+      return null;
+    }
+  }, []);
+
   if (!open) return null;
 
   const startDrag = (e) => {
-    // Don't start a drag from header controls (e.g. the close button) — capturing
-    // the pointer here would swallow their click event.
     if (e.target.closest('button, input, a, [role="button"]')) return;
     const rect = panelRef.current.getBoundingClientRect();
     dragState.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
@@ -39,7 +90,10 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
   };
   const onDrag = (e) => {
     if (!dragState.current) return;
-    setPos(clamp({ x: e.clientX - dragState.current.dx, y: e.clientY - dragState.current.dy }, panelRef.current));
+    setPos(clamp({
+      x: e.clientX - dragState.current.dx,
+      y: e.clientY - dragState.current.dy,
+    }, panelRef.current));
   };
   const endDrag = () => { dragState.current = null; };
 
@@ -47,24 +101,30 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
     const picked = await backend.pickFolder(draft.gamePath);
     if (picked) setDraft({ ...draft, gamePath: picked });
   };
-
   const browseHd = async () => {
     const picked = await backend.pickFolder(draft.hdPath || draft.gamePath);
     if (picked) setDraft({ ...draft, hdPath: picked });
   };
-
+  const browsePivot = async () => {
+    const picked = await backend.pickFolder(draft.pivotPath || draft.hdPath || draft.gamePath);
+    if (picked) setDraft({ ...draft, pivotPath: picked });
+  };
   const browseXi = async () => {
-    const picked = await backend.pickFile(draft.xiPath);
-    if (picked) setDraft({ ...draft, xiPath: picked });
+    const picked = await backend.pickFolder(draft.xiPath || '');
+    if (!picked) return;
+    setDraft({ ...draft, xiPath: picked });
+    await runXiSetup(picked, true);
   };
 
   const style = pos
     ? { left: pos.x, top: pos.y, transform: 'none' }
     : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' };
 
+  const badge = xiBadge(xiStatus);
+
   return (
     <div className="modal-backdrop" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal" ref={panelRef} style={style}>
+      <div className="modal settings-modal" ref={panelRef} style={style}>
         <div
           className="modal-header"
           onPointerDown={startDrag}
@@ -78,91 +138,211 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
           </Button>
         </div>
 
-        <div className="modal-body">
+        <div className="modal-body settings-body">
           {error && (
-            <div className="form-error" role="alert">
+            <div className="form-error settings-error" role="alert">
               <span className="icon">error</span>
               <span>{error}</span>
             </div>
           )}
 
-          <div className="form-row">
-            <label className="form-label">Game path</label>
-            <div className="form-inline">
-              <input
-                type="text"
-                value={draft.gamePath}
-                spellCheck={false}
-                onChange={(e) => setDraft({ ...draft, gamePath: e.target.value })}
-              />
-              <Button onClick={browse}>
-                <span className="icon">folder_open</span>
-                Browse
-              </Button>
+          <div className="settings-cols">
+            {/* —— Left: game trees —— */}
+            <div className="settings-col">
+              <div className="settings-col-title">Data paths</div>
+
+              <div className="form-row">
+                <label className="form-label">Game path</label>
+                <div className="form-inline">
+                  <input
+                    type="text"
+                    value={draft.gamePath}
+                    spellCheck={false}
+                    onChange={(e) => setDraft({ ...draft, gamePath: e.target.value })}
+                  />
+                  <Button onClick={browse}>
+                    <span className="icon">folder_open</span>
+                    Browse
+                  </Button>
+                </div>
+              </div>
+
+              <div className="form-row">
+                <label className="form-label">HD path</label>
+                <div className="form-inline">
+                  <input
+                    type="text"
+                    value={draft.hdPath ?? ''}
+                    spellCheck={false}
+                    placeholder="Optional HD pack root"
+                    onChange={(e) => setDraft({ ...draft, hdPath: e.target.value })}
+                  />
+                  <Button onClick={browseHd}>
+                    <span className="icon">folder_open</span>
+                    Browse
+                  </Button>
+                </div>
+              </div>
+
+              <div className="form-row">
+                <label className="form-label">Pivot path</label>
+                <div className="form-inline">
+                  <input
+                    type="text"
+                    value={draft.pivotPath ?? ''}
+                    spellCheck={false}
+                    placeholder="Ashita / override DAT root"
+                    onChange={(e) => setDraft({ ...draft, pivotPath: e.target.value })}
+                  />
+                  <Button onClick={browsePivot}>
+                    <span className="icon">folder_open</span>
+                    Browse
+                  </Button>
+                </div>
+              </div>
+
+              <div className="settings-sep" role="separator" />
+
+              <div className="settings-col-title">xi-tools</div>
+
+              <div className="form-row">
+                <label className="form-label">Folder</label>
+                <div className="form-inline">
+                  <input
+                    type="text"
+                    value={draft.xiPath ?? ''}
+                    spellCheck={false}
+                    placeholder="Path to xi-tools checkout"
+                    onChange={(e) => {
+                      setDraft({ ...draft, xiPath: e.target.value });
+                      setXiStatus(null);
+                    }}
+                    onBlur={() => {
+                      if ((draft.xiPath || '').trim()) runXiSetup(draft.xiPath, false);
+                    }}
+                  />
+                  <Button onClick={browseXi} disabled={xiStatus?.busy}>
+                    <span className="icon">folder_open</span>
+                    Browse
+                  </Button>
+                </div>
+              </div>
+
+              <div className={`xi-status${badge ? ` ${badge.cls}` : ''}${xiStatus?.busy ? ' busy' : ''}`}>
+                <span className={`icon${xiStatus?.busy ? ' spin' : ''}`}>{badge?.icon || 'info'}</span>
+                <div className="xi-status-body">
+                  <div className="xi-status-msg">
+                    {xiStatus?.message
+                      || 'Link the xi-tools repo for model glTF/FBX export. Requires Python 3.14 + uv.'}
+                  </div>
+                  {xiStatus?.python && (
+                    <div className="xi-status-meta mono">{xiStatus.python}</div>
+                  )}
+                  {xiStatus?.detail && xiStatus.status === 'error' && (
+                    <pre className="xi-status-detail mono">{xiStatus.detail.slice(0, 800)}</pre>
+                  )}
+                  <div className="xi-status-actions">
+                    <Button
+                      className="xi-action"
+                      disabled={xiStatus?.busy || !(draft.xiPath || '').trim()}
+                      onClick={() => runXiSetup(draft.xiPath, true)}
+                    >
+                      <span className="icon">build</span>
+                      {xiStatus?.busy ? 'Working…' : 'Check / Install'}
+                    </Button>
+                    {xiStatus?.status === 'missing_uv' && (
+                      <Button className="xi-action" onClick={() => backend.openUrl(UV_INSTALL_URL)}>
+                        <span className="icon">open_in_new</span>
+                        Install uv
+                      </Button>
+                    )}
+                    <Button className="xi-action ghost" onClick={() => backend.openUrl(XI_README_HINT)}>
+                      <span className="icon">menu_book</span>
+                      Setup guide
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
 
-          <div className="form-row">
-            <label className="form-label">HD path</label>
-            <div className="form-inline">
-              <input
-                type="text"
-                value={draft.hdPath ?? ''}
-                spellCheck={false}
-                placeholder="Optional HD pack / high-res install root"
-                onChange={(e) => setDraft({ ...draft, hdPath: e.target.value })}
-              />
-              <Button onClick={browseHd}>
-                <span className="icon">folder_open</span>
-                Browse
-              </Button>
+            {/* —— Right: options —— */}
+            <div className="settings-col">
+              <div className="settings-col-title">Options</div>
+
+              <div className="form-row">
+                <Field className="check-field">
+                  <Checkbox
+                    checked={draft.autoPlay}
+                    onChange={(v) => setDraft({ ...draft, autoPlay: v })}
+                    className="checkbox"
+                  >
+                    <span className="icon check-icon">check</span>
+                  </Checkbox>
+                  <Label className="check-label">Auto-play idle animation on load</Label>
+                </Field>
+              </div>
+
+              <div className="form-row">
+                <Field className="check-field">
+                  <Checkbox
+                    checked={draft.autoWasdZones !== false}
+                    onChange={(v) => setDraft({ ...draft, autoWasdZones: v })}
+                    className="checkbox"
+                  >
+                    <span className="icon check-icon">check</span>
+                  </Checkbox>
+                  <Label className="check-label">Auto switch to WASD for Zones</Label>
+                </Field>
+                <div className="form-hint">Fly camera on zone load (WASD / QE / Shift / wheel).</div>
+              </div>
+
+              <div className="form-row">
+                <Field className="check-field">
+                  <Checkbox
+                    checked={!!draft.closeDatNotesOnSave}
+                    onChange={(v) => setDraft({ ...draft, closeDatNotesOnSave: v })}
+                    className="checkbox"
+                  >
+                    <span className="icon check-icon">check</span>
+                  </Checkbox>
+                  <Label className="check-label">Close DAT Notes on Save</Label>
+                </Field>
+                <div className="form-hint">Only the whole-DAT Notes window (status bar), not UiMenu notes.</div>
+              </div>
+
+              <div className="settings-sep" role="separator" />
+
+              <div className="settings-col-title">xi-tools</div>
+
+              <div className="form-row">
+                <Field className="check-field">
+                  <Checkbox
+                    checked={draft.showXiConsole !== false}
+                    onChange={(v) => setDraft({ ...draft, showXiConsole: v })}
+                    className="checkbox"
+                  >
+                    <span className="icon check-icon">check</span>
+                  </Checkbox>
+                  <Label className="check-label">Show console output in bottom corner</Label>
+                </Field>
+                <div className="form-hint">Bottom-left panel for xi command output (e.g. title menu Save).</div>
+              </div>
+
+              <div className="form-row">
+                <Field className="check-field">
+                  <Checkbox
+                    checked={!!draft.autoCloseXiConsole}
+                    onChange={(v) => setDraft({ ...draft, autoCloseXiConsole: v })}
+                    className="checkbox"
+                    disabled={draft.showXiConsole === false}
+                  >
+                    <span className="icon check-icon">check</span>
+                  </Checkbox>
+                  <Label className="check-label">Auto-close console output</Label>
+                </Field>
+                <div className="form-hint">Dismiss the panel after 10 seconds (progress bar on the panel).</div>
+              </div>
             </div>
-            <div className="form-hint">When HD is toggled on in the toolbar, files load from here first and fall back to the game path if missing.</div>
-          </div>
-
-          <div className="form-row">
-            <label className="form-label">xi-tools CLI (for model export)</label>
-            <div className="form-inline">
-              <input
-                type="text"
-                value={draft.xiPath ?? ''}
-                spellCheck={false}
-                placeholder="Path to xi.exe — leave blank to disable model export"
-                onChange={(e) => setDraft({ ...draft, xiPath: e.target.value })}
-              />
-              <Button onClick={browseXi}>
-                <span className="icon">description</span>
-                Browse
-              </Button>
-            </div>
-            <div className="form-hint">Model (glTF/FBX) export shells out to the xi CLI. Music/SFX WAV export works without it.</div>
-          </div>
-
-          <div className="form-row">
-            <Field className="check-field">
-              <Checkbox
-                checked={draft.autoPlay}
-                onChange={(v) => setDraft({ ...draft, autoPlay: v })}
-                className="checkbox"
-              >
-                <span className="icon check-icon">check</span>
-              </Checkbox>
-              <Label className="check-label">Auto-play idle animation on load</Label>
-            </Field>
-          </div>
-
-          <div className="form-row">
-            <Field className="check-field">
-              <Checkbox
-                checked={draft.autoWasdZones !== false}
-                onChange={(v) => setDraft({ ...draft, autoWasdZones: v })}
-                className="checkbox"
-              >
-                <span className="icon check-icon">check</span>
-              </Checkbox>
-              <Label className="check-label">Auto switch to WASD for Zones</Label>
-            </Field>
-            <div className="form-hint">When loading a zone, enable fly camera (WASD / QE / Shift boost / wheel speed).</div>
           </div>
         </div>
 
@@ -175,9 +355,19 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
   );
 }
 
+function xiBadge(s) {
+  if (!s) return { cls: 'neutral', icon: 'info' };
+  if (s.busy) return { cls: 'working', icon: 'progress_activity' };
+  if (s.ok) return { cls: 'ok', icon: 'check_circle' };
+  if (s.status === 'missing_uv' || s.status === 'missing_folder') {
+    return { cls: 'warn', icon: 'warning' };
+  }
+  return { cls: 'err', icon: 'error' };
+}
+
 function clamp(p, panel) {
-  const w = panel?.offsetWidth ?? 440;
-  const h = panel?.offsetHeight ?? 280;
+  const w = panel?.offsetWidth ?? 720;
+  const h = panel?.offsetHeight ?? 420;
   return {
     x: Math.min(Math.max(p.x, 0), Math.max(window.innerWidth - w, 0)),
     y: Math.min(Math.max(p.y, 0), Math.max(window.innerHeight - h, 0)),

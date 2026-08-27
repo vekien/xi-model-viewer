@@ -190,7 +190,7 @@ launches, where the working directory isn't the repo).
 |---|---|---|
 | `XI_GAME_DIR` | FFXI install dir | `C:\Program Files (x86)\PlayOnline\SquareEnix\FINAL FANTASY XI` |
 | `XI_VGMSTREAM` | `vgmstream-cli` (BGW/SPW audio decode) | co-located `vgmstream/` → embedded copy (Windows) → PATH → `D:\xidata\AltanaListener_Windows\Dependencies\vgmstream-cli.exe` |
-| `XI_CLI` | `xi` (xi-tools) executable, or a folder holding it | Settings value → PATH → `~/.local/bin/xi` |
+| `XI_CLI` | xi-tools **folder** (or `xi.exe`); needs **Python 3.14** + venv | Settings → PATH → `~/.local/bin/xi` |
 | `XI_CACHE_DIR` | where the embedded vgmstream is unpacked | `%LOCALAPPDATA%` → `$XDG_CACHE_HOME` → `~/.cache` → temp, all `+ /XiModelViewer/vgmstream` |
 | `XI_DEV_HOST` / `XI_DEV_PORT` | `dev/serve.py` bind address / port (a port argv still wins) | `127.0.0.1` / `8765` |
 | `XI_FS_PROXY` | where Vite proxies `/fs` in browser dev mode | `http://127.0.0.1:8766` |

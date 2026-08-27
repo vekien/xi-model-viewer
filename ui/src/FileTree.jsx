@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { backend } from '../js/backend.js';
 import { Tooltip } from './Tooltip.jsx';
+import { datFileKey, getNote, loadNotes } from '../js/notes.js';
 
 const LISTABLE = /\.(dat|bgw|spw|png)$/i;
 const MAX_SEARCH = 400;
@@ -75,30 +76,61 @@ function matchesTokens(hay, tokens) {
 }
 
 /**
- * @param {string} rootPath
+ * @param {string} rootPath  Primary install root (used for pins / single-root mode)
+ * @param {{ path: string, label?: string }[]} [roots]  When set, show several top-level trees
  * @param {string} selectedPath
  * @param {string} [revealTarget]
  * @param {(path: string) => void} onSelectFile
  * @param {(msg: string) => void} [onError]
  * @param {string[]} [pathIndex]  FTABLE-relative paths (ROM\…\n.DAT) for global search
  */
-export function FileTree({ rootPath, selectedPath, revealTarget, onSelectFile, onError, pathIndex = null }) {
+export function FileTree({
+  rootPath, roots = null, selectedPath, revealTarget, onSelectFile, onError, pathIndex = null,
+  settings = null,
+}) {
   const [query, setQuery] = useState('');
   const [pinned, setPinned] = useState(loadPins);
   // When opening from the Pinned folder, don't expand/scroll to the original tree path.
   const [skipRevealKey, setSkipRevealKey] = useState('');
+  const [notesTick, setNotesTick] = useState(0);
+
+  useEffect(() => {
+    loadNotes().then(() => setNotesTick((n) => n + 1)).catch(() => {});
+    const onNotes = () => setNotesTick((n) => n + 1);
+    window.addEventListener('xi-notes-changed', onNotes);
+    return () => window.removeEventListener('xi-notes-changed', onNotes);
+  }, []);
 
   const pinSet = useMemo(() => new Set(pinned), [pinned]);
+  void notesTick;
+
+  const treeRoots = useMemo(() => {
+    if (Array.isArray(roots) && roots.length > 0) {
+      return roots.filter((r) => r?.path).map((r) => ({
+        path: r.path,
+        label: r.label || r.path.split(/[\\/]/).filter(Boolean).pop() || r.path,
+      }));
+    }
+    if (rootPath) {
+      return [{
+        path: rootPath,
+        label: rootPath.split(/[\\/]/).filter(Boolean).pop() || rootPath,
+      }];
+    }
+    return [];
+  }, [roots, rootPath]);
+
+  const primaryRoot = treeRoots[0]?.path || rootPath || '';
 
   const togglePin = useCallback((path) => {
-    const k = filePinKey(path, rootPath);
+    const k = filePinKey(path, primaryRoot);
     if (!k) return;
     setPinned((prev) => {
       const next = prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k];
       savePins(next);
       return next;
     });
-  }, [rootPath]);
+  }, [primaryRoot]);
 
   const selectFromTree = useCallback((path) => {
     setSkipRevealKey('');
@@ -106,13 +138,13 @@ export function FileTree({ rootPath, selectedPath, revealTarget, onSelectFile, o
   }, [onSelectFile]);
 
   const selectFromPin = useCallback((path) => {
-    setSkipRevealKey(filePinKey(path, rootPath));
+    setSkipRevealKey(filePinKey(path, primaryRoot));
     onSelectFile?.(path);
-  }, [onSelectFile, rootPath]);
+  }, [onSelectFile, primaryRoot]);
 
   const handleBrowse = async () => {
     try {
-      const file = await backend.pickFile(rootPath || null);
+      const file = await backend.pickFile(primaryRoot || null);
       if (file) selectFromTree(file);
     } catch (err) {
       onError?.(`Browse failed: ${err.message ?? err}`);
@@ -125,7 +157,7 @@ export function FileTree({ rootPath, selectedPath, revealTarget, onSelectFile, o
   }, [query]);
 
   const searchHits = useMemo(() => {
-    if (!tokens.length || !pathIndex?.length || !rootPath) return null;
+    if (!tokens.length || !pathIndex?.length || !primaryRoot) return null;
     const hits = [];
     for (const rel of pathIndex) {
       const norm = String(rel).replace(/\//g, '\\');
@@ -134,21 +166,21 @@ export function FileTree({ rootPath, selectedPath, revealTarget, onSelectFile, o
       if (hits.length >= MAX_SEARCH) break;
     }
     return hits;
-  }, [tokens, pathIndex, rootPath]);
+  }, [tokens, pathIndex, primaryRoot]);
 
-  // Pinned rows: keep stored order; resolve to abs under rootPath.
+  // Pinned rows: keep stored order; resolve to abs under primary root.
   const pinnedRows = useMemo(() => {
-    if (!rootPath || !pinned.length) return [];
+    if (!primaryRoot || !pinned.length) return [];
     return pinned.map((rel) => ({
       rel,
-      abs: `${rootPath}\\${rel.replace(/\//g, '\\')}`,
+      abs: `${primaryRoot}\\${rel.replace(/\//g, '\\')}`,
       name: rel.replace(/\//g, '\\').split('\\').pop() || rel,
     }));
-  }, [rootPath, pinned]);
+  }, [primaryRoot, pinned]);
 
-  if (!rootPath) return <div id="tree" className="panel" />;
-  const rootName = rootPath.split(/[\\/]/).filter(Boolean).pop() ?? rootPath;
+  if (!treeRoots.length) return <div id="tree" className="panel" />;
   const searching = tokens.length > 0;
+  const multi = treeRoots.length > 1;
 
   return (
     <div id="tree" className="panel tree-panel">
@@ -183,25 +215,24 @@ export function FileTree({ rootPath, selectedPath, revealTarget, onSelectFile, o
               <div className="side-note">No files match “{query.trim()}”.</div>
             )}
             {searchHits.map((rel) => {
-              const abs = `${rootPath}\\${rel}`;
+              const abs = `${primaryRoot}\\${rel}`;
               const selected = sameFile(selectedPath, abs) || sameFile(selectedPath, rel);
-              const key = filePinKey(rel, rootPath);
+              const key = filePinKey(rel, primaryRoot);
               const isPinned = pinSet.has(key);
               return (
                 <div
                   key={rel}
                   className={`node zone-row${selected ? ' selected' : ''}${isPinned ? ' zone-is-pinned' : ''}`}
                 >
-                  <div
-                    className="row"
-                    title={rel}
+                  <FileRow
+                    pathLabel={rel}
+                    absPath={abs}
+                    settings={settings}
                     onClick={() => selectFromTree(abs)}
-                  >
-                    <span className="caret icon" />
-                    <span className="kind icon">deployed_code</span>
-                    <span className="tree-hit-path">{rel}</span>
-                    <PinBtn pinned={isPinned} onToggle={() => togglePin(abs)} />
-                  </div>
+                    pin={(
+                      <PinBtn pinned={isPinned} onToggle={() => togglePin(abs)} />
+                    )}
+                  />
                 </div>
               );
             })}
@@ -221,24 +252,28 @@ export function FileTree({ rootPath, selectedPath, revealTarget, onSelectFile, o
                 selectedPath={selectedPath}
                 onSelectFile={selectFromPin}
                 onTogglePin={togglePin}
+                settings={settings}
               />
             )}
-            <TreeNode
-              key={rootPath}
-              path={rootPath}
-              name={rootName}
-              isDir
-              defaultOpen
-              selectedPath={selectedPath}
-              revealTarget={revealTarget}
-              skipRevealKey={skipRevealKey}
-              onSelectFile={selectFromTree}
-              onError={onError}
-              filterTokens={null}
-              rootPath={rootPath}
-              pinSet={pinSet}
-              onTogglePin={togglePin}
-            />
+            {treeRoots.map((r, i) => (
+              <TreeNode
+                key={r.path}
+                path={r.path}
+                name={r.label}
+                isDir
+                defaultOpen={i === 0 || multi}
+                selectedPath={selectedPath}
+                revealTarget={revealTarget}
+                skipRevealKey={skipRevealKey}
+                onSelectFile={selectFromTree}
+                onError={onError}
+                filterTokens={null}
+                rootPath={r.path}
+                pinSet={pinSet}
+                onTogglePin={togglePin}
+                settings={settings}
+              />
+            ))}
           </>
         )}
       </div>
@@ -273,7 +308,40 @@ function PinBtn({ pinned, onToggle }) {
   );
 }
 
-function PinnedFolder({ rows, selectedPath, onSelectFile, onTogglePin }) {
+/** Tippy file-row tooltip: path, plus DAT note when present. */
+function fileTipContent(pathLabel, absPath, settings) {
+  const note = getNote(datFileKey(absPath || pathLabel, settings));
+  const path = pathLabel || absPath || '';
+  if (!note) return path;
+  return (
+    <div className="tree-file-tip">
+      <div className="tree-file-tip-path">{path}</div>
+      <div className="tree-file-tip-note">{note}</div>
+    </div>
+  );
+}
+
+function FileRow({ pathLabel, absPath, settings, onClick, pin, name }) {
+  return (
+    <Tooltip
+      content={fileTipContent(pathLabel, absPath, settings)}
+      placement="right"
+      delay={[200, 0]}
+      maxWidth={360}
+    >
+      <div className="row" onClick={onClick}>
+        <span className="caret icon" />
+        <span className="kind icon">deployed_code</span>
+        <span className={name != null ? 'tree-file-name' : 'tree-hit-path'}>
+          {name != null ? name : pathLabel}
+        </span>
+        {pin}
+      </div>
+    </Tooltip>
+  );
+}
+
+function PinnedFolder({ rows, selectedPath, onSelectFile, onTogglePin, settings }) {
   const [open, setOpen] = useState(true);
   return (
     <div className={`node${open ? ' open' : ''} zone-pinned-group`}>
@@ -292,16 +360,13 @@ function PinnedFolder({ rows, selectedPath, onSelectFile, onTogglePin }) {
                 key={r.rel}
                 className={`node zone-row${selected ? ' selected' : ''} zone-is-pinned`}
               >
-                <div
-                  className="row"
-                  title={r.rel}
+                <FileRow
+                  pathLabel={r.rel}
+                  absPath={r.abs}
+                  settings={settings}
                   onClick={() => onSelectFile(r.abs)}
-                >
-                  <span className="caret icon" />
-                  <span className="kind icon">deployed_code</span>
-                  <span className="tree-hit-path">{r.rel}</span>
-                  <PinBtn pinned onToggle={() => onTogglePin(r.abs)} />
-                </div>
+                  pin={<PinBtn pinned onToggle={() => onTogglePin(r.abs)} />}
+                />
               </div>
             );
           })}
@@ -313,7 +378,7 @@ function PinnedFolder({ rows, selectedPath, onSelectFile, onTogglePin }) {
 
 function TreeNode({
   path, name, isDir, defaultOpen, selectedPath, revealTarget, skipRevealKey,
-  onSelectFile, onError, filterTokens, rootPath, pinSet, onTogglePin,
+  onSelectFile, onError, filterTokens, rootPath, pinSet, onTogglePin, settings,
 }) {
   const [open, setOpen] = useState(!!defaultOpen);
   const [entries, setEntries] = useState(null);
@@ -397,16 +462,39 @@ function TreeNode({
     return entries.filter((e) => matchesTokens(e.name, filterTokens));
   }, [entries, filterTokens]);
 
+  const rowInner = (
+    <>
+      <span className="caret icon">{isDir ? 'chevron_right' : ''}</span>
+      <span className="kind icon">{isDir ? 'folder' : 'deployed_code'}</span>
+      <span className={isDir ? undefined : 'tree-file-name'}>{name}</span>
+      {!isDir && (
+        <PinBtn pinned={isPinned} onToggle={() => onTogglePin?.(path)} />
+      )}
+    </>
+  );
+
   return (
     <div className={`node${open ? ' open' : ''}${isSelected ? ' selected' : ''}${!isDir ? ' zone-row' : ''}${isPinned ? ' zone-is-pinned' : ''}`}>
-      <div className="row" ref={rowRef} onClick={handleClick}>
-        <span className="caret icon">{isDir ? 'chevron_right' : ''}</span>
-        <span className="kind icon">{isDir ? 'folder' : 'deployed_code'}</span>
-        <span className={isDir ? undefined : 'tree-file-name'}>{name}</span>
-        {!isDir && (
-          <PinBtn pinned={isPinned} onToggle={() => onTogglePin?.(path)} />
-        )}
-      </div>
+      {isDir ? (
+        <div className="row" ref={rowRef} onClick={handleClick}>
+          {rowInner}
+        </div>
+      ) : (
+        <Tooltip
+          content={fileTipContent(
+            filePinKey(path, rootPath) || name,
+            path,
+            settings,
+          )}
+          placement="right"
+          delay={[200, 0]}
+          maxWidth={360}
+        >
+          <div className="row" ref={rowRef} onClick={handleClick}>
+            {rowInner}
+          </div>
+        </Tooltip>
+      )}
       {isDir && open && visible && (
         <div className="children">
           {visible.map((e) => (
@@ -424,6 +512,7 @@ function TreeNode({
               rootPath={rootPath}
               pinSet={pinSet}
               onTogglePin={onTogglePin}
+              settings={settings}
             />
           ))}
         </div>

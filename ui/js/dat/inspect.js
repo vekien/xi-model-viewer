@@ -239,6 +239,258 @@ function peekSpriteSheet(bytes, dv, s) {
   return { text: tex ? `${numMesh} sprites · ${tex}` : `${numMesh} sprites` };
 }
 
+/**
+ * 0x30 UiMenu — window / control layout (not pixel sprites).
+ * Same shape as xi-tools `xi ui layout menu-pos`:
+ *   +0x00  name[16]     e.g. "menu    race3"
+ *   +0x10  u8 type?
+ *   +0x11  u8 numElements
+ *   +0x20  frame element, then element[0..]
+ * Element: u16 size, i16 x, i16 y, …, i16 w @+10, i16 h @+12, u8 index @+16,
+ *          i8 prev @+19, i8 next @+20.
+ */
+export function parseInspectUiMenu(buffer, offset) {
+  const bytes = buffer instanceof Uint8Array
+    ? buffer
+    : new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const start = offset | 0;
+  if (start + 0x30 > bytes.length) return null;
+  const meta = dv.getUint32(start + 4, true);
+  const type = meta & 0x7f;
+  if (type !== 0x30 && type !== 0) {
+    // Allow call without type check when offset is known-good; still need size.
+  }
+  const size = ((meta >>> 7) & 0x7ffff) * 0x10;
+  const bodyEnd = Math.min(start + (size > 0 ? size : 0x100), bytes.length);
+  const dataStart = start + 0x10;
+  if (dataStart + 0x30 > bodyEnd) return null;
+
+  const nameRaw = strAt(bytes, dataStart, 0x10);
+  const name = nameRaw.replace(/\s+/g, ' ').trim();
+  const maybeType = bytes[dataStart + 0x10];
+  const numElements = bytes[dataStart + 0x11];
+  if (numElements > 64) return null;
+
+  // xiclient ButtonDefinitionHeader / FrameDefinitionHeader (see ffximain.md).
+  // Nav Up/Down/Left/Right are ButtonIDs (i8), not array indices.
+  const readEl = (off) => {
+    if (off + 22 > bodyEnd) return null;
+    const elSize = dv.getUint16(off, true);
+    if (elSize < 22 || elSize > 0x800 || off + elSize > bytes.length) return null;
+    const x = dv.getInt16(off + 2, true);
+    const y = dv.getInt16(off + 4, true);
+    const cursorX = dv.getInt16(off + 6, true);
+    const cursorY = dv.getInt16(off + 8, true);
+    const width = dv.getInt16(off + 10, true);
+    const height = dv.getInt16(off + 12, true);
+    const buttonId = elSize >= 20 ? dv.getInt16(off + 18, true) : null;
+    const i8 = (o) => (bytes[o] << 24) >> 24;
+    const navU = elSize >= 24 ? i8(off + 23) : null;
+    const navD = elSize >= 25 ? i8(off + 24) : null;
+    const navL = elSize >= 26 ? i8(off + 25) : null;
+    const navR = elSize >= 27 ? i8(off + 26) : null;
+    // Title text id: u16 immediately before first "menu    " string in the tail.
+    let titleId = null;
+    let textNs = null;
+    if (elSize >= 36) {
+      const slice = bytes.subarray(off, off + elSize);
+      let j = -1;
+      for (let p = 32; p + 8 < slice.length; p++) {
+        if (slice[p] === 0x6d && slice[p + 1] === 0x65 && slice[p + 2] === 0x6e && slice[p + 3] === 0x75) {
+          j = p;
+          break;
+        }
+      }
+      if (j >= 2) {
+        titleId = dv.getUint16(off + j - 2, true);
+        textNs = strAt(bytes, off + j, 16).replace(/\s+/g, ' ').trim();
+      }
+    }
+    const navLinked = [navU, navD, navL, navR].some((v) => v != null && v !== -1);
+    return {
+      offset: off,
+      size: elSize,
+      x, y, width, height,
+      cursorX, cursorY,
+      buttonId,
+      navU, navD, navL, navR,
+      titleId,
+      textNs,
+      // legacy columns (old guess); kept so older UI does not crash
+      index: buttonId,
+      prev: navU,
+      next: navD,
+      selectable: navLinked,
+    };
+  };
+
+  const frameOff = dataStart + 0x20; // +48 from section start
+  const frame = readEl(frameOff);
+  if (!frame) return null;
+
+  const elements = [];
+  let off = frame.offset + frame.size;
+  for (let i = 0; i < numElements; i++) {
+    const el = readEl(off);
+    if (!el) break;
+    elements.push(el);
+    off += el.size;
+  }
+
+  const id = fourcc(bytes, start).trim();
+  // "menu    race3" → bare name race3
+  const bare = name.length > 5 && name.toLowerCase().startsWith('menu')
+    ? name.slice(4).trim()
+    : name;
+
+  return {
+    id,
+    name,
+    bareName: bare || name || id,
+    maybeType,
+    numElements,
+    frame,
+    elements,
+    offset: start,
+    size: size || (off - start),
+  };
+}
+
+function peekUiMenu(bytes, dv, s) {
+  const menu = parseInspectUiMenu(bytes, s.start);
+  if (!menu) return { text: null, isUiMenu: true };
+  const n = 1 + menu.elements.length; // frame + children
+  const f = menu.frame;
+  const box = `${f.width}×${f.height} @ (${f.x},${f.y})`;
+  const label = menu.bareName || menu.name || menu.id;
+  return {
+    text: `${label} · ${n} box${n === 1 ? '' : 'es'} · ${box}`,
+    isUiMenu: true,
+  };
+}
+
+/**
+ * 0x31 UiElementGroup — image-set / layout blob (title packs: one giant group).
+ * Header matches images.js set shape:
+ *   +0x00  name[16]      category(8)+name(8)  e.g. "menu    lobbywin"
+ *   +0x10  u8
+ *   +0x11  texture[16]   atlas ref (may be external)
+ * Body: 01 00 sprite records (parseLayoutSprites).
+ */
+export function parseInspectUiElementGroup(buffer, offset) {
+  const bytes = buffer instanceof Uint8Array
+    ? buffer
+    : new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const start = offset | 0;
+  if (start + 0x20 > bytes.length) return null;
+  const meta = dv.getUint32(start + 4, true);
+  const type = meta & 0x7f;
+  if (type !== 0x31 && type !== 0) {
+    // still parse if caller knows the offset
+  }
+  const size = ((meta >>> 7) & 0x7ffff) * 0x10;
+  if (size < 0x20) return null;
+  const dataStart = start + 0x10;
+  const bodyEnd = Math.min(start + size, bytes.length);
+
+  const setRaw = strAt(bytes, dataStart, 0x10);
+  const setCategory = setRaw.slice(0, 8).trim();
+  const setName = (setRaw.slice(8, 16).trim() || setCategory);
+  const setLabel = [setCategory, setName].filter(Boolean).join(' / ') || fourcc(bytes, start).trim();
+  const textureRef = strAt(bytes, dataStart + 0x11, 0x10).replace(/\s+/g, ' ').trim();
+
+  // Lazy import avoided — inline the same 01 00 walk as images.parseLayoutSprites
+  // so inspect.js stays free of the image viewer module graph.
+  const marks = [];
+  for (let pos = dataStart; pos + 20 < bodyEnd; pos++) {
+    if (bytes[pos] !== 0x01 || bytes[pos + 1] !== 0x00) continue;
+    const typ = bytes[pos + 2];
+    const sub = bytes[pos + 3];
+    if (typ >= 0x10 || sub >= 0x10) continue;
+    let ok = true;
+    for (let i = 0; i < 16; i++) {
+      const b = bytes[pos + 4 + i];
+      if (b < 0x20 || b >= 0x7f) { ok = false; break; }
+    }
+    if (!ok) continue;
+    const parent = strAt(bytes, pos + 4, 8).trim();
+    const name = strAt(bytes, pos + 12, 8).trim();
+    if (!name) continue;
+    marks.push({ hdr: pos, payload: pos + 20, parent, name });
+    pos += 19;
+  }
+
+  const u16 = (o) => bytes[o] | (bytes[o + 1] << 8);
+  const sprites = [];
+  const ownerCounts = new Map();
+  for (let i = 0; i < marks.length; i++) {
+    const m = marks[i];
+    const stop = i + 1 < marks.length ? marks[i + 1].hdr : bodyEnd;
+    const length = stop - m.payload;
+    if (length < 24) continue;
+    let pre = length === 42 ? 1 : (length === 41 ? 0 : 0);
+    if (length !== 41 && length !== 42) {
+      if (u16(m.payload) > 4096) pre = 1;
+    }
+    const base = m.payload + pre;
+    if (base + 24 > stop) continue;
+    const dest = [];
+    for (let k = 0; k < 8; k++) dest.push(u16(base + k * 2));
+    const srcW = u16(base + 16);
+    const srcH = u16(base + 18);
+    const srcX = u16(base + 20);
+    const srcY = u16(base + 22);
+    if (srcW >= 2048 || srcH >= 2048) continue;
+    if (Math.max(...dest) >= 4096) continue;
+    const owner = i + 1 < marks.length ? marks[i + 1].name : m.name;
+    ownerCounts.set(owner, (ownerCounts.get(owner) || 0) + 1);
+    sprites.push({
+      index: sprites.length,
+      header: m.name,
+      parent: m.parent,
+      owner,
+      offset: base,
+      length,
+      dest: {
+        x0: dest[0], y0: dest[1], x1: dest[2], y1: dest[3],
+        x2: dest[4], y2: dest[5], x3: dest[6], y3: dest[7],
+      },
+      src: { w: srcW, h: srcH, x: srcX, y: srcY },
+    });
+  }
+
+  const owners = [...ownerCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, count]) => ({ name, count }));
+
+  return {
+    id: fourcc(bytes, start).trim(),
+    setCategory,
+    setName,
+    setLabel,
+    textureRef,
+    sprites,
+    owners,
+    markCount: marks.length,
+    offset: start,
+    size,
+  };
+}
+
+function peekUiElementGroup(bytes, dv, s) {
+  const g = parseInspectUiElementGroup(bytes, s.start);
+  if (!g) return { text: null, isUiElementGroup: true };
+  const top = g.owners.slice(0, 3).map((o) => o.name).join(' ');
+  const label = g.setLabel || g.id || 'group';
+  const tex = g.textureRef ? ` · tex ${g.textureRef}` : '';
+  return {
+    text: `${label} · ${g.sprites.length} sprites${tex}${top ? ` · ${top}` : ''}`,
+    isUiElementGroup: true,
+  };
+}
+
 function peekParticleMesh(bytes, dv, s) {
   const total = bytes[s.dataStart + 4] + bytes[s.dataStart + 5];
   return total ? { text: `${total} mesh${total === 1 ? '' : 'es'}` } : null;
@@ -288,6 +540,8 @@ const PEEKS = {
   0x2A: peekSkeletonMesh,
   0x2B: peekAnimation,
   0x2E: peekZoneMesh,
+  0x30: peekUiMenu,
+  0x31: peekUiElementGroup,
   0x3D: peekSoundPointer,
   0x45: peekInfo,
   0x5D: peekBumpMap,
@@ -700,6 +954,8 @@ export function inspectDat(buffer) {
       let isSound = type === 0x3D;
       let isZoneDef = type === 0x1C;
       let isRoute = type === 0x06;
+      let isUiMenu = type === 0x30;
+      let isUiElementGroup = type === 0x31;
       const isParticleGenerator = type === 0x05;
       let soundId = null;
       const peek = PEEKS[type];
@@ -712,6 +968,8 @@ export function inspectDat(buffer) {
           if (r?.isSound) isSound = true;
           if (r?.isZoneDef) isZoneDef = true;
           if (r?.isRoute) isRoute = true;
+          if (r?.isUiMenu) isUiMenu = true;
+          if (r?.isUiElementGroup) isUiElementGroup = true;
           if (r?.soundId != null) soundId = r.soundId;
         } catch { /* malformed header — list it plain */ }
       }
@@ -724,7 +982,8 @@ export function inspectDat(buffer) {
         icon: SECTION_TYPE_ICONS[type] ?? 'data_object',
         size, offset: pos, flags, detail, textureName, isTexture,
         isSkeleton, skeletonKind: isSkeleton ? 'entity' : null,
-        isSound, soundId, isZoneDef, isParticleGenerator, isRoute,
+        isSound, soundId, isZoneDef, isParticleGenerator, isRoute, isUiMenu,
+        isUiElementGroup,
       });
       const agg = summary.get(type) ?? { count: 0, bytes: 0 };
       agg.count++; agg.bytes += size;

@@ -59,6 +59,29 @@ fn write_file(path: String, contents: Vec<u8>) -> Result<(), String> {
     std::fs::write(&path, contents).map_err(|e| e.to_string())
 }
 
+/// Persistent user data dir: `%LOCALAPPDATA%\XiModelViewer` (or XDG/HOME fallback).
+/// Created on first call. Used for notes.json and similar editable JSON.
+fn user_data_dir_path() -> Result<std::path::PathBuf, String> {
+    let base = env_path("XI_DATA_DIR")
+        .or_else(|| {
+            std::env::var("LOCALAPPDATA")
+                .or_else(|_| std::env::var("APPDATA"))
+                .ok()
+                .map(std::path::PathBuf::from)
+        })
+        .or_else(|| env_path("XDG_DATA_HOME"))
+        .or_else(|| env_path("HOME").map(|h| h.join(".local").join("share")))
+        .ok_or_else(|| "could not resolve user data directory".to_string())?;
+    let dir = base.join("XiModelViewer");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+#[tauri::command]
+fn user_data_dir() -> Result<String, String> {
+    user_data_dir_path().map(|p| p.to_string_lossy().into_owned())
+}
+
 #[tauri::command]
 fn pick_folder(initial: Option<String>) -> Option<String> {
     let mut dialog = rfd::FileDialog::new().set_title("Select FFXI game folder");
@@ -77,7 +100,7 @@ fn pick_folder(initial: Option<String>) -> Option<String> {
 // matching env var to point the app elsewhere (non-Windows boxes, alt installs).
 //   XI_GAME_DIR   FFXI install directory
 //   XI_VGMSTREAM  vgmstream-cli executable
-//   XI_CLI        xi-tools executable (or a folder containing it)
+//   XI_CLI        xi-tools folder (or xi.exe); Python 3.14 + .venv
 //   XI_CACHE_DIR  where the embedded vgmstream is unpacked
 // ---------------------------------------------------------------------------
 const DEFAULT_GAME_DIR: &str = r"C:\Program Files (x86)\PlayOnline\SquareEnix\FINAL FANTASY XI";
@@ -245,14 +268,25 @@ fn find_xi() -> Option<std::path::PathBuf> {
 }
 
 /// Resolves `p` to a runnable xi: `p` itself if it's a file, else the first
-/// xi variant inside it if it's a folder.
+/// xi variant inside it if it's a folder (repo root, `.venv/Scripts`, `.venv/bin`).
 fn xi_in(p: &Path) -> Option<std::path::PathBuf> {
     if p.is_file() {
         return Some(p.to_path_buf());
     }
-    if p.is_dir() {
-        for n in ["xi.exe", "xi.cmd", "xi.bat", "xi"] {
-            let f = p.join(n);
+    if !p.is_dir() {
+        return None;
+    }
+    const NAMES: &[&str] = &["xi.exe", "xi.cmd", "xi.bat", "xi"];
+    let search = [
+        p.to_path_buf(),
+        p.join(".venv").join("Scripts"),
+        p.join(".venv").join("bin"),
+        p.join("venv").join("Scripts"),
+        p.join("venv").join("bin"),
+    ];
+    for dir in &search {
+        for n in NAMES {
+            let f = dir.join(n);
             if f.is_file() {
                 return Some(f);
             }
@@ -291,6 +325,298 @@ fn xi_available(xi_path: Option<String>) -> bool {
     resolve_xi(&xi_path).is_some()
 }
 
+/// Report from `xi_setup` — folder validation + optional `uv sync`.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct XiSetupReport {
+    ok: bool,
+    /// ready | missing_folder | not_xi_tools | missing_uv | error
+    status: String,
+    message: String,
+    detail: String,
+    uv: Option<String>,
+    python: Option<String>,
+    xi_exe: Option<String>,
+    did_sync: bool,
+}
+
+fn find_uv() -> Option<std::path::PathBuf> {
+    for name in ["uv.exe", "uv"] {
+        if let Ok(p) = which_on_path(name) {
+            return Some(p);
+        }
+    }
+    let home = env_path("USERPROFILE").or_else(|| env_path("HOME"))?;
+    for rel in [
+        std::path::PathBuf::from(".local").join("bin").join("uv.exe"),
+        std::path::PathBuf::from(".local").join("bin").join("uv"),
+        std::path::PathBuf::from(".cargo").join("bin").join("uv.exe"),
+        std::path::PathBuf::from(".cargo").join("bin").join("uv"),
+    ] {
+        let p = home.join(&rel);
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    None
+}
+
+fn looks_like_xi_tools(dir: &Path) -> bool {
+    let py = dir.join("pyproject.toml");
+    if !py.is_file() {
+        return false;
+    }
+    let Ok(text) = std::fs::read_to_string(&py) else {
+        return false;
+    };
+    // project name = "xi" and/or scripts entry for the CLI
+    text.contains("name = \"xi\"")
+        || text.contains("name='xi'")
+        || text.contains("xi.xi_cli")
+        || text.contains("xi = ")
+}
+
+fn run_quiet(cmd: &mut std::process::Command) -> Result<std::process::Output, String> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd.output().map_err(|e| e.to_string())
+}
+
+fn cmd_text(out: &std::process::Output) -> String {
+    let mut s = String::new();
+    s.push_str(&String::from_utf8_lossy(&out.stdout));
+    if !out.stderr.is_empty() {
+        if !s.is_empty() {
+            s.push('\n');
+        }
+        s.push_str(&String::from_utf8_lossy(&out.stderr));
+    }
+    s.trim().to_string()
+}
+
+/// Validate an xi-tools folder; optionally install Python 3.14 + deps via uv.
+///
+/// Mirrors the README: needs uv, Python 3.14, then `uv sync` / `uv run xi --help`.
+#[tauri::command]
+fn xi_setup(folder: String, install: bool) -> XiSetupReport {
+    let root = norm(folder.trim());
+    if folder.trim().is_empty() || !root.is_dir() {
+        return XiSetupReport {
+            ok: false,
+            status: "missing_folder".into(),
+            message: "Choose the xi-tools repo folder.".into(),
+            detail: String::new(),
+            uv: None,
+            python: None,
+            xi_exe: None,
+            did_sync: false,
+        };
+    }
+    if !looks_like_xi_tools(&root) {
+        return XiSetupReport {
+            ok: false,
+            status: "not_xi_tools".into(),
+            message: "That folder doesn’t look like xi-tools (missing pyproject.toml / project xi)."
+                .into(),
+            detail: root.display().to_string(),
+            uv: None,
+            python: None,
+            xi_exe: None,
+            did_sync: false,
+        };
+    }
+
+    let Some(uv) = find_uv() else {
+        return XiSetupReport {
+            ok: false,
+            status: "missing_uv".into(),
+            message: "uv is not installed. Install uv, then try again (see xi-tools README)."
+                .into(),
+            detail: "https://docs.astral.sh/uv/getting-started/installation/".into(),
+            uv: None,
+            python: None,
+            xi_exe: None,
+            did_sync: false,
+        };
+    };
+    let uv_s = uv.to_string_lossy().into_owned();
+
+    // Prefer a resolved xi.exe from an existing venv.
+    if let Some(exe) = xi_in(&root) {
+        // Quick smoke: --help
+        let mut help = std::process::Command::new(&exe);
+        help.arg("--help").current_dir(&root);
+        if let Ok(out) = run_quiet(&mut help) {
+            if out.status.success() {
+                return XiSetupReport {
+                    ok: true,
+                    status: "ready".into(),
+                    message: "xi-tools is ready.".into(),
+                    detail: String::new(),
+                    uv: Some(uv_s),
+                    python: None,
+                    xi_exe: Some(exe.to_string_lossy().into_owned()),
+                    did_sync: false,
+                };
+            }
+        }
+    }
+
+    if !install {
+        return XiSetupReport {
+            ok: false,
+            status: "error".into(),
+            message: "xi CLI not found in this folder. Run Check / Install to set up the venv."
+                .into(),
+            detail: String::new(),
+            uv: Some(uv_s),
+            python: None,
+            xi_exe: None,
+            did_sync: false,
+        };
+    }
+
+    let mut log = String::new();
+    let mut did_sync = false;
+
+    // Ensure Python 3.14 is available to uv (no-op if already present).
+    {
+        let mut c = std::process::Command::new(&uv);
+        c.args(["python", "install", "3.14"]).current_dir(&root);
+        match run_quiet(&mut c) {
+            Ok(out) => {
+                let t = cmd_text(&out);
+                if !t.is_empty() {
+                    log.push_str(&t);
+                    log.push('\n');
+                }
+                if !out.status.success() {
+                    // Not fatal — sync may still find another 3.14
+                    log.push_str("(uv python install 3.14 reported a non-zero exit)\n");
+                }
+            }
+            Err(e) => {
+                log.push_str(&format!("uv python install failed: {e}\n"));
+            }
+        }
+    }
+
+    // Install project deps into .venv
+    {
+        let mut c = std::process::Command::new(&uv);
+        c.args(["sync"]).current_dir(&root);
+        match run_quiet(&mut c) {
+            Ok(out) => {
+                did_sync = true;
+                let t = cmd_text(&out);
+                if !t.is_empty() {
+                    log.push_str(&t);
+                    log.push('\n');
+                }
+                if !out.status.success() {
+                    return XiSetupReport {
+                        ok: false,
+                        status: "error".into(),
+                        message: "uv sync failed — see detail (Python 3.14 required)."
+                            .into(),
+                        detail: log,
+                        uv: Some(uv_s),
+                        python: None,
+                        xi_exe: None,
+                        did_sync: true,
+                    };
+                }
+            }
+            Err(e) => {
+                return XiSetupReport {
+                    ok: false,
+                    status: "error".into(),
+                    message: format!("Could not run uv sync: {e}"),
+                    detail: log,
+                    uv: Some(uv_s),
+                    python: None,
+                    xi_exe: None,
+                    did_sync: false,
+                };
+            }
+        }
+    }
+
+    // Confirm CLI + capture Python version
+    let mut python = None;
+    {
+        let mut c = std::process::Command::new(&uv);
+        c.args(["run", "python", "--version"]).current_dir(&root);
+        if let Ok(out) = run_quiet(&mut c) {
+            let t = cmd_text(&out);
+            if !t.is_empty() {
+                python = Some(t);
+            }
+        }
+    }
+
+    let mut help_ok = false;
+    {
+        let mut c = std::process::Command::new(&uv);
+        c.args(["run", "xi", "--help"]).current_dir(&root);
+        match run_quiet(&mut c) {
+            Ok(out) => {
+                let t = cmd_text(&out);
+                if !t.is_empty() {
+                    // keep log short — only first line if huge
+                    let first = t.lines().next().unwrap_or("").to_string();
+                    if !first.is_empty() {
+                        log.push_str(&first);
+                        log.push('\n');
+                    }
+                }
+                help_ok = out.status.success();
+                if !help_ok {
+                    log.push_str(&t);
+                }
+            }
+            Err(e) => {
+                log.push_str(&format!("uv run xi --help failed: {e}\n"));
+            }
+        }
+    }
+
+    let xi_exe = xi_in(&root).map(|p| p.to_string_lossy().into_owned());
+
+    if help_ok || xi_exe.is_some() {
+        let py_note = python
+            .as_deref()
+            .map(|p| format!(" ({p})"))
+            .unwrap_or_default();
+        return XiSetupReport {
+            ok: true,
+            status: "ready".into(),
+            message: format!("xi-tools is ready{py_note}."),
+            detail: log,
+            uv: Some(uv_s),
+            python,
+            xi_exe,
+            did_sync,
+        };
+    }
+
+    XiSetupReport {
+        ok: false,
+        status: "error".into(),
+        message: "Setup finished but `xi --help` did not succeed. Check Python 3.14 and the log."
+            .into(),
+        detail: log,
+        uv: Some(uv_s),
+        python,
+        xi_exe,
+        did_sync,
+    }
+}
+
 #[tauri::command]
 fn pick_file(initial: Option<String>) -> Option<String> {
     let mut dialog = rfd::FileDialog::new().set_title("Select the xi executable");
@@ -323,13 +649,44 @@ fn xi_mesh_export(
     for a in &args {
         cmd.arg(a);
     }
-    let out = cmd.output().map_err(|e| format!("failed to run xi: {e}"))?;
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    let stderr = String::from_utf8_lossy(&out.stderr);
+    let out = run_quiet(&mut cmd).map_err(|e| format!("failed to run xi: {e}"))?;
+    let text = cmd_text(&out);
     if out.status.success() {
-        Ok(format!("{stdout}{stderr}").trim().to_string())
+        Ok(text)
     } else {
-        Err(format!("xi export failed:\n{}", format!("{stdout}{stderr}").trim()))
+        Err(format!("xi export failed:\n{text}"))
+    }
+}
+
+/// Run an arbitrary `xi <args…>` (cwd = xi-tools folder when configured as a dir).
+#[tauri::command]
+fn xi_run(args: Vec<String>, xi_path: Option<String>) -> Result<String, String> {
+    if args.is_empty() {
+        return Err("xi_run: no arguments".into());
+    }
+    let xi = resolve_xi(&xi_path)
+        .ok_or("xi CLI not found — set the xi-tools folder in Settings")?;
+    let mut cmd = std::process::Command::new(&xi);
+    for a in &args {
+        cmd.arg(a);
+    }
+    // Prefer running inside the checkout so relative paths / .env resolve.
+    if let Some(cfg) = xi_path.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        let p = norm(cfg);
+        if p.is_dir() {
+            cmd.current_dir(&p);
+        } else if let Some(parent) = p.parent() {
+            if parent.is_dir() {
+                cmd.current_dir(parent);
+            }
+        }
+    }
+    let out = run_quiet(&mut cmd).map_err(|e| format!("failed to run xi: {e}"))?;
+    let text = cmd_text(&out);
+    if out.status.success() {
+        Ok(text)
+    } else {
+        Err(format!("xi failed ({args:?}):\n{text}"))
     }
 }
 
@@ -520,12 +877,15 @@ fn main() {
             read_file,
             file_exists,
             write_file,
+            user_data_dir,
             default_game_path,
             pick_folder,
             pick_file,
             decode_vgmstream,
             xi_mesh_export,
+            xi_run,
             xi_available,
+            xi_setup,
             open_url,
             reveal_path,
             launch_args

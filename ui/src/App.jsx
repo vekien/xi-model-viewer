@@ -53,9 +53,14 @@ import { EffectList } from './EffectList.jsx';
 import { WeatherAudio } from '../js/particle/audio.js';
 import { toAudioBuffer, parseAudioHeader, FMT_ATRAC3 } from '../js/audio.js';
 import { parseImageDat, textureForSet } from '../js/images.js';
-import { inspectDat, parseInspectSkeleton, parseInspectRoute } from '../js/dat/inspect.js';
+import { inspectDat, parseInspectSkeleton, parseInspectRoute, parseInspectUiMenu, parseInspectUiElementGroup } from '../js/dat/inspect.js';
 import { SkeletonModal } from './SkeletonModal.jsx';
 import { RouteModal } from './RouteModal.jsx';
+import { UiMenuModal } from './UiMenuModal.jsx';
+import { UiElementGroupModal } from './UiElementGroupModal.jsx';
+import { CliOutputPanel } from './CliOutputPanel.jsx';
+import { DatNotesModal } from './DatNotesModal.jsx';
+import { datFileKey, getNote, loadNotes } from '../js/notes.js';
 import { matchTablePath, parseFileTable } from '../js/dat/ftable.js';
 import { classifyDat } from '../js/dat/classify.js';
 import {
@@ -70,6 +75,7 @@ import {
 import { DataViewer } from './DataViewer.jsx';
 import { ImageList } from './ImageList.jsx';
 import { ImageSetPanel } from './ImageSetPanel.jsx';
+import { ImageSpritePanel } from './ImageSpritePanel.jsx';
 import { ImageViewer } from './ImageViewer.jsx';
 import { WeatherPanel } from './WeatherPanel.jsx';
 import { Tooltip } from './Tooltip.jsx';
@@ -161,13 +167,19 @@ const yieldToPaint = () => new Promise((resolve) => {
 
 const loadSettings = (gamePath) => {
   const hdPath = localStorage.getItem('hdPath') || '';
+  const pivotPath = localStorage.getItem('pivotPath') || '';
   return {
     gamePath,
     hdPath,
     hdEnabled: !!hdPath && localStorage.getItem('hdEnabled') === '1',
+    pivotPath,
+    pivotEnabled: !!pivotPath && localStorage.getItem('pivotEnabled') === '1',
     bgColor: localStorage.getItem('bgColor') || DEFAULT_BG,
     autoPlay: localStorage.getItem('autoPlay') === '1',
     autoWasdZones: localStorage.getItem('autoWasdZones') !== '0',
+    closeDatNotesOnSave: localStorage.getItem('closeDatNotesOnSave') === '1',
+    showXiConsole: localStorage.getItem('showXiConsole') !== '0',
+    autoCloseXiConsole: localStorage.getItem('autoCloseXiConsole') === '1',
     xiPath: localStorage.getItem('xiPath') || '',
   };
 };
@@ -433,6 +445,25 @@ export default function App({ launch = null }) {
   const zdefIdRef = useRef(0);
   const [routeWindows, setRouteWindows] = useState([]); // [{ id, route, title }]
   const routeIdRef = useRef(0);
+  const [uiMenuWindows, setUiMenuWindows] = useState([]); // [{ id, menu, title }]
+  const uiMenuIdRef = useRef(0);
+  const [cliOutput, setCliOutput] = useState(null); // { title, text } bottom-left console
+  const [datNotesOpen, setDatNotesOpen] = useState(false);
+  const [datNotesTick, setDatNotesTick] = useState(0); // refresh has-note badge
+  // Global stacking: click/focus any floating modal → highest z (cross-type).
+  const modalZCounterRef = useRef(10000);
+  const [modalZByKey, setModalZByKey] = useState({}); // key -> zIndex
+  const raiseModal = useCallback((key) => {
+    if (!key) return;
+    const z = ++modalZCounterRef.current;
+    setModalZByKey((prev) => (prev[key] === z ? prev : { ...prev, [key]: z }));
+  }, []);
+  const modalZ = useCallback(
+    (key, fallback) => modalZByKey[key] ?? fallback,
+    [modalZByKey],
+  );
+  const [uiEgWindows, setUiEgWindows] = useState([]); // [{ id, group, title }]
+  const uiEgIdRef = useRef(0);
   const zonePlacementsRef = useRef(null); // raw 0x1C list from last loadZone
   const dataStructOpenRef = useRef(false); // keep loadZone in sync without TDZ
   // Data Struct ParticleGenerator preview (plays on main canvas).
@@ -1654,6 +1685,7 @@ export default function App({ launch = null }) {
       prev?.system?.clearEffect?.();
       return { genId, title, system: null, textures: null, error: '', loading: true };
     });
+    raiseModal('fx');
     setStatusText(`Loading particle ${genId}…`);
 
     try {
@@ -1719,7 +1751,7 @@ export default function App({ launch = null }) {
       setFxPreview({ genId, title, system: null, textures: null, error: msg, loading: false });
       setStatusText(`Particle ${genId}: ${msg}`);
     }
-  }, [ensureGlobalEffects]);
+  }, [ensureGlobalEffects, raiseModal]);
 
   /**
    * Zone BGM from the server's zone_settings (see dev/bake-zone-music.mjs).
@@ -2461,7 +2493,7 @@ export default function App({ launch = null }) {
       zone = { id: hit.id, name: hit.name, path: hit.path };
     } else {
       const s = settingsRef.current;
-      const rel = launchZoneRel(raw, [s?.hdPath, s?.gamePath]);
+      const rel = launchZoneRel(raw, [s?.pivotPath, s?.hdPath, s?.gamePath]);
       // Prefer the baked entry: it carries the zone name and the id the BGM
       // lookup needs. An unlisted DAT (a prototype zone) still opens by path.
       const hit = zones.find((z) => zoneDatRelPath(z.path).toLowerCase() === rel.toLowerCase());
@@ -2486,6 +2518,11 @@ export default function App({ launch = null }) {
     if (settingsRef.current?.autoWasdZones !== false) setWasd(true);
     return true;
   }, [loadZone, setWasd]);
+
+  // Prefetch AppData notes so the status-bar Notes badge is accurate.
+  useEffect(() => {
+    loadNotes().then(() => setDatNotesTick((n) => n + 1)).catch(() => {});
+  }, []);
 
   // --- startup -------------------------------------------------------------
 
@@ -2602,22 +2639,24 @@ export default function App({ launch = null }) {
     setTexWindows((prev) => {
       const i = prev.findIndex((w) => w.tex.name === tex.name);
       if (i >= 0) {
-        // Already open — bring to front (keep cascade so it doesn't jump)
         const next = prev.slice();
         const [w] = next.splice(i, 1);
         next.push(w);
+        raiseModal(`tex:${w.id}`);
         return next;
       }
       const id = ++texIdRef.current;
+      raiseModal(`tex:${id}`);
       return [...prev, { id, tex, cascade: id - 1 }];
     });
-  }, []);
+  }, [raiseModal]);
 
   const closeTexture = useCallback((id) => {
     setTexWindows((prev) => prev.filter((w) => w.id !== id));
   }, []);
 
   const focusTexture = useCallback((id) => {
+    raiseModal(`tex:${id}`);
     setTexWindows((prev) => {
       const i = prev.findIndex((w) => w.id === id);
       if (i < 0 || i === prev.length - 1) return prev;
@@ -2626,7 +2665,7 @@ export default function App({ launch = null }) {
       next.push(w);
       return next;
     });
-  }, []);
+  }, [raiseModal]);
 
   // Escape closes the topmost overlay (modals → skeleton/tex windows).
   // Data Struct is handled later (after its state is declared).
@@ -2637,8 +2676,19 @@ export default function App({ launch = null }) {
       if (settingsOpen) { setSettingsOpen(false); e.preventDefault(); return; }
       if (graphicsOpen) { setGraphicsOpen(false); e.preventDefault(); return; }
       if (helpOpen) { setHelpOpen(false); e.preventDefault(); return; }
+      if (datNotesOpen) { setDatNotesOpen(false); e.preventDefault(); return; }
       if (fxPreview) {
         closeFxPreview();
+        e.preventDefault();
+        return;
+      }
+      if (uiEgWindows.length > 0) {
+        setUiEgWindows((prev) => prev.slice(0, -1));
+        e.preventDefault();
+        return;
+      }
+      if (uiMenuWindows.length > 0) {
+        setUiMenuWindows((prev) => prev.slice(0, -1));
         e.preventDefault();
         return;
       }
@@ -2664,7 +2714,7 @@ export default function App({ launch = null }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [exportSpec, settingsOpen, graphicsOpen, helpOpen, texWindows.length, skelWindows.length, zdefWindows.length, routeWindows.length, fxPreview, closeFxPreview]);
+  }, [exportSpec, settingsOpen, graphicsOpen, helpOpen, datNotesOpen, texWindows.length, skelWindows.length, zdefWindows.length, routeWindows.length, uiMenuWindows.length, uiEgWindows.length, fxPreview, closeFxPreview]);
 
   // --- handlers ------------------------------------------------------------
 
@@ -2866,6 +2916,7 @@ export default function App({ launch = null }) {
   const [imageEntry, setImageEntry] = useState(null);   // { name, path }
   const [imageDoc, setImageDoc] = useState(null);       // parseImageDat result + resolved sets
   const [imageSet, setImageSet] = useState(null);
+  const [imageSprite, setImageSprite] = useState(null);
 
   // ── Assets > Data (DAT structure inspector) ────────────────────────────────
   const [dataDoc, setDataDoc] = useState(null);         // inspectDat result + path
@@ -3082,25 +3133,156 @@ export default function App({ launch = null }) {
     setStatusText(dataStructStatusRef.current || '');
   }, [dataStructOpen, browserKind, leftView, selectedDat, statusText, loadDatData, player, dataSources]);
 
+  /** Re-parse floating inspect windows from the current dataBufRef (after reload). */
+  const refreshOpenInspectWindows = useCallback(() => {
+    const buf = dataBufRef.current;
+    if (!buf) return;
+
+    const offsetOf = (w, prefix) => {
+      if (w.offset != null && Number.isFinite(w.offset)) return w.offset;
+      if (typeof w.key === 'string' && w.key.startsWith(prefix)) {
+        const n = Number(w.key.slice(prefix.length));
+        return Number.isFinite(n) ? n : null;
+      }
+      return null;
+    };
+
+    setUiMenuWindows((prev) => {
+      if (!prev.length) return prev;
+      return prev.map((w) => {
+        const off = offsetOf(w, 'uimenu:');
+        if (off == null) return w;
+        try {
+          const menu = parseInspectUiMenu(buf, off);
+          if (!menu?.frame) return w;
+          return {
+            ...w,
+            offset: off,
+            menu,
+            title: menu.bareName || menu.name || w.title,
+          };
+        } catch {
+          return w;
+        }
+      });
+    });
+
+    setUiEgWindows((prev) => {
+      if (!prev.length) return prev;
+      return prev.map((w) => {
+        const off = offsetOf(w, 'uieg:');
+        if (off == null) return w;
+        try {
+          const group = parseInspectUiElementGroup(buf, off);
+          if (!group) return w;
+          return {
+            ...w,
+            offset: off,
+            group,
+            title: group.setLabel || group.id || w.title,
+          };
+        } catch {
+          return w;
+        }
+      });
+    });
+
+    setRouteWindows((prev) => {
+      if (!prev.length) return prev;
+      return prev.map((w) => {
+        const off = offsetOf(w, 'route:');
+        if (off == null) return w;
+        try {
+          const route = parseInspectRoute(buf, off);
+          if (!route?.keys?.length) return w;
+          return { ...w, offset: off, route };
+        } catch {
+          return w;
+        }
+      });
+    });
+
+    setSkelWindows((prev) => {
+      if (!prev.length) return prev;
+      return prev.map((w) => {
+        // key: `${kind}:${offset}` or live fallback
+        let off = w.offset;
+        let kind = w.skelKind;
+        if (off == null && typeof w.key === 'string') {
+          const colon = w.key.indexOf(':');
+          if (colon > 0) {
+            kind = kind || w.key.slice(0, colon);
+            const n = Number(w.key.slice(colon + 1));
+            if (Number.isFinite(n)) off = n;
+          }
+        }
+        if (off == null || !kind || kind === 'live') return w;
+        try {
+          const joints = parseInspectSkeleton(buf, kind, off);
+          if (!joints?.length) return w;
+          return { ...w, offset: off, skelKind: kind, joints };
+        } catch {
+          return w;
+        }
+      });
+    });
+  }, []);
+
   dataStructReloadRef.current = (absPath) => {
     if (!absPath || !dataStructOpenRef.current) return;
-    loadDatData(absPath, { overlay: true });
+    loadDatData(absPath, { overlay: true }).then(() => refreshOpenInspectWindows());
   };
+
+  /** Re-read current DAT from disk; keep Data Struct open; refresh inspect modals.
+   *  @param {string} [forcePath] optional absolute path (e.g. pivot file just written) */
+  const reloadCurrentDat = useCallback(async (forcePath) => {
+    const path = (typeof forcePath === 'string' && forcePath)
+      || dataDoc?.fullPath
+      || shownPathRef.current
+      || dataSources[0]?.path
+      || (player.current?.path)
+      || selectedDat;
+    if (!path) {
+      setStatusText('Nothing loaded to reload.');
+      return;
+    }
+    const prevStatus = statusText;
+    setStatusText(`Reloading ${relativeName(path)}…`);
+    try {
+      // overlay: true keeps selection/modelPath and does not close Data Struct
+      await loadDatData(path, { overlay: true });
+      refreshOpenInspectWindows();
+      setStatusText(`Reloaded ${relativeName(path)}`);
+      // brief status flash then restore zone/etc. hint if Data Struct is overlay
+      if (dataStructOpen && prevStatus) {
+        window.setTimeout(() => {
+          setStatusText((cur) => (cur.startsWith('Reloaded ') ? prevStatus : cur));
+        }, 1200);
+      }
+    } catch (e) {
+      setStatusText(`Reload failed: ${e.message ?? e}`);
+    }
+  }, [
+    dataDoc, dataSources, selectedDat, statusText, dataStructOpen,
+    loadDatData, refreshOpenInspectWindows, player,
+  ]);
 
   // Escape closes Data Struct after modals/texture windows (see earlier Escape handler).
   useEffect(() => {
     const onKey = (e) => {
       if (e.key !== 'Escape' || !dataStructOpen) return;
       // Let the earlier handler claim Escape first when a modal/window is open.
-      if (exportSpec || settingsOpen || graphicsOpen || helpOpen) return;
+      if (exportSpec || settingsOpen || graphicsOpen || helpOpen || datNotesOpen) return;
       if (fxPreview || skelWindows.length || texWindows.length || zdefWindows.length) return;
+      if (routeWindows.length || uiMenuWindows.length || uiEgWindows.length) return;
       toggleDataStruct();
       e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [dataStructOpen, toggleDataStruct, exportSpec, settingsOpen, graphicsOpen, helpOpen,
-    skelWindows.length, texWindows.length, zdefWindows.length, fxPreview]);
+    datNotesOpen, skelWindows.length, texWindows.length, zdefWindows.length, routeWindows.length,
+    uiMenuWindows.length, uiEgWindows.length, fxPreview]);
 
   /** Switch the Data Struct inspector to another DAT in the current multi-file set. */
   const selectDataSource = useCallback(async (path) => {
@@ -3163,25 +3345,32 @@ export default function App({ launch = null }) {
       setStatusText(`Couldn't parse skeleton${dataBufRef.current ? '' : ' (no DAT buffer)'}`);
       return;
     }
-    const key = `${kind || 'live'}:${res?.offset ?? title}`;
+    const offset = res?.offset ?? null;
+    const key = `${kind || 'live'}:${offset ?? title}`;
     setSkelWindows((prev) => {
       const i = prev.findIndex((w) => w.key === key);
       if (i >= 0) {
         const copy = prev.slice();
         const [hit] = copy.splice(i, 1);
-        copy.push(hit);
+        const next = { ...hit, joints, title, offset, skelKind: kind || hit.skelKind };
+        copy.push(next);
+        raiseModal(`skel:${next.id}`);
         return copy;
       }
       const id = ++skelIdRef.current;
-      return [...prev, { id, key, joints, title, cascade: prev.length }];
+      raiseModal(`skel:${id}`);
+      return [...prev, {
+        id, key, joints, title, cascade: prev.length, offset, skelKind: kind,
+      }];
     });
-  }, []);
+  }, [raiseModal]);
 
   const closeSkeletonWin = useCallback((id) => {
     setSkelWindows((prev) => prev.filter((w) => w.id !== id));
   }, []);
 
   const focusSkeletonWin = useCallback((id) => {
+    raiseModal(`skel:${id}`);
     setSkelWindows((prev) => {
       const i = prev.findIndex((w) => w.id === id);
       if (i < 0 || i === prev.length - 1) return prev;
@@ -3190,7 +3379,7 @@ export default function App({ launch = null }) {
       copy.push(hit);
       return copy;
     });
-  }, []);
+  }, [raiseModal]);
 
   /** Collect ZoneDef rows from live model / last loadZone cache (sync). */
   const collectZonePlacements = useCallback(() => {
@@ -3228,23 +3417,108 @@ export default function App({ launch = null }) {
       return;
     }
     const key = `route:${res.offset}`;
+    const offset = res.offset;
     setRouteWindows((prev) => {
       const i = prev.findIndex((w) => w.key === key);
       if (i >= 0) {
         const copy = prev.slice();
         const [hit] = copy.splice(i, 1);
-        copy.push(hit);
+        const next = { ...hit, route, title, offset };
+        copy.push(next);
+        raiseModal(`route:${next.id}`);
         return copy;
       }
-      return [...prev, { id: ++routeIdRef.current, key, title, route }];
+      const id = ++routeIdRef.current;
+      raiseModal(`route:${id}`);
+      return [...prev, { id, key, title, route, offset }];
     });
-  }, []);
+  }, [raiseModal]);
+
+  const openDataUiMenu = useCallback((res) => {
+    const tag = (res?.id && String(res.id).trim()) || 'UiMenu';
+    if (!dataBufRef.current || res?.offset == null) {
+      setStatusText("Couldn't parse UiMenu (no DAT buffer)");
+      return;
+    }
+    let menu = null;
+    try {
+      menu = parseInspectUiMenu(dataBufRef.current, res.offset);
+    } catch (e) {
+      console.warn('parseInspectUiMenu', e);
+    }
+    if (!menu?.frame) {
+      setStatusText(`Couldn't parse UiMenu ${tag}`);
+      return;
+    }
+    const title = menu.bareName || menu.name || tag;
+    const key = `uimenu:${res.offset}`;
+    const offset = res.offset;
+    setUiMenuWindows((prev) => {
+      const i = prev.findIndex((w) => w.key === key);
+      if (i >= 0) {
+        const copy = prev.slice();
+        const [hit] = copy.splice(i, 1);
+        // Re-parse on re-open so values match disk after external edits.
+        const next = { ...hit, menu, title, offset };
+        copy.push(next);
+        raiseModal(`uimenu:${next.id}`);
+        return copy;
+      }
+      const id = ++uiMenuIdRef.current;
+      raiseModal(`uimenu:${id}`);
+      return [...prev, { id, key, title, menu, offset }];
+    });
+  }, [raiseModal]);
+
+  const openDataUiElementGroup = useCallback((res) => {
+    const tag = (res?.id && String(res.id).trim()) || 'UiElementGroup';
+    if (!dataBufRef.current || res?.offset == null) {
+      setStatusText("Couldn't parse UiElementGroup (no DAT buffer)");
+      return;
+    }
+    let group = null;
+    try {
+      group = parseInspectUiElementGroup(dataBufRef.current, res.offset);
+    } catch (e) {
+      console.warn('parseInspectUiElementGroup', e);
+    }
+    if (!group) {
+      setStatusText(`Couldn't parse UiElementGroup ${tag}`);
+      return;
+    }
+    const title = group.setLabel || group.id || tag;
+    const key = `uieg:${res.offset}`;
+    const offset = res.offset;
+    setUiEgWindows((prev) => {
+      const i = prev.findIndex((w) => w.key === key);
+      if (i >= 0) {
+        const copy = prev.slice();
+        const [hit] = copy.splice(i, 1);
+        const next = { ...hit, group, title, offset };
+        copy.push(next);
+        raiseModal(`uieg:${next.id}`);
+        return copy;
+      }
+      const id = ++uiEgIdRef.current;
+      raiseModal(`uieg:${id}`);
+      return [...prev, { id, key, title, group, offset }];
+    });
+  }, [raiseModal]);
 
   const closeRouteWin = useCallback((id) => {
     setRouteWindows((prev) => prev.filter((w) => w.id !== id));
   }, []);
 
+  const closeUiMenuWin = useCallback((id) => {
+    setUiMenuWindows((prev) => prev.filter((w) => w.id !== id));
+  }, []);
+
+  const closeUiEgWin = useCallback((id) => {
+    setUiEgWindows((prev) => prev.filter((w) => w.id !== id));
+  }, []);
+
   const focusRouteWin = useCallback((id) => {
+    raiseModal(`route:${id}`);
     setRouteWindows((prev) => {
       const i = prev.findIndex((w) => w.id === id);
       if (i < 0 || i === prev.length - 1) return prev;
@@ -3253,7 +3527,31 @@ export default function App({ launch = null }) {
       copy.push(hit);
       return copy;
     });
-  }, []);
+  }, [raiseModal]);
+
+  const focusUiMenuWin = useCallback((id) => {
+    raiseModal(`uimenu:${id}`);
+    setUiMenuWindows((prev) => {
+      const i = prev.findIndex((w) => w.id === id);
+      if (i < 0 || i === prev.length - 1) return prev;
+      const copy = prev.slice();
+      const [hit] = copy.splice(i, 1);
+      copy.push(hit);
+      return copy;
+    });
+  }, [raiseModal]);
+
+  const focusUiEgWin = useCallback((id) => {
+    raiseModal(`uieg:${id}`);
+    setUiEgWindows((prev) => {
+      const i = prev.findIndex((w) => w.id === id);
+      if (i < 0 || i === prev.length - 1) return prev;
+      const copy = prev.slice();
+      const [hit] = copy.splice(i, 1);
+      copy.push(hit);
+      return copy;
+    });
+  }, [raiseModal]);
 
   /** Data Struct ZoneDef row → floating placements table. */
   const openDataZoneDef = useCallback((res) => {
@@ -3270,10 +3568,13 @@ export default function App({ launch = null }) {
           copy[i] = { ...copy[i], ...partial, title };
           const [hit] = copy.splice(i, 1);
           copy.push(hit);
+          raiseModal(`zdef:${hit.id}`);
           return copy;
         }
+        const id = ++zdefIdRef.current;
+        raiseModal(`zdef:${id}`);
         return [...prev, {
-          id: ++zdefIdRef.current,
+          id,
           key,
           title,
           placements: [],
@@ -3321,13 +3622,14 @@ export default function App({ launch = null }) {
         setStatusText(`ZoneDef: ${msg}`);
       }
     })();
-  }, [getKeyTables, collectZonePlacements]);
+  }, [getKeyTables, collectZonePlacements, raiseModal]);
 
   const closeZdefWin = useCallback((id) => {
     setZdefWindows((prev) => prev.filter((w) => w.id !== id));
   }, []);
 
   const focusZdefWin = useCallback((id) => {
+    raiseModal(`zdef:${id}`);
     setZdefWindows((prev) => {
       const i = prev.findIndex((w) => w.id === id);
       if (i < 0 || i === prev.length - 1) return prev;
@@ -3336,7 +3638,7 @@ export default function App({ launch = null }) {
       copy.push(hit);
       return copy;
     });
-  }, []);
+  }, [raiseModal]);
 
   // One-shot SFX from Data Struct SoundEffectPointer rows.
   const [playingSoundKey, setPlayingSoundKey] = useState(null);
@@ -3511,7 +3813,7 @@ export default function App({ launch = null }) {
       zoneMusicIdRef.current = null;
     }
     if (leftView !== 'images' && leftView !== 'files' && leftView !== 'data') {
-      setImageEntry(null); setImageDoc(null); setImageSet(null);
+      setImageEntry(null); setImageDoc(null); setImageSet(null); setImageSprite(null);
     }
     if (leftView !== 'data' && leftView !== 'files') {
       setDataDoc(null); dataBufRef.current = null; dataTexturesRef.current = null;
@@ -3543,6 +3845,7 @@ export default function App({ launch = null }) {
     // than falling through to the default model. Store just {name, path}.
     try { localStorage.setItem(LAST_IMAGE_KEY, JSON.stringify({ name: entry.name, path: entry.path })); } catch { /* quota */ }
     setImageSet(null);
+    setImageSprite(null);
     setImageDoc(null);
     // Images are 2D and cover the viewport, so anything still in the scene just
     // shows through. Drop it the way switching to Music does.
@@ -3552,16 +3855,39 @@ export default function App({ launch = null }) {
     setAnims([]);
     setCurrentAnim('');
     try {
-      const { data: buf } = await backend.readPrefer(gameCandidates(entry.path, settings));
+      const cands = gameCandidates(entry.path, settings);
+      const { path: resolved, data: buf } = await backend.readPrefer(cands);
       const doc = parseImageDat(buf);
       if (doc.kind === 'sets') {
         // Resolve each set's atlas once here so the panel and the viewer agree.
-        doc.sets = doc.sets.map((s) => ({ ...s, texture: textureForSet(s, doc.textures) }));
+        // Synthetic texture rows already carry .texture from parseImageDat.
+        doc.sets = doc.sets.map((s) => (
+          s.texture ? s : { ...s, texture: textureForSet(s, doc.textures) }
+        ));
       }
       setImageDoc(doc);
-      const first = doc.kind === 'sets' ? doc.sets.find((s) => s.texture) ?? doc.sets[0] : null;
+      // Prefer a row that actually has pixels in this file (title packs: textures
+      // first; menu packs: first set whose atlas resolved).
+      const first = doc.kind === 'sets'
+        ? (doc.sets.find((s) => s.kind === 'texture' && s.texture)
+          ?? doc.sets.find((s) => s.texture)
+          ?? doc.sets[0])
+        : null;
       setImageSet(first ?? null);
-      setStatusText(doc.kind === 'png' ? 'PNG' : `${doc.sets?.length ?? 0} image sets`);
+      const nSet = doc.kind === 'sets' ? doc.sets.filter((s) => s.kind !== 'texture').length : 0;
+      const nTex = doc.kind === 'sets' ? doc.sets.filter((s) => s.kind === 'texture').length : 0;
+      const nSpr = doc.sprites?.length ?? 0;
+      const srcTag = (() => {
+        const p = String(resolved || '').toLowerCase();
+        if (settings.pivotPath && p.startsWith(String(settings.pivotPath).toLowerCase())) return 'pivot';
+        if (settings.hdPath && p.startsWith(String(settings.hdPath).toLowerCase())) return 'hd';
+        return 'game';
+      })();
+      const base = doc.kind === 'png' ? 'PNG'
+        : doc.titlePack
+          ? `title pack · ${nTex} textures · ${nSpr} sprites`
+          : `${nSet} image sets${nTex ? ` · ${nTex} textures` : ''}${nSpr ? ` · ${nSpr} sprites` : ''}`;
+      setStatusText(`${base} · ${srcTag}`);
     } catch (e) {
       setImageDoc({ kind: 'empty' });
       setStatusText(`Failed to read ${entry.path}: ${e.message ?? e}`);
@@ -3606,10 +3932,12 @@ export default function App({ launch = null }) {
     setDataStructOpen(false);
     setStatusText(`Reading ${rel}…`);
     try {
+      // Always resolve through pivot/HD/game candidates when the path maps to a
+      // ROM\… key — re-clicks and pin clicks must not stick to a stale absolute.
       const readAbs = async (abs) => {
-        const r = relFromAbs(abs, settings);
-        if (r !== abs) {
-          const { data } = await backend.readPrefer(gameCandidates(r, settings));
+        const cands = gameCandidates(abs, settings);
+        if (cands.length) {
+          const { data } = await backend.readPrefer(cands);
           return data;
         }
         return backend.readFile(abs);
@@ -3617,7 +3945,7 @@ export default function App({ launch = null }) {
       const buf = await readAbs(path);
       const cls = classifyDat(buf, path);
 
-      const clearImages = () => { setImageEntry(null); setImageDoc(null); setImageSet(null); };
+      const clearImages = () => { setImageEntry(null); setImageDoc(null); setImageSet(null); setImageSprite(null); };
       const clearData = () => {
         setDataDoc(null);
         dataBufRef.current = null;
@@ -3917,9 +4245,11 @@ export default function App({ launch = null }) {
   const saveSettings = async (draft) => {
     const gamePath = draft.gamePath.trim();
     const hdPath = (draft.hdPath || '').trim();
+    const pivotPath = (draft.pivotPath || '').trim();
     const xiPath = (draft.xiPath || '').trim();
     const prevPath = settingsRef.current?.gamePath ?? '';
     const prevHd = settingsRef.current?.hdPath ?? '';
+    const prevPivot = settingsRef.current?.pivotPath ?? '';
 
     if (!gamePath) {
       setSettingsError('Game path is required. Browse to your FINAL FANTASY XI install folder.');
@@ -3939,23 +4269,42 @@ export default function App({ launch = null }) {
         return;
       }
     }
+    if (pivotPath) {
+      try {
+        await backend.listDir(pivotPath);
+      } catch {
+        setSettingsError(`Pivot path not found:\n${pivotPath}`);
+        return;
+      }
+    }
 
     localStorage.setItem('gamePath', gamePath);
     localStorage.setItem('hdPath', hdPath);
+    localStorage.setItem('pivotPath', pivotPath);
     localStorage.setItem('bgColor', draft.bgColor);
     localStorage.setItem('autoPlay', draft.autoPlay ? '1' : '0');
     localStorage.setItem('autoWasdZones', draft.autoWasdZones === false ? '0' : '1');
+    localStorage.setItem('closeDatNotesOnSave', draft.closeDatNotesOnSave ? '1' : '0');
+    localStorage.setItem('showXiConsole', draft.showXiConsole === false ? '0' : '1');
+    localStorage.setItem('autoCloseXiConsole', draft.autoCloseXiConsole ? '1' : '0');
     localStorage.setItem('xiPath', xiPath);
-    // Clearing the HD path forces the toggle off.
+    // Clearing a root forces its toggle off.
     const hdEnabled = hdPath ? !!draft.hdEnabled : false;
+    const pivotEnabled = pivotPath ? !!draft.pivotEnabled : false;
     if (!hdPath) localStorage.setItem('hdEnabled', '0');
+    if (!pivotPath) localStorage.setItem('pivotEnabled', '0');
     const next = {
       ...draft,
       gamePath,
       hdPath,
       hdEnabled,
+      pivotPath,
+      pivotEnabled,
       xiPath,
       autoWasdZones: draft.autoWasdZones !== false,
+      closeDatNotesOnSave: !!draft.closeDatNotesOnSave,
+      showXiConsole: draft.showXiConsole !== false,
+      autoCloseXiConsole: !!draft.autoCloseXiConsole,
     };
     setSettings(next);
     settingsRef.current = next;
@@ -3975,9 +4324,11 @@ export default function App({ launch = null }) {
       const dat = `${gamePath}\\${DEFAULT_DAT_SUFFIX}`;
       await loadModel([dat], DEFAULT_DAT_SUFFIX);
       setRevealTarget(dat.toLowerCase());
-    } else if (hdPath.toLowerCase() !== prevHd.toLowerCase()) {
-      // HD root changed while a model is up — drop cached shared tables/effects
-      // so the next load picks up the new pack.
+    } else if (
+      hdPath.toLowerCase() !== prevHd.toLowerCase()
+      || pivotPath.toLowerCase() !== prevPivot.toLowerCase()
+    ) {
+      // Override roots changed while a model is up — drop cached shared tables.
       globalEffectsRef.current = null;
       dataTablesRef.current = null;
     }
@@ -4026,6 +4377,9 @@ export default function App({ launch = null }) {
 
   const handleMenuAction = (id, label) => {
     switch (id) {
+      case 'reload-dat':
+        reloadCurrentDat();
+        break;
       case 'settings':
         setSettingsError('');
         setSettingsOpen(true);
@@ -4045,35 +4399,102 @@ export default function App({ launch = null }) {
       case 'toggle-textures':
         setShowTex((v) => !v);
         break;
-      case 'toggle-hd': {
+      case 'toggle-hd':
+      case 'toggle-pivot': {
         const s = settingsRef.current;
-        if (!s?.hdPath) break;
+        const isPivot = id === 'toggle-pivot';
+        if (isPivot ? !s?.pivotPath : !s?.hdPath) break;
+
         const loaded = modelRef.current;
         const camSnap = rendererRef.current?.camera?.snapshot?.() ?? null;
         if (loaded?.kind === 'zone') persistCurrentZoneCamera();
-        const next = { ...s, hdEnabled: !s.hdEnabled };
-        try { localStorage.setItem('hdEnabled', next.hdEnabled ? '1' : '0'); } catch { /* quota */ }
-        setSettings(next);
-        settingsRef.current = next;
-        // Shared ROM/0/0.DAT and FTABLE may differ between packs.
-        globalEffectsRef.current = null;
-        dataTablesRef.current = null;
-        setStatusText(next.hdEnabled ? `HD on — ${s.hdPath}` : 'HD off — using game path');
-        // Reload the on-screen zone/model so meshes/textures swap immediately.
-        if (!loaded) break;
+
+        // Image viewer keeps no modelRef — recover path from entry / last-image.
+        const imagePath = imageEntry?.path
+          || (() => {
+            try { return JSON.parse(localStorage.getItem(LAST_IMAGE_KEY) || 'null')?.path || ''; }
+            catch { return ''; }
+          })();
+
+        let rel = '';
         try {
           const last = JSON.parse(localStorage.getItem(LAST_DAT_KEY) || 'null');
-          if (loaded.kind === 'zone' && last?.kind === 'zone' && last.zone?.path) {
-            loadZone(last.zone, { keepCamera: true, cameraSnap: camSnap });
-          } else if (last?.paths?.length) {
-            loadModel(last.paths, last.name || relativeName(last.paths[last.paths.length - 1]), {
-              ...(last.opts ?? {}),
-              keepCamera: true,
-            });
+          const abs = selectedDat || imagePath || last?.paths?.[last.paths.length - 1]
+            || last?.zone?.path || '';
+          rel = relFromAbs(abs, s) || '';
+          if (!rel && abs) {
+            const m = String(abs).replace(/\//g, '\\').match(/(?:^|\\)((?:ROM\d*|sound\d*|maps)\\.+)$/i);
+            if (m) rel = m[1];
           }
-        } catch (e) {
-          console.warn('HD reload failed', e);
+          if (!rel && imagePath) {
+            const m = String(imagePath).replace(/\//g, '\\').match(/(?:^|\\)?((?:ROM\d*|sound\d*|maps)\\.+)$/i);
+            if (m) rel = m[1];
+            else if (!/^[a-zA-Z]:\\/.test(imagePath)) rel = imagePath;
+          }
+        } catch { /* ignore */ }
+
+        const next = isPivot
+          ? { ...s, pivotEnabled: !s.pivotEnabled }
+          : { ...s, hdEnabled: !s.hdEnabled };
+        try {
+          if (isPivot) localStorage.setItem('pivotEnabled', next.pivotEnabled ? '1' : '0');
+          else localStorage.setItem('hdEnabled', next.hdEnabled ? '1' : '0');
+        } catch { /* quota */ }
+        setSettings(next);
+        settingsRef.current = next;
+        globalEffectsRef.current = null;
+        dataTablesRef.current = null;
+
+        const on = isPivot ? next.pivotEnabled : next.hdEnabled;
+        const root = isPivot ? s.pivotPath : s.hdPath;
+        if (on && rel && isPivot) {
+          const pivotAbs = `${s.pivotPath}\\${normRel(rel)}`;
+          const r = normRel(rel);
+          backend.fileExists(pivotAbs).then((ok) => {
+            setStatusText(ok
+              ? `Pivot on — override found for ${r}`
+              : `Pivot on — no override for ${r} (falls back)`);
+          }).catch(() => setStatusText(`Pivot on — ${s.pivotPath}`));
+        } else if (on) {
+          setStatusText(isPivot ? `Pivot on — ${root}` : `HD on — ${root}`);
+        } else {
+          setStatusText(isPivot ? 'Pivot off — HD/game path only' : 'HD off — using game path');
         }
+
+        // Reload whatever is on screen (zone / model / image / data).
+        const reloadAsset = async () => {
+          try {
+            const last = JSON.parse(localStorage.getItem(LAST_DAT_KEY) || 'null');
+            if (loaded?.kind === 'zone' && last?.kind === 'zone' && last.zone?.path) {
+              await loadZone(last.zone, { keepCamera: true, cameraSnap: camSnap });
+              return;
+            }
+            if (loaded && last?.paths?.length) {
+              await loadModel(last.paths, last.name || relativeName(last.paths[last.paths.length - 1]), {
+                ...(last.opts ?? {}),
+                keepCamera: true,
+              });
+              return;
+            }
+            // Image DAT (no modelRef) — force re-read with new candidate order.
+            if (imagePath || (browserKind === 'image' && imageEntry)) {
+              const img = imageEntry || JSON.parse(localStorage.getItem(LAST_IMAGE_KEY) || 'null');
+              if (img?.path) {
+                setImageDoc(null); // drop stale pixels immediately
+                await loadImage({ name: img.name || relativeName(img.path), path: img.path });
+                return;
+              }
+            }
+            // Data Struct inspector buffer
+            if (dataBufRef.current && (dataDoc || browserKind === 'data')) {
+              const p = dataDoc?.fullPath || selectedDat;
+              if (p) await loadDatData(p);
+            }
+          } catch (e) {
+            console.warn(`${isPivot ? 'Pivot' : 'HD'} reload failed`, e);
+          }
+        };
+        reloadAsset();
         break;
       }
       case 'toggle-wireframe':
@@ -4792,7 +5213,7 @@ export default function App({ launch = null }) {
         )}
         <SettingsModal
           open={settingsOpen}
-          initial={settings ?? { gamePath: '', hdPath: '', hdEnabled: false, bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, xiPath: '' }}
+          initial={settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, closeDatNotesOnSave: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }}
           error={settingsError}
           onSave={saveSettings}
           onClose={() => { setSettingsOpen(false); setSettingsError(''); }}
@@ -4815,6 +5236,7 @@ export default function App({ launch = null }) {
         checks={{
           textures: showTex,
           hd: !!settings?.hdEnabled,
+          pivot: !!settings?.pivotEnabled,
           wireframe: showWireframe,
           skeleton: showSkeleton,
           alpha: showAlpha,
@@ -4834,6 +5256,7 @@ export default function App({ launch = null }) {
           noNavmesh: !hasNavmesh,
           noSkybox: !hasSkybox,
           noHdPath: !settings?.hdPath,
+          noPivotPath: !settings?.pivotPath,
         }}
         flySpeed={flySpeed}
         fps={fps}
@@ -4866,6 +5289,7 @@ export default function App({ launch = null }) {
           onSelectFile={loadFromTree}
           onError={(msg) => setStatusText(msg)}
           pathIndex={filePathIndex}
+          settings={settings}
         />
       )}
       {explorerOpen && leftView === 'npc' && (
@@ -4942,11 +5366,17 @@ export default function App({ launch = null }) {
       {explorerOpen && leftView === 'data' && (
         <FileTree
           rootPath={settings?.gamePath ?? ''}
+          roots={[
+            settings?.gamePath && { path: settings.gamePath, label: 'FINAL FANTASY XI' },
+            settings?.hdPath && { path: settings.hdPath, label: 'HD' },
+            settings?.pivotPath && { path: settings.pivotPath, label: 'PIVOT' },
+          ].filter(Boolean)}
           selectedPath={selectedDat}
           revealTarget={revealTarget}
           onSelectFile={loadFromTree}
           onError={(msg) => setStatusText(msg)}
           pathIndex={filePathIndex}
+          settings={settings}
         />
       )}
 
@@ -4969,6 +5399,8 @@ export default function App({ launch = null }) {
             onOpenSkeleton={openDataSkeleton}
             onOpenZoneDef={openDataZoneDef}
             onOpenRoute={openDataRoute}
+            onOpenUiMenu={openDataUiMenu}
+            onOpenUiElementGroup={openDataUiElementGroup}
             onOpenParticle={openDataParticle}
             onPlaySound={playDataSound}
             playingSoundKey={playingSoundKey}
@@ -5018,13 +5450,28 @@ export default function App({ launch = null }) {
       {!dataStructOpen && (leftView === 'images' || (leftView === 'files' && browserKind === 'image')
         || (leftView === 'data' && browserKind === 'image')) && imageDoc && (
         <>
-          <ImageViewer doc={imageDoc} set={imageSet} />
+          <ImageViewer
+            doc={imageDoc}
+            set={imageSet}
+            sprites={imageDoc.sprites || []}
+            highlightSprite={imageSprite}
+          />
           <ImageSetPanel
             file={imageEntry}
             sets={imageDoc.kind === 'sets' ? imageDoc.sets : []}
             selected={imageSet}
-            onSelect={setImageSet}
+            onSelect={(s) => { setImageSet(s); setImageSprite(null); }}
+            titlePack={!!imageDoc.titlePack}
+            spriteCount={imageDoc.sprites?.length || 0}
           />
+          {(imageDoc.sprites?.length > 0) && (
+            <ImageSpritePanel
+              sprites={imageDoc.sprites}
+              selectedSet={imageSet}
+              selectedSprite={imageSprite}
+              onSelect={setImageSprite}
+            />
+          )}
         </>
       )}
 
@@ -5115,6 +5562,36 @@ export default function App({ launch = null }) {
             >
               {dataStructOpen ? 'Hide Data Struct' : 'Data Struct'}
             </button>
+            {(() => {
+              const datPath = dataDoc?.fullPath
+                || shownPathRef.current
+                || selectedDat
+                || player.current?.path
+                || '';
+              if (!datPath) return null;
+              const nKey = datFileKey(datPath, settings);
+              void datNotesTick;
+              const has = !!(nKey && getNote(nKey));
+              return (
+                <>
+                  <span className="status-sep">·</span>
+                  <button
+                    type="button"
+                    className={`status-link status-dat-notes${datNotesOpen ? ' on' : ''}${has ? ' has-note' : ''}`}
+                    onClick={() => {
+                      loadNotes().then(() => setDatNotesTick((n) => n + 1));
+                      setDatNotesOpen((v) => {
+                        const next = !v;
+                        if (next) raiseModal('datnotes');
+                        return next;
+                      });
+                    }}
+                  >
+                    {datNotesOpen ? 'Hide Notes' : 'Notes'}
+                  </button>
+                </>
+              );
+            })()}
           </>
         )}
       </div>
@@ -5219,7 +5696,7 @@ export default function App({ launch = null }) {
           key={w.id}
           tex={w.tex}
           cascadeOffset={w.cascade}
-          zIndex={210 + i}
+          zIndex={modalZ(`tex:${w.id}`, 210 + i)}
           onClose={() => closeTexture(w.id)}
           onFocus={() => focusTexture(w.id)}
         />
@@ -5231,7 +5708,7 @@ export default function App({ launch = null }) {
           joints={w.joints}
           title={w.title}
           cascadeOffset={w.cascade}
-          zIndex={500 + i}
+          zIndex={modalZ(`skel:${w.id}`, 500 + i)}
           onClose={() => closeSkeletonWin(w.id)}
           onFocus={() => focusSkeletonWin(w.id)}
         />
@@ -5245,7 +5722,7 @@ export default function App({ launch = null }) {
           error={w.error || ''}
           title={w.title}
           cascadeOffset={w.cascade}
-          zIndex={2000 + i}
+          zIndex={modalZ(`zdef:${w.id}`, 2000 + i)}
           onClose={() => closeZdefWin(w.id)}
           onFocus={() => focusZdefWin(w.id)}
         />
@@ -5256,9 +5733,72 @@ export default function App({ launch = null }) {
           key={w.id}
           route={w.route}
           title={w.title}
-          zIndex={2100 + i}
+          zIndex={modalZ(`route:${w.id}`, 2100 + i)}
           onClose={() => closeRouteWin(w.id)}
           onFocus={() => focusRouteWin(w.id)}
+        />
+      ))}
+
+      {uiMenuWindows.map((w, i) => (
+        <UiMenuModal
+          key={w.id}
+          menu={w.menu}
+          title={w.title}
+          datPath={dataDoc?.fullPath || shownPathRef.current || selectedDat || ''}
+          xiPath={settings?.xiPath || ''}
+          settings={settings}
+          zIndex={modalZ(`uimenu:${w.id}`, 2120 + i)}
+          onClose={() => closeUiMenuWin(w.id)}
+          onFocus={() => focusUiMenuWin(w.id)}
+          onSaved={reloadCurrentDat}
+          onCliLog={(log) => {
+            if (settingsRef.current?.showXiConsole === false) return;
+            setCliOutput(log);
+          }}
+        />
+      ))}
+
+      {settings?.showXiConsole !== false && (
+        <CliOutputPanel
+          log={cliOutput}
+          autoClose={!!settings?.autoCloseXiConsole}
+          autoCloseMs={10000}
+          onClose={() => setCliOutput(null)}
+        />
+      )}
+
+      {datNotesOpen && (() => {
+        const datPath = dataDoc?.fullPath
+          || shownPathRef.current
+          || selectedDat
+          || player.current?.path
+          || '';
+        const nKey = datFileKey(datPath, settings);
+        if (!nKey) return null;
+        const label = relativeName(datPath) || datPath;
+        return (
+          <DatNotesModal
+            noteKey={nKey}
+            label={label}
+            zIndex={modalZ('datnotes', 2200)}
+            closeOnSave={!!settings?.closeDatNotesOnSave}
+            onFocus={() => raiseModal('datnotes')}
+            onClose={() => {
+              setDatNotesOpen(false);
+              setDatNotesTick((n) => n + 1);
+            }}
+          />
+        );
+      })()}
+
+      {uiEgWindows.map((w, i) => (
+        <UiElementGroupModal
+          key={w.id}
+          group={w.group}
+          title={w.title}
+          zIndex={modalZ(`uieg:${w.id}`, 2130 + i)}
+          onClose={() => closeUiEgWin(w.id)}
+          onFocus={() => focusUiEgWin(w.id)}
         />
       ))}
 
@@ -5270,14 +5810,15 @@ export default function App({ launch = null }) {
           textures={fxPreview.textures}
           error={fxPreview.error || ''}
           loading={!!fxPreview.loading}
-          zIndex={2010}
+          zIndex={modalZ('fx', 2010)}
+          onFocus={() => raiseModal('fx')}
           onClose={closeFxPreview}
         />
       )}
 
       <SettingsModal
         open={settingsOpen}
-        initial={settings ?? { gamePath: '', hdPath: '', hdEnabled: false, bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, xiPath: '' }}
+        initial={settings ?? { gamePath: '', hdPath: '', hdEnabled: false, bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, closeDatNotesOnSave: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }}
         error={settingsError}
         onSave={saveSettings}
         onClose={() => { setSettingsOpen(false); setSettingsError(''); }}

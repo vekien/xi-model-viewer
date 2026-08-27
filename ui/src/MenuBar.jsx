@@ -7,6 +7,7 @@ const MENUS = [
     label: 'File',
     items: [
       { id: 'open-dat', label: 'Open DAT…', icon: 'file_open' },
+      { id: 'reload-dat', label: 'Reload DAT', icon: 'refresh' },
       { id: 'export', label: 'Export', icon: 'download' },
       { id: 'settings', label: 'Settings', icon: 'settings' },
       { id: 'help', label: 'About', icon: 'star' },
@@ -18,10 +19,12 @@ const MENUS = [
       { id: 'reset-camera', label: 'Reset Camera', icon: 'recenter' },
       { id: 'toggle-explorer', label: 'Toggle Explorer', icon: 'list_alt', check: 'explorer' },
       { id: 'toggle-wasd', label: 'Toggle WASD', icon: 'keyboard', check: 'wasd' },
+      { id: 'toggle-hd', label: 'Toggle HD', icon: 'hd', check: 'hd', disableWhen: 'noHdPath' },
+      { id: 'toggle-pivot', label: 'Toggle PIVOT', icon: 'swap_horiz', check: 'pivot', disableWhen: 'noPivotPath' },
+      { toolbarSep: true },
       { id: 'toggle-wireframe', label: 'Toggle Wireframe', icon: 'grid_on', check: 'wireframe' },
       { id: 'toggle-skeleton', label: 'Toggle Skeleton', icon: 'accessibility_new', check: 'skeleton' },
       { id: 'toggle-textures', label: 'Toggle Textures', icon: 'texture', check: 'textures' },
-      { id: 'toggle-hd', label: 'Toggle HD', icon: 'hd', check: 'hd', disableWhen: 'noHdPath' },
       { id: 'toggle-alpha', label: 'Toggle Alpha', icon: 'opacity', check: 'alpha' },
       { id: 'toggle-blend-lequal', label: 'Toggle Blend LEQUAL', icon: 'layers', check: 'blendLequal' },
       { id: 'toggle-unlit', label: 'Toggle Unlit', icon: 'light_mode', check: 'unlit' },
@@ -59,7 +62,7 @@ const MENUS = [
 /** Quick-toggle strip next to the menus — View checks minus a few menu-only items. */
 const TOOLBAR_SKIP = new Set(['toggle-blend-lequal']);
 const VIEW_TOOLBAR = MENUS.find((m) => m.label === 'View').items
-  .filter((i) => i.check && !TOOLBAR_SKIP.has(i.id));
+  .filter((i) => i.toolbarSep || (i.check && !TOOLBAR_SKIP.has(i.id)));
 
 /**
  * Classic menubar: click opens; while open, hovering another top-level button
@@ -147,7 +150,10 @@ export function MenuBar({
       <span className="menu-sep" aria-hidden="true" />
 
       <div className="view-toolbar">
-        {VIEW_TOOLBAR.map((item) => {
+        {VIEW_TOOLBAR.map((item, i) => {
+          if (item.toolbarSep || item.sep) {
+            return <span key={`sep-${i}`} className="menu-sep" aria-hidden="true" />;
+          }
           const disabled = !!(item.disabled || (item.disableWhen && checks[item.disableWhen]));
           const on = !!(item.check && checks[item.check]);
           const tip = item.label.replace(/^Toggle\s+/i, '');
@@ -171,6 +177,16 @@ export function MenuBar({
       <span className="menu-sep" aria-hidden="true" />
 
       <div className="cam-group">
+        <Tooltip content="Reload DAT — refresh Data Struct and open inspect windows" placement="bottom">
+          <button
+            type="button"
+            className="view-tool"
+            aria-label="Reload DAT"
+            onClick={() => { setActive(null); setCamera(null); onAction('reload-dat', 'Reload DAT'); }}
+          >
+            <span className="icon">refresh</span>
+          </button>
+        </Tooltip>
         {/* Panel openers, grouped apart from the on/off toggles to their left. */}
         <Tooltip content="Graphics Settings" placement="bottom">
           <button
@@ -246,7 +262,9 @@ export function MenuBar({
             style={{ position: 'fixed', left: active.left, top: active.top }}
           >
             {activeMenu.items.map((item, i) => {
-              if (item.sep) return <div key={`sep${i}`} className="menu-divider" role="separator" />;
+              if (item.sep || item.toolbarSep) {
+                return <div key={`sep${i}`} className="menu-divider" role="separator" />;
+              }
               const disabled = !!(item.disabled || (item.disableWhen && checks[item.disableWhen]));
               return (
                 <button

@@ -96,10 +96,46 @@ export const backend = {
     return text;
   },
 
+  /** Runs `xi <args…>` with the configured xi-tools. Returns stdout/stderr text. */
+  async xiRun(args, xiPath) {
+    if (isTauri()) {
+      return tauriInvoke('xi_run', { args: args || [], xiPath: xiPath || null });
+    }
+    const res = await fetch('/fs/xi-run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ args, xiPath }),
+    });
+    const text = await res.text();
+    if (!res.ok) throw new Error(text);
+    return text;
+  },
+
   /** True if a runnable xi is resolvable from the configured path (or PATH). */
   async xiAvailable(xiPath) {
     if (isTauri()) return tauriInvoke('xi_available', { xiPath: xiPath || null });
     return !!(xiPath && xiPath.trim());   // dev shim can't check; trust the field
+  },
+
+  /**
+   * Validate xi-tools folder; optionally run uv python install 3.14 + uv sync.
+   * @returns {{ ok, status, message, detail, uv?, python?, xiExe?, didSync }}
+   */
+  async xiSetup(folder, install = true) {
+    if (isTauri()) {
+      return tauriInvoke('xi_setup', { folder: folder || '', install: !!install });
+    }
+    // Browser dev: ask serve.py
+    const res = await fetch('/fs/xi-setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder, install: !!install }),
+    });
+    const data = await res.json().catch(async () => ({ ok: false, message: await res.text() }));
+    if (!res.ok && data.ok == null) {
+      return { ok: false, status: 'error', message: data.message || 'xi setup failed', detail: '', didSync: false };
+    }
+    return data;
   },
 
   /** Native file picker (Tauri only). Returns the chosen path or null. */
@@ -117,6 +153,35 @@ export const backend = {
     });
     if (!res.ok) throw new Error(await res.text());
   },
+
+  /**
+   * Persistent user data folder (`%LOCALAPPDATA%\\XiModelViewer`).
+   * Browser dev: `dev/.user-data` under the repo.
+   */
+  async userDataDir() {
+    if (isTauri()) return tauriInvoke('user_data_dir');
+    const res = await fetch('/fs/user-data');
+    if (!res.ok) throw new Error(await res.text());
+    return (await res.text()).trim();
+  },
+
+  /** Read a UTF-8 text file; returns null if missing. */
+  async readTextFile(path) {
+    try {
+      const buf = await this.readFile(path);
+      const bytes = buf instanceof ArrayBuffer ? new Uint8Array(buf) : new Uint8Array(buf);
+      return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    } catch {
+      return null;
+    }
+  },
+
+  /** Write a UTF-8 text file (creates parents). */
+  async writeTextFile(path, text) {
+    const bytes = new TextEncoder().encode(text ?? '');
+    return this.writeFile(path, bytes);
+  },
+
 
   /** Lists filenames (not dirs) directly in a directory. Returns [] if missing. */
   async listFiles(path) {

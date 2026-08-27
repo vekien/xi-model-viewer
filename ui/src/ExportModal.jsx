@@ -129,7 +129,7 @@ export function ExportModal({ open, spec, onClose, onStatus }) {
           {needsXi && (
             <div className="export-warn">
               <span className="icon">info</span>
-              <span>Model export needs the <strong>xi-tools</strong> CLI. Set its path in
+              <span>Model export needs the <strong>xi-tools</strong> folder (Python 3.14). Set it in
                 <em> File → Settings</em> to enable it.</span>
             </div>
           )}

@@ -79,7 +79,7 @@ function ZoneTabs({ tabs, activeKey, onSelect }) {
 
 export function DataViewer({
   doc, sources, onSelectSource, onOpenTexture, onOpenSkeleton, onOpenZoneDef,
-  onOpenRoute, onOpenParticle, onPlaySound, playingSoundKey, onRevealPath, onOpenDat, onRenderFile,
+  onOpenRoute, onOpenUiMenu, onOpenUiElementGroup, onOpenParticle, onPlaySound, playingSoundKey, onRevealPath, onOpenDat, onRenderFile,
 }) {
   if (!doc) {
     return (
@@ -199,6 +199,8 @@ export function DataViewer({
       onOpenSkeleton={onOpenSkeleton}
       onOpenZoneDef={onOpenZoneDef}
       onOpenRoute={onOpenRoute}
+      onOpenUiMenu={onOpenUiMenu}
+      onOpenUiElementGroup={onOpenUiElementGroup}
       onOpenParticle={onOpenParticle}
       onPlaySound={onPlaySound}
       playingSoundKey={playingSoundKey}
@@ -312,7 +314,8 @@ function countRes(node) {
 
 function SectionsView({
   doc, sourceItems, activeSource, zoneChrome, onSelectSource,
-  onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenRoute,
+  onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenRoute, onOpenUiMenu,
+  onOpenUiElementGroup,
   onOpenParticle, onPlaySound, playingSoundKey,
   onRevealPath, onRenderFile,
 }) {
@@ -362,6 +365,8 @@ function SectionsView({
               onOpenSkeleton={onOpenSkeleton}
               onOpenZoneDef={onOpenZoneDef}
               onOpenRoute={onOpenRoute}
+              onOpenUiMenu={onOpenUiMenu}
+              onOpenUiElementGroup={onOpenUiElementGroup}
               onOpenParticle={onOpenParticle}
               onPlaySound={onPlaySound}
               playingSoundKey={playingSoundKey}
@@ -1115,7 +1120,7 @@ function GearSlotNode({ node, onOpenDat, tableRace }) {
   );
 }
 
-function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenRoute, onOpenParticle, onPlaySound, playingSoundKey }) {
+function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenRoute, onOpenUiMenu, onOpenUiElementGroup, onOpenParticle, onPlaySound, playingSoundKey }) {
   const [open, setOpen] = useState(depth < 4 || !!forceOpen);
   // While filtering, keep matching branches expanded.
   const expanded = forceOpen || open;
@@ -1160,6 +1165,8 @@ function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onOpenZ
               onOpenSkeleton={onOpenSkeleton}
               onOpenZoneDef={onOpenZoneDef}
               onOpenRoute={onOpenRoute}
+              onOpenUiMenu={onOpenUiMenu}
+              onOpenUiElementGroup={onOpenUiElementGroup}
               onOpenParticle={onOpenParticle}
               onPlaySound={onPlaySound}
               playingSoundKey={playingSoundKey}
@@ -1174,6 +1181,8 @@ function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onOpenZ
               onOpenSkeleton={onOpenSkeleton}
               onOpenZoneDef={onOpenZoneDef}
               onOpenRoute={onOpenRoute}
+              onOpenUiMenu={onOpenUiMenu}
+              onOpenUiElementGroup={onOpenUiElementGroup}
               onOpenParticle={onOpenParticle}
               onPlaySound={onPlaySound}
               playingSoundKey={playingSoundKey}
@@ -1184,7 +1193,7 @@ function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onOpenZ
   );
 }
 
-function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenRoute, onOpenParticle, onPlaySound, playingSoundKey }) {
+function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenRoute, onOpenUiMenu, onOpenUiElementGroup, onOpenParticle, onPlaySound, playingSoundKey }) {
   const isTex = !!(res.isTexture || res.textureName
     || res.type === 0x20 || res.type === 0x5D
     || res.name === 'Texture' || res.name === 'BumpMap');
@@ -1199,6 +1208,10 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
     || res.name === 'ZoneDef');
   const isRoute = !!(res.isRoute || res.type === 0x06 || res.type === 6
     || res.name === 'Route');
+  const isUiMenu = !!(res.isUiMenu || res.type === 0x30 || res.type === 48
+    || res.name === 'UiMenu');
+  const isUiElementGroup = !!(res.isUiElementGroup || res.type === 0x31 || res.type === 49
+    || res.name === 'UiElementGroup');
   const isParticle = !!(res.isParticleGenerator || res.type === 0x05 || res.type === 5
     || res.name === 'ParticleGenerator');
   const soundKey = isSound && res.soundId != null
@@ -1207,12 +1220,14 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
   const soundPlaying = !!(soundKey && playingSoundKey === soundKey);
   const texClick = isTex && !!onOpenTexture;
   const skelClick = isSkel && !!onOpenSkeleton;
-  // ZoneDef / Particle / Route rows stay activatable so a missing handler still logs.
+  // ZoneDef / Particle / Route / Ui* stay activatable so a missing handler still logs.
   const zdefClick = isZoneDef;
   const routeClick = isRoute;
+  const uiMenuClick = isUiMenu;
+  const uiEgClick = isUiElementGroup;
   const particleClick = isParticle;
   const soundClick = isSound && res.soundId != null && !!onPlaySound;
-  const clickable = texClick || skelClick || soundClick || zdefClick || particleClick || routeClick;
+  const clickable = texClick || skelClick || soundClick || zdefClick || particleClick || routeClick || uiMenuClick || uiEgClick;
   const openKey = res.textureName || res.id?.trim() || null;
   const onActivate = (e) => {
     e?.preventDefault?.();
@@ -1221,6 +1236,12 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
     else if (particleClick) {
       if (typeof onOpenParticle === 'function') onOpenParticle(res);
       else console.error('ParticleGenerator click: onOpenParticle handler missing', res);
+    } else if (uiEgClick) {
+      if (typeof onOpenUiElementGroup === 'function') onOpenUiElementGroup(res);
+      else console.error('UiElementGroup click: onOpenUiElementGroup handler missing', res);
+    } else if (uiMenuClick) {
+      if (typeof onOpenUiMenu === 'function') onOpenUiMenu(res);
+      else console.error('UiMenu click: onOpenUiMenu handler missing', res);
     } else if (routeClick) {
       if (typeof onOpenRoute === 'function') onOpenRoute(res);
       else console.error('Route click: onOpenRoute handler missing', res);
@@ -1233,26 +1254,32 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
   const flags = res.flags ?? [];
   const hint = soundClick ? (soundPlaying ? 'click to stop' : 'click to play')
     : particleClick ? 'click to play'
-      : routeClick ? 'click to view path'
-        : zdefClick ? 'click to view placements'
-          : 'click to view';
+      : uiEgClick ? 'click to view sprites'
+        : uiMenuClick ? 'click to view layout'
+          : routeClick ? 'click to view path'
+            : zdefClick ? 'click to view placements'
+              : 'click to view';
   return (
     <div
-      className={`data-row data-res-row${isTex ? ' data-res-tex' : ''}${isSkel ? ' data-res-skel' : ''}${isZoneDef ? ' data-res-zdef' : ''}${isRoute ? ' data-res-route' : ''}${isParticle ? ' data-res-fx' : ''}${isSound ? ' data-res-sfx' : ''}${soundPlaying ? ' data-res-sfx-play' : ''}${clickable ? ' data-res-click' : ''}`}
+      className={`data-row data-res-row${isTex ? ' data-res-tex' : ''}${isSkel ? ' data-res-skel' : ''}${isZoneDef ? ' data-res-zdef' : ''}${isRoute ? ' data-res-route' : ''}${isUiMenu ? ' data-res-uimenu' : ''}${isUiElementGroup ? ' data-res-uieg' : ''}${isParticle ? ' data-res-fx' : ''}${isSound ? ' data-res-sfx' : ''}${soundPlaying ? ' data-res-sfx-play' : ''}${clickable ? ' data-res-click' : ''}`}
       style={{ paddingLeft: 8 + depth * 14 }}
       title={soundClick
         ? (soundPlaying ? `Click to stop se ${res.soundId}` : `Click to play se ${res.soundId}`)
         : particleClick
           ? `Click to play particle · ${String(res.id || '').trim() || 'generator'}`
-          : routeClick
-            ? `Click to view camera path · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
-            : zdefClick
-              ? `Click to view placements · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
-              : skelClick
-                ? `Click to view skeleton tree · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
-                : texClick
-                  ? `Click to view texture · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
-                  : `offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}${flags.length ? ` · ${flags.join(', ')}` : ''}`}
+          : uiEgClick
+            ? `Click to view element group / sprites · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
+            : uiMenuClick
+              ? `Click to view menu layout · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
+              : routeClick
+                ? `Click to view camera path · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
+                : zdefClick
+                  ? `Click to view placements · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
+                  : skelClick
+                    ? `Click to view skeleton tree · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
+                    : texClick
+                      ? `Click to view texture · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
+                      : `offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}${flags.length ? ` · ${flags.join(', ')}` : ''}`}
       onClick={clickable ? onActivate : undefined}
       role={clickable ? 'button' : undefined}
       tabIndex={clickable ? 0 : undefined}
