@@ -326,9 +326,13 @@ export class OrbitCamera {
       this.pitch = this.yUp ? Math.atan2(f[1], horiz) : Math.atan2(-f[1], horiz);
       this.mode = 'fly';
     } else {
-      // Drop an orbit target ahead of the fly camera.
+      // Drop an orbit target ahead of the fly camera. The 5-unit floor keeps a
+      // zone pivot off the camera's nose, but a whole entity is only a couple
+      // of units across — applying it there shoves the pivot straight past the
+      // model, so orbiting a just-framed actor swung around empty space.
       const f = this.lookDir;
-      const dist = Math.min(Math.max(this.distance, 5), this.maxDistance);
+      const floor = this.rangeKind === 'zone' ? 5 : this.minDistance;
+      const dist = Math.min(Math.max(this.distance, floor), this.maxDistance);
       this.target = [
         this.pos[0] + f[0] * dist,
         this.pos[1] + f[1] * dist,
