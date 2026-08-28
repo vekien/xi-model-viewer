@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { backend } from '../js/backend.js';
 import { Tooltip } from './Tooltip.jsx';
 import { datFileKey, getNote, loadNotes } from '../js/notes.js';
+import { userPathPurpose } from '../js/dat/userdat.js';
 
-const LISTABLE = /\.(dat|bgw|spw|png)$/i;
+// USER\ save folders mix .dat with .ttl (macro book names), .sys and .msg.
+const LISTABLE = /\.(dat|bgw|spw|png|ttl|sys|msg)$/i;
 const MAX_SEARCH = 400;
 const PIN_KEY = 'pinnedFiles';
 
@@ -83,10 +85,11 @@ function matchesTokens(hay, tokens) {
  * @param {(path: string) => void} onSelectFile
  * @param {(msg: string) => void} [onError]
  * @param {string[]} [pathIndex]  FTABLE-relative paths (ROM\…\n.DAT) for global search
+ * @param {(path: string) => string | null} [typeOf]  Row type badge ("Zone", "Gear", …)
  */
 export function FileTree({
   rootPath, roots = null, selectedPath, revealTarget, onSelectFile, onError, pathIndex = null,
-  settings = null,
+  typeOf = null, settings = null,
 }) {
   const [query, setQuery] = useState('');
   const [pinned, setPinned] = useState(loadPins);
@@ -203,9 +206,11 @@ export function FileTree({
           spellCheck={false}
         />
         {query && (
-          <button type="button" className="list-search-clear" title="Clear" onClick={() => setQuery('')}>
-            <span className="icon">close</span>
-          </button>
+          <Tooltip content="Clear">
+            <button type="button" className="list-search-clear" onClick={() => setQuery('')}>
+              <span className="icon">close</span>
+            </button>
+          </Tooltip>
         )}
       </div>
       <div className="tree-scroll">
@@ -228,6 +233,7 @@ export function FileTree({
                     pathLabel={rel}
                     absPath={abs}
                     settings={settings}
+                    typeOf={typeOf}
                     onClick={() => selectFromTree(abs)}
                     pin={(
                       <PinBtn pinned={isPinned} onToggle={() => togglePin(abs)} />
@@ -252,6 +258,7 @@ export function FileTree({
                 selectedPath={selectedPath}
                 onSelectFile={selectFromPin}
                 onTogglePin={togglePin}
+                typeOf={typeOf}
                 settings={settings}
               />
             )}
@@ -271,6 +278,7 @@ export function FileTree({
                 rootPath={r.path}
                 pinSet={pinSet}
                 onTogglePin={togglePin}
+                typeOf={typeOf}
                 settings={settings}
               />
             ))}
@@ -312,16 +320,29 @@ function PinBtn({ pinned, onToggle }) {
 function fileTipContent(pathLabel, absPath, settings) {
   const note = getNote(datFileKey(absPath || pathLabel, settings));
   const path = pathLabel || absPath || '';
-  if (!note) return path;
+  // USER saves are named by feature, not by content — say which one this is.
+  const purpose = userPathPurpose(absPath || pathLabel);
+  if (!note && !purpose) return path;
   return (
     <div className="tree-file-tip">
       <div className="tree-file-tip-path">{path}</div>
-      <div className="tree-file-tip-note">{note}</div>
+      {purpose && <div className="tree-file-tip-purpose">{purpose}</div>}
+      {note && <div className="tree-file-tip-note">{note}</div>}
     </div>
   );
 }
 
-function FileRow({ pathLabel, absPath, settings, onClick, pin, name }) {
+/**
+ * What we can tell about a DAT without opening it (baked lists + FTABLE ids).
+ * Renders nothing when the file isn't one we recognise.
+ */
+function TypeBadge({ typeOf, path }) {
+  const label = typeOf?.(path);
+  if (!label) return null;
+  return <span className={`tree-type t-${label.toLowerCase()}`}>{label}</span>;
+}
+
+function FileRow({ pathLabel, absPath, settings, onClick, pin, name, typeOf }) {
   return (
     <Tooltip
       content={fileTipContent(pathLabel, absPath, settings)}
@@ -335,13 +356,14 @@ function FileRow({ pathLabel, absPath, settings, onClick, pin, name }) {
         <span className={name != null ? 'tree-file-name' : 'tree-hit-path'}>
           {name != null ? name : pathLabel}
         </span>
+        <TypeBadge typeOf={typeOf} path={absPath || pathLabel} />
         {pin}
       </div>
     </Tooltip>
   );
 }
 
-function PinnedFolder({ rows, selectedPath, onSelectFile, onTogglePin, settings }) {
+function PinnedFolder({ rows, selectedPath, onSelectFile, onTogglePin, typeOf, settings }) {
   const [open, setOpen] = useState(true);
   return (
     <div className={`node${open ? ' open' : ''} zone-pinned-group`}>
@@ -364,6 +386,7 @@ function PinnedFolder({ rows, selectedPath, onSelectFile, onTogglePin, settings 
                   pathLabel={r.rel}
                   absPath={r.abs}
                   settings={settings}
+                  typeOf={typeOf}
                   onClick={() => onSelectFile(r.abs)}
                   pin={<PinBtn pinned onToggle={() => onTogglePin(r.abs)} />}
                 />
@@ -378,7 +401,7 @@ function PinnedFolder({ rows, selectedPath, onSelectFile, onTogglePin, settings 
 
 function TreeNode({
   path, name, isDir, defaultOpen, selectedPath, revealTarget, skipRevealKey,
-  onSelectFile, onError, filterTokens, rootPath, pinSet, onTogglePin, settings,
+  onSelectFile, onError, filterTokens, rootPath, pinSet, onTogglePin, typeOf, settings,
 }) {
   const [open, setOpen] = useState(!!defaultOpen);
   const [entries, setEntries] = useState(null);
@@ -467,6 +490,7 @@ function TreeNode({
       <span className="caret icon">{isDir ? 'chevron_right' : ''}</span>
       <span className="kind icon">{isDir ? 'folder' : 'deployed_code'}</span>
       <span className={isDir ? undefined : 'tree-file-name'}>{name}</span>
+      {!isDir && <TypeBadge typeOf={typeOf} path={path} />}
       {!isDir && (
         <PinBtn pinned={isPinned} onToggle={() => onTogglePin?.(path)} />
       )}
@@ -512,6 +536,7 @@ function TreeNode({
               rootPath={rootPath}
               pinSet={pinSet}
               onTogglePin={onTogglePin}
+              typeOf={typeOf}
               settings={settings}
             />
           ))}
