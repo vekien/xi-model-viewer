@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@headlessui/react';
 import { Combo } from './Combo.jsx';
+import { Tooltip } from './Tooltip.jsx';
 
 /** Combo on a labelled panel row, matching the gear slots in the Characters panel. */
 function Row({ label, children }) {
@@ -145,13 +146,14 @@ export function AnimationPanel({ pc, anim }) {
             <span className="icon fill">{playing ? 'stop' : 'play_arrow'}</span>
             <span>{playing ? 'Stop' : 'Play'}</span>
           </Button>
-          <Button
-            className="icon-btn pc-reset"
-            title="Reset to frame 0 and 100% speed"
-            onClick={() => { onSeek?.(0); onSpeed?.(1); }}
-          >
-            <span className="icon">restart_alt</span>
-          </Button>
+          <Tooltip content="Reset to frame 0 and 100% speed">
+            <Button
+              className="icon-btn pc-reset"
+              onClick={() => { onSeek?.(0); onSpeed?.(1); }}
+            >
+              <span className="icon">restart_alt</span>
+            </Button>
+          </Tooltip>
         </Row>
       )}
       {frameSink && <FrameScrubber frameSink={frameSink} onSeek={onSeek} />}

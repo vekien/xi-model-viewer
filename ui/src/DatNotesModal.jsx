@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@headlessui/react';
+import { Tooltip } from './Tooltip.jsx';
 import {
   getNote, loadNotes, setNote,
 } from '../js/notes.js';
@@ -88,7 +89,9 @@ export function DatNotesModal({
       >
         <span className="icon">sticky_note_2</span>
         <span className="modal-title">Notes</span>
-        <span className="route-count mono" title={label}>{label}</span>
+        <Tooltip content={label}>
+          <span className="route-count mono">{label}</span>
+        </Tooltip>
         <Button type="button" className="icon-btn modal-close" onClick={onClose} aria-label="Close">
           <span className="icon">close</span>
         </Button>

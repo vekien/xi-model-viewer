@@ -126,27 +126,30 @@ function SetRow({ set: s, selected, onSelect }) {
   const isTex = s.kind === 'texture';
   return (
     <div className={`node${selected ? ' selected' : ''}`}>
-      <div
-        className="row"
-        ref={ref}
-        onClick={() => onSelect?.(s)}
-        title={s.textureRef || s.raw}
-      >
-        <span className="caret icon" />
-        <span className="kind icon">
-          {isTex ? 'texture' : (s.texture ? 'image' : 'broken_image')}
-        </span>
-        <span className="img-cat mono-small">{s.category}</span>
-        <span className="zone-name">{s.name}</span>
-        {s.texture && (
-          <span className="mono-small zone-id">
-            {s.texture.width}×{s.texture.height}
+      <Tooltip content={s.textureRef || s.raw}>
+        <div
+          className="row"
+          ref={ref}
+          onClick={() => onSelect?.(s)}
+        >
+          <span className="caret icon" />
+          <span className="kind icon">
+            {isTex ? 'texture' : (s.texture ? 'image' : 'broken_image')}
           </span>
-        )}
-        {!s.texture && !isTex && (
-          <span className="mono-small zone-id img-ext" title="Texture lives in another DAT">ext</span>
-        )}
-      </div>
+          <span className="img-cat mono-small">{s.category}</span>
+          <span className="zone-name">{s.name}</span>
+          {s.texture && (
+            <span className="mono-small zone-id">
+              {s.texture.width}×{s.texture.height}
+            </span>
+          )}
+          {!s.texture && !isTex && (
+            <Tooltip content="Texture lives in another DAT">
+              <span className="mono-small zone-id img-ext">ext</span>
+            </Tooltip>
+          )}
+        </div>
+      </Tooltip>
     </div>
   );
 }

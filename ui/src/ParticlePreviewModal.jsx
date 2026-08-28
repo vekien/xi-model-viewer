@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@headlessui/react';
 import { ParticlePreviewHost, bgToHex, parseBgHex } from '../js/particlePreview.js';
+import { Tooltip } from './Tooltip.jsx';
 
 const MIN_W = 360;
 const MIN_H = 280;
@@ -155,9 +156,11 @@ export function ParticlePreviewModal({
       >
         <span className="icon">auto_awesome</span>
         <span className="modal-title mono">{title || genId || 'ParticleGenerator'}</span>
-        <Button className="icon-btn modal-close" onClick={onClose} title="Close">
-          <span className="icon">close</span>
-        </Button>
+        <Tooltip content="Close">
+          <Button className="icon-btn modal-close" onClick={onClose}>
+            <span className="icon">close</span>
+          </Button>
+        </Tooltip>
       </div>
       {error ? (
         <div className="fx-modal-body">
@@ -181,22 +184,25 @@ export function ParticlePreviewModal({
               </span>
             </div>
             <div className="fx-modal-actions">
-              <label className="fx-modal-bg" title="Viewport background">
-                <span className="icon">palette</span>
-                <input
-                  type="color"
-                  value={normalizeColorInput(bgHex)}
-                  onChange={(e) => setBgHex(e.target.value)}
-                />
-              </label>
-              <Button
-                className={`btn${showGrid ? ' active' : ''}`}
-                onClick={() => setShowGrid((v) => !v)}
-                title="Toggle world grid"
-              >
-                <span className="icon">grid_on</span>
-                Grid
-              </Button>
+              <Tooltip content="Viewport background">
+                <label className="fx-modal-bg">
+                  <span className="icon">palette</span>
+                  <input
+                    type="color"
+                    value={normalizeColorInput(bgHex)}
+                    onChange={(e) => setBgHex(e.target.value)}
+                  />
+                </label>
+              </Tooltip>
+              <Tooltip content="Toggle world grid">
+                <Button
+                  className={`btn${showGrid ? ' active' : ''}`}
+                  onClick={() => setShowGrid((v) => !v)}
+                >
+                  <span className="icon">grid_on</span>
+                  Grid
+                </Button>
+              </Tooltip>
               <Button className="btn" onClick={() => setPlaying((p) => !p)}>
                 <span className="icon">{playing ? 'pause' : 'play_arrow'}</span>
                 {playing ? 'Pause' : 'Play'}
@@ -215,14 +221,15 @@ export function ParticlePreviewModal({
           </div>
         </>
       )}
-      <div
-        className="fx-modal-resize"
-        title="Resize"
-        onPointerDown={startResize}
-        onPointerMove={onResizeMove}
-        onPointerUp={endResize}
-        onPointerCancel={endResize}
-      />
+      <Tooltip content="Resize">
+        <div
+          className="fx-modal-resize"
+          onPointerDown={startResize}
+          onPointerMove={onResizeMove}
+          onPointerUp={endResize}
+          onPointerCancel={endResize}
+        />
+      </Tooltip>
     </div>
   );
 }

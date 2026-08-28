@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Checkbox, Field, Label } from '@headlessui/react';
 import { backend } from '../js/backend.js';
 import { loadNotes, notesFilePath, revealNotesFile } from '../js/notes.js';
+import { Tooltip } from './Tooltip.jsx';
 
 const UV_INSTALL_URL = 'https://docs.astral.sh/uv/getting-started/installation/';
 const XI_README_HINT = 'https://github.com/vekien/xi-tools#getting-started';
@@ -140,9 +141,11 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
         >
           <span className="icon">settings</span>
           <span className="modal-title">Settings</span>
-          <Button className="icon-btn modal-close" onClick={onClose} title="Close">
-            <span className="icon">close</span>
-          </Button>
+          <Tooltip content="Close">
+            <Button className="icon-btn modal-close" onClick={onClose}>
+              <span className="icon">close</span>
+            </Button>
+          </Tooltip>
         </div>
 
         <div className="modal-body settings-body">
@@ -242,23 +245,28 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
                     || 'Link xi-tools for model export (Python 3.14 + uv).'}
                 </span>
                 <div className="xi-status-actions">
-                  <Button
-                    className="xi-action"
-                    disabled={xiStatus?.busy || !(draft.xiPath || '').trim()}
-                    onClick={() => runXiSetup(draft.xiPath, true)}
-                    title="Check / Install"
-                  >
-                    <span className="icon">build</span>
-                    {xiStatus?.busy ? '…' : 'Check'}
-                  </Button>
-                  {xiStatus?.status === 'missing_uv' && (
-                    <Button className="xi-action" onClick={() => backend.openUrl(UV_INSTALL_URL)} title="Install uv">
-                      <span className="icon">open_in_new</span>
+                  <Tooltip content="Check / Install">
+                    <Button
+                      className="xi-action"
+                      disabled={xiStatus?.busy || !(draft.xiPath || '').trim()}
+                      onClick={() => runXiSetup(draft.xiPath, true)}
+                    >
+                      <span className="icon">build</span>
+                      {xiStatus?.busy ? '…' : 'Check'}
                     </Button>
+                  </Tooltip>
+                  {xiStatus?.status === 'missing_uv' && (
+                    <Tooltip content="Install uv">
+                      <Button className="xi-action" onClick={() => backend.openUrl(UV_INSTALL_URL)}>
+                        <span className="icon">open_in_new</span>
+                      </Button>
+                    </Tooltip>
                   )}
-                  <Button className="xi-action ghost" onClick={() => backend.openUrl(XI_README_HINT)} title="Setup guide">
-                    <span className="icon">menu_book</span>
-                  </Button>
+                  <Tooltip content="Setup guide">
+                    <Button className="xi-action ghost" onClick={() => backend.openUrl(XI_README_HINT)}>
+                      <span className="icon">menu_book</span>
+                    </Button>
+                  </Tooltip>
                 </div>
               </div>
               {xiStatus?.detail && xiStatus.status === 'error' && (

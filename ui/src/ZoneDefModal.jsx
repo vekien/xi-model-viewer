@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { Button } from '@headlessui/react';
+import { Tooltip } from './Tooltip.jsx';
 
 const fmt3 = (v) => (Number.isFinite(v) ? v.toFixed(2) : '—');
 
@@ -67,9 +68,11 @@ export function ZoneDefModal({
               ? `${total.toLocaleString()} placements`
               : `${filtered.length.toLocaleString()} / ${total.toLocaleString()}`}
         </span>
-        <Button className="icon-btn modal-close" onClick={onClose} title="Close">
-          <span className="icon">close</span>
-        </Button>
+        <Tooltip content="Close">
+          <Button className="icon-btn modal-close" onClick={onClose}>
+            <span className="icon">close</span>
+          </Button>
+        </Tooltip>
       </div>
       <div className="zdef-search">
         <span className="icon">search</span>
@@ -81,9 +84,11 @@ export function ZoneDefModal({
           onChange={(e) => setQuery(e.target.value)}
         />
         {query && (
-          <button type="button" className="list-search-clear" onClick={() => setQuery('')} title="Clear">
-            <span className="icon">close</span>
-          </button>
+          <Tooltip content="Clear">
+            <button type="button" className="list-search-clear" onClick={() => setQuery('')}>
+              <span className="icon">close</span>
+            </button>
+          </Tooltip>
         )}
       </div>
       <div className="zdef-table-wrap">

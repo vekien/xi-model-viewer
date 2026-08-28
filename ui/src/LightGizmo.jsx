@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { Tooltip } from './Tooltip.jsx';
 
 const SIZE = 88;
 const R = 34; // sphere radius in px
@@ -149,22 +150,23 @@ export function LightGizmo({ dir, onChange, onReset, detailsOpen = false }) {
   };
 
   return (
-    <div
-      id="light-gizmo"
-      className={`light-gizmo${detailsOpen ? ' details-open' : ''}`}
-      title="Drag to aim the shadow light · double-click to reset"
-    >
-      <canvas
-        ref={canvasRef}
-        width={SIZE}
-        height={SIZE}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onDoubleClick={onDblClick}
-      />
-    </div>
+    <Tooltip content="Drag to aim the shadow light · double-click to reset">
+      <div
+        id="light-gizmo"
+        className={`light-gizmo${detailsOpen ? ' details-open' : ''}`}
+      >
+        <canvas
+          ref={canvasRef}
+          width={SIZE}
+          height={SIZE}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onDoubleClick={onDblClick}
+        />
+      </div>
+    </Tooltip>
   );
 }
 

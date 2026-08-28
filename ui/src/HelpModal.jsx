@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@headlessui/react';
 import { backend } from '../js/backend.js';
+import { Tooltip } from './Tooltip.jsx';
 
 const GITHUB = 'https://github.com/vekien/xi-model-viewer';
 
@@ -68,9 +69,11 @@ export function HelpModal({ open, onClose }) {
         >
           <span className="icon">star</span>
           <span className="modal-title">About</span>
-          <Button className="icon-btn modal-close" onClick={onClose} title="Close">
-            <span className="icon">close</span>
-          </Button>
+          <Tooltip content="Close">
+            <Button className="icon-btn modal-close" onClick={onClose}>
+              <span className="icon">close</span>
+            </Button>
+          </Tooltip>
         </div>
 
         <div className="modal-body help-body">

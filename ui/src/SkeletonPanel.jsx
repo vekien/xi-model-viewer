@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@headlessui/react';
+import { Tooltip } from './Tooltip.jsx';
 
 /** Matches xi-tools' export naming (`f"bone{joint.index:04d}"`), so a row here
  *  reads the same as the node it becomes in a glTF/FBX export. Zero-based. */
@@ -71,9 +72,11 @@ export function SkeletonPanel({ pose, onClose }) {
         <span className="icon">accessibility_new</span>
         <span className="details-title">Skeleton</span>
         <span className="skel-count mono">{joints.length} joints</span>
-        <Button className="icon-btn details-close" onClick={onClose} title="Close">
-          <span className="icon">close</span>
-        </Button>
+        <Tooltip content="Close">
+          <Button className="icon-btn details-close" onClick={onClose}>
+            <span className="icon">close</span>
+          </Button>
+        </Tooltip>
       </div>
       <div className="skel-body">{rows}</div>
     </div>

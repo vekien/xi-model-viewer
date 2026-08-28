@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@headlessui/react';
 import { backend } from '../js/backend.js';
 import { resolveWritableDat, rootKindForAbs } from '../js/gamePath.js';
+import { Tooltip } from './Tooltip.jsx';
 import {
   getNote, loadNotes, setNote,
   uiMenuSectionKey,
@@ -290,12 +291,11 @@ export function UiMenuModal({
         <span className="icon">menu</span>
         <span className="modal-title mono">{title}</span>
         {sourceBadge(source) && (
-          <span
-            className={`uimenu-src-badge uimenu-src-${sourceBadge(source).cls}`}
-            title={source?.path || ''}
-          >
-            {sourceBadge(source).label}
-          </span>
+          <Tooltip content={source?.path || ''}>
+            <span className={`uimenu-src-badge uimenu-src-${sourceBadge(source).cls}`}>
+              {sourceBadge(source).label}
+            </span>
+          </Tooltip>
         )}
         <span className="route-count mono">{meta}</span>
         <Button type="button" className="icon-btn modal-close" onClick={onClose} aria-label="Close">
@@ -310,28 +310,31 @@ export function UiMenuModal({
           {menuTag && <span className="mono">tag <b>{menuTag}</b></span>}
         </div>
         <div className="uimenu-actions">
-          <Button
-            type="button"
-            className={`uimenu-btn${notesOpen ? ' on' : ''}${sectionNote || notesDirtyRef.current ? ' has-note' : ''}`}
-            onClick={toggleNotes}
-            title="Free-text notes for this menu (AppData notes.json)"
-          >
-            Notes
-          </Button>
-          {!editing ? (
+          <Tooltip content="Free-text notes for this menu (AppData notes.json)">
             <Button
               type="button"
-              className="uimenu-btn"
-              disabled={!canEdit || busy}
-              title={!xiPath?.trim()
-                ? 'Set xi-tools folder in Settings'
-                : !datPath
-                  ? 'No DAT path'
-                  : 'Edit positions / size / nav'}
-              onClick={beginEdit}
+              className={`uimenu-btn${notesOpen ? ' on' : ''}${sectionNote || notesDirtyRef.current ? ' has-note' : ''}`}
+              onClick={toggleNotes}
             >
-              Edit
+              Notes
             </Button>
+          </Tooltip>
+          {!editing ? (
+            <Tooltip content={!xiPath?.trim()
+              ? 'Set xi-tools folder in Settings'
+              : !datPath
+                ? 'No DAT path'
+                : 'Edit positions / size / nav'}
+            >
+              <Button
+                type="button"
+                className="uimenu-btn"
+                disabled={!canEdit || busy}
+                onClick={beginEdit}
+              >
+                Edit
+              </Button>
+            </Tooltip>
           ) : (
             <>
               <Button type="button" className="uimenu-btn" disabled={busy} onClick={cancelEdit}>
