@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@headlessui/react';
 import { backend } from '../js/backend.js';
 import { gameCandidates, normRel, relFromAbs } from '../js/gamePath.js';
-import { animDisplayName, groupAnimations, mergeModels, parseEntity, resolveScheduleClip } from '../js/dat.js';
+import { animDisplayName, groupAnimations, matchAnimRef, mergeModels, parseEntity, resolveScheduleClip } from '../js/dat.js';
 import { Renderer } from '../js/renderer.js';
 import { FileTree } from './FileTree.jsx';
 import { MenuBar } from './MenuBar.jsx';
@@ -54,6 +54,7 @@ import { parseParticleGenerator } from '../js/particle/parser.js';
 import { ParticleSystem } from '../js/particle/system.js';
 import { parseEffectRoutines, flattenRoutine } from '../js/effect.js';
 import { EffectList } from './EffectList.jsx';
+import { ensureXiToolsOnBoot } from '../js/toolsBoot.js';
 import { WeatherAudio } from '../js/particle/audio.js';
 import { toAudioBuffer, parseAudioHeader, FMT_ATRAC3 } from '../js/audio.js';
 import { parseImageDat, textureForSet } from '../js/images.js';
@@ -86,6 +87,7 @@ import { WeatherPanel } from './WeatherPanel.jsx';
 import { Tooltip } from './Tooltip.jsx';
 import { loadZoneNavmesh } from '../js/navmesh.js';
 import { launchZoneRel } from '../js/launch.js';
+import { normalizeBgId, resolveBgUrl } from './bgs.js';
 
 const DEFAULT_DAT_SUFFIX = 'ROM\\5\\3.DAT';
 const DEFAULT_BG = '#303438';
@@ -202,7 +204,13 @@ function particleParsers(zoneResource, warnings) {
  * name ("lvup    lvu1"); the trailing token is the texture's own id. Display
  * only — the raw name stays the lookup key.
  */
-const texLabel = (name) => String(name ?? '').trim().split(/\s+/).pop() || String(name ?? '');
+/**
+ * Cross-fade between cast stages, and from the release back to idle, in 30fps
+ * clip frames. SkeletonPose.evaluate consumes it as a segment's `transOut`.
+ */
+const CAST_BLEND_FRAMES = 9;   // 0.3s
+
+const texLabel = (name) = String(name ?? '').trim().split(/\s+/).pop() || String(name ?? '');
 
 function buildParticleTree(buffer, parsers, warnings) {
   const bytes = new Uint8Array(buffer);
@@ -397,6 +405,37 @@ export default function App({ launch = null }) {
     });
     return () => { alive = false; };
   }, [minimal]);
+
+  // xi-tools: auto-install / update from GitHub (same policy as xi-zone-editor).
+  // Does not block the UI; status text only when something actually changed.
+  useEffect(() => {
+    if (minimal) return undefined;
+    let alive = true;
+    const xiPath = localStorage.getItem('xiPath') || '';
+    ensureXiToolsOnBoot({ xiPath }).then((result) => {
+      if (!alive || !result) return;
+      const st = result.status;
+      if (st?.toolsDir && result.changed) {
+        try { localStorage.setItem('xiPath', st.toolsDir); } catch { /* quota */ }
+        setSettings((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev, xiPath: st.toolsDir };
+          settingsRef.current = next;
+          return next;
+        });
+      } else if (st?.toolsDir && !(localStorage.getItem('xiPath') || '').trim()) {
+        try { localStorage.setItem('xiPath', st.toolsDir); } catch { /* quota */ }
+        setSettings((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev, xiPath: st.toolsDir };
+          settingsRef.current = next;
+          return next;
+        });
+      }
+      if (result.changed && result.message) setStatusText(result.message);
+    });
+    return () => { alive = false; };
+  }, [minimal]);
   const [exportSpec, setExportSpec] = useState(null);
   const [leftView, setLeftViewState] = useState(() => {
     // A launch zone arrives on the Zones page. Set as the *initial* view, not a
@@ -495,6 +534,12 @@ export default function App({ launch = null }) {
   const [fxPreview, setFxPreview] = useState(null); // { genId, title, note, error, ownsScene }
   const fxPreviewTokenRef = useRef(0);
   const [selectedFloor, setSelectedFloor] = useState('');
+  // Scene > Floor Repeat: multiplier on the floor texture's tiling. Persisted,
+  // and re-applied by the renderer whenever a new floor texture is loaded.
+  const [floorTileScale, setFloorTileScaleState] = useState(() => {
+    const v = parseFloat(localStorage.getItem('floorTileScale'));
+    return Number.isFinite(v) ? Math.min(4, Math.max(0.25, v)) : 1;
+  });
   const [playing, setPlayingState] = useState(false);
   // Animation playback rate, 0.1–2.0 (10%–200%). Mirrored to a ref so the
   // renderer-lifecycle effect can seed a freshly-built renderer without listing
@@ -607,7 +652,9 @@ export default function App({ launch = null }) {
   const [effectEntry, setEffectEntry] = useState(null);     // { name, dir, file, path } | null
   const [effectRoutines, setEffectRoutines] = useState([]); // 0x07 routines in the effect DAT
   const [effectSchedule, setEffectSchedule] = useState(''); // active routine id (AltanaViewer "Schedule")
-  const [effectPlaying, setEffectPlaying] = useState(true);
+  // 'playing' | 'paused' | 'stopped'. Pause freezes the stage as it is; Stop
+  // clears it and rewinds — the old single Play/Stop button only ever paused.
+  const [effectTransport, setEffectTransport] = useState('playing');
   const [effectSpeed, setEffectSpeedState] = useState(1);
   const effectRoutinesRef = useRef([]);                     // mirror for stable playback callbacks
   const effectSpeedRef = useRef(1);
@@ -616,6 +663,23 @@ export default function App({ launch = null }) {
     return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.6;
   });
   const effectVolumeRef = useRef(effectVolume);
+  // Effects loop by default — a spell preview is over in a second or two. The
+  // choice sticks, and the ref is what the arming calls read.
+  const [effectLoop, setEffectLoopState] = useState(
+    () => localStorage.getItem('effectLoop') !== '0',
+  );
+  const effectLoopRef = useRef(effectLoop);
+  // Called from the render loop when a non-looping routine plays itself out —
+  // a ref so arming the routine never has to be redone when the callback
+  // identity changes.
+  const effectFinishedRef = useRef(() => {});
+  // Animation panel > Show Character Animation. The effect DAT's 0x05 commands
+  // name the caster's clip, so a Ninjutsu effect finds the ninjutsu motion and a
+  // nuke finds the cast motion with nothing mapped by hand.
+  const [showCharAnim, setShowCharAnimState] = useState(
+    () => localStorage.getItem('showCharAnim') === '1',
+  );
+  const showCharAnimRef = useRef(showCharAnim);
   const effectSfxOnRef = useRef(true);
   const effectTokenRef = useRef(0);                         // drop stale effect-load results
   const zoneMusicRef = useRef(null);                        // zone_music.json (server zone_settings)
@@ -924,8 +988,12 @@ export default function App({ launch = null }) {
     renderer.shadowRange = shadowDistance;
     renderer.setCustomSunDir(customSunDir);
     renderer.camera.fovDegrees = fov;
-    const savedBg = localStorage.getItem('bgImage') || '';
-    if (savedBg.startsWith('/bgs/')) renderer.setBackgroundImage(savedBg);
+    {
+      const id = normalizeBgId(localStorage.getItem('bgImage') || 'none');
+      const url = resolveBgUrl(id);
+      if (url) renderer.setBackgroundImage(url);
+    }
+    renderer.setFloorTileScale(floorTileScale);
     renderer.playbackSpeed = playbackSpeedRef.current;
     renderer.showSkybox = localStorage.getItem('skybox') === '1';
     // Unplaced orphans use per-row eyes in Objects (always eligible to draw).
@@ -1610,27 +1678,169 @@ export default function App({ launch = null }) {
         await Promise.all([...warmIds].map((id) => audio.warm(id)));
         if (token !== effectTokenRef.current) return;
       }
-
-      system.playEffectRoutine(routine.flat.commands, { loop: true, sounds: routine.flat.sounds });
-
       const renderer = rendererRef.current;
+      const actor = modelRef.current;
+      const onActor = !!(actor && actor.kind !== 'zone' && actor.isRenderable && renderer?.model === actor);
+
+      // Caster animation: resolve each 0x05 ref against THIS character's clips.
+      // A ref that doesn't resolve is dropped, which is how the weapon-skill
+      // (`wz*`) refs degrade when the motion pack holding them isn't loaded.
+      let animCues = [];
+      let windup = 0;
+      if (onActor && showCharAnimRef.current) {
+        // `actor.animations` entries ARE clips (id + jointTracks +
+        // lengthInFrames) — there is no `.clip` wrapper. That only appears once
+        // groupAnimations() buckets them for the Anim dropdown.
+        const ids = actor.animations.map((a) => a.id);
+        const clipById = new Map(actor.animations.map((a) => [a.id, a]));
+        /**
+         * A ref like `mb0?` matches SEVERAL clips — `mb00`, `mb01` — and those
+         * are body-region layers of one motion, not alternatives. Taking the
+         * first played only the half that tracked the legs. groupAnimations
+         * merges them into a single layered clip, which is what the Characters
+         * view feeds the renderer (see resolveScheduleClip).
+         */
+        const findClip = (ref) => {
+          const parts = matchAnimRef(ref, ids).map((id) => clipById.get(id)).filter(Boolean);
+          if (!parts.length) return null;
+          return groupAnimations(parts)[0]?.clip ?? null;
+        };
+        // `idl` and nothing else. `std` is a stand-UP motion, not a stance.
+        const idleClip = () => findClip('idl?') ?? pickBaseIdle(actor);
+
+        // A call the effect DAT can't satisfy is a schedule on the ACTOR — this
+        // is where the cast motions live (`shbk` black, `shnj` ninjutsu, `shwh`
+        // white). Every race ships the `sh*` schedules EMPTY while the `ca*`
+        // twin carries the ref, so read the twin's ref when the direct one is
+        // blank (verified identical on Hume/Taru/Galka/Mithra).
+        const schedById = new Map((actor.schedules ?? []).map((sc) => [sc.id, sc]));
+        const schoolRef = (id) => (schedById.get(id)?.refs ?? [])[0]
+          ?? (id.startsWith('sh') ? (schedById.get(`ca${id.slice(2)}`)?.refs ?? [])[0] : null)
+          ?? null;
+
+        /**
+         * Full cast — wind-up → hold → release — as ONE clip with `segments`,
+         * not a run of setAnimation calls. That hands the whole thing to
+         * SkeletonPose.evaluate, which already cross-fades a finished segment
+         * back to `baseClip` over `transOut` frames and rests undriven joints
+         * there instead of the bind pose. Firing separate clips could only
+         * snap.
+         *
+         * The three stages are the same clip base with the stage digit walked
+         * (`mb0?`/`mb1?`/`mb2?` for black magic), so this is derived, not a
+         * table. Segment delays are 30fps clip frames; the routine clock is
+         * 60/s, hence the doubling on the way out.
+         */
+        const buildCast = (scheduleId) => {
+          // ONLY the magic-cast schedules have the three-stage structure.
+          // `ca<school>` / `sh<school>` map to `m*0/1/2` = wind-up/hold/release.
+          // Everything else a routine can call — res0, damg, sway, gurd, pary —
+          // is a self-contained motion, and walking its stage digit invents a
+          // sequence that does not exist: `res0` refs `rx0?`, so the walk
+          // played rx0 → rx1 → rx2, i.e. Raise I then II then III.
+          if (!/^(ca|sh)/.test(scheduleId)) return null;
+          const ref = schoolRef(scheduleId);
+          if (!ref) return null;
+          const base = ref.slice(0, 2);
+          // Belt and braces: the cast families all start with `m`.
+          if (!base.startsWith('m')) return null;
+          const inC = findClip(`${base}0?`);
+          const holdC = findClip(`${base}1?`);
+          const outC = findClip(`${base}2?`);
+          if (!inC || !outC) return null;
+          const len = (c) => c.lengthInFrames ?? 0;
+          const segments = [{ clip: inC, delay: 0, transOut: CAST_BLEND_FRAMES }];
+          let at = len(inC);
+          if (holdC) {
+            segments.push({ clip: holdC, delay: at, transOut: CAST_BLEND_FRAMES });
+            at += len(holdC);
+          }
+          // The release runs its own length (~1s for most schools) and then
+          // fades out over CAST_BLEND_FRAMES rather than cutting to idle.
+          segments.push({ clip: outC, delay: at, transOut: CAST_BLEND_FRAMES });
+          return { segments, releaseFrame: at, endFrame: at + len(outC) + CAST_BLEND_FRAMES };
+        };
+
+        const cast = (routine.flat.actorCalls ?? []).map((c) => buildCast(c.scheduleId)).find(Boolean);
+        if (cast) {
+          windup = cast.releaseFrame * 2;   // the effect lands on the release
+          const jointTracks = new Map();
+          for (const s of cast.segments) for (const [j, t] of s.clip.jointTracks) jointTracks.set(j, t);
+          const idle = idleClip();
+          // TWO cues, not one. Stretching the cast clip to cover the effect
+          // can't work: the renderer loops on lengthInFrames, and an effect
+          // outlives its own emission window (particles have their own
+          // lifespans), so any length guessed from the routine wrapped early
+          // and replayed the wind-up over the still-running spell. Instead the
+          // cast runs exactly its own length, then hands over to the idle,
+          // which loops cleanly on its own until the effect re-arms and
+          // re-fires cue one.
+          animCues = [{
+            delay: 0,
+            clip: {
+              id: 'cast',
+              segments: cast.segments,
+              jointTracks,
+              lengthInFrames: cast.endFrame,
+              numFrames: Math.max(...cast.segments.map((s) => s.clip.numFrames ?? 0)),
+              keyFrameDuration: 1,
+              // Undriven joints and finished segments settle here, not bind pose.
+              baseClip: idle,
+              parts: cast.segments.map((s) => s.clip.id),
+            },
+          }];
+          // Hand over to the looping idle the frame the cast finishes.
+          if (idle) animCues.push({ delay: cast.endFrame * 2, clip: idle });
+        } else {
+          // No cast schedule: fall back to whatever 0x05 named outright.
+          animCues = (routine.flat.anims ?? [])
+            .map((a) => ({ delay: a.delay, clip: findClip(a.ref) }))
+            .filter((a) => a.clip);
+        }
+      }
+      if (onActor && !showCharAnimRef.current) {
+        renderer.setAnimation(actorIdleClip());
+        renderer.playing = true;
+      }
+      // Shift the whole effect so it fires on the cast's release frame.
+      const shift = (arr) => (windup ? arr.map((x) => ({ ...x, delay: x.delay + windup })) : arr);
+      system.playEffectRoutine(shift(routine.flat.commands), {
+        loop: effectLoopRef.current,
+        sounds: shift(routine.flat.sounds),
+        anims: animCues,
+        // Routine ticks are 60/s and clips are 30fps, but setAnimation starts at
+        // frame 0 either way — the delay is what the effect clock already
+        // applied, so nothing is converted here.
+        onAnim: (a) => {
+          const r = rendererRef.current;
+          if (!r || !a.clip) return;
+          r.setAnimation(a.clip);
+          r.playing = true;
+        },
+        onFinished: effectFinishedRef.current,
+      });
       setWasd(false);                    // effects orbit; fly controls would fight the framing
-      // Already showing an effect? Keep the orbit — only frame the first one so
-      // switching effects doesn't yank the camera back each time.
-      const keepCamera = renderer.effectMode;
-      renderer.setEffectScene(system, textures, keepCamera);
+
+      if (onActor) {
+        // Keep the character mesh; composite particles like a zone weather pass.
+        renderer.attachEffectSystem(system, textures);
+      } else {
+        // Empty stage: wipe any prior model and frame the origin once.
+        const keepCamera = renderer.effectMode;
+        renderer.setEffectScene(system, textures, keepCamera);
+        modelRef.current = null;
+        setModelPath(rel);
+        shownPathRef.current = abs;
+      }
       renderer.effectSpeed = effectSpeedRef.current;
       renderer.effectPaused = false;
 
-      modelRef.current = null;
       effectRoutinesRef.current = routines;
       setEffectEntry(entry);
       setEffectRoutines(routines);
       setEffectSchedule(routine.id);
-      setEffectPlaying(true);
-      setModelPath(rel);
+      setEffectTransport('playing');
       setSelectedDat(abs.toLowerCase());
-      shownPathRef.current = abs;
       setDataSources([{ id: 'effect', label: rel, path: abs }]);
 
       // Details panel: the effect's sprite images (click to view, same as gear
@@ -1639,35 +1849,51 @@ export default function App({ launch = null }) {
       const sheets = dir.collectByTypeRecursive(SEC.SPRITE_SHEET);
       const pmeshes = dir.collectByTypeRecursive(SEC.PARTICLE_MESH);
       const countVerts = (list) => list.reduce(
-        (n, r) => n + (r.meshes ?? []).reduce((m, x) => m + (x.count ?? 0), 0), 0,
+        (n, r) => n + (r.meshes ?? []).reduce((m, x) => m + (x.count ?? 0), 0),
+        0,
       );
       const verts = countVerts(sheets) + countVerts(pmeshes);
+      const effectMeta = {
+        path: rel,
+        category: entry.cat ?? '—',
+        generators: routine.flat.commands.length,
+        sounds: routine.flat.sounds.length,
+        spriteSheets: sheets.length,
+        particleMeshes: pmeshes.length,
+        onActor,
+      };
+      const effectTextures = [...ownTextures.values()].map((t) => ({
+        name: texLabel(t.name), width: t.width, height: t.height, format: t.format, data: t.data,
+      }));
       setTexWindows([]);   // close viewers from the previous effect
-      setModelInfo({
-        name: entry.name,
-        joints: null,
-        verts,
-        tris: Math.floor(verts / 3),
-        animCount: 0,
-        scheduleCount: routines.length,
-        textures: [...ownTextures.values()].map((t) => ({
-          name: texLabel(t.name), width: t.width, height: t.height, format: t.format, data: t.data,
-        })),
-        parts: [],
-        effect: {
-          path: rel,
-          category: entry.cat ?? '—',
-          generators: routine.flat.commands.length,
-          sounds: routine.flat.sounds.length,
-          spriteSheets: sheets.length,
-          particleMeshes: pmeshes.length,
-        },
-      });
-      setStatusText(
-        routine.flat.commands.length
-          ? `${entry.name}  ·  ${routine.flat.commands.length} generators`
-          : `${entry.name}  ·  no particle routine`,
-      );
+      if (onActor) {
+        setModelInfo((prev) => ({
+          ...(prev ?? { name: entry.name, joints: null, verts: 0, tris: 0, animCount: 0, parts: [] }),
+          scheduleCount: routines.length,
+          effect: effectMeta,
+          // Keep actor textures; append effect sheets for the Details list.
+          textures: [
+            ...((prev?.textures ?? []).filter((t) => !effectTextures.some((e) => e.name === t.name))),
+            ...effectTextures,
+          ],
+        }));
+      } else {
+        setModelInfo({
+          name: entry.name,
+          joints: null,
+          verts,
+          tris: Math.floor(verts / 3),
+          animCount: 0,
+          scheduleCount: routines.length,
+          textures: effectTextures,
+          parts: [],
+          effect: effectMeta,
+        });
+      }
+      const genLabel = routine.flat.commands.length
+        ? `${entry.name}  ·  ${routine.flat.commands.length} generators`
+        : `${entry.name}  ·  no particle routine`;
+      setStatusText(onActor ? `${genLabel}  ·  on actor` : genLabel);
     } catch (e) {
       console.warn('[effect] load failed', abs, e);
       if (token === effectTokenRef.current) {
@@ -1700,12 +1926,83 @@ export default function App({ launch = null }) {
     if (rendererRef.current) rendererRef.current.effectSpeed = clamped;
   }, []);
 
-  const toggleEffectPlay = useCallback(() => {
-    setEffectPlaying((p) => {
-      const next = !p;
-      if (rendererRef.current) rendererRef.current.effectPaused = !next;
-      return next;
-    });
+  /** The actor's idle clip — every PC and NPC skeleton ships `idl0` or `std0`. */
+  const actorIdleClip = useCallback(() => {
+    const actor = modelRef.current;
+    if (!actor?.animations?.length) return null;
+    const ids = actor.animations.map((a) => a.id);
+    const parts = matchAnimRef('idl?', ids)
+      .map((id) => actor.animations.find((a) => a.id === id))
+      .filter(Boolean);
+    return parts.length ? (groupAnimations(parts)[0]?.clip ?? null) : pickBaseIdle(actor);
+  }, []);
+
+  const setShowCharAnim = useCallback((on) => {
+    showCharAnimRef.current = !!on;
+    setShowCharAnimState(!!on);
+    try { localStorage.setItem('showCharAnim', on ? '1' : '0'); } catch { /* quota */ }
+    // Takes effect on the next effect load / schedule change — the cue list is
+    // baked when the routine is armed. Either way settle the actor on its idle
+    // rather than the bind pose, so a half-played cast is never left frozen.
+    const r = rendererRef.current;
+    if (!on && r) {
+      r.setAnimation(actorIdleClip());
+      r.playing = true;
+    }
+  }, [actorIdleClip]);
+
+  /** Loop toggle: applies to the armed routine immediately, and sticks. */
+  const setEffectLoop = useCallback((on) => {
+    effectLoopRef.current = !!on;
+    setEffectLoopState(!!on);
+    try { localStorage.setItem('effectLoop', on ? '1' : '0'); } catch { /* quota */ }
+    rendererRef.current?.particleSystem?.setEffectLoop(!!on);
+    // setEffectLoop replays a one-shot that had played itself out (but never a
+    // stopped one), so the transport must not be left reading "paused".
+    const sys = rendererRef.current?.particleSystem;
+    if (on && sys && !sys.isEffectFinished()) {
+      if (rendererRef.current) rendererRef.current.effectPaused = false;
+      setEffectTransport('playing');
+    }
+  }, []);
+
+  // A one-shot that reaches its end leaves an empty stage, which is the same
+  // place Stop leaves it — so the transport reads "stopped" and Play re-runs it.
+  effectFinishedRef.current = () => setEffectTransport('stopped');
+
+  /** Play: resume a pause, or re-run a stopped/finished routine from frame 0. */
+  const playEffect = useCallback(() => {
+    const renderer = rendererRef.current;
+    // An empty parked stage has nothing to un-pause, so Play must re-arm it.
+    if (renderer?.particleSystem?.isEffectFinished()) {
+      renderer.particleSystem.restartEffect();
+    }
+    if (renderer) {
+      renderer.effectPaused = false;
+      if (showCharAnimRef.current) renderer.playing = true;
+    }
+    setEffectTransport('playing');
+  }, []);
+
+  /** Pause: freeze the stage exactly as it is — actor included. */
+  const pauseEffect = useCallback(() => {
+    const r = rendererRef.current;
+    if (r) {
+      r.effectPaused = true;
+      // The cast motion is part of the effect, so it holds too. Only while this
+      // feature is driving the actor: otherwise pausing an effect would freeze
+      // a clip the user picked by hand from the Anim dropdown.
+      if (showCharAnimRef.current) r.playing = false;
+    }
+    setEffectTransport('paused');
+  }, []);
+
+  /** Stop: clear the stage and rewind, leaving the routine ready for Play. */
+  const stopEffect = useCallback(() => {
+    const renderer = rendererRef.current;
+    renderer?.particleSystem?.stopEffect();
+    if (renderer) renderer.effectPaused = false;
+    setEffectTransport('stopped');
   }, []);
 
   const changeEffectSchedule = useCallback((id) => {
@@ -1713,10 +2010,10 @@ export default function App({ launch = null }) {
     const system = rendererRef.current?.particleSystem;
     if (!system) return;
     const routine = effectRoutinesRef.current.find((r) => r.id === id);
-    if (!routine) { system.clearEffect(); setEffectPlaying(false); return; }
-    system.playEffectRoutine(routine.flat.commands, { loop: true, sounds: routine.flat.sounds });
+    if (!routine) { system.clearEffect(); setEffectTransport('stopped'); return; }
+    system.playEffectRoutine(routine.flat.commands, { loop: effectLoopRef.current, sounds: routine.flat.sounds, onFinished: effectFinishedRef.current });
     rendererRef.current.effectPaused = false;
-    setEffectPlaying(true);
+    setEffectTransport('playing');
   }, []);
 
   /** Reset: restart the routine from frame 0 (speed reset is handled by onSpeed). */
@@ -1724,7 +2021,7 @@ export default function App({ launch = null }) {
     const renderer = rendererRef.current;
     renderer?.particleSystem?.restartEffect();
     if (renderer) renderer.effectPaused = false;
-    setEffectPlaying(true);
+    setEffectTransport('playing');
   }, []);
 
   /** Close Data Struct particle preview modal (does not touch the main view). */
@@ -2859,8 +3156,14 @@ export default function App({ launch = null }) {
     schedules: effectRoutines.map((r) => ({ id: r.id, clipIds: [] })),
     currentSchedule: effectSchedule,
     onScheduleChange: changeEffectSchedule,
-    playing: effectPlaying,
-    onTogglePlay: toggleEffectPlay,
+    transport: effectTransport,
+    onPlay: playEffect,
+    onPause: pauseEffect,
+    onStop: stopEffect,
+    loop: effectLoop,
+    onLoop: setEffectLoop,
+    charAnim: showCharAnim,
+    onCharAnim: setShowCharAnim,
     speed: effectSpeed,
     onSpeed: setEffectSpeed,
     onSeek: restartEffect,
@@ -2954,6 +3257,13 @@ export default function App({ launch = null }) {
     setSelectedFloor('');
   }, []);
 
+  const changeFloorTileScale = useCallback((v) => {
+    const s = Math.min(4, Math.max(0.25, Number(v) || 1));
+    setFloorTileScaleState(s);
+    try { localStorage.setItem('floorTileScale', String(s)); } catch { /* quota */ }
+    rendererRef.current?.setFloorTileScale(s);
+  }, []);
+
   const setBg = useCallback((hex) => {
     rendererRef.current.setClearColor(hex);
     rendererRef.current.setFog({ color: hex });   // fade toward the background
@@ -2961,20 +3271,19 @@ export default function App({ launch = null }) {
     setSettings((s) => (s ? { ...s, bgColor: hex } : s));
   }, []);
 
-  // Scene > Background Image — full-viewport cover under the 3D scene.
-  // Only accept stable /bgs/… paths (drop legacy vite-glob URLs from storage).
-  const [bgImage, setBgImageState] = useState(() => {
-    const v = localStorage.getItem('bgImage') || '';
-    return v.startsWith('/bgs/') ? v : '';
-  });
-  const setBgImage = useCallback((url) => {
-    const next = (url && String(url).startsWith('/bgs/')) ? String(url) : '';
+  // Scene > Background Image — store bare filename or 'none'.
+  const [bgImage, setBgImageState] = useState(() => (
+    normalizeBgId(localStorage.getItem('bgImage') || 'none')
+  ));
+  const setBgImage = useCallback((id) => {
+    const next = normalizeBgId(id);
     setBgImageState(next);
     try {
-      if (next) localStorage.setItem('bgImage', next);
+      if (next !== 'none') localStorage.setItem('bgImage', next);
       else localStorage.removeItem('bgImage');
     } catch { /* quota */ }
-    rendererRef.current?.setBackgroundImage(next || null);
+    const url = resolveBgUrl(next);
+    rendererRef.current?.setBackgroundImage(url || null);
   }, []);
 
   // Fog on/off + a distance scale over whatever the scene authored. For zones
@@ -3952,9 +4261,14 @@ export default function App({ launch = null }) {
     const nextAudio = AUDIO_VIEWS.has(leftView)
       || (leftView === 'files' && (browserKind === 'music' || browserKind === 'sfx'));
 
-    // Zones keeps a loaded zone; anything else starts empty. Characters
-    // reloads itself on arrival, so unloading here just clears the old actor.
-    if (!(prevZone && nextZone)) unloadModel();
+    // Zones keeps a loaded zone; anything else starts empty — except Effects,
+    // which keeps a PC/NPC so spells can play on the actor (attachEffectSystem).
+    const actor = modelRef.current;
+    const keepActorForEffects = leftView === 'effects'
+      && actor
+      && actor.kind !== 'zone'
+      && actor.isRenderable;
+    if (!(prevZone && nextZone) && !keepActorForEffects) unloadModel();
     if (!(prevAudio && nextAudio)) player.stop();
     // Leaving the zone views silences the zone outright: the BGM and every
     // ambient/weather voice, including one-shots already in flight. Detaching
@@ -3974,19 +4288,32 @@ export default function App({ launch = null }) {
     }
     if (leftView !== 'files') setBrowserKind(null);
     setDataStructOpen(false);
-    setShowAxes(leftView === 'effects' || (leftView === 'files' && browserKind === 'effect'));
-    // Leaving Effects: unloadModel already tore down the particle scene; drop the
-    // selection so returning starts clean instead of showing dead transport rows.
+    // Axes on empty effect stage only — keep them off when a character is still up.
+    setShowAxes(
+      (leftView === 'effects' && !keepActorForEffects)
+      || (leftView === 'files' && browserKind === 'effect'),
+    );
     // Re-entering Character Creation frames the model once more; while you are
     // in it, the camera is yours.
     if (leftView !== 'creation') crFramedRef.current = false;
     if (leftView !== 'pc') rendererRef.current?.setMeshSourceFilter(null);
+    // Leaving Effects: disarm playback, but keep effectEntry so the list still
+    // highlights the last DAT when you return (Character ↔ Effects).
     if ((prev === 'effects' || (prev === 'files' && browserKind === 'effect'))
       && leftView !== 'effects' && leftView !== 'files') {
       effectRoutinesRef.current = [];
-      setEffectEntry(null);
       setEffectRoutines([]);
       setEffectSchedule('');
+      setEffectTransport('stopped');
+    }
+    // Entering Effects with an actor: clear any leftover particles; list selection stays.
+    if (keepActorForEffects && prev !== 'effects') {
+      rendererRef.current?.particleSystem?.clearEffect?.();
+      weatherAudioRef.current?.stopOneShots?.();
+      effectRoutinesRef.current = [];
+      setEffectRoutines([]);
+      setEffectSchedule('');
+      setEffectTransport('stopped');
     }
   }, [leftView, unloadModel, player, setZoneTrack, browserKind]);
 
@@ -5442,6 +5769,8 @@ export default function App({ launch = null }) {
         onFloor={loadFloor}
         onClearFloor={clearFloor}
         selectedFloor={selectedFloor}
+        floorTileScale={floorTileScale}
+        onFloorTileScale={changeFloorTileScale}
         shadowsOn={showShadows}
         shadowDistance={shadowDistance}
         onShadowDistance={setShadowDistance}
