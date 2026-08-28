@@ -76,6 +76,7 @@ export function MenuBar({
   onAction, checks = {}, flySpeed = 0, fps = 0, fov = 45, onFov,
   sequencerOpen = false,
   bgColor = '#1a1a24', onBgColor, bgImage = '', onBgImage,
+  floorTileScale = 1, onFloorTileScale,
   onFloor, onClearFloor, selectedFloor = '',
   shadowsOn = false, shadowDistance = 90, onShadowDistance,
   renderHeight = 0, onRenderHeight, bufferSize = null,
@@ -105,14 +106,23 @@ export function MenuBar({
     };
   }, [active]);
 
+  // Shared: Combo options portal to <body>; never treat those clicks as "outside".
+  const isComboPortalClick = (t) => !!(
+    t?.closest?.(
+      '.combo-options, .combo-option, .combo-input, [data-headlessui-portal], [role="listbox"], [role="option"]',
+    )
+  );
+
   useEffect(() => {
     if (!scene) return;
     const close = (e) => {
       if (barRef.current?.contains(e.target)) return;
       if (sceneRef.current?.contains(e.target)) return;
+      if (isComboPortalClick(e.target)) return;
       setScene(null);
     };
     const onKey = (e) => e.key === 'Escape' && setScene(null);
+    // pointerdown bubbles before Listbox selects — use capture:false and skip portals
     document.addEventListener('pointerdown', close);
     document.addEventListener('keydown', onKey);
     return () => {
@@ -124,10 +134,9 @@ export function MenuBar({
   useEffect(() => {
     if (!graphics) return;
     const close = (e) => {
-      // Combo dropdown portals to body — don't close when picking a Combo option.
       if (barRef.current?.contains(e.target)) return;
       if (gfxRef.current?.contains(e.target)) return;
-      if (e.target.closest?.('.combo-menu, .combo-list, [data-headlessui-portal]')) return;
+      if (isComboPortalClick(e.target)) return;
       setGraphics(null);
       onGraphicsOpenChange?.(false);
     };
@@ -300,6 +309,8 @@ export function MenuBar({
               onFloor={onFloor}
               onClearFloor={onClearFloor}
               selectedFloor={selectedFloor}
+              floorTileScale={floorTileScale}
+              onFloorTileScale={onFloorTileScale}
             />
           </div>,
           document.body,

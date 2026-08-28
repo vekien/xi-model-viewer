@@ -23,7 +23,9 @@ const ENTITY_SUN_DAT = [-ENTITY_SUN_DISPLAY[0], -ENTITY_SUN_DISPLAY[1], ENTITY_S
 // diffuse texture, in every program.
 const SHADOW_UNITS = [0x84C1 /* TEXTURE1 */, 0x84C2 /* TEXTURE2 */];
 
-// Full-screen background image (Scene > Background Image). Cover-fit UVs.
+// Full-screen background image (Scene > Background Image).
+// uCoverScale = fraction of the texture kept on each axis (cover = fill the
+// viewport, crop the overflow). See the draw site for how it is derived.
 const BG_IMAGE_VS = `#version 300 es
 precision highp float;
 layout(location=0) in vec2 aPos;
@@ -31,6 +33,9 @@ layout(location=1) in vec2 aUV;
 uniform vec2 uCoverScale;
 out vec2 vUV;
 void main() {
+  // Quad always fills the viewport; the crop happens in UV space so there are
+  // never bars. uCoverScale is <= 1 on the overflowing axis, selecting a
+  // centred sub-rect of the texture.
   vUV = (aUV - 0.5) * uCoverScale + 0.5;
   gl_Position = vec4(aPos, 0.0, 1.0);
 }
@@ -401,16 +406,26 @@ in vec2 vUV;
 in vec3 vWorld;
 uniform sampler2D uTexture;
 uniform vec3 uSunDir;
+uniform vec2 uFadeRadius;   // (opaque within x, gone beyond y) in world units
 ${FOG_UNIFORMS}
 ${SHADOW_UNIFORMS}
 out vec4 outColor;
 ${SHADOW_SAMPLE}
 void main() {
+  // Fade to nothing on a circle around the origin so the plane blends into
+  // whatever is behind it instead of ending on a hard horizon line. Radial,
+  // not square, or the corners would reach further than the sides.
+  float r = length(vWorld.xz);
+  float alpha = 1.0 - smoothstep(uFadeRadius.x, max(uFadeRadius.y, uFadeRadius.x + 0.001), r);
+  // Skip the fully-faded ring entirely — a transparent fragment still writes
+  // depth, which would punch a hole in anything drawn behind it later.
+  if (alpha <= 0.002) discard;
+
   // The floor is unlit, so the shadow is the only lighting it has. Its normal
   // is constant: entity models are raw Y-DOWN DAT space, so "up" is −Y.
   const vec3 n = vec3(0.0, -1.0, 0.0);
   vec3 rgb = texture(uTexture, vUV).rgb * sunShadow(vWorld, n, dot(n, uSunDir));
-  outColor = vec4(rgb, 1.0);
+  outColor = vec4(rgb, alpha);
 ${FOG_APPLY}
 }
 `;
@@ -725,6 +740,7 @@ export class Renderer {
       fogColor: gl.getUniformLocation(this.floorProgram, 'uFogColor'),
       fogRange: gl.getUniformLocation(this.floorProgram, 'uFogRange'),
       sunDir: gl.getUniformLocation(this.floorProgram, 'uSunDir'),
+      fadeRadius: gl.getUniformLocation(this.floorProgram, 'uFadeRadius'),
       shadowMap0: gl.getUniformLocation(this.floorProgram, 'uShadowMap0'),
       shadowMap1: gl.getUniformLocation(this.floorProgram, 'uShadowMap1'),
       lightViewProj0: gl.getUniformLocation(this.floorProgram, 'uLightViewProj0'),
@@ -746,7 +762,16 @@ export class Renderer {
 
     this.floor = null;      // { texture } when a floor is loaded
     this.floorY = 0;
+    // `floorTile` is what the shader reads: the per-texture default times the
+    // user's Scene > Floor Repeat multiplier. Kept apart so picking a different
+    // floor re-derives the default without discarding their setting.
+    this.floorTileBase = 0.5;
+    this.floorTileScale = 1;
     this.floorTile = 0.5;
+    this.floorHalf = half;
+    // Edge fade, in world units from the origin. The outer edge stops well
+    // inside the quad's own half-extent so its border is never what you see.
+    this.floorFade = { inner: half * 0.2, outer: half * 0.7 };
     // `_fogBase` is the authored fog (zone environment or manual); `fog` is what
     // the shaders read after the user's toggle and distance scale are applied.
     this._fogBase = { enabled: false, color: [0x30 / 255, 0x34 / 255, 0x38 / 255], near: 6, far: 40 };
@@ -895,27 +920,40 @@ export class Renderer {
     if (!url) {
       if (this.bgImage?.texture) gl.deleteTexture(this.bgImage.texture);
       this.bgImage = null;
+      this._bgLoadToken = (this._bgLoadToken || 0) + 1;
       return;
     }
-    if (this.bgImage?.url === url) return;
+    if (this.bgImage?.url === url && this.bgImage?.texture) return;
     const token = (this._bgLoadToken = (this._bgLoadToken || 0) + 1);
     const img = new Image();
+    // Same-origin public asset; still helps some embeds.
+    img.decoding = 'async';
     img.onload = () => {
       if (token !== this._bgLoadToken) return;
-      if (this.bgImage?.texture) gl.deleteTexture(this.bgImage.texture);
-      const texture = gl.createTexture();
-      gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-      gl.bindTexture(gl.TEXTURE_2D, null);
-      this.bgImage = { texture, width: img.naturalWidth || img.width, height: img.naturalHeight || img.height, url };
+      try {
+        if (this.bgImage?.texture) gl.deleteTexture(this.bgImage.texture);
+        const texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        this.bgImage = {
+          texture,
+          width: img.naturalWidth || img.width,
+          height: img.naturalHeight || img.height,
+          url,
+        };
+      } catch (e) {
+        console.warn('[renderer] background upload failed', url, e);
+      }
     };
     img.onerror = () => {
       if (token !== this._bgLoadToken) return;
-      console.warn('[renderer] background image failed', url);
+      console.warn('[renderer] background image failed to load', url);
     };
     img.src = url;
   }
@@ -928,10 +966,21 @@ export class Renderer {
     const texture = this.createTexture(image);
     if (texture) {
       // Tile roughly every ~2 world units regardless of the source resolution.
-      this.floorTile = 1 / 2;
+      this.floorTileBase = 1 / 2;
+      this.floorTile = this.floorTileBase * this.floorTileScale;
       this.floor = { texture };
       this.snapFloorToFeet();
     }
+  }
+
+  /**
+   * User multiplier on the floor's texture repeat (Scene > Floor Repeat).
+   * Higher repeats more often, i.e. smaller tiles. Survives a floor change.
+   */
+  setFloorTileScale(scale) {
+    const s = Math.min(4, Math.max(0.25, Number(scale) || 1));
+    this.floorTileScale = s;
+    this.floorTile = this.floorTileBase * s;
   }
 
   /**
@@ -1178,11 +1227,83 @@ export class Renderer {
     this.effectPaused = false;
     this.effectSpeed = 1;
     this.setParticleSystem(system, null);   // installs the camera adapter
+    // Standalone stage: no actor, so actor-attached generators sit at the
+    // origin. Explicit rather than relying on a freshly built system.
+    system?.setActor?.(null);
     // Switching between effects leaves the camera fully alone (keepCamera). The
     // FIRST effect only normalizes what must be right (Y-up, entity ranges,
     // origin pivot) while keeping the user's zoom and angle — lining up a shot
     // on the empty stage survives picking an effect. F = full reframe.
     if (!keepCamera) this.frameEffect(true);
+  }
+
+  /**
+   * Play a spell/ability on the current entity without wiping the mesh.
+   * Zone pattern: model stays, then setParticleSystem. Entity draw path must
+   * call _drawParticles (see draw()).
+   */
+  /**
+   * Live view of the drawn actor for the particle runtime. Reads `this.pose`
+   * at call time, not capture time, so an attached effect follows the running
+   * animation.
+   *
+   * Joint transforms come back PRE-MULTIPLIED by DISPLAY_ROT — diag(−1,−1,1) —
+   * and that is the whole trick. The drawer always maps particles DAT →
+   * display, which suits the zone/standalone camera (yUp), but an entity is
+   * drawn raw under the Y-down camera. Compositing the two mirrored particles
+   * in X and Y against the actor: the effect sat at the reflection of its
+   * joint, and smoke sank instead of rising.
+   *
+   * DISPLAY_ROT is its own inverse, so feeding it in here cancels the one the
+   * drawer applies. Both the position and the basis have to carry it, because
+   *
+   *     D · T(D·p) · (D·R) · L  =  T(p) · R · L
+   *
+   * — the particle's own local transform L then plays out in the joint's real
+   * DAT basis, which is the space the character mesh and camera already live
+   * in. Flipping only the position would fix where the effect sits and leave
+   * it still playing upside down.
+   */
+  actorAdapter() {
+    const self = this;
+    return {
+      getJointPosition(index, out) {
+        const t = self.pose?.trans?.[index];
+        if (t) { out.x = -t[0]; out.y = -t[1]; out.z = t[2]; }
+        else { out.x = 0; out.y = 0; out.z = 0; }
+        return out;
+      },
+      getJointRotation(index, out) {
+        const q = self.pose?.rot?.[index];
+        if (!q) return out.identity();
+        out.setRotationFromQuaternionInPlace(q[0], q[1], q[2], q[3]);
+        // D · R for column-major m[col*4 + row]: negate rows 0 and 1.
+        const m = out.m;
+        m[0] = -m[0]; m[1] = -m[1];
+        m[4] = -m[4]; m[5] = -m[5];
+        m[8] = -m[8]; m[9] = -m[9];
+        return out;
+      },
+    };
+  }
+
+  attachEffectSystem(system, textures) {
+    this.particleDrawer?.disposeMeshes();
+    const gl = this.gl;
+    for (const tex of textures.values()) {
+      const t = this.createTexture(tex);
+      if (!t) continue;
+      const prev = this.textures.get(tex.name);
+      if (prev) gl.deleteTexture(prev);
+      this.textures.set(tex.name, t);
+    }
+    this.effectMode = false;
+    this.effectPaused = false;
+    if (this.effectSpeed == null) this.effectSpeed = 1;
+    this.setParticleSystem(system, null);
+    // Hand over the skeleton AFTER setParticleSystem — it installs the camera
+    // adapter and would otherwise be the one to clear this.
+    system?.setActor?.(this.actorAdapter());
   }
 
   /**
@@ -1975,11 +2096,33 @@ export class Renderer {
    * state) OOMs the tab and collapses the UI. Prefer the window CSS box always.
    */
   resize() {
-    // CSS box — never trust attribute width/height for layout (those are the
-    // backing store and can be huge without changing layout when inset:0 works;
-    // if layout ever followed attributes, uncapped math would explode).
-    const cw = Math.max(this.canvas.clientWidth || 0, 1);
-    const ch = Math.max(this.canvas.clientHeight || 0, 1);
+    // Size from the VIEWPORT, never from the canvas's own layout box.
+    //
+    // #canvas is `position: fixed; inset: 0`, so the viewport IS its intended
+    // size — and reading it here is what makes this loop-proof. Deriving the
+    // buffer from clientWidth is self-referential: a canvas with no effective
+    // CSS size lays out at its *attribute* size, so buffer → layout → buffer
+    // feeds back and grows every frame until it pins at maxDim. By then the
+    // element overflows the window and you see one corner of a huge render,
+    // which reads as the view zooming in. Reading window.innerWidth cannot
+    // feed back, so the loop is impossible no matter what broke the CSS.
+    const cw = Math.max(window.innerWidth || this.canvas.clientWidth || 0, 1);
+    const ch = Math.max(window.innerHeight || this.canvas.clientHeight || 0, 1);
+    // If the element is laying out far larger than the window, the #canvas rule
+    // is not in effect. The size is recoverable here; the cause is not, so say
+    // it once with the numbers rather than silently papering over it.
+    if (!this._sizeWarned) {
+      const lw = this.canvas.clientWidth || 0;
+      const lh = this.canvas.clientHeight || 0;
+      if (lw > cw * 1.5 || lh > ch * 1.5) {
+        this._sizeWarned = true;
+        console.warn(
+          `[renderer] #canvas lays out at ${lw}x${lh} but the window is ${cw}x${ch} — `
+          + 'the "#canvas { position: fixed; inset: 0 }" rule is not applying. '
+          + 'Sizing from the window instead; expect the element to overflow until that is fixed.',
+        );
+      }
+    }
     // Prefer a real GL cap when available; stay well under typical browser limits.
     let maxDim = 8192;
     try {
@@ -2065,10 +2208,13 @@ export class Renderer {
     // mismatch grows with depth, which reads on screen as parallax.
     let proj = this.camera.projectionMatrix(aspect);
     if (this.screenOffsetX) {
-      // screenOffsetX is CSS px, so divide by the element width, not the
+      // screenOffsetX is CSS px, so divide by the displayed width, not the
       // drawing buffer's — the two part company once Graphics > Render
       // Resolution pins the buffer to a fixed height. Same form as zoomAt().
-      const dx = (2 * this.screenOffsetX) / Math.max(this.canvas.clientWidth, 1);
+      // Window rather than clientWidth, matching resize(): identical while the
+      // canvas is pinned to the viewport, and still right if it ever is not.
+      const dx = (2 * this.screenOffsetX)
+        / Math.max(window.innerWidth || this.canvas.clientWidth || 1, 1);
       const shift = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, dx, 0, 0, 1]);
       proj = mat4Multiply(shift, proj);
     }
@@ -2090,19 +2236,25 @@ export class Renderer {
     gl.clearColor(cc[0], cc[1], cc[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    // Optional full-screen background image (cover). Under everything else.
-    if (this.bgImage?.texture && !skyOn) {
+    // Optional background image — CSS background-size: cover. Aspect ratio is
+    // kept and the viewport is always filled, so the overflowing axis is
+    // cropped rather than bordered; `contain` here left the clear colour
+    // showing as bars down the side of the canvas.
+    if (this.bgImage?.texture) {
       const img = this.bgImage;
       const canvasAspect = this.canvas.width / Math.max(this.canvas.height, 1);
       const imgAspect = (img.width || 1) / Math.max(img.height || 1, 1);
-      // cover: scale UVs so the image fills the viewport
+      // Fraction of the texture that stays visible on each axis. Both are <= 1,
+      // so the sampler never reads outside [0,1] and CLAMP_TO_EDGE can't smear
+      // an edge pixel across the gap — which is what inverting these does.
       let sx = 1;
       let sy = 1;
-      if (canvasAspect > imgAspect) sy = canvasAspect / imgAspect;
-      else sx = imgAspect / canvasAspect;
+      if (canvasAspect > imgAspect) sy = imgAspect / canvasAspect;  // crop top/bottom
+      else sx = canvasAspect / imgAspect;                           // crop left/right
       gl.disable(gl.DEPTH_TEST);
       gl.depthMask(false);
       gl.disable(gl.BLEND);
+      gl.disable(gl.CULL_FACE);
       gl.useProgram(this.bgProgram);
       gl.uniform1i(this.bgUniforms.texture, 0);
       gl.uniform2f(this.bgUniforms.coverScale, sx, sy);
@@ -2111,6 +2263,7 @@ export class Renderer {
       gl.bindVertexArray(this.bgVao);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       gl.bindVertexArray(null);
+      gl.bindTexture(gl.TEXTURE_2D, null);
       gl.depthMask(true);
     }
 
@@ -2129,12 +2282,19 @@ export class Renderer {
       gl.uniform3fv(this.floorUniforms.fogColor, this.fog.color);
       gl.uniform2f(this.floorUniforms.fogRange, this.fog.near, fogFar);
       gl.uniform3fv(this.floorUniforms.sunDir, this.shadowSunDir);
+      gl.uniform2f(this.floorUniforms.fadeRadius, this.floorFade.inner, this.floorFade.outer);
       this._bindShadowUniforms(this.floorUniforms);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.floor.texture);
+      // The fade ring needs blending against the background drawn above it.
+      // Depth writes stay on so the model still occludes correctly where the
+      // floor is solid; the faded ring discards rather than writing depth.
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       gl.bindVertexArray(this.floorVao);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       gl.bindVertexArray(null);
+      gl.disable(gl.BLEND);
     }
 
     // Zones take the dedicated ordered path (xim ZoneDrawer.drawZoneObjects).
@@ -2188,10 +2348,15 @@ export class Renderer {
     // "Just the bones": the rig replaces the mesh rather than overlaying it.
     if (this.showSkeleton) {
       this._drawSkeleton(viewProj);
+      this._drawParticles();
       drawHelpers();
       return;
     }
-    if (this.batches.length === 0) { drawHelpers(); return; }
+    if (this.batches.length === 0) {
+      this._drawParticles();
+      drawHelpers();
+      return;
+    }
 
     gl.useProgram(this.program);
     this._syncPose();
@@ -2284,6 +2449,9 @@ export class Renderer {
     if (usePolyMode) {
       this.polygonMode.polygonModeWEBGL(gl.FRONT_AND_BACK, this.polygonMode.FILL_WEBGL);
     }
+
+    // Spell/ability on this actor (attachEffectSystem) — same composite order as zones.
+    this._drawParticles();
 
     // Debug overlays on top (collision terrain colours, UE-green navmesh).
     this._drawOverlay(viewProj, this.showCollision ? this.collisionOverlay : null, this.collisionOpacity);
@@ -2381,6 +2549,23 @@ export class Renderer {
       if (!bmin) return false;
     }
 
+    // Light camera sits at the origin looking down −L (L points *at* the sun),
+    // so light-space z of a point is dot(L, p) and "in front" is negative z.
+    // Built before the fit because the model branch measures its box in light
+    // space rather than guessing a radius from the bounds.
+    const up = Math.abs(L[1]) > 0.99 ? [0, 0, 1] : [0, 1, 0];
+    const view = mat4LookAt([0, 0, 0], [-L[0], -L[1], -L[2]], up);
+    const lx = (p) => view[0] * p[0] + view[4] * p[1] + view[8] * p[2];
+    const ly = (p) => view[1] * p[0] + view[5] * p[1] + view[9] * p[2];
+    const lz = (p) => view[2] * p[0] + view[6] * p[1] + view[10] * p[2];
+    const cornersOf = (lo, hi) => {
+      const out = [];
+      for (let i = 0; i < 8; i++) {
+        out.push([(i & 1) ? hi[0] : lo[0], (i & 2) ? hi[1] : lo[1], (i & 4) ? hi[2] : lo[2]]);
+      }
+      return out;
+    };
+
     // radii[0] is the sharp near cascade, the last entry is the draw distance.
     // centreFor() must take the radius: each cascade sits where its *own* box
     // is useful. Sharing one centre sized for the far cascade parks the near
@@ -2388,6 +2573,9 @@ export class Renderer {
     // place its resolution would have shown — falls out of it and back onto the
     // coarse map. That is the bug that made the split look like it did nothing.
     let centreFor, radii;
+    // Model views measure their own fit, so the depth range can use the same
+    // points rather than the raw bounds (a long shadow reaches well past them).
+    let fitPoints = null;
     if (isZone) {
       // The user's draw distance, used verbatim. The cascades cover a disc
       // around the camera, so a bird's-eye view shadows only what is near it
@@ -2406,35 +2594,71 @@ export class Renderer {
         eye[2] + f[2] * Ri * 0.55,
       ];
     } else {
-      // A model is small enough that one map over its bounds is already finer
-      // than any split would make it.
-      const c = [(bmin[0] + bmax[0]) / 2, (bmin[1] + bmax[1]) / 2, (bmin[2] + bmax[2]) / 2];
+      // One map is plenty for a model — but it has to cover where the shadow
+      // LANDS, not just the model. Sizing it to the bounds meant a low sun cast
+      // a shadow many times the model's size straight out of the box, and past
+      // the edge there is no depth information at all, so it ended on a hard
+      // diagonal line (the ortho window's border, seen on the floor).
+      //
+      // So fit the model's corners PLUS those corners dropped down the light
+      // onto the floor plane: exactly the region that needs coverage. It only
+      // grows when the sun is low enough to need it, and even a long shadow
+      // costs little here — at 2048 a box ten times the model's size still
+      // resolves finer than the model's own silhouette.
+      const modelR = Math.hypot(bmax[0] - bmin[0], bmax[1] - bmin[1], bmax[2] - bmin[2]) / 2;
+      const corners = cornersOf(bmin, bmax);
+      fitPoints = corners.slice();
+      // Entity space is Y-DOWN: the floor is at +Y and a sun above has L[1] < 0,
+      // so t (the distance along −L to the floor plane) comes out positive.
+      // Capped, or a sun on the horizon stretches the box towards infinity and
+      // takes all the resolution with it.
+      const maxCast = Math.max(modelR * 24, 1);
+      if (Math.abs(L[1]) > 1e-3) {
+        for (const p of corners) {
+          const t = (p[1] - this.floorY) / L[1];
+          if (!(t > 0)) continue;                       // corner is below the floor
+          const d = Math.min(t, maxCast);
+          fitPoints.push([p[0] - d * L[0], p[1] - d * L[1], p[2] - d * L[2]]);
+        }
+      }
+      let xlo = Infinity, xhi = -Infinity, ylo = Infinity, yhi = -Infinity;
+      let zlo = Infinity, zhi = -Infinity;
+      for (const p of fitPoints) {
+        const x = lx(p), y = ly(p), z = lz(p);
+        if (x < xlo) xlo = x; if (x > xhi) xhi = x;
+        if (y < ylo) ylo = y; if (y > yhi) yhi = y;
+        if (z < zlo) zlo = z; if (z > zhi) zhi = z;
+      }
+      // Rebuild the world point holding that light-space centre. The lookAt has
+      // no translation (eye is the origin) and its basis is orthonormal, so the
+      // inverse is just the transpose: p = x*row0 + y*row1 + z*row2.
+      const mid = [(xlo + xhi) / 2, (ylo + yhi) / 2, (zlo + zhi) / 2];
+      const c = [
+        view[0] * mid[0] + view[1] * mid[1] + view[2] * mid[2],
+        view[4] * mid[0] + view[5] * mid[1] + view[6] * mid[2],
+        view[8] * mid[0] + view[9] * mid[1] + view[10] * mid[2],
+      ];
       centreFor = () => c;
-      const r = Math.hypot(bmax[0] - bmin[0], bmax[1] - bmin[1], bmax[2] - bmin[2]) / 2;
-      radii = [Math.max(r * 1.4, 0.5)];
+      // Square window over the wider axis, with headroom for the PCF taps and
+      // the 0.85→1 border ramp so neither eats into the shadow itself.
+      const r = Math.max((xhi - xlo) / 2, (yhi - ylo) / 2);
+      radii = [Math.max(r * 1.15, 0.5)];
     }
     const outerCentre = centreFor(radii[radii.length - 1]);
-
-    // Light camera sits at the origin looking down −L (L points *at* the sun),
-    // so light-space z of a point is dot(L, p) and "in front" is negative z.
-    const up = Math.abs(L[1]) > 0.99 ? [0, 0, 1] : [0, 1, 0];
-    const view = mat4LookAt([0, 0, 0], [-L[0], -L[1], -L[2]], up);
-    const lx = (p) => view[0] * p[0] + view[4] * p[1] + view[8] * p[2];
-    const ly = (p) => view[1] * p[0] + view[5] * p[1] + view[9] * p[2];
-    const lz = (p) => view[2] * p[0] + view[6] * p[1] + view[10] * p[2];
 
     // Depth range spans the whole scene along the light axis: casters well
     // outside the ortho window are clipped by x/y anyway, but anything *above*
     // the window (a cliff, a roof) has to stay inside near/far to cast at all.
     // Shared by every cascade so their depths are directly comparable.
+    // Model views hand over the same points they were fitted to: a receiver
+    // whose depth falls outside near/far is rejected by `uvz.z > 1.0` just as
+    // surely as one outside the window, so the far end of a long shadow has to
+    // be in here too.
     let zmin = Infinity, zmax = -Infinity;
-    if (bmin) {
-      for (let i = 0; i < 8; i++) {
-        const z = lz([
-          (i & 1) ? bmax[0] : bmin[0],
-          (i & 2) ? bmax[1] : bmin[1],
-          (i & 4) ? bmax[2] : bmin[2],
-        ]);
+    const depthPts = fitPoints ?? (bmin ? cornersOf(bmin, bmax) : null);
+    if (depthPts) {
+      for (const p of depthPts) {
+        const z = lz(p);
         if (z < zmin) zmin = z;
         if (z > zmax) zmax = z;
       }
@@ -2893,9 +3117,9 @@ export class Renderer {
     // frame (8 frames ≈ 133 ms, same real-time tolerance as before).
     let elapsedFrames = Math.min(8, Math.max(0, (dtSeconds || 1 / 60) * 60));
 
-    // Standalone effect playback: Stop freezes the sim, and the Speed slider
-    // scales the whole effect (particles and its routine schedule alike).
-    if (this.effectMode) {
+    // Effect playback (empty stage or on-actor): Stop freezes the sim; Speed
+    // scales particles and the routine schedule. Armed via playEffectRoutine.
+    if (this.effectMode || this.particleSystem?._effect) {
       if (this.effectPaused) return;
       elapsedFrames *= this.effectSpeed ?? 1;
     }

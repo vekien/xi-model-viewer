@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Tooltip } from './Tooltip.jsx';
 import { Combo } from './Combo.jsx';
-import { BG_IMAGES } from './bgs.js';
+import { BG_IMAGES, resolveBgUrl } from './bgs.js';
+
+// Floor Repeat multiplier bounds — mirrored by Renderer.setFloorTileScale,
+// which clamps to the same range.
+const TILE_MIN = 0.25;
+const TILE_MAX = 4;
 
 // floors.json rows: { zone, spec: "rom/dir/file", fourcc }
 async function loadFloors() {
@@ -25,11 +30,13 @@ async function loadFloors() {
 export function ScenePanel({
   bgColor = '#1a1a24',
   onBg,
-  bgImage = '',
+  bgImage = 'none',
   onBgImage,
   onFloor,
   onClearFloor,
   selectedFloor = '',
+  floorTileScale = 1,
+  onFloorTileScale,
 }) {
   const [groups, setGroups] = useState(null);
   const [openZone, setOpenZone] = useState('');
@@ -39,7 +46,7 @@ export function ScenePanel({
   }, []);
 
   const bgItems = useMemo(
-    () => [{ id: '', label: 'None' }, ...BG_IMAGES.map((b) => ({ id: b.url, label: b.label }))],
+    () => [{ id: 'none', label: 'None' }, ...BG_IMAGES],
     [],
   );
 
@@ -68,9 +75,13 @@ export function ScenePanel({
         <span className="gfx-lab">Background Image</span>
         <div className="gfx-ctrl">
           <Combo
-            value={bgImage || ''}
+            value={bgImage || 'none'}
             items={bgItems}
-            onChange={(id) => onBgImage?.(id || '')}
+            onChange={(id) => {
+              if (id == null) return;
+              // Pass filename id; App resolves to URL via resolveBgUrl.
+              onBgImage?.(id === 'none' ? 'none' : id);
+            }}
           />
         </div>
       </div>
@@ -90,6 +101,23 @@ export function ScenePanel({
           </button>
         </Tooltip>
       </div>
+
+      <div className={`gfx-line${hasFloor ? '' : ' dim'}`}>
+        <span className="gfx-lab">
+          Floor Repeat &nbsp; • &nbsp; <strong>{Number(floorTileScale).toFixed(2)}×</strong>
+        </span>
+      </div>
+      <input
+        type="range"
+        min={TILE_MIN}
+        max={TILE_MAX}
+        step="0.05"
+        value={floorTileScale}
+        disabled={!hasFloor}
+        onChange={(e) => onFloorTileScale?.(+e.target.value)}
+        className="vol-slider gfx-slider"
+        style={{ '--fill': `${((floorTileScale - TILE_MIN) / (TILE_MAX - TILE_MIN)) * 100}%` }}
+      />
 
       <div className="tool-pop-section">Floor texture</div>
       <div className="tool-pop-list">
