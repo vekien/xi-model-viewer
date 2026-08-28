@@ -10,7 +10,14 @@ function norm(v) {
   return [v[0] / n, v[1] / n, v[2] / n];
 }
 
-/** Screen offset (−1..1, +Y up) → unit direction (Y-up, +Z toward viewer). */
+/**
+ * Screen offset (−1..1, +Y up) → unit direction (Y-up, +Z toward viewer).
+ *
+ * The near hemisphere only: a screen point maps to two directions on the
+ * sphere and this picks +Z. The far half is reached by dragging the hollow
+ * handle instead, which negates the whole vector (see `eventToDir`) — the
+ * light used to be stuck in front of the model because nothing ever did.
+ */
 function hitDir(nx, ny) {
   const d2 = nx * nx + ny * ny;
   if (d2 > 1) {
@@ -28,6 +35,8 @@ export function LightGizmo({ dir, onChange, onReset, detailsOpen = false }) {
   const canvasRef = useRef(null);
   const dirRef = useRef(dir || DEFAULT_DIR);
   const dragRef = useRef(false);
+  // Set for the duration of a right-drag: the pointer is moving the antipode.
+  const backRef = useRef(false);
 
   useEffect(() => {
     dirRef.current = dir && Math.hypot(...dir) > 1e-6 ? norm(dir) : DEFAULT_DIR;
@@ -76,19 +85,37 @@ export function LightGizmo({ dir, onChange, onReset, detailsOpen = false }) {
     ctx.ellipse(cx, cy, R * 0.28, R, 0, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Light handle on sphere (front if z>=0)
+    // Two handles, always both on screen. The solid one is the light itself;
+    // the hollow one is its antipode — the side the shadow falls towards — and
+    // is what a right-drag grabs. Since a screen point maps to two directions,
+    // the antipode is the only way to show "the other side" as a separate,
+    // grabbable target rather than a dot hidden underneath the first.
     const front = D[2] >= -0.02;
     const hx = cx + D[0] * R;
     const hy = cy - D[1] * R;
-    if (front) {
-      // Ray from center toward light
-      ctx.strokeStyle = 'rgba(255, 210, 120, 0.45)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(hx, hy);
-      ctx.stroke();
-    }
+    const ax = cx - D[0] * R;
+    const ay = cy + D[1] * R;
+
+    // Ray from centre toward the light; dashed while the light is behind.
+    ctx.strokeStyle = front ? 'rgba(255, 210, 120, 0.45)' : 'rgba(255, 210, 120, 0.18)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash(front ? [] : [2, 2]);
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(hx, hy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Antipode (right-drag target)
+    ctx.beginPath();
+    ctx.arc(ax, ay, 4, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(20, 24, 30, 0.75)';
+    ctx.fill();
+    ctx.strokeStyle = front ? 'rgba(255, 255, 255, 0.28)' : 'rgba(255, 210, 120, 0.7)';
+    ctx.lineWidth = 1.25;
+    ctx.stroke();
+
+    // Light handle
     ctx.beginPath();
     ctx.arc(hx, hy, front ? 6 : 4.5, 0, Math.PI * 2);
     ctx.fillStyle = front ? '#ffd078' : 'rgba(180, 160, 100, 0.55)';
@@ -115,14 +142,19 @@ export function LightGizmo({ dir, onChange, onReset, detailsOpen = false }) {
     const y = e.clientY - rect.top;
     const nx = (x - SIZE / 2) / R;
     const ny = -(y - SIZE / 2) / R;
-    return hitDir(nx, ny);
+    const d = hitDir(nx, ny);
+    // Right-drag grabs the hollow antipode, so the pointer is placing the far
+    // end of the ray: negate it and the light lands on the far hemisphere,
+    // which hitDir alone can never produce.
+    return backRef.current ? [-d[0], -d[1], -d[2]] : d;
   };
 
   const onPointerDown = (e) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 && e.button !== 2) return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     dragRef.current = true;
+    backRef.current = e.button === 2;
     const d = eventToDir(e);
     dirRef.current = d;
     onChange?.(d);
@@ -139,6 +171,7 @@ export function LightGizmo({ dir, onChange, onReset, detailsOpen = false }) {
 
   const onPointerUp = (e) => {
     dragRef.current = false;
+    backRef.current = false;
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* */ }
   };
 
@@ -150,23 +183,27 @@ export function LightGizmo({ dir, onChange, onReset, detailsOpen = false }) {
   };
 
   return (
-    <Tooltip content="Drag to aim the shadow light · double-click to reset">
-      <div
-        id="light-gizmo"
-        className={`light-gizmo${detailsOpen ? ' details-open' : ''}`}
-      >
-        <canvas
-          ref={canvasRef}
-          width={SIZE}
-          height={SIZE}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-          onDoubleClick={onDblClick}
-        />
-      </div>
-    </Tooltip>
+    <div
+      id="light-gizmo"
+      className={`light-gizmo${detailsOpen ? ' details-open' : ''}`}
+    >
+      {/* Help sits on its own target: hovering it explains the widget, while
+          hovering (or dragging) the sphere itself no longer pops a tip. */}
+      <Tooltip content="Drag the filled handle to aim the light · right-drag the hollow one to put it behind · double-click to reset">
+        <span className="light-gizmo-help">?</span>
+      </Tooltip>
+      <canvas
+        ref={canvasRef}
+        width={SIZE}
+        height={SIZE}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onDoubleClick={onDblClick}
+        onContextMenu={(e) => e.preventDefault()}
+      />
+    </div>
   );
 }
 
