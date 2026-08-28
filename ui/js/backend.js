@@ -142,6 +142,59 @@ export const backend = {
     return data;
   },
 
+  /** Disk + GitHub status for managed xi-tools install. */
+  async toolsStatus() {
+    if (!isTauri()) {
+      return {
+        installed: true,
+        localVersion: 'dev',
+        latestVersion: null,
+        updateAvailable: false,
+        toolsDir: '',
+        usingLocalOverride: false,
+        error: null,
+      };
+    }
+    return tauriInvoke('tools_status');
+  },
+
+  /** Download / update xi-tools from GitHub releases into AppData. */
+  async toolsInstallOrUpdate() {
+    if (!isTauri()) throw new Error('Install only available in the desktop app');
+    return tauriInvoke('tools_install_or_update');
+  },
+
+  async toolsSetLocalPath(path) {
+    if (!isTauri()) throw new Error('Only available in the desktop app');
+    return tauriInvoke('tools_set_local_path', { path: path || '' });
+  },
+
+  async toolsClearLocalPath() {
+    if (!isTauri()) throw new Error('Only available in the desktop app');
+    return tauriInvoke('tools_clear_local_path');
+  },
+
+  async pickToolsFolder(initial) {
+    if (!isTauri()) return null;
+    return tauriInvoke('pick_tools_folder', { initial: initial || null });
+  },
+
+  /** Listen for tools-progress events during install. Returns unlisten fn. */
+  async onToolsProgress(handler) {
+    const listen = window.__TAURI__?.event?.listen;
+    if (typeof listen !== 'function') return () => {};
+    return listen('tools-progress', (ev) => handler(ev?.payload || {}));
+  },
+
+  async onToolsLog(handler) {
+    const listen = window.__TAURI__?.event?.listen;
+    if (typeof listen !== 'function') return () => {};
+    return listen('tools-log', (ev) => {
+      const line = typeof ev?.payload === 'string' ? ev.payload : String(ev?.payload ?? '');
+      if (line) handler(line);
+    });
+  },
+
   /** Native file picker (Tauri only). Returns the chosen path or null. */
   async pickFile(initial) {
     if (!isTauri()) return null;
