@@ -481,7 +481,6 @@ fn xi_setup(folder: String, install: bool) -> XiSetupReport {
     }
 
     let mut log = String::new();
-    let mut did_sync = false;
 
     // Ensure Python 3.14 is available to uv (no-op if already present).
     {
@@ -511,7 +510,6 @@ fn xi_setup(folder: String, install: bool) -> XiSetupReport {
         c.args(["sync"]).current_dir(&root);
         match run_quiet(&mut c) {
             Ok(out) => {
-                did_sync = true;
                 let t = cmd_text(&out);
                 if !t.is_empty() {
                     log.push_str(&t);
@@ -545,6 +543,8 @@ fn xi_setup(folder: String, install: bool) -> XiSetupReport {
             }
         }
     }
+    // Only reached after a successful `uv sync` (failures return above).
+    let did_sync = true;
 
     // Confirm CLI + capture Python version
     let mut python = None;
