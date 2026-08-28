@@ -287,6 +287,10 @@ export class ParticleSystem {
     // constructor, so a missing adapter would throw during registration and take
     // the whole weather set down with it.
     this.camera = camera ?? NULL_CAMERA;
+    // Optional actor the SourceActor/TargetActor generators ride. null means
+    // they emit at the origin, which is what a standalone effect preview wants.
+    // See ACTOR_ATTACH_TYPES and Renderer#actorAdapter.
+    this.actor = null;
     this.environment = environment;
     this.effectManager = new EffectManager();
 
@@ -591,18 +595,32 @@ export class ParticleSystem {
    * `loop` re-arms the routine once it and its trailing particles have finished,
    * giving a continuous preview.
    */
-  playEffectRoutine(commands, { loop = true, sounds = [] } = {}) {
+  playEffectRoutine(commands, { loop = true, sounds = [], anims = [], onAnim = null, onFinished = null } = {}) {
     this.clearEffect();
     const cmds = commands ?? [];
     const emitSpan = Math.max(1, ...cmds.map((c) => c.delay + Math.max(c.dur, 1)));
     this._effect = {
       commands: cmds,
       sounds,
+      // Caster animations the routine schedules (0x05). Fired on the same
+      // playhead as the generators, so they follow loop, pause and speed for
+      // free rather than needing their own timers.
+      anims,
+      onAnim,
       playhead: 0,
       fired: new Set(),
       firedSounds: new Set(),
+      firedAnims: new Set(),
       voices: [],
       loop,
+      // Parked states — both leave the routine armed so Play/Reset can run it
+      // again, and both stop #advanceEffect. `done` is a non-looping routine
+      // that played itself out; `stopped` is the user pressing Stop.
+      done: false,
+      stopped: false,
+      // Fired once when a non-looping routine parks, so the transport UI can
+      // stop claiming it is still playing an empty stage.
+      onFinished,
       length: emitSpan,
       // Grows as generators fire, to emit-end + the particles' own lifespan —
       // the frame the effect is actually over. See #advanceEffect.
@@ -633,11 +651,48 @@ export class ParticleSystem {
     this._effect.playhead = 0;
     this._effect.fired.clear();
     this._effect.firedSounds.clear();
+    this._effect.firedAnims.clear();
+    this._effect.done = false;
+    this._effect.stopped = false;
   }
+
+  /**
+   * Stop: clear the stage and rewind to frame 0, but keep the routine armed so
+   * Play can run it again. Distinct from clearEffect(), which tears the routine
+   * down entirely and needs playEffectRoutine to come back.
+   */
+  stopEffect() {
+    const e = this._effect;
+    if (!e) return;
+    this.effectManager.clearEffects(this._effectAssociation);
+    for (const v of e.voices) v.stop();
+    this.audioBackend?.stopOneShots?.();
+    e.voices.length = 0;
+    e.playhead = 0;
+    e.fired.clear();
+    e.firedSounds.clear();
+    e.firedAnims.clear();
+    e.stopped = true;
+  }
+
+  /**
+   * Turn looping on/off for the armed routine (Animation panel > Loop).
+   * Switching it back on after a one-shot has played ITSELF out replays it —
+   * but not after an explicit Stop, which should stay stopped.
+   */
+  setEffectLoop(on) {
+    const e = this._effect;
+    if (!e) return;
+    e.loop = !!on;
+    if (e.loop && e.done && !e.stopped) this.restartEffect();
+  }
+
+  /** True while the stage is empty and parked — played out, or stopped. */
+  isEffectFinished() { return !!(this._effect?.done || this._effect?.stopped); }
 
   #advanceEffect(elapsedFrames) {
     const e = this._effect;
-    if (!e) return;
+    if (!e || e.done || e.stopped) return;
     e.playhead += elapsedFrames;
 
     for (let i = 0; i < e.commands.length; i++) {
@@ -676,6 +731,16 @@ export class ParticleSystem {
       if (voice) e.voices.push(voice);
     }
 
+    // Caster animations (0x05). Same timeline as the generators, so the clip
+    // starts on the frame the routine authored it for.
+    for (let i = 0; i < e.anims.length; i++) {
+      if (e.firedAnims.has(i)) continue;
+      const a = e.anims[i];
+      if (e.playhead < a.delay) continue;
+      e.firedAnims.add(i);
+      e.onAnim?.(a);
+    }
+
     /*
      * Re-arm when the effect is genuinely finished, not on a fixed timer.
      *
@@ -690,14 +755,26 @@ export class ParticleSystem {
      * RepeatExpirationHandler particle resets its own age forever).
      */
     const allFired = e.fired.size >= e.commands.length
-      && e.firedSounds.size >= e.sounds.length;
+      && e.firedSounds.size >= e.sounds.length
+      && e.firedAnims.size >= e.anims.length;
     if (!allFired) return;
 
     e.voices = e.voices.filter((v) => !v.isComplete());
     const finished = this.effectManager.countParticles() === 0 && e.voices.length === 0;
 
     if (finished || e.playhead >= e.expectedEnd + LOOP_TAIL_FRAMES) {
-      if (!e.loop) { this.clearEffect(); return; }
+      if (!e.loop) {
+        // Play-once: drop the particles and any tail sound, but keep the
+        // routine armed. Tearing `_effect` down here left Reset and Play with
+        // nothing to restart, so a finished one-shot could not be replayed.
+        this.effectManager.clearEffects(this._effectAssociation);
+        for (const v of e.voices) v.stop();
+        this.audioBackend?.stopOneShots?.();
+        e.voices.length = 0;
+        e.done = true;
+        e.onFinished?.();
+        return;
+      }
       this.effectManager.clearEffects(this._effectAssociation);
       // Normally a no-op — `finished` already requires silence — but the
       // LOOP_TAIL_FRAMES backstop can re-arm while a sound is still going, and
@@ -708,6 +785,7 @@ export class ParticleSystem {
       e.playhead = 0;
       e.fired.clear();
       e.firedSounds.clear();
+    e.firedAnims.clear();
     }
   }
 
@@ -719,6 +797,13 @@ export class ParticleSystem {
     this.#advanceEffect(elapsedFrames);
     this.effectManager.update(elapsedFrames);
   }
+
+  /**
+   * Supply (or clear) the actor that actor-attached generators follow.
+   * The adapter is read every frame — see Renderer#actorAdapter — so it must
+   * report the CURRENT pose, in DAT space (the drawer applies DISPLAY_ROT).
+   */
+  setActor(actor) { this.actor = actor ?? null; }
 
   getAllParticles() { return this.effectManager.getAllParticles(); }
   getScreenFlashes() { return this._screenFlashes; }

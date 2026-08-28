@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button } from '@headlessui/react';
+import { Button, Checkbox, Field, Label } from '@headlessui/react';
 import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
 
@@ -88,6 +88,9 @@ export function AnimationPanel({ pc, anim }) {
   const { anims = [], currentAnim = '', onAnimChange,
           schedules = [], currentSchedule = '', onScheduleChange,
           playing, onTogglePlay, frameSink, onSeek,
+          transport = 'playing', onPlay, onPause, onStop,
+          loop = true, onLoop,
+          charAnim = false, onCharAnim,
           speed = 1, onSpeed, volume, onVolume } = anim ?? {};
 
   if (actionGroups.length === 0 && anims.length === 0 && schedules.length === 0) return null;
@@ -140,7 +143,55 @@ export function AnimationPanel({ pc, anim }) {
           />
         </Row>
       )}
-      {onTogglePlay && (
+      {/* Effects: Play/Pause + bare stop / rewind / loop glyphs. */}
+      {onPlay && (
+        <Row label="Playback">
+          <Button
+            className="pc-play"
+            onClick={transport === 'playing' ? onPause : onPlay}
+          >
+            <span className="icon fill">{transport === 'playing' ? 'pause' : 'play_arrow'}</span>
+            <span>{transport === 'playing' ? 'Pause' : 'Play'}</span>
+          </Button>
+          <div className="pc-tgroup">
+            {onStop && (
+              <Tooltip content="Stop">
+                <Button
+                  className="pc-tbtn"
+                  disabled={transport === 'stopped'}
+                  aria-label="Stop"
+                  onClick={onStop}
+                >
+                  {/* stop_circle reads cleaner than the bare square at this size */}
+                  <span className="icon">stop_circle</span>
+                </Button>
+              </Tooltip>
+            )}
+            <Tooltip content="Reset">
+              <Button
+                className="pc-tbtn"
+                aria-label="Reset"
+                onClick={() => { onSeek?.(0); onSpeed?.(1); }}
+              >
+                <span className="icon">replay</span>
+              </Button>
+            </Tooltip>
+            {onLoop && (
+              <Tooltip content={loop ? 'Loop on' : 'Loop off'}>
+                <Button
+                  className={`pc-tbtn${loop ? ' on' : ''}`}
+                  aria-label="Loop"
+                  aria-pressed={loop ? 'true' : 'false'}
+                  onClick={() => onLoop(!loop)}
+                >
+                  <span className="icon">repeat</span>
+                </Button>
+              </Tooltip>
+            )}
+          </div>
+        </Row>
+      )}
+      {!onPlay && onTogglePlay && (
         <Row label="Playback">
           <Button className="pc-play" onClick={onTogglePlay}>
             <span className="icon fill">{playing ? 'stop' : 'play_arrow'}</span>
@@ -155,6 +206,14 @@ export function AnimationPanel({ pc, anim }) {
             </Button>
           </Tooltip>
         </Row>
+      )}
+      {onCharAnim && (
+        <Field className="pc-ctrl pc-charanim">
+          <Checkbox checked={charAnim} onChange={onCharAnim} className="checkbox">
+            <span className="icon check-icon">check</span>
+          </Checkbox>
+          <Label className="pc-charanim-label">Show Character Animation</Label>
+        </Field>
       )}
       {frameSink && <FrameScrubber frameSink={frameSink} onSeek={onSeek} />}
       {onSpeed && (
