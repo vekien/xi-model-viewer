@@ -31,7 +31,7 @@ import { TextureModal } from './TextureModal.jsx';
 import { HelpModal } from './HelpModal.jsx';
 import { UpdateModal } from './UpdateModal.jsx';
 import { LightGizmo, DEFAULT_LIGHT_DIR } from './LightGizmo.jsx';
-import { GraphicsModal } from './GraphicsModal.jsx';
+
 import { CameraSequencer } from './CameraSequencer.jsx';
 import { parseFloorTexture } from '../js/dat.js';
 import { extractKeyTables, parseZone, parseDatTextures, parseZoneDefAt } from '../js/zone.js';
@@ -44,6 +44,7 @@ import {
   clonePlacementPose, applyPlacementPose, posesEqual,
 } from '../js/zoneModel.js';
 import { pickZoneAt } from '../js/zonePick.js';
+import { loadDatTypeLists, makeDatTypeLookup } from '../js/dattypes.js';
 import { pickGizmoAxis, axisDragDelta } from '../js/zoneGizmo.js';
 import { parseEnvironments, parseEnvironmentsByRoot, resolveEnvironment, defaultWeather, listWeathers, terrainLightingFromEnv, skyDomeFromEnv, EnvironmentManager } from '../js/environment.js';
 import { parseSections } from '../js/zone.js';
@@ -56,11 +57,12 @@ import { EffectList } from './EffectList.jsx';
 import { WeatherAudio } from '../js/particle/audio.js';
 import { toAudioBuffer, parseAudioHeader, FMT_ATRAC3 } from '../js/audio.js';
 import { parseImageDat, textureForSet } from '../js/images.js';
-import { inspectDat, parseInspectSkeleton, parseInspectRoute, parseInspectUiMenu, parseInspectUiElementGroup } from '../js/dat/inspect.js';
+import { inspectDat, parseInspectSkeleton, parseInspectRoute, parseInspectUiMenu, parseInspectUiElementGroup, parseInspectDataTable, inspectDmsg, attachDataTableNames } from '../js/dat/inspect.js';
 import { SkeletonModal } from './SkeletonModal.jsx';
 import { RouteModal } from './RouteModal.jsx';
 import { UiMenuModal } from './UiMenuModal.jsx';
 import { UiElementGroupModal } from './UiElementGroupModal.jsx';
+import { DataTableModal } from './DataTableModal.jsx';
 import { CliOutputPanel } from './CliOutputPanel.jsx';
 import { DatNotesModal } from './DatNotesModal.jsx';
 import { datFileKey, getNote, loadNotes } from '../js/notes.js';
@@ -115,7 +117,7 @@ function readZoneCamera(key) {
   const snap = readZoneCamMap()[key];
   return snap && Array.isArray(snap.target) ? snap : null;
 }
-const VIEWS = ['files', 'npc', 'pc', 'creation', 'music', 'sfx', 'zones', 'images', 'effects', 'data'];
+const VIEWS = ['files', 'npc', 'pc', 'creation', 'music', 'sfx', 'zones', 'images', 'effects'];
 /** Views that browse individual models, where fly controls are a hindrance. */
 const ORBIT_VIEWS = new Set(['files', 'npc', 'pc', 'creation']);
 /** Views with a Details panel — model/zone stats, or an effect's sprite images. */
@@ -128,7 +130,7 @@ const ZONE_VIEWS = new Set(['zones']);
 const AUDIO_VIEWS = new Set(['music', 'sfx']);
 // Views that put their own content on screen as soon as they open. Restoring
 // one of these at startup must not also load the last/default DAT.
-const SELF_LOADING_VIEWS = new Set(['pc', 'creation', 'images', 'music', 'sfx', 'effects', 'data']);
+const SELF_LOADING_VIEWS = new Set(['pc', 'creation', 'images', 'music', 'sfx', 'effects']);
 // A schedule sequence lays segments on a timeline; a joint whose segment hasn't
 // started yet would show bind pose (T-pose flash each loop). Underlay a looping
 // idle so those joints rest naturally — battle idle for weapon actions if it's
@@ -413,13 +415,19 @@ export default function App({ launch = null }) {
     setLeftViewState(v);
     localStorage.setItem(LAST_VIEW_KEY, v);
   }, []);
-  // What the File Browser last opened (zone/image/…); drives the right-hand
-  // panels without leaving Assets > File Browser.
+  // What the DAT Browser last opened (zone/image/…); drives the right-hand
+  // panels without leaving Assets > DAT Browser.
   const [browserKind, setBrowserKind] = useState(null);
-  // FTABLE paths for File Browser search (ROM\…\n.DAT).
+  // Structure owns the viewport when the DAT Browser has nothing rendered, or
+  // what it opened is a plain table. Otherwise it's the status-bar overlay.
+  const dataOwnsPage = browserKind === 'data' || (leftView === 'files' && !browserKind);
+  // FTABLE paths for DAT Browser search (ROM\…\n.DAT).
   const [filePathIndex, setFilePathIndex] = useState(null);
   const fileIndexRef = useRef(null);
-  // File → Open DAT from a non-browser view: switch to File Browser, then open.
+  // (path) => 'Zone' | 'Gear' | … for the tree's type badges; null until the
+  // baked lists and the FTABLE map have loaded.
+  const [datTypeOf, setDatTypeOf] = useState(null);
+  // File → Open DAT from a non-browser view: switch to DAT Browser, then open.
   const pendingBrowserFileRef = useRef(null);
   // Browsing single models rather than a zone: fly controls put the camera
   // somewhere arbitrary and WASD swallows typing in the filter boxes, so drop
@@ -479,6 +487,8 @@ export default function App({ launch = null }) {
   );
   const [uiEgWindows, setUiEgWindows] = useState([]); // [{ id, group, title }]
   const uiEgIdRef = useRef(0);
+  const [dataTableWindows, setDataTableWindows] = useState([]); // [{ id, table, title }]
+  const dataTableIdRef = useRef(0);
   const zonePlacementsRef = useRef(null); // raw 0x1C list from last loadZone
   const dataStructOpenRef = useRef(false); // keep loadZone in sync without TDZ
   // Data Struct ParticleGenerator preview (plays on main canvas).
@@ -548,7 +558,9 @@ export default function App({ launch = null }) {
   fpsCapRef.current = fpsCap;
   const [renderHeight, setRenderHeight] = useState(() => {
     const v = parseInt(localStorage.getItem('renderHeight'), 10);
-    return Number.isFinite(v) && v > 0 ? v : 0;   // 0 = follow the window
+    // Only known presets — a corrupt/huge value OOMs the canvas (seen 33M×33M).
+    const allowed = new Set([0, 720, 900, 1080, 1440, 1800, 2160]);
+    return allowed.has(v) ? v : 0;   // 0 = follow the window
   });
   // Mirrors what the renderer actually sized its buffer to, so the Graphics
   // panel can show it. Sampled while the panel is open — resize() is the only
@@ -890,7 +902,15 @@ export default function App({ launch = null }) {
   // --- renderer lifecycle --------------------------------------------------
 
   useEffect(() => {
-    const renderer = new Renderer(canvasRef.current);
+    // Sequencer HMR / crash can leave body.cinematic on and hide the whole UI.
+    document.body.classList.remove('cinematic');
+    const canvas = canvasRef.current;
+    // Recover from a runaway backing store (seen at 33M×33M — freezes the tab).
+    if (canvas && (canvas.width > 8192 || canvas.height > 8192)) {
+      canvas.width = 1;
+      canvas.height = 1;
+    }
+    const renderer = new Renderer(canvas);
     renderer.screenOffsetX = explorerOpen ? 180 : 0;
     rendererRef.current = renderer;
     // Dev-only escape hatch for driving/inspecting the renderer from the
@@ -898,11 +918,14 @@ export default function App({ launch = null }) {
     // Exposed as the ref, not the instance — StrictMode mounts twice and a
     // captured instance goes stale the moment the second one takes over.
     if (import.meta.env.DEV) window.__xiRendererRef = rendererRef;
+    renderer.renderHeight = renderHeight;
     renderer.setFogOverride({ enabled: fogOn, scale: fogScale });
     renderer.showShadows = showShadows;
     renderer.shadowRange = shadowDistance;
     renderer.setCustomSunDir(customSunDir);
     renderer.camera.fovDegrees = fov;
+    const savedBg = localStorage.getItem('bgImage') || '';
+    if (savedBg.startsWith('/bgs/')) renderer.setBackgroundImage(savedBg);
     renderer.playbackSpeed = playbackSpeedRef.current;
     renderer.showSkybox = localStorage.getItem('skybox') === '1';
     // Unplaced orphans use per-row eyes in Objects (always eligible to draw).
@@ -953,7 +976,6 @@ export default function App({ launch = null }) {
     };
     raf = requestAnimationFrame(frame);
 
-    const canvas = canvasRef.current;
     const onWheel = (e) => {
       e.preventDefault();
       if (renderer.camera.sequenceLock) return;
@@ -1444,19 +1466,26 @@ export default function App({ launch = null }) {
       return buildDatTree(bytes, dv, parseSections(dv), parsers, (m) => warnings.push(m));
     };
 
-    if (!globalEffectsRef.current) {
+    // Zone particle path only needs root+textures. Do NOT stash this as the
+    // full globalEffectsRef — loadEffect needs routines from ROM/0/0.DAT too,
+    // and an early incomplete cache would permanently drop shared routine links.
+    let zoneGlobalRoot = globalEffectsRef.current?.root ?? null;
+    let zoneGlobalTextures = globalEffectsRef.current?.textures ?? null;
+    if (!zoneGlobalRoot) {
       try {
         const { data: buf } = await backend.readPrefer(gameCandidates('ROM\\0\\0.DAT', settings));
-        globalEffectsRef.current = { root: treeOf(buf, globalParsers), textures: parseDatTextures(buf) };
+        zoneGlobalRoot = treeOf(buf, globalParsers);
+        zoneGlobalTextures = parseDatTextures(buf);
       } catch (e) {
         console.warn('shared effects DAT (ROM/0/0.DAT) unavailable', e);
-        globalEffectsRef.current = { root: null, textures: new Map() };
+        zoneGlobalRoot = null;
+        zoneGlobalTextures = new Map();
       }
     }
 
     const system = new ParticleSystem({
       zoneRoot: treeOf(treeBuf, zoneParsers),
-      globalRoot: globalEffectsRef.current.root,
+      globalRoot: zoneGlobalRoot,
       zoneMeshIdToName: parsed.meshIdToName,
       zoneMeshes: parsed.meshes,
       zoneMeshSections: parsed.meshSections,
@@ -1475,7 +1504,10 @@ export default function App({ launch = null }) {
 
   /** Load ROM/0/0.DAT once — the shared effects tree spell DATs link into. */
   const ensureGlobalEffects = useCallback(async (settings, warnings) => {
-    if (globalEffectsRef.current) return globalEffectsRef.current;
+    // Must include `routines`. A partial cache (root/textures only) is treated
+    // as incomplete and rebuilt so linked 0x03 targets still resolve.
+    const cur = globalEffectsRef.current;
+    if (cur?.root && cur?.routines) return cur;
     try {
       const { data: buf } = await backend.readPrefer(gameCandidates('ROM\\0\\0.DAT', settings));
       globalEffectsRef.current = {
@@ -2608,7 +2640,7 @@ export default function App({ launch = null }) {
           return;
         }
         // Lists that own no model on boot — don't resurrect the last DAT behind them.
-        if (restoredView === 'music' || restoredView === 'sfx' || restoredView === 'effects' || restoredView === 'data') return;
+        if (restoredView === 'music' || restoredView === 'sfx' || restoredView === 'effects') return;
 
         // Prefer the last successfully loaded DAT; fall back to the default demo model.
         let paths = null;
@@ -2710,11 +2742,15 @@ export default function App({ launch = null }) {
       if (e.key !== 'Escape') return;
       if (exportSpec) { setExportSpec(null); e.preventDefault(); return; }
       if (settingsOpen) { setSettingsOpen(false); e.preventDefault(); return; }
-      if (graphicsOpen) { setGraphicsOpen(false); e.preventDefault(); return; }
       if (helpOpen) { setHelpOpen(false); e.preventDefault(); return; }
       if (datNotesOpen) { setDatNotesOpen(false); e.preventDefault(); return; }
       if (fxPreview) {
         closeFxPreview();
+        e.preventDefault();
+        return;
+      }
+      if (dataTableWindows.length > 0) {
+        setDataTableWindows((prev) => prev.slice(0, -1));
         e.preventDefault();
         return;
       }
@@ -2750,7 +2786,7 @@ export default function App({ launch = null }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [exportSpec, settingsOpen, graphicsOpen, helpOpen, datNotesOpen, texWindows.length, skelWindows.length, zdefWindows.length, routeWindows.length, uiMenuWindows.length, uiEgWindows.length, fxPreview, closeFxPreview]);
+  }, [exportSpec, settingsOpen, helpOpen, datNotesOpen, texWindows.length, skelWindows.length, zdefWindows.length, routeWindows.length, uiMenuWindows.length, uiEgWindows.length, dataTableWindows.length, fxPreview, closeFxPreview]);
 
   // --- handlers ------------------------------------------------------------
 
@@ -2925,6 +2961,22 @@ export default function App({ launch = null }) {
     setSettings((s) => (s ? { ...s, bgColor: hex } : s));
   }, []);
 
+  // Scene > Background Image — full-viewport cover under the 3D scene.
+  // Only accept stable /bgs/… paths (drop legacy vite-glob URLs from storage).
+  const [bgImage, setBgImageState] = useState(() => {
+    const v = localStorage.getItem('bgImage') || '';
+    return v.startsWith('/bgs/') ? v : '';
+  });
+  const setBgImage = useCallback((url) => {
+    const next = (url && String(url).startsWith('/bgs/')) ? String(url) : '';
+    setBgImageState(next);
+    try {
+      if (next) localStorage.setItem('bgImage', next);
+      else localStorage.removeItem('bgImage');
+    } catch { /* quota */ }
+    rendererRef.current?.setBackgroundImage(next || null);
+  }, []);
+
   // Fog on/off + a distance scale over whatever the scene authored. For zones
   // that's the 0x2F environment (re-pushed every frame while weather fades), so
   // these are kept as an override the renderer re-applies rather than a value
@@ -2954,7 +3006,7 @@ export default function App({ launch = null }) {
   const [imageSet, setImageSet] = useState(null);
   const [imageSprite, setImageSprite] = useState(null);
 
-  // ── Assets > Data (DAT structure inspector) ────────────────────────────────
+  // ── DAT structure inspector (DAT Browser page + status-bar overlay) ───────
   const [dataDoc, setDataDoc] = useState(null);         // inspectDat result + path
   // Status-bar overlay: peek structure without leaving the live zone/model/etc.
   const [dataStructOpen, setDataStructOpenState] = useState(false);
@@ -3052,7 +3104,7 @@ export default function App({ launch = null }) {
           doc = await buildZoneDatDoc(zkind, bytes, rel, settingsRef.current, dataTablesRef);
           if (token !== dataTokenRef.current) return;
         } else {
-          doc = inspectDat(buf);
+          doc = inspectDat(buf, path);
         }
       }
       dataTexturesRef.current = null;
@@ -3124,7 +3176,9 @@ export default function App({ launch = null }) {
                 ? `${finalDoc.entries.length.toLocaleString()} dialog lines${zoneSuffix}`
                 : finalDoc.kind === 'xistring'
                   ? `${finalDoc.entries.length.toLocaleString()} XISTRING entries`
-                  : finalDoc.label;
+                  : finalDoc.kind === 'dmsg'
+                    ? `${finalDoc.entries.length.toLocaleString()} d_msg entries`
+                    : finalDoc.label;
       if (!opts.overlay) {
         setStatusText(opts.notice ? `${rel} — ${opts.notice}` : baseStatus);
       }
@@ -3143,8 +3197,8 @@ export default function App({ launch = null }) {
   const toggleDataStruct = useCallback(async () => {
     if (dataStructOpen) {
       setDataStructOpen(false);
-      // Drop overlay-only docs; keep docs that own the page (browserKind data).
-      if (browserKind !== 'data' && leftView !== 'data') {
+      // Drop overlay-only docs; keep docs that own the page.
+      if (!dataOwnsPage) {
         setDataDoc(null);
         dataBufRef.current = null;
         dataTexturesRef.current = null;
@@ -3169,7 +3223,7 @@ export default function App({ launch = null }) {
     setDataStructOpen(true);
     // Restore prior status (zone name, etc.) — structure lives in the overlay.
     setStatusText(dataStructStatusRef.current || '');
-  }, [dataStructOpen, browserKind, leftView, selectedDat, statusText, loadDatData, player, dataSources]);
+  }, [dataStructOpen, dataOwnsPage, selectedDat, statusText, loadDatData, player, dataSources]);
 
   /** Re-parse floating inspect windows from the current dataBufRef (after reload). */
   const refreshOpenInspectWindows = useCallback(() => {
@@ -3310,25 +3364,25 @@ export default function App({ launch = null }) {
     const onKey = (e) => {
       if (e.key !== 'Escape' || !dataStructOpen) return;
       // Let the earlier handler claim Escape first when a modal/window is open.
-      if (exportSpec || settingsOpen || graphicsOpen || helpOpen || datNotesOpen) return;
+      if (exportSpec || settingsOpen || helpOpen || datNotesOpen) return;
       if (fxPreview || skelWindows.length || texWindows.length || zdefWindows.length) return;
-      if (routeWindows.length || uiMenuWindows.length || uiEgWindows.length) return;
+      if (routeWindows.length || uiMenuWindows.length || uiEgWindows.length || dataTableWindows.length) return;
       toggleDataStruct();
       e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [dataStructOpen, toggleDataStruct, exportSpec, settingsOpen, graphicsOpen, helpOpen,
+  }, [dataStructOpen, toggleDataStruct, exportSpec, settingsOpen, helpOpen,
     datNotesOpen, skelWindows.length, texWindows.length, zdefWindows.length, routeWindows.length,
-    uiMenuWindows.length, uiEgWindows.length, fxPreview]);
+    uiMenuWindows.length, uiEgWindows.length, dataTableWindows.length, fxPreview]);
 
   /** Switch the Data Struct inspector to another DAT in the current multi-file set. */
   const selectDataSource = useCallback(async (path) => {
     if (!path) return;
     await loadDatData(path, {
-      overlay: dataStructOpen || (browserKind !== 'data' && leftView !== 'data'),
+      overlay: dataStructOpen || !dataOwnsPage,
     });
-  }, [loadDatData, dataStructOpen, browserKind, leftView]);
+  }, [loadDatData, dataStructOpen, dataOwnsPage]);
 
   /**
    * A row in the file-table view names a DAT — jump the inspector to it.
@@ -3541,6 +3595,68 @@ export default function App({ launch = null }) {
       raiseModal(`uieg:${id}`);
       return [...prev, { id, key, title, group, offset }];
     });
+  }, [raiseModal]);
+
+  const openDataTable = useCallback((res) => {
+    const tag = (res?.id && String(res.id).trim()) || res?.name || 'Table';
+    if (!dataBufRef.current || res?.offset == null) {
+      setStatusText("Couldn't parse table (no DAT buffer)");
+      return;
+    }
+    let table = null;
+    try {
+      table = parseInspectDataTable(dataBufRef.current, res.offset);
+    } catch (e) {
+      console.warn('parseInspectDataTable', e);
+    }
+    if (!table?.rows) {
+      setStatusText(`Couldn't parse table ${tag}`);
+      return;
+    }
+    const title = `${table.id || tag} · ${table.title || 'Table'}`;
+    const key = `dtable:${res.offset}`;
+    const offset = res.offset;
+
+    const pushWin = (tbl) => {
+      setDataTableWindows((prev) => {
+        const i = prev.findIndex((w) => w.key === key);
+        if (i >= 0) {
+          const copy = prev.slice();
+          const [hit] = copy.splice(i, 1);
+          const next = { ...hit, table: tbl, title, offset };
+          copy.push(next);
+          raiseModal(`dtable:${next.id}`);
+          return copy;
+        }
+        const id = ++dataTableIdRef.current;
+        raiseModal(`dtable:${id}`);
+        return [...prev, { id, key, title, table: tbl, offset }];
+      });
+    };
+
+    pushWin(table);
+
+    // SpellList / AbilityList: pull names from d_msg name DATs when game path is set.
+    const nameDat = table.nameDat;
+    if (nameDat && settingsRef.current?.gamePath) {
+      const rel = nameDat.replace(/\//g, '\\');
+      backend.readPrefer(gameCandidates(rel, settingsRef.current))
+        .then(({ data }) => {
+          const dmsg = inspectDmsg(data);
+          if (!dmsg) return;
+          const enriched = attachDataTableNames(
+            { ...table, rows: table.rows.map((r) => ({ ...r })) },
+            dmsg,
+          );
+          enriched.nameDatPath = rel;
+          setDataTableWindows((prev) => prev.map((w) => (
+            w.key === key ? { ...w, table: enriched } : w
+          )));
+        })
+        .catch((e) => {
+          console.warn('name DAT load failed', nameDat, e);
+        });
+    }
   }, [raiseModal]);
 
   const closeRouteWin = useCallback((id) => {
@@ -3826,15 +3942,15 @@ export default function App({ launch = null }) {
     if (prev === leftView) return;
     prevViewRef.current = leftView;
 
-    // File Browser / Data can host zone content in-place via browserKind.
+    // DAT Browser can host zone content in-place via browserKind.
     const prevZone = ZONE_VIEWS.has(prev)
-      || ((prev === 'files' || prev === 'data') && browserKind === 'zone');
+      || (prev === 'files' && browserKind === 'zone');
     const nextZone = ZONE_VIEWS.has(leftView)
-      || ((leftView === 'files' || leftView === 'data') && browserKind === 'zone');
+      || (leftView === 'files' && browserKind === 'zone');
     const prevAudio = AUDIO_VIEWS.has(prev)
-      || ((prev === 'files' || prev === 'data') && (browserKind === 'music' || browserKind === 'sfx'));
+      || (prev === 'files' && (browserKind === 'music' || browserKind === 'sfx'));
     const nextAudio = AUDIO_VIEWS.has(leftView)
-      || ((leftView === 'files' || leftView === 'data') && (browserKind === 'music' || browserKind === 'sfx'));
+      || (leftView === 'files' && (browserKind === 'music' || browserKind === 'sfx'));
 
     // Zones keeps a loaded zone; anything else starts empty. Characters
     // reloads itself on arrival, so unloading here just clears the old actor.
@@ -3850,14 +3966,13 @@ export default function App({ launch = null }) {
       setZoneTrack(null);
       zoneMusicIdRef.current = null;
     }
-    if (leftView !== 'images' && leftView !== 'files' && leftView !== 'data') {
+    if (leftView !== 'images' && leftView !== 'files') {
       setImageEntry(null); setImageDoc(null); setImageSet(null); setImageSprite(null);
     }
-    if (leftView !== 'data' && leftView !== 'files') {
+    if (leftView !== 'files') {
       setDataDoc(null); dataBufRef.current = null; dataTexturesRef.current = null;
     }
-    // Keep browserKind when moving between File Browser and Data (same openers).
-    if (leftView !== 'files' && leftView !== 'data') setBrowserKind(null);
+    if (leftView !== 'files') setBrowserKind(null);
     setDataStructOpen(false);
     setShowAxes(leftView === 'effects' || (leftView === 'files' && browserKind === 'effect'));
     // Leaving Effects: unloadModel already tore down the particle scene; drop the
@@ -3932,7 +4047,7 @@ export default function App({ launch = null }) {
     }
   }, []);
 
-  /** FTABLE path list for File Browser search (once per session / install). */
+  /** FTABLE path list for DAT Browser search (once per session / install). */
   const ensureFilePathIndex = useCallback(async () => {
     if (fileIndexRef.current) return fileIndexRef.current;
     try {
@@ -3940,6 +4055,11 @@ export default function App({ launch = null }) {
       const paths = [...byPath.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
       fileIndexRef.current = paths;
       setFilePathIndex(paths);
+      // Type badges ride along: the lists are small and the FTABLE map is
+      // already in hand. Failing here must not cost us the path index.
+      loadDatTypeLists()
+        .then((lists) => setDatTypeOf(() => makeDatTypeLookup(lists, byPath)))
+        .catch(() => {});
       return paths;
     } catch (e) {
       console.warn('file path index failed', e);
@@ -3950,11 +4070,11 @@ export default function App({ launch = null }) {
   }, []);
 
   useEffect(() => {
-    if (leftView === 'files' || leftView === 'data') ensureFilePathIndex();
+    if (leftView === 'files') ensureFilePathIndex();
   }, [leftView, ensureFilePathIndex, settings?.gamePath]);
 
   /**
-   * Assets > File Browser click: sniff the DAT and open the matching viewer
+   * Assets > DAT Browser click: sniff the DAT and open the matching viewer
    * (zone / model / image / music / sfx / effect / data inspector).
    * opts.fromOverlay — Open-in-3D from Data Struct overlay; on failure re-open
    * the overlay instead of hijacking the page into browserKind=data.
@@ -4109,6 +4229,11 @@ export default function App({ launch = null }) {
         clearData();
         clearEffect();
         player.stop();
+        // Models orbit. Dropping fly here rather than leaving it to the
+        // ORBIT_VIEWS effect matters: that effect fires on the browserKind
+        // commit, which can land after fitCamera() and re-derive the pivot
+        // from the fly pose instead of the framing we just computed.
+        if (wasdRef.current) setWasd(false);
         setBrowserKind('entity');
         setDataDoc(null);
         const absPath = String(path).replace(/\//g, '\\');
@@ -4193,7 +4318,7 @@ export default function App({ launch = null }) {
         return;
       }
 
-      // data / unknown → structure inspector (same as Assets > Data).
+      // data / unknown → structure inspector.
       clearImages();
       clearEffect();
       player.stop();
@@ -4592,9 +4717,6 @@ export default function App({ launch = null }) {
           return next;
         });
         break;
-      case 'graphics':
-        setGraphicsOpen((v) => !v);
-        break;
       case 'camera-sequencer':
         setSequencerOpen((v) => !v);
         break;
@@ -4640,9 +4762,6 @@ export default function App({ launch = null }) {
       case 'assets-files':
         setLeftView('files');
         break;
-      case 'assets-data':
-        setLeftView('data');
-        break;
       case 'assets-npcs':
         setLeftView('npc');
         break;
@@ -4669,14 +4788,10 @@ export default function App({ launch = null }) {
         setLeftView('effects');
         break;
       case 'open-dat':
-        // Data view inspects structure; otherwise sniff type in File Browser.
+        // Sniff the type and open it the way a click in the tree would.
         backend.pickFile(settingsRef.current?.gamePath || null)
           .then((file) => {
             if (!file) return;
-            if (leftView === 'data') {
-              loadDatData(file);
-              return;
-            }
             if (leftView === 'files') {
               loadFromTree(file);
               return;
@@ -5319,13 +5434,23 @@ export default function App({ launch = null }) {
         fps={fps}
         fov={fov}
         onFov={setFov}
-        graphicsOpen={graphicsOpen}
         sequencerOpen={sequencerOpen}
         bgColor={settings?.bgColor ?? DEFAULT_BG}
         onBgColor={setBg}
+        bgImage={bgImage}
+        onBgImage={setBgImage}
         onFloor={loadFloor}
         onClearFloor={clearFloor}
         selectedFloor={selectedFloor}
+        shadowsOn={showShadows}
+        shadowDistance={shadowDistance}
+        onShadowDistance={setShadowDistance}
+        renderHeight={renderHeight}
+        onRenderHeight={setRenderHeight}
+        bufferSize={bufferSize}
+        fpsCap={fpsCap}
+        onFpsCap={setFpsCap}
+        onGraphicsOpenChange={setGraphicsOpen}
       />
 
       {/* Mounted only while open: unmounting is what releases the camera lock,
@@ -5346,11 +5471,17 @@ export default function App({ launch = null }) {
       {explorerOpen && leftView === 'files' && (
         <FileTree
           rootPath={settings?.gamePath ?? ''}
+          roots={[
+            settings?.gamePath && { path: settings.gamePath, label: 'FINAL FANTASY XI' },
+            settings?.hdPath && { path: settings.hdPath, label: 'HD' },
+            settings?.pivotPath && { path: settings.pivotPath, label: 'PIVOT' },
+          ].filter(Boolean)}
           selectedPath={selectedDat}
           revealTarget={revealTarget}
           onSelectFile={loadFromTree}
           onError={(msg) => setStatusText(msg)}
           pathIndex={filePathIndex}
+          typeOf={datTypeOf}
           settings={settings}
         />
       )}
@@ -5413,29 +5544,8 @@ export default function App({ launch = null }) {
         <EffectList onSelect={loadEffect} selectedPath={effectEntry?.path} />
       )}
 
-      {/* Data view reuses the file tree. Clicks smart-open (same as File Browser)
-          so zones/models render; pure tables still land in the inspector. */}
-      {explorerOpen && leftView === 'data' && (
-        <FileTree
-          rootPath={settings?.gamePath ?? ''}
-          roots={[
-            settings?.gamePath && { path: settings.gamePath, label: 'FINAL FANTASY XI' },
-            settings?.hdPath && { path: settings.hdPath, label: 'HD' },
-            settings?.pivotPath && { path: settings.pivotPath, label: 'PIVOT' },
-          ].filter(Boolean)}
-          selectedPath={selectedDat}
-          revealTarget={revealTarget}
-          onSelectFile={loadFromTree}
-          onError={(msg) => setStatusText(msg)}
-          pathIndex={filePathIndex}
-          settings={settings}
-        />
-      )}
-
-      {/* Structure: owned page (Data / failed open) or status-bar overlay toggle. */}
-      {(dataStructOpen
-        || (leftView === 'data' && !browserKind)
-        || browserKind === 'data') && (
+      {/* Structure: owned page (empty browser / table / failed open) or overlay. */}
+      {(dataStructOpen || dataOwnsPage) && (
         <>
           {dataDoc?.notice && (
             <div className="file-open-banner" role="status">
@@ -5453,6 +5563,7 @@ export default function App({ launch = null }) {
             onOpenRoute={openDataRoute}
             onOpenUiMenu={openDataUiMenu}
             onOpenUiElementGroup={openDataUiElementGroup}
+            onOpenDataTable={openDataTable}
             onOpenParticle={openDataParticle}
             onPlaySound={playDataSound}
             playingSoundKey={playingSoundKey}
@@ -5460,8 +5571,7 @@ export default function App({ launch = null }) {
             onOpenDat={openDatFromTable}
             onRenderFile={dataDoc?.fullPath ? () => {
               const path = dataDoc.fullPath;
-              const fromOverlay = dataStructOpen
-                || (browserKind !== 'data' && leftView !== 'data');
+              const fromOverlay = dataStructOpen || !dataOwnsPage;
               setDataStructOpen(false);
               // Composed character/NPC/creation already on screen — just dismiss.
               if (fromOverlay && modelRef.current
@@ -5499,8 +5609,8 @@ export default function App({ launch = null }) {
         </>
       )}
 
-      {!dataStructOpen && (leftView === 'images' || (leftView === 'files' && browserKind === 'image')
-        || (leftView === 'data' && browserKind === 'image')) && imageDoc && (
+      {!dataStructOpen && (leftView === 'images' || (leftView === 'files' && browserKind === 'image'))
+        && imageDoc && (
         <>
           <ImageViewer
             doc={imageDoc}
@@ -5568,10 +5678,10 @@ export default function App({ launch = null }) {
           controls — Images/Music/SFX have their own right-hand panels.
           Creation is ORBIT but not browserKind==='entity', so list it explicitly. */}
       {/* PC/NPC/Creation own the viewport directly (browserKind is cleared on
-          view switch). File Browser / Data need browserKind==='entity'. */}
+          view switch). DAT Browser needs browserKind==='entity'. */}
       {!dataStructOpen && !player.current
         && (leftView === 'pc' || leftView === 'npc' || leftView === 'creation'
-          || ((ORBIT_VIEWS.has(leftView) || leftView === 'data') && browserKind === 'entity'))
+          || (ORBIT_VIEWS.has(leftView) && browserKind === 'entity'))
         && (
         <AnimationPanel
           pc={leftView === 'pc' ? pc : null}
@@ -5800,6 +5910,17 @@ export default function App({ launch = null }) {
         />
       ))}
 
+      {dataTableWindows.map((w, i) => (
+        <DataTableModal
+          key={w.id}
+          table={w.table}
+          title={w.title}
+          zIndex={modalZ(`dtable:${w.id}`, 2110 + i)}
+          onClose={() => setDataTableWindows((prev) => prev.filter((x) => x.id !== w.id))}
+          onFocus={() => raiseModal(`dtable:${w.id}`)}
+        />
+      ))}
+
       {uiMenuWindows.map((w, i) => (
         <UiMenuModal
           key={w.id}
@@ -5890,19 +6011,6 @@ export default function App({ launch = null }) {
         spec={exportSpec}
         onClose={() => setExportSpec(null)}
         onStatus={(msg) => setStatusText(msg)}
-      />
-
-      <GraphicsModal
-        open={graphicsOpen}
-        onClose={() => setGraphicsOpen(false)}
-        shadowsOn={showShadows}
-        shadowDistance={shadowDistance}
-        onShadowDistance={setShadowDistance}
-        renderHeight={renderHeight}
-        onRenderHeight={setRenderHeight}
-        bufferSize={bufferSize}
-        fpsCap={fpsCap}
-        onFpsCap={setFpsCap}
       />
 
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
