@@ -145,6 +145,63 @@ void main() {
 }
 `;
 
+// Screen-space refraction for linkedDataType Distortion (0x22). Samples a
+// frozen scene grab with a UV nudge driven by hazeOffset and the quad UV so
+// heat-haze / Utsusemi shimmer warps whatever is behind the particle.
+const DISTORT_VERTEX_SHADER = `#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPos;
+layout(location=2) in vec2 aUV;
+uniform mat4 uProjMatrix;
+uniform mat4 uModelViewMatrix;
+out vec2 vUV;
+out vec4 vClip;
+void main() {
+  vUV = aUV;
+  vClip = uProjMatrix * uModelViewMatrix * vec4(aPos, 1.0);
+  gl_Position = vClip;
+}
+`;
+
+const DISTORT_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+in vec2 vUV;
+in vec4 vClip;
+uniform sampler2D uScene;
+uniform vec2 uResolution;
+uniform vec2 uHazeOffset;    // particle.hazeOffset (x = strength)
+uniform vec4 uTextureFactor; // particle tint / alpha from keyframes
+uniform float uTime;
+out vec4 outColor;
+void main() {
+  vec2 ndc = vClip.xy / max(vClip.w, 1e-5);
+  vec2 base = clamp(ndc * 0.5 + 0.5, vec2(0.001), vec2(0.999));
+
+  vec2 fromC = vUV - 0.5;
+  float r = length(fromC);
+  // Soft disc — no hard silhouette.
+  float falloff = smoothstep(0.55, 0.0, r);
+  float particleA = clamp(uTextureFactor.a, 0.0, 1.0);
+  // Authored haze is often ~0.23; keep warp subtle. No artificial alpha floor
+  // (that painted a black blob on dark stages).
+  float strength = abs(uHazeOffset.x) * 0.12 * falloff * max(particleA, 0.05);
+  if (strength < 0.0005) discard;
+
+  float ang = atan(fromC.y, fromC.x) + uTime * 2.4;
+  vec2 dir = vec2(cos(ang * 3.0), sin(ang * 2.0));
+  vec2 offset = (normalize(fromC + 1e-4) * 0.55 + dir * 0.25) * strength;
+
+  vec2 uv = clamp(base + offset, vec2(0.001), vec2(0.999));
+  vec3 s0 = texture(uScene, base).rgb;
+  vec3 s1 = texture(uScene, uv).rgb;
+  // Only the *change* from warping reads as heat; flat black stays invisible.
+  float detail = length(s1 - s0) + dot(s0, vec3(0.3, 0.59, 0.11));
+  float a = falloff * particleA * smoothstep(0.01, 0.12, detail) * 0.55;
+  if (a < 0.01) discard;
+  outColor = vec4(s1, a);
+}
+`;
+
 // Lens flare. FFXI doesn't draw the flare in the world — it draws the sprite
 // sheet in screen space, strung along the vector from the sun/moon's screen
 // position through the centre of the view, with each sprite's position given by
@@ -329,6 +386,74 @@ export class ParticleDrawer {
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     gl.bindVertexArray(null);
+
+    // Distortion / heat-haze: scene color grab + refraction program.
+    this.distortProgram = buildProgram(gl, DISTORT_VERTEX_SHADER, DISTORT_FRAGMENT_SHADER);
+    this.distortU = {
+      proj: gl.getUniformLocation(this.distortProgram, 'uProjMatrix'),
+      modelView: gl.getUniformLocation(this.distortProgram, 'uModelViewMatrix'),
+      scene: gl.getUniformLocation(this.distortProgram, 'uScene'),
+      resolution: gl.getUniformLocation(this.distortProgram, 'uResolution'),
+      hazeOffset: gl.getUniformLocation(this.distortProgram, 'uHazeOffset'),
+      textureFactor: gl.getUniformLocation(this.distortProgram, 'uTextureFactor'),
+      time: gl.getUniformLocation(this.distortProgram, 'uTime'),
+    };
+    this.grab = null;   // { fbo, tex, w, h }
+    this._distortTime = 0;
+  }
+
+  /**
+   * Ensure a color-only FBO matching the drawing buffer for scene grabs.
+   * Used by Distortion particles to sample whatever was already drawn.
+   */
+  #ensureGrab(w, h) {
+    const gl = this.gl;
+    w = Math.max(1, w | 0);
+    h = Math.max(1, h | 0);
+    if (this.grab && this.grab.w === w && this.grab.h === h) return this.grab;
+    if (this.grab) {
+      gl.deleteTexture(this.grab.tex);
+      gl.deleteFramebuffer(this.grab.fbo);
+    }
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    this.grab = { fbo, tex, w, h };
+    return this.grab;
+  }
+
+  /**
+   * Copy the current backbuffer into the grab texture. Call once per frame
+   * before drawing Distortion particles (after scene + non-distort particles).
+   */
+  captureScene(width, height) {
+    const gl = this.gl;
+    // Never allocate a grab larger than the real drawing buffer or 4K — a
+    // runaway canvas size previously OOMed the tab (tens of millions of px).
+    const dbw = Math.max(1, gl.drawingBufferWidth | 0);
+    const dbh = Math.max(1, gl.drawingBufferHeight | 0);
+    const w = Math.min(Math.max(1, (width || dbw) | 0), dbw, 4096);
+    const h = Math.min(Math.max(1, (height || dbh) | 0), dbh, 4096);
+    if (w > 8192 || h > 8192) return; // belt-and-suspenders
+    try {
+      const grab = this.#ensureGrab(w, h);
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, grab.fbo);
+      gl.blitFramebuffer(0, 0, w, h, 0, 0, grab.w, grab.h, gl.COLOR_BUFFER_BIT, gl.LINEAR);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    } catch (e) {
+      console.warn('[particles] scene grab failed', e);
+      try { gl.bindFramebuffer(gl.FRAMEBUFFER, null); } catch { /* */ }
+    }
   }
 
   /** Additive full-screen wash for lightning (xim ScreenFlasher). */
@@ -367,6 +492,11 @@ export class ParticleDrawer {
 
   disposeMeshes() {
     const gl = this.gl;
+    if (this.grab) {
+      gl.deleteTexture(this.grab.tex);
+      gl.deleteFramebuffer(this.grab.fbo);
+      this.grab = null;
+    }
     for (const entry of this.meshCache.values()) {
       gl.deleteBuffer(entry.vbo);
       gl.deleteVertexArray(entry.vao);
@@ -541,7 +671,7 @@ export class ParticleDrawer {
    * @param {Object}  opts.lighting   { ambient, sunDir, sunColor, moonDir, moonColor }
    * @param {Object}  opts.fog        { enabled, near, far, color }
    */
-  draw({ system, view, proj, lighting, fog, showTextures = true }) {
+  draw({ system, view, proj, lighting, fog, showTextures = true, canvasWidth, canvasHeight }) {
     const gl = this.gl;
     const contexts = system.getAllParticles();
     this.lastStats = { drawn: 0, particles: contexts.length };
@@ -571,6 +701,7 @@ export class ParticleDrawer {
     staticView.m[12] = ex; staticView.m[13] = -ey; staticView.m[14] = ez;
 
     const commands = [];
+    const distortCmds = [];
     const flares = [];
 
     for (const { particle, opacity } of contexts) {
@@ -615,17 +746,20 @@ export class ParticleDrawer {
       const textureFactor = particle.getColor().withMultipliedAlpha(opacity).clamp();
       const distance = Math.hypot(modelView.m[12], modelView.m[13], modelView.m[14]);
 
-      commands.push({
+      const cmd = {
         particle, meshes, model, modelView, textureFactor, distance,
         priority: this.#priority(particle, distance),
         subParticles: particle.subParticles,
-      });
+      };
+      if (particle.isDistortion()) distortCmds.push(cmd);
+      else commands.push(cmd);
     }
 
-    if (!commands.length) return;
     // Painter's order: furthest (and explicitly low-priority, like the sea) first.
     commands.sort((a, b) => b.priority - a.priority);
+    distortCmds.sort((a, b) => b.priority - a.priority);
 
+    if (commands.length) {
     gl.useProgram(this.program);
     gl.uniform1i(this.u.texture, 0);
     gl.activeTexture(gl.TEXTURE0);
@@ -711,8 +845,64 @@ export class ParticleDrawer {
     gl.depthMask(true);
     gl.disable(gl.BLEND);
     gl.blendEquation(gl.FUNC_ADD);
+    } // end normal commands
+
+    // Distortion after regular particles so the grab includes them; capture
+    // freezes the backbuffer so refraction doesn't sample itself.
+    if (distortCmds.length) {
+      const w = canvasWidth || gl.drawingBufferWidth;
+      const h = canvasHeight || gl.drawingBufferHeight;
+      this.captureScene(w, h);
+      this.#drawDistortion(distortCmds, proj, w, h);
+    }
 
     this.#drawLensFlares(flares, viewMat, proj);
+  }
+
+  /**
+   * Draw Distortion particles: sample the scene grab with a UV nudge from
+   * hazeOffset + radial falloff (heat-haze / Utsusemi shimmer).
+   */
+  #drawDistortion(cmds, proj, width, height) {
+    const gl = this.gl;
+    if (!this.grab?.tex || !cmds.length) return;
+    this._distortTime = (this._distortTime || 0) + 1 / 60;
+
+    gl.useProgram(this.distortProgram);
+    gl.uniformMatrix4fv(this.distortU.proj, false, proj);
+    gl.uniform1i(this.distortU.scene, 0);
+    gl.uniform2f(this.distortU.resolution, width, height);
+    gl.uniform1f(this.distortU.time, this._distortTime);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.grab.tex);
+
+    gl.enable(gl.BLEND);
+    gl.blendEquation(gl.FUNC_ADD);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LEQUAL);
+    gl.depthMask(false);
+    gl.disable(gl.CULL_FACE);
+
+    for (const cmd of cmds) {
+      const p = cmd.particle;
+      const haze = p.hazeOffset || { x: 0, y: 0 };
+      gl.uniform2f(this.distortU.hazeOffset, haze.x || 0, haze.y || 0);
+      gl.uniform4fv(this.distortU.textureFactor, cmd.textureFactor.rgba);
+      gl.uniformMatrix4fv(this.distortU.modelView, false, cmd.modelView.m);
+
+      for (const mesh of cmd.meshes) {
+        const entry = this.#upload(mesh);
+        gl.bindVertexArray(entry.vao);
+        gl.drawArrays(gl.TRIANGLES, 0, entry.count);
+        this.lastStats.drawn++;
+      }
+    }
+
+    gl.bindVertexArray(null);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
   }
 
   /**

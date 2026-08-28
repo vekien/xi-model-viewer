@@ -21,7 +21,7 @@ const CMD_SPAWN_GENERATOR = 0x02;   // ref is a generator DatId
  * The blocking behaviour isn't modelled — for a standalone preview all of them
  * amount to "play that routine too, starting at this command's time".
  */
-const CALL_OPS = new Set([0x03, 0x09, 0x3b, 0x3c]);
+const CALL_OPS = new Set([0x03, 0x09, 0x3b, 0x3c, 0x57]);
 /**
  * SoundEffect ops (effect_system.md §3: positioned / player-only / nearest /
  * global variants). A ref that doesn't resolve to a 0x3D pointer is skipped.

@@ -41,6 +41,112 @@ class NoMeshProvider {
 const NO_MESH = new NoMeshProvider();
 
 /**
+ * Procedural ring (linkedDataType 0x24). RingMeshSetup fills particle.ringMeshParams
+ * after StandardParticleSetup resolves the provider — getMeshes reads them live.
+ */
+class RingMeshProvider {
+  hasMeshes(particle) {
+    const p = particle?.ringMeshParams;
+    return !!(p && p.numLayers >= 2 && p.verticesPerLayer >= 3);
+  }
+  getMeshes(particle) {
+    if (!this.hasMeshes(particle)) return [];
+    return [buildRingMesh(particle.ringMeshParams)];
+  }
+}
+
+const RING_MESH = new RingMeshProvider();
+
+/**
+ * Distortion (0x22) geometry: unit billboard quad. The drawer refracts the
+ * scene grab through it using hazeOffset — no solid fill.
+ */
+class DistortionMeshProvider {
+  constructor() {
+    // XY plane, faces +Z in local space; XYZ/Camera billboard orients it.
+    const n = 6;
+    this._mesh = {
+      count: n,
+      positions: new Float32Array([
+        -1, -1, 0,  1, -1, 0,  1, 1, 0,
+        -1, -1, 0,  1, 1, 0,  -1, 1, 0,
+      ]),
+      normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]),
+      // Neutral 0x80 — stage doubling maps to 1.0; alpha full so haze strength
+      // comes from the particle colour / keyframes.
+      colors: new Uint8Array(n * 4).fill(0x80),
+      uvs: new Float32Array([0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1]),
+      textureName: null,
+      distortion: true,
+    };
+  }
+  hasMeshes() { return true; }
+  getMeshes() { return [this._mesh]; }
+}
+
+const DISTORTION_MESH = new DistortionMeshProvider();
+
+/** Build a multi-layer ring strip from RingMeshSetup params. */
+function buildRingMesh(params) {
+  const layers = Math.max(2, params.numLayers | 0);
+  const segs = Math.max(3, Math.min(64, params.verticesPerLayer | 0));
+  const radii = params.layerRadius || [];
+  const colors = params.layerColor || [];
+  // Two tris per segment per layer gap.
+  const rings = layers - 1;
+  const numVerts = rings * segs * 6;
+  const positions = new Float32Array(numVerts * 3);
+  const normals = new Float32Array(numVerts * 3);
+  const cols = new Uint8Array(numVerts * 4);
+  const uvs = new Float32Array(numVerts * 2);
+  let vi = 0;
+  for (let L = 0; L < rings; L++) {
+    const r0 = radii[L] ?? (0.5 + L * 0.5);
+    const r1 = radii[L + 1] ?? (r0 + 0.5);
+    const c0 = colors[L] || [255, 255, 255, 180];
+    const c1 = colors[L + 1] || c0;
+    for (let s = 0; s < segs; s++) {
+      const a0 = (s / segs) * Math.PI * 2;
+      const a1 = ((s + 1) / segs) * Math.PI * 2;
+      const cos0 = Math.cos(a0), sin0 = Math.sin(a0);
+      const cos1 = Math.cos(a1), sin1 = Math.sin(a1);
+      // ring lies in XZ (Y up in DAT space for many shockwaves is vertical axis)
+      const pts = [
+        [r0 * cos0, 0, r0 * sin0, c0, s / segs, L / rings],
+        [r1 * cos0, 0, r1 * sin0, c1, s / segs, (L + 1) / rings],
+        [r1 * cos1, 0, r1 * sin1, c1, (s + 1) / segs, (L + 1) / rings],
+        [r0 * cos0, 0, r0 * sin0, c0, s / segs, L / rings],
+        [r1 * cos1, 0, r1 * sin1, c1, (s + 1) / segs, (L + 1) / rings],
+        [r0 * cos1, 0, r0 * sin1, c0, (s + 1) / segs, L / rings],
+      ];
+      for (const [x, y, z, col, u, v] of pts) {
+        positions[vi * 3] = x;
+        positions[vi * 3 + 1] = y;
+        positions[vi * 3 + 2] = z;
+        normals[vi * 3] = 0;
+        normals[vi * 3 + 1] = 1;
+        normals[vi * 3 + 2] = 0;
+        cols[vi * 4] = col[0] ?? 255;
+        cols[vi * 4 + 1] = col[1] ?? 255;
+        cols[vi * 4 + 2] = col[2] ?? 255;
+        cols[vi * 4 + 3] = col[3] ?? 180;
+        uvs[vi * 2] = u;
+        uvs[vi * 2 + 1] = v;
+        vi++;
+      }
+    }
+  }
+  return {
+    count: numVerts,
+    positions,
+    normals,
+    colors: cols,
+    uvs,
+    textureName: null,
+  };
+}
+
+/**
  * Slash-joined directory ids from the DAT root down to `dir` ("f_qu/weat/thdr"),
  * matching the path the zone loader records for each 0x2E section. The tree root
  * carries an empty id and is skipped.
@@ -540,7 +646,9 @@ export class ParticleSystem {
       if (e.playhead < c.delay) continue;
       e.fired.add(i);
       const effect = this.areaRoot?.getChild(c.genId, SEC.EFFECT)
-        ?? this.areaRoot?.getChildRecursive(c.genId, SEC.EFFECT);
+        ?? this.areaRoot?.getChildRecursive(c.genId, SEC.EFFECT)
+        ?? this.globalRoot?.getChild(c.genId, SEC.EFFECT)
+        ?? this.globalRoot?.getChildRecursive(c.genId, SEC.EFFECT);
       if (!effect) { this.warn(`effect generator not found: ${c.genId}`); continue; }
       // A generator stops *emitting* at delay+dur, but the last particle it
       // emitted lives maxLifeSpan frames beyond that. Aero V finishes emitting
@@ -628,9 +736,9 @@ export class ParticleSystem {
       case LinkedDataType.StaticMesh: return this.#resolveStaticMesh(link, generator);
       case LinkedDataType.SpriteSheet:
       case LinkedDataType.LensFlare: return this.#resolveSpriteSheet(link, generator);
-      // Ring meshes, distortion, weighted meshes, point lights and audio have no
-      // drawable geometry in this viewer yet; they resolve to nothing and are
-      // skipped at draw time rather than erroring the generator.
+      case LinkedDataType.RingMesh: return RING_MESH;
+      case LinkedDataType.Distortion: return DISTORTION_MESH;
+      // Weighted meshes, point lights and audio still have no drawable geometry.
       default: return NO_MESH;
     }
   }

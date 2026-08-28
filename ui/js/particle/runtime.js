@@ -246,11 +246,13 @@ export class Particle {
   }
 
   /**
-   * Alpha-blended particle meshes snap to fully opaque past the halfway point.
-   * xim confirmed this by switching Bibiki Bay's ocean to a zone mesh, which
-   * stops snapping — so the behaviour is tied to particle meshes specifically.
+   * Alpha-blended *zone* particle meshes (sea planes, etc.) snap to fully
+   * opaque past the halfway point — xim confirmed on Bibiki Bay's ocean.
+   * Spell/ability shells (Utsusemi md00 peaks keyframe alpha at 0.5) must NOT
+   * snap: forcing a=1 makes the cage look solid and over-bright.
    */
   #shouldSnapAlpha(color) {
+    if (this.association?.kind === 'effect') return false;
     return this.blendFunc === BlendFunc.Src_InvSrc_Add
       && color.a() >= 127 / 255
       && this.meshProvider?.isParticleMesh === true;
