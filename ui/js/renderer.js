@@ -23,6 +23,28 @@ const ENTITY_SUN_DAT = [-ENTITY_SUN_DISPLAY[0], -ENTITY_SUN_DISPLAY[1], ENTITY_S
 // diffuse texture, in every program.
 const SHADOW_UNITS = [0x84C1 /* TEXTURE1 */, 0x84C2 /* TEXTURE2 */];
 
+// Full-screen background image (Scene > Background Image). Cover-fit UVs.
+const BG_IMAGE_VS = `#version 300 es
+precision highp float;
+layout(location=0) in vec2 aPos;
+layout(location=1) in vec2 aUV;
+uniform vec2 uCoverScale;
+out vec2 vUV;
+void main() {
+  vUV = (aUV - 0.5) * uCoverScale + 0.5;
+  gl_Position = vec4(aPos, 0.0, 1.0);
+}
+`;
+const BG_IMAGE_FS = `#version 300 es
+precision highp float;
+in vec2 vUV;
+uniform sampler2D uTexture;
+out vec4 outColor;
+void main() {
+  outColor = texture(uTexture, vUV);
+}
+`;
+
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
 
@@ -825,6 +847,34 @@ export class Renderer {
 
     this.clearColor = [0x30 / 255, 0x34 / 255, 0x38 / 255];
     this.userClearColor = this.clearColor.slice();
+
+    // Full-screen background image (Scene > Background Image). Drawn after
+    // clear, depth off, so models/floors sit on top. Cover-fit in the shader.
+    this.bgProgram = buildProgram(gl, BG_IMAGE_VS, BG_IMAGE_FS);
+    this.bgUniforms = {
+      texture: gl.getUniformLocation(this.bgProgram, 'uTexture'),
+      coverScale: gl.getUniformLocation(this.bgProgram, 'uCoverScale'),
+    };
+    this.bgVao = gl.createVertexArray();
+    this.bgVbo = gl.createBuffer();
+    gl.bindVertexArray(this.bgVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.bgVbo);
+    // pos.xy NDC, uv
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+      // x, y, u, v  — full-screen quad, UV 0..1
+      -1, -1, 0, 1,
+       1, -1, 1, 1,
+      -1,  1, 0, 0,
+      -1,  1, 0, 0,
+       1, -1, 1, 1,
+       1,  1, 1, 0,
+    ]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0);
+    gl.enableVertexAttribArray(1);
+    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 16, 8);
+    gl.bindVertexArray(null);
+    this.bgImage = null; // { texture, width, height, url }
   }
 
   /** Accepts '#rrggbb'. */
@@ -834,6 +884,40 @@ export class Renderer {
       this.userClearColor = rgb;
       this.clearColor = rgb;
     }
+  }
+
+  /**
+   * Full-viewport background image (cover). Pass a URL string or null to clear.
+   * Async — loads then uploads; safe to call repeatedly.
+   */
+  setBackgroundImage(url) {
+    const gl = this.gl;
+    if (!url) {
+      if (this.bgImage?.texture) gl.deleteTexture(this.bgImage.texture);
+      this.bgImage = null;
+      return;
+    }
+    if (this.bgImage?.url === url) return;
+    const token = (this._bgLoadToken = (this._bgLoadToken || 0) + 1);
+    const img = new Image();
+    img.onload = () => {
+      if (token !== this._bgLoadToken) return;
+      if (this.bgImage?.texture) gl.deleteTexture(this.bgImage.texture);
+      const texture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      gl.bindTexture(gl.TEXTURE_2D, null);
+      this.bgImage = { texture, width: img.naturalWidth || img.width, height: img.naturalHeight || img.height, url };
+    };
+    img.onerror = () => {
+      if (token !== this._bgLoadToken) return;
+      console.warn('[renderer] background image failed', url);
+    };
+    img.src = url;
   }
 
   /** Sets the floor's tiled ground texture (a parsed floor TextureImage), or null. */
@@ -1315,11 +1399,12 @@ export class Renderer {
   }
 
   /**
-   * World grid — the floor, as lines. XZ plane lines at the same height the
-   * textured floor would sit (feet for entities, world 0 for zones/effects),
-   * lifted a hair toward the camera side so the two don't z-fight when both are
-   * on. Fixed world spacing (1 unit; 10 in zones), so like the axes it reads as
-   * scene scale, not screen furniture. Every 5th line is brighter.
+   * World grid — the floor, as lines. XZ plane at the same height the textured
+   * floor / axes sit (feet for entities, world 0 for zones/effects). Kept on
+   * the true plane so the X/Z axes and the i=0 grid lines meet at one point
+   * when zoomed in (a Y bias used to look like a gap at the origin). Z-fight
+   * with a coplanar floor is handled via polygon offset, not a world offset.
+   * Fixed world spacing (1 unit; 10 in zones). Every 5th line is brighter.
    */
   _drawGrid(viewProj) {
     const gl = this.gl;
@@ -1354,8 +1439,12 @@ export class Renderer {
       this.gridLines = { vao, vbo, count: data.length / 6, kind };
     }
 
+    // Same plane as the axes gizmo. Only lift off that plane when a coplanar
+    // textured floor is actually drawn — otherwise axes/grid diverge at the
+    // origin when zoomed (the old always-on 0.02 bias).
     const baseY = (this.effectMode || this.model?.kind === 'zone') ? 0 : (this.floorY ?? 0);
-    const y = baseY + (this.camera.yUp ? 0.02 : -0.02);
+    const floorOn = !!this.floor;
+    const y = baseY + (floorOn ? (this.camera.yUp ? 0.015 : -0.015) : 0);
     const move = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, y, 0, 1]);
     const mvp = mat4Multiply(viewProj, move);
 
@@ -1881,19 +1970,42 @@ export class Renderer {
    * with its own aspect would either stretch the picture or letterbox it out
    * from under the UI. Everything that maps pointers to the scene already works
    * off getBoundingClientRect (CSS px), so it is unaffected either way.
+   *
+   * Hard-capped: a runaway size (e.g. 33M×33M from a bad aspect or corrupt
+   * state) OOMs the tab and collapses the UI. Prefer the window CSS box always.
    */
   resize() {
-    const cw = Math.max(this.canvas.clientWidth, 1);
-    const ch = Math.max(this.canvas.clientHeight, 1);
+    // CSS box — never trust attribute width/height for layout (those are the
+    // backing store and can be huge without changing layout when inset:0 works;
+    // if layout ever followed attributes, uncapped math would explode).
+    const cw = Math.max(this.canvas.clientWidth || 0, 1);
+    const ch = Math.max(this.canvas.clientHeight || 0, 1);
+    // Prefer a real GL cap when available; stay well under typical browser limits.
+    let maxDim = 8192;
+    try {
+      const glMax = this.gl?.getParameter?.(this.gl.MAX_RENDERBUFFER_SIZE);
+      if (glMax > 0) maxDim = Math.min(8192, glMax);
+    } catch { /* context lost */ }
+
     let w, h;
-    if (this.renderHeight > 0) {
-      h = Math.max(Math.round(this.renderHeight), 1);
-      w = Math.max(Math.round(h * (cw / ch)), 1);
+    const rh = Number(this.renderHeight);
+    if (Number.isFinite(rh) && rh > 0 && rh <= 4320) {
+      h = Math.round(rh);
+      w = Math.round(h * (cw / ch));
     } else {
-      const dpr = window.devicePixelRatio || 1;
-      w = Math.max(Math.round(cw * dpr), 1);
-      h = Math.max(Math.round(ch * dpr), 1);
+      const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 0.5), 3);
+      w = Math.round(cw * dpr);
+      h = Math.round(ch * dpr);
     }
+    w = Math.min(Math.max(w, 1), maxDim);
+    h = Math.min(Math.max(h, 1), maxDim);
+    // Keep aspect if we had to clamp one side.
+    if (w === maxDim || h === maxDim) {
+      const aspect = cw / ch;
+      if (w / h > aspect) w = Math.max(1, Math.round(h * aspect));
+      else h = Math.max(1, Math.round(w / aspect));
+    }
+
     if (this.canvas.width !== w || this.canvas.height !== h) {
       this.canvas.width = w;
       this.canvas.height = h;
@@ -1977,6 +2089,30 @@ export class Renderer {
     const cc = skyOn && this.skyDome.horizon ? this.skyDome.horizon : this.clearColor;
     gl.clearColor(cc[0], cc[1], cc[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    // Optional full-screen background image (cover). Under everything else.
+    if (this.bgImage?.texture && !skyOn) {
+      const img = this.bgImage;
+      const canvasAspect = this.canvas.width / Math.max(this.canvas.height, 1);
+      const imgAspect = (img.width || 1) / Math.max(img.height || 1, 1);
+      // cover: scale UVs so the image fills the viewport
+      let sx = 1;
+      let sy = 1;
+      if (canvasAspect > imgAspect) sy = canvasAspect / imgAspect;
+      else sx = imgAspect / canvasAspect;
+      gl.disable(gl.DEPTH_TEST);
+      gl.depthMask(false);
+      gl.disable(gl.BLEND);
+      gl.useProgram(this.bgProgram);
+      gl.uniform1i(this.bgUniforms.texture, 0);
+      gl.uniform2f(this.bgUniforms.coverScale, sx, sy);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, img.texture);
+      gl.bindVertexArray(this.bgVao);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      gl.bindVertexArray(null);
+      gl.depthMask(true);
+    }
 
     gl.enable(gl.DEPTH_TEST);
     gl.disable(gl.CULL_FACE);
@@ -2801,6 +2937,8 @@ export class Renderer {
       lighting: this._zoneLightUniforms(),
       fog: this.fog,
       showTextures: this.showTextures,
+      canvasWidth: this.gl.drawingBufferWidth,
+      canvasHeight: this.gl.drawingBufferHeight,
     });
     this.particleDrawer.drawScreenFlashes(system.getScreenFlashes());
   }

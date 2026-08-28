@@ -1,4 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Tooltip } from './Tooltip.jsx';
+import { Combo } from './Combo.jsx';
+import { BG_IMAGES } from './bgs.js';
 
 // floors.json rows: { zone, spec: "rom/dir/file", fourcc }
 async function loadFloors() {
@@ -16,12 +19,14 @@ async function loadFloors() {
 }
 
 /**
- * Compact scene controls (toolbar popover, FOV-style): background colour,
+ * Compact scene controls (toolbar popover): background colour / image,
  * clear floor, and a short floor picker.
  */
 export function ScenePanel({
   bgColor = '#1a1a24',
   onBg,
+  bgImage = '',
+  onBgImage,
   onFloor,
   onClearFloor,
   selectedFloor = '',
@@ -33,76 +38,100 @@ export function ScenePanel({
     loadFloors().then(setGroups).catch(() => setGroups([]));
   }, []);
 
+  const bgItems = useMemo(
+    () => [{ id: '', label: 'None' }, ...BG_IMAGES.map((b) => ({ id: b.url, label: b.label }))],
+    [],
+  );
+
   const keyOf = (f) => `${f.spec}:${f.fourcc}`;
   const hasFloor = !!selectedFloor;
 
   return (
-    <div className="scene-pop">
-      <div className="scene-pop-bg">
-        <span className="cam-label">Background</span>
-        <input
-          type="color"
-          className="scene-pop-color"
-          value={bgColor}
-          onChange={(e) => onBg?.(e.target.value)}
-          title="Viewport background"
-        />
+    <div className="tool-pop-body">
+      <h3>SCENE SETTINGS</h3>
+
+      <div className="gfx-line">
+        <span className="gfx-lab">Background Colour</span>
+        <div className="gfx-ctrl gfx-ctrl-end">
+          <Tooltip content="Viewport background">
+            <input
+              type="color"
+              className="tool-pop-color"
+              value={bgColor}
+              onChange={(e) => onBg?.(e.target.value)}
+            />
+          </Tooltip>
+        </div>
       </div>
 
-      <div className="scene-pop-actions">
-        <button
-          type="button"
-          className="cam-reset"
-          disabled={!hasFloor}
-          onClick={() => onClearFloor?.()}
-          title={hasFloor ? 'Remove the ground plane' : 'No floor loaded'}
-        >
-          <span className="icon">layers_clear</span>
-          Remove floor
-        </button>
+      <div className="gfx-line">
+        <span className="gfx-lab">Background Image</span>
+        <div className="gfx-ctrl">
+          <Combo
+            value={bgImage || ''}
+            items={bgItems}
+            onChange={(id) => onBgImage?.(id || '')}
+          />
+        </div>
       </div>
 
-      <div className="scene-pop-floors-label">Floor texture</div>
-      <div className="scene-pop-floors">
-        {groups === null && <div className="scene-pop-note">Loading…</div>}
-        {groups?.length === 0 && <div className="scene-pop-note">No floors listed.</div>}
+      <hr />
+
+      <div className="tool-pop-actions">
+        <Tooltip content={hasFloor ? 'Remove the ground plane' : 'No floor loaded'}>
+          <button
+            type="button"
+            className="cam-reset"
+            disabled={!hasFloor}
+            onClick={() => onClearFloor?.()}
+          >
+            <span className="icon">layers_clear</span>
+            Remove floor
+          </button>
+        </Tooltip>
+      </div>
+
+      <div className="tool-pop-section">Floor texture</div>
+      <div className="tool-pop-list">
+        {groups === null && <div className="tool-pop-note">Loading…</div>}
+        {groups?.length === 0 && <div className="tool-pop-note">No floors listed.</div>}
         {groups?.map(({ zone, floors }) => {
           const single = floors.length === 1;
           const open = openZone === zone || single;
           return (
-            <div key={zone} className="scene-pop-zone">
+            <div key={zone} className="tool-pop-group">
               {!single ? (
                 <button
                   type="button"
-                  className={`scene-pop-zone-btn${open ? ' open' : ''}`}
+                  className={`tool-pop-group-btn${open ? ' open' : ''}`}
                   onClick={() => setOpenZone((z) => (z === zone ? '' : zone))}
                 >
-                  <span className={`icon scene-pop-caret${open ? ' open' : ''}`}>chevron_right</span>
+                  <span className={`icon tool-pop-caret${open ? ' open' : ''}`}>chevron_right</span>
                   <span className="icon">grass</span>
-                  <span className="scene-pop-zone-name">{zone}</span>
-                  <span className="scene-pop-badge">{floors.length}</span>
+                  <span className="tool-pop-group-name">{zone}</span>
+                  <span className="tool-pop-badge">{floors.length}</span>
                 </button>
               ) : null}
               {(open || single) && floors.map((f) => {
                 const key = keyOf(f);
                 const on = selectedFloor === key;
                 return (
-                  <button
-                    key={key}
-                    type="button"
-                    className={`scene-pop-floor${on ? ' on' : ''}${single ? ' alone' : ''}`}
-                    onClick={() => onFloor?.(f.spec, f.fourcc)}
-                    title={`${f.spec} · ${f.fourcc}`}
-                  >
-                    <span className="icon">{single ? 'grass' : 'texture'}</span>
-                    <span className="scene-pop-floor-label">
-                      {single ? zone : f.fourcc}
-                    </span>
-                    {single ? (
-                      <span className="mono scene-pop-fourcc">{f.fourcc}</span>
-                    ) : null}
-                    {on ? <span className="icon scene-pop-check">check</span> : null}
-                  </button>
+                  <Tooltip key={key} content={`${f.spec} · ${f.fourcc}`}>
+                    <button
+                      type="button"
+                      className={`tool-pop-item${on ? ' on' : ''}${single ? ' alone' : ''}`}
+                      onClick={() => onFloor?.(f.spec, f.fourcc)}
+                    >
+                      <span className="icon">{single ? 'grass' : 'texture'}</span>
+                      <span className="tool-pop-item-label">
+                        {single ? zone : f.fourcc}
+                      </span>
+                      {single ? (
+                        <span className="mono tool-pop-item-meta">{f.fourcc}</span>
+                      ) : null}
+                      {on ? <span className="icon tool-pop-check">check</span> : null}
+                    </button>
+                  </Tooltip>
                 );
               })}
             </div>
