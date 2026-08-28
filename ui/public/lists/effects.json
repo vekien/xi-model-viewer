@@ -707,6 +707,41 @@
     {
      "name": "Sacrosanctity",
      "path": "ROM/265/101.DAT"
+    },
+    {
+     "name": "Eagle Eye Shot",
+     "path": "ROM/196/107.DAT",
+     "fileId": 4598,
+     "abilityId": 26,
+     "animId": 186
+    },
+    {
+     "name": "Mug",
+     "path": "ROM/196/91.DAT",
+     "fileId": 4595,
+     "abilityId": 45,
+     "animId": 183
+    },
+    {
+     "name": "Call Wyvern",
+     "path": "ROM/98/10.DAT",
+     "fileId": 4506,
+     "abilityId": 61,
+     "animId": 94
+    },
+    {
+     "name": "Fight",
+     "path": "ROM/92/112.DAT",
+     "fileId": 4495,
+     "abilityId": 69,
+     "animId": 83
+    },
+    {
+     "name": "Reverse Flourish",
+     "path": "ROM/196/90.DAT",
+     "fileId": 4594,
+     "abilityId": 206,
+     "animId": 182
     }
    ]
   },
@@ -1471,6 +1506,13 @@
     {
      "name": "Noctohelix II",
      "path": "ROM/338/59.DAT"
+    },
+    {
+     "name": "Thundara",
+     "path": "ROM/288/114.DAT",
+     "fileId": 3699,
+     "spellId": 836,
+     "animId": 899
     }
    ]
   },
@@ -2767,6 +2809,216 @@
     {
      "name": "328/2",
      "path": "ROM/328/2.DAT"
+    },
+    {
+     "name": "Indi-Regen",
+     "path": "ROM/288/110.DAT",
+     "fileId": 3661,
+     "spellId": 768,
+     "animId": 861
+    },
+    {
+     "name": "Indi-Poison",
+     "path": "ROM/289/2.DAT",
+     "fileId": 3662,
+     "spellId": 769,
+     "animId": 862
+    },
+    {
+     "name": "Indi-Refresh",
+     "path": "ROM/289/3.DAT",
+     "fileId": 3663,
+     "spellId": 770,
+     "animId": 863
+    },
+    {
+     "name": "Indi-Haste",
+     "path": "ROM/289/4.DAT",
+     "fileId": 3664,
+     "spellId": 771,
+     "animId": 864
+    },
+    {
+     "name": "Indi-STR",
+     "path": "ROM/289/5.DAT",
+     "fileId": 3665,
+     "spellId": 772,
+     "animId": 865
+    },
+    {
+     "name": "Indi-DEX",
+     "path": "ROM/289/6.DAT",
+     "fileId": 3666,
+     "spellId": 773,
+     "animId": 866
+    },
+    {
+     "name": "Indi-VIT",
+     "path": "ROM/289/7.DAT",
+     "fileId": 3667,
+     "spellId": 774,
+     "animId": 867
+    },
+    {
+     "name": "Indi-AGI",
+     "path": "ROM/289/8.DAT",
+     "fileId": 3668,
+     "spellId": 775,
+     "animId": 868
+    },
+    {
+     "name": "Indi-INT",
+     "path": "ROM/289/9.DAT",
+     "fileId": 3669,
+     "spellId": 776,
+     "animId": 869
+    },
+    {
+     "name": "Indi-MND",
+     "path": "ROM/289/10.DAT",
+     "fileId": 3670,
+     "spellId": 777,
+     "animId": 870
+    },
+    {
+     "name": "Indi-CHR",
+     "path": "ROM/289/11.DAT",
+     "fileId": 3671,
+     "spellId": 778,
+     "animId": 871
+    },
+    {
+     "name": "Indi-Fury",
+     "path": "ROM/289/12.DAT",
+     "fileId": 3672,
+     "spellId": 779,
+     "animId": 872
+    },
+    {
+     "name": "Indi-Barrier",
+     "path": "ROM/289/13.DAT",
+     "fileId": 3673,
+     "spellId": 780,
+     "animId": 873
+    },
+    {
+     "name": "Indi-Acumen",
+     "path": "ROM/289/14.DAT",
+     "fileId": 3674,
+     "spellId": 781,
+     "animId": 874
+    },
+    {
+     "name": "Indi-Fend",
+     "path": "ROM/289/15.DAT",
+     "fileId": 3675,
+     "spellId": 782,
+     "animId": 875
+    },
+    {
+     "name": "Indi-Precision",
+     "path": "ROM/289/16.DAT",
+     "fileId": 3676,
+     "spellId": 783,
+     "animId": 876
+    },
+    {
+     "name": "Indi-Voidance",
+     "path": "ROM/289/17.DAT",
+     "fileId": 3677,
+     "spellId": 784,
+     "animId": 877
+    },
+    {
+     "name": "Indi-Focus",
+     "path": "ROM/289/18.DAT",
+     "fileId": 3678,
+     "spellId": 785,
+     "animId": 878
+    },
+    {
+     "name": "Indi-Attunement",
+     "path": "ROM/289/19.DAT",
+     "fileId": 3679,
+     "spellId": 786,
+     "animId": 879
+    },
+    {
+     "name": "Indi-Wilt",
+     "path": "ROM/289/20.DAT",
+     "fileId": 3680,
+     "spellId": 787,
+     "animId": 880
+    },
+    {
+     "name": "Indi-Frailty",
+     "path": "ROM/289/21.DAT",
+     "fileId": 3681,
+     "spellId": 788,
+     "animId": 881
+    },
+    {
+     "name": "Indi-Fade",
+     "path": "ROM/289/22.DAT",
+     "fileId": 3682,
+     "spellId": 789,
+     "animId": 882
+    },
+    {
+     "name": "Indi-Malaise",
+     "path": "ROM/289/23.DAT",
+     "fileId": 3683,
+     "spellId": 790,
+     "animId": 883
+    },
+    {
+     "name": "Indi-Slip",
+     "path": "ROM/289/24.DAT",
+     "fileId": 3684,
+     "spellId": 791,
+     "animId": 884
+    },
+    {
+     "name": "Indi-Torpor",
+     "path": "ROM/289/25.DAT",
+     "fileId": 3685,
+     "spellId": 792,
+     "animId": 885
+    },
+    {
+     "name": "Indi-Vex",
+     "path": "ROM/289/26.DAT",
+     "fileId": 3686,
+     "spellId": 793,
+     "animId": 886
+    },
+    {
+     "name": "Indi-Languor",
+     "path": "ROM/289/27.DAT",
+     "fileId": 3687,
+     "spellId": 794,
+     "animId": 887
+    },
+    {
+     "name": "Indi-Slow",
+     "path": "ROM/289/28.DAT",
+     "fileId": 3688,
+     "spellId": 795,
+     "animId": 888
+    },
+    {
+     "name": "Indi-Paralysis",
+     "path": "ROM/289/29.DAT",
+     "fileId": 3689,
+     "spellId": 796,
+     "animId": 889
+    },
+    {
+     "name": "Indi-Gravity",
+     "path": "ROM/289/30.DAT",
+     "fileId": 3690,
+     "spellId": 797,
+     "animId": 890
     }
    ]
   },
@@ -3435,6 +3687,20 @@
     {
      "name": "Kakka: Ichi",
      "path": "ROM/263/49.DAT"
+    },
+    {
+     "name": "Gekka: Ichi",
+     "path": "ROM/318/20.DAT",
+     "fileId": 3162,
+     "spellId": 505,
+     "animId": 362
+    },
+    {
+     "name": "Yain: Ichi",
+     "path": "ROM/318/21.DAT",
+     "fileId": 3163,
+     "spellId": 506,
+     "animId": 363
     }
    ]
   },
@@ -4591,6 +4857,13 @@
     {
      "name": "Alexander: Perfect Defense",
      "path": "ROM/238/84.DAT"
+    },
+    {
+     "name": "Fire Spirit",
+     "path": "ROM/97/96.DAT",
+     "fileId": 3088,
+     "spellId": 288,
+     "animId": 288
     }
    ]
   },
@@ -6947,6 +7220,454 @@
     {
      "name": "(Schedule tar1) 7",
      "path": "ROM/262/60.DAT"
+    },
+    {
+     "name": "Nat. Meditation",
+     "path": "ROM/308/116.DAT",
+     "fileId": 3707,
+     "spellId": 700,
+     "animId": 907
+    },
+    {
+     "name": "Tem. Upheaval",
+     "path": "ROM/308/117.DAT",
+     "fileId": 3708,
+     "spellId": 701,
+     "animId": 908
+    },
+    {
+     "name": "Rending Deluge",
+     "path": "ROM/308/118.DAT",
+     "fileId": 3709,
+     "spellId": 702,
+     "animId": 909
+    },
+    {
+     "name": "Embalming Earth",
+     "path": "ROM/308/119.DAT",
+     "fileId": 3710,
+     "spellId": 703,
+     "animId": 910
+    },
+    {
+     "name": "Paralyzing Triad",
+     "path": "ROM/308/120.DAT",
+     "fileId": 3711,
+     "spellId": 704,
+     "animId": 911
+    },
+    {
+     "name": "Foul Waters",
+     "path": "ROM/308/121.DAT",
+     "fileId": 3712,
+     "spellId": 705,
+     "animId": 912
+    },
+    {
+     "name": "Glutinous Dart",
+     "path": "ROM/308/122.DAT",
+     "fileId": 3713,
+     "spellId": 706,
+     "animId": 913
+    },
+    {
+     "name": "Retinal Glare",
+     "path": "ROM/308/123.DAT",
+     "fileId": 3714,
+     "spellId": 707,
+     "animId": 914
+    },
+    {
+     "name": "Subduction",
+     "path": "ROM/312/121.DAT",
+     "fileId": 3725,
+     "spellId": 708,
+     "animId": 925
+    },
+    {
+     "name": "Thrashing Assault",
+     "path": "ROM/312/122.DAT",
+     "fileId": 3726,
+     "spellId": 709,
+     "animId": 926
+    },
+    {
+     "name": "Erratic Flutter",
+     "path": "ROM/318/36.DAT",
+     "fileId": 3737,
+     "spellId": 710,
+     "animId": 937
+    },
+    {
+     "name": "Restoral",
+     "path": "ROM/321/65.DAT",
+     "fileId": 3740,
+     "spellId": 711,
+     "animId": 940
+    },
+    {
+     "name": "Rail Cannon",
+     "path": "ROM/321/66.DAT",
+     "fileId": 3741,
+     "spellId": 712,
+     "animId": 941
+    },
+    {
+     "name": "Diffusion Ray",
+     "path": "ROM/321/67.DAT",
+     "fileId": 3742,
+     "spellId": 713,
+     "animId": 942
+    },
+    {
+     "name": "Sinker Drill",
+     "path": "ROM/321/68.DAT",
+     "fileId": 3743,
+     "spellId": 714,
+     "animId": 943
+    },
+    {
+     "name": "Droning Whirlwind",
+     "path": "ROM/308/124.DAT",
+     "fileId": 3715,
+     "spellId": 744,
+     "animId": 915
+    },
+    {
+     "name": "Carcharian Verve",
+     "path": "ROM/308/125.DAT",
+     "fileId": 3716,
+     "spellId": 745,
+     "animId": 916
+    },
+    {
+     "name": "Blistering Roar",
+     "path": "ROM/308/126.DAT",
+     "fileId": 3717,
+     "spellId": 746,
+     "animId": 917
+    },
+    {
+     "name": "Shantotto",
+     "path": "ROM/318/100.DAT",
+     "fileId": 3739,
+     "spellId": 896,
+     "animId": 939
+    },
+    {
+     "name": "NEW - fileId 3281",
+     "path": "ROM/212/32.DAT",
+     "fileId": 3281
+    },
+    {
+     "name": "NEW - fileId 3420",
+     "path": "ROM/363/23.DAT",
+     "fileId": 3420
+    },
+    {
+     "name": "NEW - fileId 3425",
+     "path": "ROM/313/73.DAT",
+     "fileId": 3425
+    },
+    {
+     "name": "NEW - fileId 3426",
+     "path": "ROM/313/74.DAT",
+     "fileId": 3426
+    },
+    {
+     "name": "NEW - fileId 3427",
+     "path": "ROM/317/122.DAT",
+     "fileId": 3427
+    },
+    {
+     "name": "NEW - fileId 3428",
+     "path": "ROM/317/123.DAT",
+     "fileId": 3428
+    },
+    {
+     "name": "NEW - fileId 3429",
+     "path": "ROM/363/24.DAT",
+     "fileId": 3429
+    },
+    {
+     "name": "NEW - fileId 3706",
+     "path": "ROM/306/116.DAT",
+     "fileId": 3706
+    },
+    {
+     "name": "NEW - fileId 3718",
+     "path": "ROM/309/16.DAT",
+     "fileId": 3718
+    },
+    {
+     "name": "NEW - fileId 3719",
+     "path": "ROM/309/17.DAT",
+     "fileId": 3719
+    },
+    {
+     "name": "NEW - fileId 3720",
+     "path": "ROM/309/18.DAT",
+     "fileId": 3720
+    },
+    {
+     "name": "NEW - fileId 3721",
+     "path": "ROM/310/110.DAT",
+     "fileId": 3721
+    },
+    {
+     "name": "NEW - fileId 3722",
+     "path": "ROM/310/111.DAT",
+     "fileId": 3722
+    },
+    {
+     "name": "NEW - fileId 3723",
+     "path": "ROM/312/119.DAT",
+     "fileId": 3723
+    },
+    {
+     "name": "NEW - fileId 3724",
+     "path": "ROM/312/120.DAT",
+     "fileId": 3724
+    },
+    {
+     "name": "NEW - fileId 3727",
+     "path": "ROM/313/35.DAT",
+     "fileId": 3727
+    },
+    {
+     "name": "NEW - fileId 3728",
+     "path": "ROM/314/122.DAT",
+     "fileId": 3728
+    },
+    {
+     "name": "NEW - fileId 3730",
+     "path": "ROM/317/76.DAT",
+     "fileId": 3730
+    },
+    {
+     "name": "NEW - fileId 3738",
+     "path": "ROM/318/51.DAT",
+     "fileId": 3738
+    },
+    {
+     "name": "NEW - fileId 3744",
+     "path": "ROM/321/69.DAT",
+     "fileId": 3744
+    },
+    {
+     "name": "NEW - fileId 3745",
+     "path": "ROM/321/70.DAT",
+     "fileId": 3745
+    },
+    {
+     "name": "NEW - fileId 3746",
+     "path": "ROM/321/71.DAT",
+     "fileId": 3746
+    },
+    {
+     "name": "NEW - fileId 3747",
+     "path": "ROM/324/84.DAT",
+     "fileId": 3747
+    },
+    {
+     "name": "NEW - fileId 3748",
+     "path": "ROM/324/85.DAT",
+     "fileId": 3748
+    },
+    {
+     "name": "NEW - fileId 3749",
+     "path": "ROM/324/86.DAT",
+     "fileId": 3749
+    },
+    {
+     "name": "NEW - fileId 3750",
+     "path": "ROM/324/87.DAT",
+     "fileId": 3750
+    },
+    {
+     "name": "NEW - fileId 3751",
+     "path": "ROM/327/125.DAT",
+     "fileId": 3751
+    },
+    {
+     "name": "NEW - fileId 3752",
+     "path": "ROM/327/126.DAT",
+     "fileId": 3752
+    },
+    {
+     "name": "NEW - fileId 3753",
+     "path": "ROM/327/127.DAT",
+     "fileId": 3753
+    },
+    {
+     "name": "NEW - fileId 3754",
+     "path": "ROM/328/0.DAT",
+     "fileId": 3754
+    },
+    {
+     "name": "NEW - fileId 3755",
+     "path": "ROM/328/1.DAT",
+     "fileId": 3755
+    },
+    {
+     "name": "NEW - fileId 3782",
+     "path": "ROM/332/38.DAT",
+     "fileId": 3782
+    },
+    {
+     "name": "NEW - fileId 3783",
+     "path": "ROM/332/39.DAT",
+     "fileId": 3783
+    },
+    {
+     "name": "NEW - fileId 3784",
+     "path": "ROM/332/40.DAT",
+     "fileId": 3784
+    },
+    {
+     "name": "NEW - fileId 3785",
+     "path": "ROM/332/41.DAT",
+     "fileId": 3785
+    },
+    {
+     "name": "NEW - fileId 3786",
+     "path": "ROM/332/42.DAT",
+     "fileId": 3786
+    },
+    {
+     "name": "NEW - fileId 3787",
+     "path": "ROM/332/43.DAT",
+     "fileId": 3787
+    },
+    {
+     "name": "NEW - fileId 3796",
+     "path": "ROM/335/18.DAT",
+     "fileId": 3796
+    },
+    {
+     "name": "NEW - fileId 3797",
+     "path": "ROM/335/19.DAT",
+     "fileId": 3797
+    },
+    {
+     "name": "NEW - fileId 3798",
+     "path": "ROM/335/20.DAT",
+     "fileId": 3798
+    },
+    {
+     "name": "NEW - fileId 3799",
+     "path": "ROM/335/21.DAT",
+     "fileId": 3799
+    },
+    {
+     "name": "NEW - fileId 3800",
+     "path": "ROM/335/22.DAT",
+     "fileId": 3800
+    },
+    {
+     "name": "NEW - fileId 3801",
+     "path": "ROM/335/23.DAT",
+     "fileId": 3801
+    },
+    {
+     "name": "NEW - fileId 3802",
+     "path": "ROM/338/75.DAT",
+     "fileId": 3802
+    },
+    {
+     "name": "NEW - fileId 3803",
+     "path": "ROM/338/76.DAT",
+     "fileId": 3803
+    },
+    {
+     "name": "NEW - fileId 3804",
+     "path": "ROM/338/77.DAT",
+     "fileId": 3804
+    },
+    {
+     "name": "NEW - fileId 3805",
+     "path": "ROM/338/78.DAT",
+     "fileId": 3805
+    },
+    {
+     "name": "NEW - fileId 3806",
+     "path": "ROM/335/32.DAT",
+     "fileId": 3806
+    },
+    {
+     "name": "NEW - fileId 3807",
+     "path": "ROM/335/33.DAT",
+     "fileId": 3807
+    },
+    {
+     "name": "NEW - fileId 3808",
+     "path": "ROM/335/34.DAT",
+     "fileId": 3808
+    },
+    {
+     "name": "NEW - fileId 3809",
+     "path": "ROM/335/35.DAT",
+     "fileId": 3809
+    },
+    {
+     "name": "NEW - fileId 3810",
+     "path": "ROM/338/44.DAT",
+     "fileId": 3810
+    },
+    {
+     "name": "NEW - fileId 3813",
+     "path": "ROM/348/42.DAT",
+     "fileId": 3813
+    },
+    {
+     "name": "NEW - fileId 3814",
+     "path": "ROM/348/43.DAT",
+     "fileId": 3814
+    },
+    {
+     "name": "NEW - fileId 3815",
+     "path": "ROM/361/69.DAT",
+     "fileId": 3815
+    },
+    {
+     "name": "NEW - fileId 3816",
+     "path": "ROM/371/15.DAT",
+     "fileId": 3816
+    },
+    {
+     "name": "NEW - fileId 3817",
+     "path": "ROM/372/11.DAT",
+     "fileId": 3817
+    },
+    {
+     "name": "NEW - fileId 3818",
+     "path": "ROM/373/57.DAT",
+     "fileId": 3818
+    },
+    {
+     "name": "NEW - fileId 3819",
+     "path": "ROM/373/58.DAT",
+     "fileId": 3819
+    },
+    {
+     "name": "NEW - fileId 3820",
+     "path": "ROM/383/13.DAT",
+     "fileId": 3820
+    },
+    {
+     "name": "NEW - fileId 3821",
+     "path": "ROM/383/14.DAT",
+     "fileId": 3821
+    },
+    {
+     "name": "NEW - fileId 3916",
+     "path": "ROM/13/54.DAT",
+     "fileId": 3916
+    },
+    {
+     "name": "NEW - fileId 3940",
+     "path": "ROM/220/87.DAT",
+     "fileId": 3940
     }
    ]
   },
@@ -7861,6 +8582,69 @@
     {
      "name": "338/46",
      "path": "ROM/338/46.DAT"
+    },
+    {
+     "name": "Haste II",
+     "path": "ROM/317/75.DAT",
+     "fileId": 3729,
+     "spellId": 511,
+     "animId": 929
+    },
+    {
+     "name": "Foil",
+     "path": "ROM/289/42.DAT",
+     "fileId": 3703,
+     "spellId": 840,
+     "animId": 903
+    },
+    {
+     "name": "Distract",
+     "path": "ROM/318/32.DAT",
+     "fileId": 3733,
+     "spellId": 841,
+     "animId": 933
+    },
+    {
+     "name": "Distract II",
+     "path": "ROM/318/33.DAT",
+     "fileId": 3734,
+     "spellId": 842,
+     "animId": 934
+    },
+    {
+     "name": "Frazzle",
+     "path": "ROM/318/34.DAT",
+     "fileId": 3735,
+     "spellId": 843,
+     "animId": 935
+    },
+    {
+     "name": "Frazzle II",
+     "path": "ROM/318/35.DAT",
+     "fileId": 3736,
+     "spellId": 844,
+     "animId": 936
+    },
+    {
+     "name": "Flurry",
+     "path": "ROM/318/30.DAT",
+     "fileId": 3731,
+     "spellId": 845,
+     "animId": 931
+    },
+    {
+     "name": "Flurry II",
+     "path": "ROM/318/31.DAT",
+     "fileId": 3732,
+     "spellId": 846,
+     "animId": 932
+    },
+    {
+     "name": "Temper II",
+     "path": "ROM/338/45.DAT",
+     "fileId": 3811,
+     "spellId": 895,
+     "animId": 1011
     }
    ]
   },

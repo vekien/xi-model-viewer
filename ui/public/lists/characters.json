@@ -239,9 +239,9 @@
       "mid": 0
      },
      {
-      "id": "1:ROM\\183\\67.DAT",
+      "id": "7:ROM\\183\\67.DAT",
       "label": "Izayoi",
-      "group": "None",
+      "group": "Unidentified",
       "paths": [
        "ROM\\183\\67.DAT"
       ],
@@ -291,15 +291,6 @@
        "ROM\\175\\36.DAT"
       ],
       "mid": 397
-     },
-     {
-      "id": "7:ROM\\183\\67.DAT",
-      "label": "Izayoi",
-      "group": "Unidentified",
-      "paths": [
-       "ROM\\183\\67.DAT"
-      ],
-      "mid": 400
      },
      {
       "id": "8:29/90",
@@ -10663,15 +10654,6 @@
       "mid": 886
      },
      {
-      "id": "333:365/15",
-      "label": "Infiltrator",
-      "group": "Sword",
-      "paths": [
-       "ROM\\365\\15.DAT"
-      ],
-      "mid": 805
-     },
-     {
       "id": "334:368/32",
       "label": "Sakpata's Sword",
       "group": "Sword",
@@ -10742,15 +10724,6 @@
        "ROM\\381\\0.DAT"
       ],
       "mid": 939
-     },
-     {
-      "id": "342:382/127",
-      "label": "Kyukoto",
-      "group": "Sword",
-      "paths": [
-       "ROM\\382\\127.DAT"
-      ],
-      "mid": 941
      },
      {
       "id": "343:108/125",
@@ -27964,15 +27937,6 @@
       "mid": 96
      },
      {
-      "id": "95:124/9",
-      "label": "Yasha Sune-Ate",
-      "group": "--------------------------------",
-      "paths": [
-       "ROM\\124\\9.DAT"
-      ],
-      "mid": 61
-     },
-     {
       "id": "96:125/105",
       "label": "Suzaku's Sune-Ate",
       "group": "--------------------------------",
@@ -29575,15 +29539,6 @@
       "mid": 341
      },
      {
-      "id": "274:328/120",
-      "label": "Despair Greaves",
-      "group": "--------------------------------",
-      "paths": [
-       "ROM\\328\\120.DAT"
-      ],
-      "mid": 389
-     },
-     {
       "id": "275:328/121",
       "label": "Pursuer's Gaiters",
       "group": "--------------------------------",
@@ -29672,15 +29627,6 @@
        "ROM\\343\\50.DAT"
       ],
       "mid": 413
-     },
-     {
-      "id": "285:346/14",
-      "label": "Merlinic Crackows",
-      "group": "--------------------------------",
-      "paths": [
-       "ROM\\346\\14.DAT"
-      ],
-      "mid": 415
      },
      {
       "id": "286:348/49",
@@ -40129,15 +40075,6 @@
        "ROM\\360\\48.DAT"
       ],
       "mid": 850
-     },
-     {
-      "id": "378:361/20",
-      "label": "Ark Tabar",
-      "group": "Axe",
-      "paths": [
-       "ROM\\361\\20.DAT"
-      ],
-      "mid": 858
      },
      {
       "id": "379:361/20",
@@ -54771,15 +54708,6 @@
        "ROM\\351\\117.DAT"
       ],
       "mid": 582
-     },
-     {
-      "id": "85:289/88",
-      "label": "Chocobo Shirt",
-      "group": null,
-      "paths": [
-       "ROM\\289\\88.DAT"
-      ],
-      "mid": 309
      },
      {
       "id": "86:307/44",
@@ -72788,15 +72716,6 @@
       "mid": 850
      },
      {
-      "id": "367:361/22",
-      "label": "Ark Tabar",
-      "group": "Axe",
-      "paths": [
-       "ROM\\361\\22.DAT"
-      ],
-      "mid": 858
-     },
-     {
       "id": "368:361/22",
       "label": "Dullahan axe",
       "group": "Axe",
@@ -78685,9 +78604,9 @@
       "mid": 594
      },
      {
-      "id": "198:281/61",
-      "label": "Sandung",
-      "group": "Dagger",
+      "id": "504:281/61",
+      "label": "Solstice",
+      "group": "Club",
       "paths": [
        "ROM\\281\\61.DAT"
       ],
@@ -81437,15 +81356,6 @@
        "ROM\\280\\68.DAT"
       ],
       "mid": 595
-     },
-     {
-      "id": "504:281/61",
-      "label": "Solstice",
-      "group": "Club",
-      "paths": [
-       "ROM\\281\\61.DAT"
-      ],
-      "mid": 597
      },
      {
       "id": "505:286/62",
@@ -107038,15 +106948,6 @@
       "mid": 850
      },
      {
-      "id": "367:361/24",
-      "label": "Ark Tabar",
-      "group": "Axe",
-      "paths": [
-       "ROM\\361\\24.DAT"
-      ],
-      "mid": 858
-     },
-     {
       "id": "368:361/24",
       "label": "Dullahan axe",
       "group": "Axe",
@@ -115014,13 +114915,6 @@
       "mid": 935
      },
      {
-      "id": "429:",
-      "label": "Chocobo Wand",
-      "group": "Club",
-      "paths": [],
-      "mid": 0
-     },
-     {
       "id": "430:113/14",
       "label": "Oak Cudgel",
       "group": "Club",
@@ -116207,6 +116101,13 @@
        "ROM\\200\\55.DAT"
       ],
       "mid": 504
+     },
+     {
+      "id": "429:",
+      "label": "Chocobo Wand",
+      "group": "Club",
+      "paths": [],
+      "mid": 0
      }
     ],
     "range": [
@@ -139868,15 +139769,6 @@
       "mid": 850
      },
      {
-      "id": "366:361/26",
-      "label": "Ark Tabar",
-      "group": "Axe",
-      "paths": [
-       "ROM\\361\\26.DAT"
-      ],
-      "mid": 858
-     },
-     {
       "id": "367:361/26",
       "label": "Dullahan axe",
       "group": "Axe",
@@ -139904,9 +139796,9 @@
       "mid": 882
      },
      {
-      "id": "370:369/119",
-      "label": "Aern Axe II",
-      "group": "Axe",
+      "id": "514:369/119",
+      "label": "Aern Spear II",
+      "group": "Polearm",
       "paths": [
        "ROM\\369\\119.DAT"
       ],
@@ -141198,15 +141090,6 @@
        "ROM\\369\\54.DAT"
       ],
       "mid": 890
-     },
-     {
-      "id": "514:369/119",
-      "label": "Aern Spear II",
-      "group": "Polearm",
-      "paths": [
-       "ROM\\369\\119.DAT"
-      ],
-      "mid": 893
      },
      {
       "id": "515:375/58",
@@ -150927,8 +150810,8 @@
       "mid": 462
      },
      {
-      "id": "71:365/40",
-      "label": "Adenium Masque",
+      "id": "77:365/40",
+      "label": "Magh Bihu's Masque",
       "group": null,
       "paths": [
        "ROM\\365\\40.DAT"
@@ -150979,15 +150862,6 @@
        "ROM\\376\\21.DAT"
       ],
       "mid": 481
-     },
-     {
-      "id": "77:365/40",
-      "label": "Magh Bihu's Masque",
-      "group": null,
-      "paths": [
-       "ROM\\365\\40.DAT"
-      ],
-      "mid": 471
      },
      {
       "id": "78:379/75",
@@ -154865,16 +154739,6 @@
       ],
       "mid": 598,
       "midAlt": 582
-     },
-     {
-      "id": "105:289/110",
-      "label": "Chocobo Shirt",
-      "group": null,
-      "paths": [
-       "ROM\\289\\110.DAT"
-      ],
-      "mid": 317,
-      "midAlt": 309
      },
      {
       "id": "106:307/53",
@@ -173317,15 +173181,6 @@
       "mid": 123
      },
      {
-      "id": "22:53/100",
-      "label": "Cermet Claws",
-      "group": "Hand",
-      "paths": [
-       "ROM\\53\\100.DAT"
-      ],
-      "mid": 125
-     },
-     {
       "id": "23:53/100",
       "label": "Mythril Claws",
       "group": "Hand",
@@ -174181,9 +174036,9 @@
       "mid": 450
      },
      {
-      "id": "118:227/21",
-      "label": "Machismo",
-      "group": "Dagger",
+      "id": "228:227/21",
+      "label": "Concordia",
+      "group": "Sword",
       "paths": [
        "ROM\\227\\21.DAT"
       ],
@@ -174838,15 +174693,6 @@
       "mid": 268
      },
      {
-      "id": "191:54/116",
-      "label": "Jagdplaute",
-      "group": "Sword",
-      "paths": [
-       "ROM\\54\\116.DAT"
-      ],
-      "mid": 269
-     },
-     {
       "id": "192:54/116",
       "label": "Knight's Sword",
       "group": "Sword",
@@ -175169,15 +175015,6 @@
        "ROM\\211\\78.DAT"
       ],
       "mid": 445
-     },
-     {
-      "id": "228:227/21",
-      "label": "Concordia",
-      "group": "Sword",
-      "paths": [
-       "ROM\\227\\21.DAT"
-      ],
-      "mid": 459
      },
      {
       "id": "229:242/8",
@@ -180593,15 +180430,6 @@
      {
       "id": "3:55/30",
       "label": "Judge's shield (GM Only)",
-      "group": "Shield",
-      "paths": [
-       "ROM\\55\\30.DAT"
-      ],
-      "mid": 22
-     },
-     {
-      "id": "4:55/30",
-      "label": "Ritter Shield",
       "group": "Shield",
       "paths": [
        "ROM\\55\\30.DAT"
@@ -210074,15 +209902,6 @@
       "mid": 850
      },
      {
-      "id": "370:361/30",
-      "label": "Ark Tabar",
-      "group": "Axe",
-      "paths": [
-       "ROM\\361\\30.DAT"
-      ],
-      "mid": 858
-     },
-     {
       "id": "371:361/30",
       "label": "Dullahan axe",
       "group": "Axe",
@@ -210099,15 +209918,6 @@
        "ROM\\368\\14.DAT"
       ],
       "mid": 874
-     },
-     {
-      "id": "373:368/21",
-      "label": "Agwu's Axe",
-      "group": "Axe",
-      "paths": [
-       "ROM\\368\\21.DAT"
-      ],
-      "mid": 881
      },
      {
       "id": "374:370/11",
@@ -224741,15 +224551,6 @@
        "ROM\\351\\123.DAT"
       ],
       "mid": 582
-     },
-     {
-      "id": "83:289/124",
-      "label": "Chocobo Shirt",
-      "group": null,
-      "paths": [
-       "ROM\\289\\124.DAT"
-      ],
-      "mid": 309
      },
      {
       "id": "84:307/62",
@@ -239502,19 +239303,19 @@
     ],
     "hands": [
      {
-      "id": "0:0/0",
-      "label": "None",
-      "group": null,
-      "paths": [],
-      "mid": 0
-     },
-     {
       "id": "1:188/69",
       "label": "Chocobo Armor",
       "group": null,
       "paths": [
        "ROM\\188\\69.DAT"
       ],
+      "mid": 0
+     },
+     {
+      "id": "0:0/0",
+      "label": "None",
+      "group": null,
+      "paths": [],
       "mid": 0
      }
     ],

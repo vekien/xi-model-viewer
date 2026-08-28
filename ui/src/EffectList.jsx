@@ -6,6 +6,13 @@ import { Tooltip } from './Tooltip.jsx';
 
 const MAX_RESULTS = 400;   // cap the flat search list so a broad query stays snappy
 
+// Survive Character ↔ Effects unmount: list tree + search stay where you left them.
+const effectListUi = {
+  query: '',
+  openCats: new Set(),
+  data: null,   // cached fetch so re-open doesn't flash "Loading…"
+};
+
 /** Badge from path: ROM/15/89.DAT → 15/89 */
 function pathId(path) {
   if (!path) return '';
@@ -29,18 +36,38 @@ function EffectRow({ entry, sub, selected, onSelect }) {
 }
 
 export function EffectList({ onSelect, selectedPath }) {
-  const [data, setData] = useState(null);            // { categories } | null while loading
-  const [query, setQuery] = useState('');
-  const [openCats, setOpenCats] = useState(() => new Set());
+  const [data, setData] = useState(() => effectListUi.data);
+  const [query, setQuery] = useState(() => effectListUi.query);
+  const [openCats, setOpenCats] = useState(() => new Set(effectListUi.openCats));
 
   useEffect(() => {
+    effectListUi.query = query;
+  }, [query]);
+  useEffect(() => {
+    effectListUi.openCats = openCats;
+  }, [openCats]);
+
+  useEffect(() => {
+    if (effectListUi.data) {
+      setData(effectListUi.data);
+      return undefined;
+    }
     let cancelled = false;
     (async () => {
       try {
         const res = await fetch('lists/effects.json');
         const json = res.ok ? await res.json() : { categories: [] };
-        if (!cancelled) setData(json);
-      } catch { if (!cancelled) setData({ categories: [] }); }
+        if (!cancelled) {
+          effectListUi.data = json;
+          setData(json);
+        }
+      } catch {
+        if (!cancelled) {
+          const empty = { categories: [] };
+          effectListUi.data = empty;
+          setData(empty);
+        }
+      }
     })();
     return () => { cancelled = true; };
   }, []);

@@ -94,13 +94,32 @@ for (const { id, label } of index) {
       entries.push({
         name: ranged ? `${name || spec} ${i + 1}` : (name || `${dir}/${file}`),
         path: `ROM/${dir}/${file}.DAT`,
+        // No name in the CSV — the label above is invented from the spec, so
+        // this row is a placeholder for a DAT nobody has identified yet.
+        placeholder: !name,
       });
     });
   }
 
-  if (entries.length) { categories.push({ id, label, entries }); entryCount += entries.length; }
+  // The CSVs occasionally list one DAT twice in a category — once named, once
+  // blank (ChocoboRacing.csv has `181/55,Sandy Course Race` followed by a bare
+  // `181/55`). The blank row bakes into a "181/55" placeholder that reads as a
+  // second, separate effect sitting right under the real one.
+  //
+  // Drop a placeholder only when that exact path is already named in the SAME
+  // category. Two genuine names for one DAT are left alone — Corsair's 164/61
+  // really is listed as both Dancer's Roll and Double-Up, and that is the source
+  // data saying they share a VFX, not a baking artefact.
+  const namedPaths = new Set(entries.filter((e) => !e.placeholder).map((e) => e.path));
+  const kept = entries
+    .filter((e) => !(e.placeholder && namedPaths.has(e.path)))
+    .map(({ name, path }) => ({ name, path }));
+
+  if (kept.length) { categories.push({ id, label, entries: kept }); entryCount += kept.length; }
 }
 
 const outPath = join(OUT, 'effects.json');
-writeFileSync(outPath, `${JSON.stringify({ categories }, null, 2)}\n`);
+// 1-space indent matches the other baked lists (sfx, characters); at 4k+ entries
+// the extra column costs ~40KB of shipped JSON for nothing.
+writeFileSync(outPath, `${JSON.stringify({ categories }, null, 1)}\n`);
 console.log(`Wrote ${outPath}: ${categories.length} categories, ${entryCount} effects.`);
