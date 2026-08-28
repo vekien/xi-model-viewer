@@ -15,7 +15,7 @@
 //
 // Emits effects.json:
 //   { "categories": [ { "id", "label",
-//       "entries": [ { "name", "dir", "file", "path": "ROM/d/f.DAT" }, … ] } ] }
+//       "entries": [ { "name", "path": "ROM/d/f.DAT" }, … ] } ] }
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -93,8 +93,6 @@ for (const { id, label } of index) {
     expanded.forEach(({ dir, file }, i) => {
       entries.push({
         name: ranged ? `${name || spec} ${i + 1}` : (name || `${dir}/${file}`),
-        dir,
-        file,
         path: `ROM/${dir}/${file}.DAT`,
       });
     });

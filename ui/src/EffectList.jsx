@@ -1,12 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Tooltip } from './Tooltip.jsx';
 
 // Effect categories/entries baked from AltanaViewer's List/Effect CSVs (see
-// dev/bake-effects.mjs). Each entry names a spell/ability/status DAT the
-// particle runtime can play: { name, dir, file, path: "ROM/d/f.DAT" }.
+// dev/bake-effects.mjs). Each entry: { name, path: "ROM/d/f.DAT" }.
 
 const MAX_RESULTS = 400;   // cap the flat search list so a broad query stays snappy
 
+/** Badge from path: ROM/15/89.DAT → 15/89 */
+function pathId(path) {
+  if (!path) return '';
+  const m = String(path).replace(/\\/g, '/').match(/([^/]+)\/(\d+)\/(\d+)\.DAT$/i);
+  return m ? `${m[2]}/${m[3]}` : String(path).replace(/\\/g, '/');
+}
+
 function EffectRow({ entry, sub, selected, onSelect }) {
+  const id = pathId(entry.path);
   return (
     <div className={`node${selected ? ' selected' : ''}`}>
       <div className="row" onClick={() => onSelect(entry)}>
@@ -14,7 +22,7 @@ function EffectRow({ entry, sub, selected, onSelect }) {
         <span className="kind icon">bolt</span>
         <span className="effect-name">{entry.name}</span>
         {sub && <span className="mono-small effect-sub">{sub}</span>}
-        <span className="mono-small effect-id">{entry.dir}/{entry.file}</span>
+        {id && <span className="mono-small effect-id">{id}</span>}
       </div>
     </div>
   );
@@ -47,7 +55,8 @@ export function EffectList({ onSelect, selectedPath }) {
     for (const cat of data.categories) {
       const catMatches = cat.label.toLowerCase().includes(q);
       for (const e of cat.entries) {
-        if (catMatches || e.name.toLowerCase().includes(q) || `${e.dir}/${e.file}`.includes(q)) {
+        const id = pathId(e.path).toLowerCase();
+        if (catMatches || e.name.toLowerCase().includes(q) || id.includes(q) || String(e.path || '').toLowerCase().includes(q)) {
           out.push({ ...e, cat: cat.label });
           if (out.length >= MAX_RESULTS) return out;
         }
@@ -75,9 +84,11 @@ export function EffectList({ onSelect, selectedPath }) {
           spellCheck={false}
         />
         {query && (
-          <button className="list-search-clear" title="Clear" onClick={() => setQuery('')}>
-            <span className="icon">close</span>
-          </button>
+          <Tooltip content="Clear">
+            <button className="list-search-clear" onClick={() => setQuery('')}>
+              <span className="icon">close</span>
+            </button>
+          </Tooltip>
         )}
       </div>
 
