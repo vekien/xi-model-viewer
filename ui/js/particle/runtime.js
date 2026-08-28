@@ -14,7 +14,7 @@
 // re-use the world transform on its own.
 
 import { Vec3, Mat4, Color, PI_f, posRand, rand } from './math.js';
-import { AttachType, ACTOR_ATTACH_TYPES, BillBoardType, LinkedDataType, RotationOrder, BlendFunc, PointLightParams, PositionTransform } from './types.js';
+import { AttachType, BillBoardType, LinkedDataType, RotationOrder, BlendFunc, PointLightParams, PositionTransform } from './types.js';
 
 let particleCounter = 1;
 
@@ -462,15 +462,6 @@ export class ParticleGenerator {
       this.activeParticles = [];
       return;
     }
-    // Re-read the skeleton each frame so an attached effect tracks the bone
-    // through the animation; the construction-time value alone would pin it to
-    // wherever the joint happened to be when the generator was armed. Narrowed
-    // to actor attach types on purpose — sun/moon keep their existing
-    // once-only behaviour, which the zone weather path is built around.
-    if (this.runtime.actor && ACTOR_ATTACH_TYPES.has(this.def.attachType)) {
-      this.updateAssociatedPosition(elapsedFrames);
-      this.updateAssociatedFacing(elapsedFrames);
-    }
     this.emit(elapsedFrames);
     for (const p of this.activeParticles) p.update(elapsedFrames);
     this.activeParticles = this.activeParticles.filter((p) => !p.isComplete());
@@ -553,26 +544,14 @@ export class ParticleGenerator {
     } else if (attach === AttachType.Moon) {
       this.genAssociatedPosition.copyFrom(this.runtime.getMoonPosition())
         .addInPlace(this.runtime.camera.getPosition());
-    } else if (ACTOR_ATTACH_TYPES.has(attach)) {
-      // Ride the actor's skeleton. Read live, every frame, so the effect
-      // follows the animation rather than sitting where the bone started.
-      // Without an actor these fall through to the origin, which for an entity
-      // model is the floor under its feet — the old behaviour.
-      const actor = this.runtime.actor;
-      if (actor) actor.getJointPosition(this.def.attachedJoint0, this.genAssociatedPosition);
     }
+    // Actor attach types need an actor association, which effects never have:
+    // a spell renders identically whether or not a character is on screen.
   }
 
   getAssociatedPosition() { return this.genAssociatedPosition; }
 
-  updateAssociatedFacing() {
-    // Zone generators have no actor facing to track; actor-attached ones take
-    // the joint's own basis, so an effect authored to shoot "forward" follows
-    // wherever that bone is pointing.
-    if (!ACTOR_ATTACH_TYPES.has(this.def.attachType)) return;
-    const actor = this.runtime.actor;
-    if (actor) actor.getJointRotation(this.def.attachedJoint0, this.genAssociatedRotation);
-  }
+  updateAssociatedFacing() { /* zone generators have no actor facing to track */ }
 
   getAssociatedFacing() {
     return new Mat4().copyFrom(this.genAssociatedRotation).rotateZYXInPlace(this.rotation.x, this.rotation.y, this.rotation.z);

@@ -18,7 +18,9 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
   const [xiStatus, setXiStatus] = useState(null); // uv/setup badge
   const [tools, setTools] = useState(null);       // ToolsStatus from Rust
   const [toolsBusy, setToolsBusy] = useState(false);
-  const [toolsMsg, setToolsMsg] = useState('');
+  const [toolsMsg, setToolsMsg] = useState(''); // managed install status only
+  const [localMsg, setLocalMsg] = useState(''); // local checkout info (ok / neutral)
+  const [localErr, setLocalErr] = useState(''); // local checkout error (red)
   const [toolsProgress, setToolsProgress] = useState(null); // { label, pct, detail }
   const [toolsLog, setToolsLog] = useState('');
   const [localPathDraft, setLocalPathDraft] = useState('');
@@ -62,16 +64,22 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
     try {
       const st = await backend.toolsStatus();
       setTools(st);
-      setLocalPathDraft(st.toolsDir || '');
-      if (st.error) setToolsMsg(st.error);
-      else if (st.usingLocalOverride) {
-        setToolsMsg(`Local checkout · v${st.localVersion}`);
-      } else if (st.installed) {
-        const latest = st.latestVersion ? ` · latest ${st.latestVersion}` : '';
-        const upd = st.updateAvailable ? ' · update available' : '';
-        setToolsMsg(`Installed v${st.localVersion}${latest}${upd}`);
+      // Only prefill the local field when an override is active — not the managed path.
+      setLocalPathDraft(st.usingLocalOverride ? (st.toolsDir || '') : '');
+      if (st.usingLocalOverride) {
+        setToolsMsg('Managed install idle — local checkout is active.');
+        setLocalMsg(`Active · v${st.localVersion || '—'}`);
+        setLocalErr('');
       } else {
-        setToolsMsg('Not installed — click Install to download from GitHub.');
+        setLocalMsg('');
+        if (st.error && !st.installed) setToolsMsg(st.error);
+        else if (st.installed) {
+          const latest = st.latestVersion ? ` · latest ${st.latestVersion}` : '';
+          const upd = st.updateAvailable ? ' · update available' : '';
+          setToolsMsg(`Installed v${st.localVersion}${latest}${upd}`);
+        } else {
+          setToolsMsg('Not installed — click Install to download from GitHub.');
+        }
       }
       return st;
     } catch (e) {
@@ -134,6 +142,8 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
     setTools(null);
     setToolsBusy(false);
     setToolsMsg('');
+    setLocalMsg('');
+    setLocalErr('');
     setToolsProgress(null);
     setToolsLog('');
     setNotesErr('');
@@ -187,6 +197,7 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
 
   const doInstallOrUpdate = async () => {
     setToolsBusy(true);
+    setLocalErr('');
     setToolsLog('');
     setToolsProgress({ label: 'Starting…', pct: 0, detail: '' });
     setToolsMsg('Installing / updating xi-tools…');
@@ -194,7 +205,6 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
     try {
       const st = await backend.toolsInstallOrUpdate();
       setTools(st);
-      setLocalPathDraft(st.toolsDir || '');
       setDraft((d) => ({ ...d, xiPath: st.toolsDir || d.xiPath }));
       setToolsMsg(st.installed
         ? `Installed v${st.localVersion}`
@@ -226,6 +236,7 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
   };
 
   const browseLocalTools = async () => {
+    setLocalErr('');
     const picked = await backend.pickToolsFolder(localPathDraft || draft.xiPath || '');
     if (picked) setLocalPathDraft(picked);
   };
@@ -233,19 +244,24 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
   const applyLocalTools = async () => {
     const path = localPathDraft.trim();
     if (!path) {
-      setToolsMsg('Choose a folder first.');
+      setLocalMsg('');
+      setLocalErr('Choose a folder first.');
       return;
     }
     setToolsBusy(true);
+    setLocalErr('');
+    setLocalMsg('Validating…');
     try {
       const st = await backend.toolsSetLocalPath(path);
       setTools(st);
       setDraft((d) => ({ ...d, xiPath: st.toolsDir }));
       setLocalPathDraft(st.toolsDir);
-      setToolsMsg(`Using local checkout: ${st.toolsDir}`);
+      setToolsMsg('Managed install idle — local checkout is active.');
+      setLocalMsg(`Active · v${st.localVersion || '—'}`);
       await runXiSetup(st.toolsDir, true);
     } catch (e) {
-      setToolsMsg(e?.message || String(e));
+      setLocalMsg('');
+      setLocalErr(friendlyLocalErr(e?.message || String(e), path));
     } finally {
       setToolsBusy(false);
     }
@@ -253,17 +269,19 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
 
   const clearLocalTools = async () => {
     setToolsBusy(true);
+    setLocalErr('');
+    setLocalMsg('');
     try {
       const st = await backend.toolsClearLocalPath();
       setTools(st);
-      setLocalPathDraft(st.toolsDir || '');
+      setLocalPathDraft('');
       setDraft((d) => ({ ...d, xiPath: st.toolsDir || '' }));
       setToolsMsg(st.installed
         ? `Using downloaded release (v${st.localVersion})`
         : 'Override cleared — install a release when ready.');
       if (st.toolsDir && st.installed) await runXiSetup(st.toolsDir, false);
     } catch (e) {
-      setToolsMsg(e?.message || String(e));
+      setLocalErr(e?.message || String(e));
     } finally {
       setToolsBusy(false);
     }
@@ -400,6 +418,32 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
                 <div className="form-row">
                   <Field className="check-field">
                     <Checkbox
+                      checked={!!draft.showGrid}
+                      onChange={(v) => setDraft({ ...draft, showGrid: v })}
+                      className="checkbox"
+                    >
+                      <span className="icon check-icon">check</span>
+                    </Checkbox>
+                    <Label className="check-label">Show grid</Label>
+                  </Field>
+                </div>
+
+                <div className="form-row">
+                  <Field className="check-field">
+                    <Checkbox
+                      checked={!!draft.showAxes}
+                      onChange={(v) => setDraft({ ...draft, showAxes: v })}
+                      className="checkbox"
+                    >
+                      <span className="icon check-icon">check</span>
+                    </Checkbox>
+                    <Label className="check-label">Show axes</Label>
+                  </Field>
+                </div>
+
+                <div className="form-row">
+                  <Field className="check-field">
+                    <Checkbox
                       checked={draft.autoWasdZones !== false}
                       onChange={(v) => setDraft({ ...draft, autoWasdZones: v })}
                       className="checkbox"
@@ -517,9 +561,12 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
                     type="text"
                     value={localPathDraft}
                     spellCheck={false}
-                    placeholder="Path to xi-tools"
+                    placeholder="e.g. D:\xi-tools"
                     disabled={toolsBusy}
-                    onChange={(e) => setLocalPathDraft(e.target.value)}
+                    onChange={(e) => {
+                      setLocalPathDraft(e.target.value);
+                      if (localErr) setLocalErr('');
+                    }}
                   />
                   <Button disabled={toolsBusy} onClick={browseLocalTools}>
                     <span className="icon">folder_open</span>
@@ -536,6 +583,19 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
                   Use downloaded release
                 </Button>
               </div>
+
+              {localErr && (
+                <div className="form-error settings-local-err" role="alert">
+                  <span className="icon">error</span>
+                  <span>{localErr}</span>
+                </div>
+              )}
+              {!localErr && localMsg && (
+                <div className={`xi-status settings-local-ok${tools?.usingLocalOverride ? ' ok' : ''}`}>
+                  <span className="icon">{tools?.usingLocalOverride ? 'check_circle' : 'info'}</span>
+                  <span className="xi-status-msg">{localMsg}</span>
+                </div>
+              )}
 
               <div className="settings-sep" role="separator" />
 
@@ -616,6 +676,19 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
   );
 }
 
+/** Make Rust path errors readable under Local checkout. */
+function friendlyLocalErr(raw, path) {
+  const msg = String(raw || '').trim();
+  if (!msg) return 'That folder could not be used.';
+  if (/^Not a folder:/i.test(msg)) {
+    return `Folder not found:\n${path || msg.replace(/^Not a folder:\s*/i, '')}\nBrowse to your xi-tools clone (must contain src\\xi).`;
+  }
+  if (/doesn't look like an xi-tools/i.test(msg) || /Expected:/i.test(msg)) {
+    return msg;
+  }
+  return msg;
+}
+
 function formatProgressDetail(p) {
   const unit = p.unit || 'bytes';
   const loaded = Number(p.loaded) || 0;
@@ -653,6 +726,8 @@ function xiBadge(s) {
 function toolsUiBadge(st, busy) {
   if (busy) return { cls: 'working', icon: 'progress_activity' };
   if (!st) return { cls: 'neutral', icon: 'info' };
+  // Local checkout owns the active path — managed row stays neutral.
+  if (st.usingLocalOverride) return { cls: 'neutral', icon: 'pause_circle' };
   if (st.error && !st.installed) return { cls: 'err', icon: 'error' };
   if (st.updateAvailable) return { cls: 'warn', icon: 'upgrade' };
   if (st.installed) return { cls: 'ok', icon: 'check_circle' };

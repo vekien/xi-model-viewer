@@ -23,6 +23,31 @@ const ENTITY_SUN_DAT = [-ENTITY_SUN_DISPLAY[0], -ENTITY_SUN_DISPLAY[1], ENTITY_S
 // diffuse texture, in every program.
 const SHADOW_UNITS = [0x84C1 /* TEXTURE1 */, 0x84C2 /* TEXTURE2 */];
 
+/**
+ * Entity DAT -> screen: a 180-degree turn about X, diag(1, -1, -1).
+ *
+ * Entity geometry is uploaded raw (Y-down), so the entity pass carries this in
+ * its viewProj and every view can share one Y-up camera. Entities used to run a
+ * Y-down camera to compensate, which put Characters/NPCs in a different space
+ * from Zones and Effects — an effect composited onto a character then differed
+ * by a roll about the view axis, which no per-particle matrix can undo.
+ *
+ * About X, not Z. Zone geometry uses diag(-1,-1,1) (180 about Z), which flips Y
+ * but also MIRRORS X — fine for terrain, wrong for a character, whose gear and
+ * handedness would swap sides. Turning about X flips Y and Z instead: upright
+ * under a Y-up camera, facing reversed, nothing mirrored. det +1 either way, so
+ * both are proper rotations rather than reflections.
+ */
+const ENTITY_ROT_M = new Float32Array([
+  1, 0, 0, 0,
+  0, -1, 0, 0,
+  0, 0, -1, 0,
+  0, 0, 0, 1,
+]);
+
+/** The matrix above applied to a point — for anything comparing against raw DAT. */
+const toEntityPt = (p) => [p[0], -p[1], -p[2]];
+
 // Full-screen background image (Scene > Background Image).
 // uCoverScale = fraction of the texture kept on each axis (cover = fill the
 // viewport, crop the overflow). See the draw site for how it is derived.
@@ -1227,9 +1252,6 @@ export class Renderer {
     this.effectPaused = false;
     this.effectSpeed = 1;
     this.setParticleSystem(system, null);   // installs the camera adapter
-    // Standalone stage: no actor, so actor-attached generators sit at the
-    // origin. Explicit rather than relying on a freshly built system.
-    system?.setActor?.(null);
     // Switching between effects leaves the camera fully alone (keepCamera). The
     // FIRST effect only normalizes what must be right (Y-up, entity ranges,
     // origin pivot) while keeping the user's zoom and angle — lining up a shot
@@ -1242,51 +1264,6 @@ export class Renderer {
    * Zone pattern: model stays, then setParticleSystem. Entity draw path must
    * call _drawParticles (see draw()).
    */
-  /**
-   * Live view of the drawn actor for the particle runtime. Reads `this.pose`
-   * at call time, not capture time, so an attached effect follows the running
-   * animation.
-   *
-   * Joint transforms come back PRE-MULTIPLIED by DISPLAY_ROT — diag(−1,−1,1) —
-   * and that is the whole trick. The drawer always maps particles DAT →
-   * display, which suits the zone/standalone camera (yUp), but an entity is
-   * drawn raw under the Y-down camera. Compositing the two mirrored particles
-   * in X and Y against the actor: the effect sat at the reflection of its
-   * joint, and smoke sank instead of rising.
-   *
-   * DISPLAY_ROT is its own inverse, so feeding it in here cancels the one the
-   * drawer applies. Both the position and the basis have to carry it, because
-   *
-   *     D · T(D·p) · (D·R) · L  =  T(p) · R · L
-   *
-   * — the particle's own local transform L then plays out in the joint's real
-   * DAT basis, which is the space the character mesh and camera already live
-   * in. Flipping only the position would fix where the effect sits and leave
-   * it still playing upside down.
-   */
-  actorAdapter() {
-    const self = this;
-    return {
-      getJointPosition(index, out) {
-        const t = self.pose?.trans?.[index];
-        if (t) { out.x = -t[0]; out.y = -t[1]; out.z = t[2]; }
-        else { out.x = 0; out.y = 0; out.z = 0; }
-        return out;
-      },
-      getJointRotation(index, out) {
-        const q = self.pose?.rot?.[index];
-        if (!q) return out.identity();
-        out.setRotationFromQuaternionInPlace(q[0], q[1], q[2], q[3]);
-        // D · R for column-major m[col*4 + row]: negate rows 0 and 1.
-        const m = out.m;
-        m[0] = -m[0]; m[1] = -m[1];
-        m[4] = -m[4]; m[5] = -m[5];
-        m[8] = -m[8]; m[9] = -m[9];
-        return out;
-      },
-    };
-  }
-
   attachEffectSystem(system, textures) {
     this.particleDrawer?.disposeMeshes();
     const gl = this.gl;
@@ -1301,9 +1278,6 @@ export class Renderer {
     this.effectPaused = false;
     if (this.effectSpeed == null) this.effectSpeed = 1;
     this.setParticleSystem(system, null);
-    // Hand over the skeleton AFTER setParticleSystem — it installs the camera
-    // adapter and would otherwise be the one to clear this.
-    system?.setActor?.(this.actorAdapter());
   }
 
   /**
@@ -1565,7 +1539,10 @@ export class Renderer {
     // origin when zoomed (the old always-on 0.02 bias).
     const baseY = (this.effectMode || this.model?.kind === 'zone') ? 0 : (this.floorY ?? 0);
     const floorOn = !!this.floor;
-    const y = baseY + (floorOn ? (this.camera.yUp ? 0.015 : -0.015) : 0);
+    // DAT space for entities (drawn via datVP) and display space for zones —
+    // the lift follows which one this grid is in, not the camera.
+    const datSpaceGrid = !this.effectMode && this.model?.kind !== 'zone';
+    const y = baseY + (floorOn ? (datSpaceGrid ? -0.015 : 0.015) : 0);
     const move = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, y, 0, 1]);
     const mvp = mat4Multiply(viewProj, move);
 
@@ -1796,8 +1773,33 @@ export class Renderer {
     if (!this.pose || !this.model) return;
     const bounds = this.computeBounds();
     if (!bounds) return;
-    this.camera.fit(bounds.min, bounds.max);
+    // Bounds are DAT; the camera lives in display space.
+    const a = toEntityPt(bounds.min);
+    const b = toEntityPt(bounds.max);
+    this.camera.fit(
+      [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.min(a[2], b[2])],
+      [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.max(a[2], b[2])],
+    );
     this.snapFloorToFeet(bounds);
+  }
+
+  /**
+   * Display-space point the entity/effect should orbit around after a pan
+   * (model bounds centre, or the origin for a bare effect). Zones return null
+   * — free pan+orbit around an arbitrary look-at stays as-is there.
+   */
+  getOrbitPivot() {
+    if (this.effectMode) return [0, 0, 0];
+    if (!this.model || this.model.kind === 'zone') return null;
+    const bounds = this.computeBounds();
+    if (!bounds) return [0, 0, 0];
+    const a = toEntityPt(bounds.min);
+    const b = toEntityPt(bounds.max);
+    return [
+      (a[0] + b[0]) * 0.5,
+      (a[1] + b[1]) * 0.5,
+      (a[2] + b[2]) * 0.5,
+    ];
   }
 
   /** Reset the camera to frame whatever is on screen — a model/zone or a
@@ -2221,6 +2223,12 @@ export class Renderer {
     this.projMatrix = proj;
     const viewProj = mat4Multiply(proj, this.camera.viewMatrix());
     const eye = this.camera.eye;
+    // Entity geometry (mesh, floor, skeleton, helpers) is raw DAT space, so it
+    // renders through DISPLAY_ROT while the camera stays Y-up like everywhere
+    // else. `datEye` is the camera in DAT space, for the fog distance those
+    // shaders measure against their raw vWorld.
+    const datVP = mat4Multiply(viewProj, ENTITY_ROT_M);
+    const datEye = toEntityPt(eye);
     const fogFar = this.fog.enabled ? this.fog.far : -1;
 
     // Cast shadows: fill the depth map from the sun before anything reads it.
@@ -2274,11 +2282,11 @@ export class Renderer {
     // Floor first (writes depth so the model occludes correctly).
     if (this.floor) {
       gl.useProgram(this.floorProgram);
-      gl.uniformMatrix4fv(this.floorUniforms.viewProj, false, viewProj);
+      gl.uniformMatrix4fv(this.floorUniforms.viewProj, false, datVP);
       gl.uniform1f(this.floorUniforms.tile, this.floorTile);
       gl.uniform1f(this.floorUniforms.y, this.floorY);
       gl.uniform1i(this.floorUniforms.texture, 0);
-      gl.uniform3fv(this.floorUniforms.cameraPos, eye);
+      gl.uniform3fv(this.floorUniforms.cameraPos, datEye);
       gl.uniform3fv(this.floorUniforms.fogColor, this.fog.color);
       gl.uniform2f(this.floorUniforms.fogRange, this.fog.near, fogFar);
       gl.uniform3fv(this.floorUniforms.sunDir, this.shadowSunDir);
@@ -2339,15 +2347,21 @@ export class Renderer {
       return;
     }
 
+    // Helpers: display-space (viewProj) on the empty/effect stage and zones.
+    // Entity mesh is drawn through datVP (ENTITY_ROT); keep skeleton helpers in
+    // the same space as the skinned mesh when a pose exists.
+    const helpersVP = (this.pose && this.model && this.model.kind !== 'zone')
+      ? datVP
+      : viewProj;
     const drawHelpers = () => {
-      if (this.showGrid) this._drawGrid(viewProj);
-      if (this.showAxes) this._drawAxes(viewProj);
-      if (this.cameraPath) this._drawCameraPath(viewProj);
+      if (this.showGrid) this._drawGrid(helpersVP);
+      if (this.showAxes) this._drawAxes(helpersVP);
+      if (this.cameraPath) this._drawCameraPath(helpersVP);
     };
     if (!this.pose) { drawHelpers(); return; }
     // "Just the bones": the rig replaces the mesh rather than overlaying it.
     if (this.showSkeleton) {
-      this._drawSkeleton(viewProj);
+      this._drawSkeleton(datVP);
       this._drawParticles();
       drawHelpers();
       return;
@@ -2363,10 +2377,10 @@ export class Renderer {
     gl.uniform4fv(this.uniforms.rot, this.rotArray);
     gl.uniform4fv(this.uniforms.trans, this.transArray);
     gl.uniform4fv(this.uniforms.scale, this.scaleArray);
-    gl.uniformMatrix4fv(this.uniforms.viewProj, false, viewProj);
+    gl.uniformMatrix4fv(this.uniforms.viewProj, false, datVP);
     gl.uniform3fv(this.uniforms.lightDir, this.camera.forward);
     gl.uniform1i(this.uniforms.texture, 0);
-    gl.uniform3fv(this.uniforms.cameraPos, eye);
+    gl.uniform3fv(this.uniforms.cameraPos, datEye);
     gl.uniform3fv(this.uniforms.fogColor, this.fog.color);
     gl.uniform2f(this.uniforms.fogRange, this.fog.near, fogFar);
 

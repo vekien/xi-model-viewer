@@ -287,10 +287,6 @@ export class ParticleSystem {
     // constructor, so a missing adapter would throw during registration and take
     // the whole weather set down with it.
     this.camera = camera ?? NULL_CAMERA;
-    // Optional actor the SourceActor/TargetActor generators ride. null means
-    // they emit at the origin, which is what a standalone effect preview wants.
-    // See ACTOR_ATTACH_TYPES and Renderer#actorAdapter.
-    this.actor = null;
     this.environment = environment;
     this.effectManager = new EffectManager();
 
@@ -797,13 +793,6 @@ export class ParticleSystem {
     this.#advanceEffect(elapsedFrames);
     this.effectManager.update(elapsedFrames);
   }
-
-  /**
-   * Supply (or clear) the actor that actor-attached generators follow.
-   * The adapter is read every frame — see Renderer#actorAdapter — so it must
-   * report the CURRENT pose, in DAT space (the drawer applies DISPLAY_ROT).
-   */
-  setActor(actor) { this.actor = actor ?? null; }
 
   getAllParticles() { return this.effectManager.getAllParticles(); }
   getScreenFlashes() { return this._screenFlashes; }

@@ -94,6 +94,7 @@ const DEFAULT_BG = '#303438';
 const LAST_DAT_KEY = 'lastDat';
 const LAST_VIEW_KEY = 'lastView';
 const LAST_IMAGE_KEY = 'lastImage';
+const LAST_EFFECT_KEY = 'lastEffect';
 const ANIM_SEL_KEY = 'lastAnimSel';
 /** Per-zone camera poses keyed by zone path (lowercase). */
 const ZONE_CAM_KEY = 'zoneCameras';
@@ -186,6 +187,8 @@ const loadSettings = (gamePath) => {
     showXiConsole: localStorage.getItem('showXiConsole') !== '0',
     autoCloseXiConsole: localStorage.getItem('autoCloseXiConsole') === '1',
     xiPath: localStorage.getItem('xiPath') || '',
+    showGrid: localStorage.getItem('showGrid') === '1',
+    showAxes: localStorage.getItem('showAxes') === '1',
   };
 };
 
@@ -210,7 +213,7 @@ function particleParsers(zoneResource, warnings) {
  */
 const CAST_BLEND_FRAMES = 9;   // 0.3s
 
-const texLabel = (name) = String(name ?? '').trim().split(/\s+/).pop() || String(name ?? '');
+const texLabel = (name) => String(name ?? '').trim().split(/\s+/).pop() || String(name ?? '');
 
 function buildParticleTree(buffer, parsers, warnings) {
   const bytes = new Uint8Array(buffer);
@@ -562,12 +565,9 @@ export default function App({ launch = null }) {
   const animTick = useRef(null);
   const [showTex, setShowTex] = useState(true);
   const [showWireframe, setShowWireframe] = useState(false);
-  // Origin axis gizmo. Defaults on in Effects (particles play at 0,0,0 with no
-  // other geometry to judge position against) and off everywhere else; the
-  // view-change effect below re-applies that default on every switch.
-  const [showAxes, setShowAxes] = useState(() => localStorage.getItem(LAST_VIEW_KEY) === 'effects');
-  // World grid (the floor, as lines). Off until asked for; sticks across views.
-  const [showGrid, setShowGrid] = useState(false);
+  // Origin axis gizmo + world grid — persisted (Settings + View menu).
+  const [showAxes, setShowAxes] = useState(() => localStorage.getItem('showAxes') === '1');
+  const [showGrid, setShowGrid] = useState(() => localStorage.getItem('showGrid') === '1');
   const [showSkeleton, setShowSkeleton] = useState(false);
   const [showAlpha, setShowAlpha] = useState(true);
   // Zone blend submeshes: LEQUAL depth (on) vs strict LESS (off). Default on.
@@ -975,7 +975,7 @@ export default function App({ launch = null }) {
       canvas.height = 1;
     }
     const renderer = new Renderer(canvas);
-    renderer.screenOffsetX = explorerOpen ? 180 : 0;
+    renderer.screenOffsetX = 0;
     rendererRef.current = renderer;
     // Dev-only escape hatch for driving/inspecting the renderer from the
     // console (headless verification, quick probes). Not part of the app API.
@@ -1183,7 +1183,6 @@ export default function App({ launch = null }) {
 
   useEffect(() => {
     try { localStorage.setItem('explorer', explorerOpen ? '1' : '0'); } catch { /* quota */ }
-    if (rendererRef.current) rendererRef.current.screenOffsetX = explorerOpen ? 180 : 0;
   }, [explorerOpen]);
 
   useEffect(() => {
@@ -1842,6 +1841,13 @@ export default function App({ launch = null }) {
       setEffectTransport('playing');
       setSelectedDat(abs.toLowerCase());
       setDataSources([{ id: 'effect', label: rel, path: abs }]);
+      try {
+        localStorage.setItem(LAST_EFFECT_KEY, JSON.stringify({
+          name: entry.name,
+          path: rel,
+          cat: entry.cat ?? null,
+        }));
+      } catch { /* quota */ }
 
       // Details panel: the effect's sprite images (click to view, same as gear
       // textures) plus what the DAT actually contains.
@@ -2937,7 +2943,25 @@ export default function App({ launch = null }) {
           return;
         }
         // Lists that own no model on boot — don't resurrect the last DAT behind them.
-        if (restoredView === 'music' || restoredView === 'sfx' || restoredView === 'effects') return;
+        if (restoredView === 'music' || restoredView === 'sfx') return;
+        // Effects: replay the last spell/ability (empty stage) so reload lands
+        // on a live preview, not a blank origin with upside-down helpers.
+        if (restoredView === 'effects') {
+          setWasd(false);
+          try {
+            const last = JSON.parse(localStorage.getItem(LAST_EFFECT_KEY) || 'null');
+            if (last?.path) {
+              await loadEffect({
+                name: last.name || last.path,
+                path: last.path,
+                cat: last.cat ?? undefined,
+              });
+              return;
+            }
+          } catch { /* stale/corrupt — fall through to framed empty stage */ }
+          rendererRef.current?.frameEffect?.();
+          return;
+        }
 
         // Prefer the last successfully loaded DAT; fall back to the default demo model.
         let paths = null;
@@ -2986,7 +3010,9 @@ export default function App({ launch = null }) {
         setStatusText(`Startup failed: ${err.message ?? err}`);
       }
     })();
-  }, [loadModel, loadZone, setWasd, openLaunchZone]);
+  // loadImage is declared below this effect; the async body closes over it safely,
+  // but listing it in deps would hit the temporal dead zone on first render.
+  }, [loadModel, loadZone, loadEffect, setWasd, openLaunchZone]);
 
   // Debug/verification hook (used by the headless capture flow)
   useEffect(() => {
@@ -3164,6 +3190,8 @@ export default function App({ launch = null }) {
     onLoop: setEffectLoop,
     charAnim: showCharAnim,
     onCharAnim: setShowCharAnim,
+    // Only meaningful when an effect is playing on a loaded PC/NPC.
+    charAnimEnabled: !!modelInfo?.effect?.onActor,
     speed: effectSpeed,
     onSpeed: setEffectSpeed,
     onSeek: restartEffect,
@@ -4288,11 +4316,6 @@ export default function App({ launch = null }) {
     }
     if (leftView !== 'files') setBrowserKind(null);
     setDataStructOpen(false);
-    // Axes on empty effect stage only — keep them off when a character is still up.
-    setShowAxes(
-      (leftView === 'effects' && !keepActorForEffects)
-      || (leftView === 'files' && browserKind === 'effect'),
-    );
     // Re-entering Character Creation frames the model once more; while you are
     // in it, the camera is yours.
     if (leftView !== 'creation') crFramedRef.current = false;
@@ -4778,6 +4801,12 @@ export default function App({ launch = null }) {
     localStorage.setItem('showXiConsole', draft.showXiConsole === false ? '0' : '1');
     localStorage.setItem('autoCloseXiConsole', draft.autoCloseXiConsole ? '1' : '0');
     localStorage.setItem('xiPath', xiPath);
+    const nextGrid = !!draft.showGrid;
+    const nextAxes = !!draft.showAxes;
+    localStorage.setItem('showGrid', nextGrid ? '1' : '0');
+    localStorage.setItem('showAxes', nextAxes ? '1' : '0');
+    setShowGrid(nextGrid);
+    setShowAxes(nextAxes);
     // Clearing a root forces its toggle off.
     const hdEnabled = hdPath ? !!draft.hdEnabled : false;
     const pivotEnabled = pivotPath ? !!draft.pivotEnabled : false;
@@ -4795,6 +4824,8 @@ export default function App({ launch = null }) {
       closeDatNotesOnSave: !!draft.closeDatNotesOnSave,
       showXiConsole: draft.showXiConsole !== false,
       autoCloseXiConsole: !!draft.autoCloseXiConsole,
+      showGrid: nextGrid,
+      showAxes: nextAxes,
     };
     setSettings(next);
     settingsRef.current = next;
@@ -5081,10 +5112,18 @@ export default function App({ launch = null }) {
         setSkybox(!showSkybox);
         break;
       case 'toggle-axes':
-        setShowAxes((v) => !v);
+        setShowAxes((v) => {
+          const next = !v;
+          try { localStorage.setItem('showAxes', next ? '1' : '0'); } catch { /* quota */ }
+          return next;
+        });
         break;
       case 'toggle-grid':
-        setShowGrid((v) => !v);
+        setShowGrid((v) => {
+          const next = !v;
+          try { localStorage.setItem('showGrid', next ? '1' : '0'); } catch { /* quota */ }
+          return next;
+        });
         break;
       case 'assets-files':
         setLeftView('files');
@@ -5573,7 +5612,10 @@ export default function App({ launch = null }) {
       if (wasdRef.current) {
         if (drag.current.btn === 0 || drag.current.btn === 2) cam.flyLook(dx, dy);
       } else if (drag.current.btn === 0) {
-        cam.orbit(dx, dy);
+        // Entities/effects: orbit around the model pivot so a pan is preserved
+        // (character stays put on screen). Zones keep free tumble about look-at.
+        const pivot = rendererRef.current.getOrbitPivot?.() ?? null;
+        cam.orbit(dx, dy, pivot);
       } else {
         cam.pan(dx, dy);
       }
@@ -5712,7 +5754,11 @@ export default function App({ launch = null }) {
         )}
         <SettingsModal
           open={settingsOpen}
-          initial={settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, closeDatNotesOnSave: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }}
+          initial={{
+            ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, closeDatNotesOnSave: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
+            showGrid,
+            showAxes,
+          }}
           error={settingsError}
           onSave={saveSettings}
           onClose={() => { setSettingsOpen(false); setSettingsError(''); }}
@@ -6329,7 +6375,11 @@ export default function App({ launch = null }) {
 
       <SettingsModal
         open={settingsOpen}
-        initial={settings ?? { gamePath: '', hdPath: '', hdEnabled: false, bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, closeDatNotesOnSave: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }}
+        initial={{
+          ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, closeDatNotesOnSave: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
+          showGrid,
+          showAxes,
+        }}
         error={settingsError}
         onSave={saveSettings}
         onClose={() => { setSettingsOpen(false); setSettingsError(''); }}

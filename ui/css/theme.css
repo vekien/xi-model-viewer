@@ -124,6 +124,8 @@ html, body {
   box-shadow:
     inset 0 1px 0 var(--highlight),
     0 6px 28px rgba(0, 0, 0, 0.42);
+  padding: 12px;
+  overflow: hidden;
 }
 
 /* --- Buttons -------------------------------------------------------------- */

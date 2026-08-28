@@ -90,7 +90,7 @@ export function AnimationPanel({ pc, anim }) {
           playing, onTogglePlay, frameSink, onSeek,
           transport = 'playing', onPlay, onPause, onStop,
           loop = true, onLoop,
-          charAnim = false, onCharAnim,
+          charAnim = false, onCharAnim, charAnimEnabled = true,
           speed = 1, onSpeed, volume, onVolume } = anim ?? {};
 
   if (actionGroups.length === 0 && anims.length === 0 && schedules.length === 0) return null;
@@ -99,7 +99,7 @@ export function AnimationPanel({ pc, anim }) {
     <div id="animbar" className="panel">
       <div className="side-separator anim-title">
         <span className="icon">animation</span>
-        Animation
+        Options
       </div>
       {actionGroups.length > 0 && (
         <>
@@ -207,14 +207,9 @@ export function AnimationPanel({ pc, anim }) {
           </Tooltip>
         </Row>
       )}
-      {onCharAnim && (
-        <Field className="pc-ctrl pc-charanim">
-          <Checkbox checked={charAnim} onChange={onCharAnim} className="checkbox">
-            <span className="icon check-icon">check</span>
-          </Checkbox>
-          <Label className="pc-charanim-label">Show Character Animation</Label>
-        </Field>
-      )}
+      
+      <hr/>
+
       {frameSink && <FrameScrubber frameSink={frameSink} onSeek={onSeek} />}
       {onSpeed && (
         <Row label="Speed">
@@ -244,6 +239,26 @@ export function AnimationPanel({ pc, anim }) {
           </span>
         </Row>
       )}
+
+      <hr/>
+
+      {onCharAnim && (
+        <Field
+          className={`pc-ctrl pc-charanim${charAnimEnabled ? '' : ' is-disabled'}`}
+          disabled={!charAnimEnabled}
+        >
+          <Checkbox
+            checked={!!charAnim && !!charAnimEnabled}
+            onChange={onCharAnim}
+            className="checkbox"
+            disabled={!charAnimEnabled}
+          >
+            <span className="icon check-icon">check</span>
+          </Checkbox>
+          <Label className="pc-charanim-label">Show Character Animation</Label>
+        </Field>
+      )}
+
     </div>
   );
 }

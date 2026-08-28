@@ -27,25 +27,6 @@ export const AttachType = {
 const ATTACH_VALUES = new Set(Object.values(AttachType));
 export const attachTypeFrom = (flag) => (ATTACH_VALUES.has(flag) ? flag : null);
 
-/**
- * Attach types that resolve to an actor rather than the world or the sky.
- * 91% of the generators in retail effect DATs are SourceActor or TargetActor.
- *
- * The viewer previews one character at a time, so source and target are the
- * same actor and every one of these lands on it. SourceActorWeapon belongs on
- * the drawn weapon; it falls back to the joint the DAT names, which for those
- * generators is the hand holding it.
- */
-export const ACTOR_ATTACH_TYPES = new Set([
-  AttachType.SourceActor,
-  AttachType.TargetActor,
-  AttachType.SourceToTargetBasis,
-  AttachType.TargetActorSourceFacing,
-  AttachType.SourceActorTargetFacing,
-  AttachType.TargetToSourceBasis,
-  AttachType.SourceActorWeapon,
-]);
-
 export const BillBoardType = {
   None: 'None',
   XYZ: 'XYZ',
