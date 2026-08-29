@@ -356,6 +356,8 @@ export default function App({ launch = null }) {
   const canvasRef = useRef(null);
   const rendererRef = useRef(null);
   const modelRef = useRef(null);
+  // Entity (NPC/PC) still on stage after Effects — restore path UI when leaving.
+  const lastEntityRef = useRef(null);
   const loadGenRef = useRef(0);       // drop stale async load results
   const overlayGenRef = useRef(0);    // which load gen owns the loading overlay
   const appliedPlayRef = useRef({ kind: null, id: '' }); // last applied anim/schedule (gear-swap resume)
@@ -680,6 +682,11 @@ export default function App({ launch = null }) {
     () => localStorage.getItem('showCharAnim') === '1',
   );
   const showCharAnimRef = useRef(showCharAnim);
+  // Spawn TargetActor FX at the character AABB centre (default on).
+  const [attachFx, setAttachFxState] = useState(
+    () => localStorage.getItem('attachFxToChar') !== '0',
+  );
+  const attachFxRef = useRef(attachFx);
   const effectSfxOnRef = useRef(true);
   const effectTokenRef = useRef(0);                         // drop stale effect-load results
   const zoneMusicRef = useRef(null);                        // zone_music.json (server zone_settings)
@@ -1000,6 +1007,7 @@ export default function App({ launch = null }) {
     renderer.showUnplaced = true;
     // Restore View > Toggle WASD from last session.
     if (wasdRef.current) renderer.camera.setMode('fly');
+    renderer.attachFxToActor = attachFxRef.current;
     // Seed the toolbar readout so it never shows 0 before the first frame.
     setFlySpeed(Math.round(renderer.camera.flySpeed));
 
@@ -1473,6 +1481,20 @@ export default function App({ launch = null }) {
       try {
         localStorage.setItem(LAST_DAT_KEY, JSON.stringify({ paths, name: displayName, opts: { focusPaths, weaponSlots, battleTable, parts } }));
       } catch { /* quota / private mode */ }
+      // Remember NPC/PC for Effects → back without a full reload.
+      if (model.kind !== 'zone' && model.kind !== 'creation') {
+        const view = leftViewRef.current === 'pc' || leftViewRef.current === 'npc'
+          ? leftViewRef.current
+          : (lastEntityRef.current?.view ?? 'npc');
+        lastEntityRef.current = {
+          view,
+          selectedPath: primaryPath.toLowerCase(),
+          modelPath: relativeName(primaryPath),
+          shownPath: primaryPath,
+          sourcePath: paths[paths.length - 1],
+          name: displayName,
+        };
+      }
       return { ok: true };
     } catch (err) {
       console.error(err);
@@ -1822,15 +1844,17 @@ export default function App({ launch = null }) {
 
       if (onActor) {
         // Keep the character mesh; composite particles like a zone weather pass.
+        renderer.attachFxToActor = attachFxRef.current;
         renderer.attachEffectSystem(system, textures);
       } else {
         // Empty stage: wipe any prior model and frame the origin once.
         const keepCamera = renderer.effectMode;
         renderer.setEffectScene(system, textures, keepCamera);
         modelRef.current = null;
-        setModelPath(rel);
-        shownPathRef.current = abs;
       }
+      // Status bar + Data Struct always name the effect DAT (even on-actor).
+      setModelPath(rel);
+      shownPathRef.current = abs;
       renderer.effectSpeed = effectSpeedRef.current;
       renderer.effectPaused = false;
 
@@ -1841,6 +1865,9 @@ export default function App({ launch = null }) {
       setEffectTransport('playing');
       setSelectedDat(abs.toLowerCase());
       setDataSources([{ id: 'effect', label: rel, path: abs }]);
+      if (dataStructOpenRef.current) {
+        queueMicrotask(() => dataStructReloadRef.current?.(abs));
+      }
       try {
         localStorage.setItem(LAST_EFFECT_KEY, JSON.stringify({
           name: entry.name,
@@ -1956,6 +1983,13 @@ export default function App({ launch = null }) {
       r.playing = true;
     }
   }, [actorIdleClip]);
+
+  const setAttachFx = useCallback((on) => {
+    attachFxRef.current = !!on;
+    setAttachFxState(!!on);
+    try { localStorage.setItem('attachFxToChar', on ? '1' : '0'); } catch { /* quota */ }
+    if (rendererRef.current) rendererRef.current.attachFxToActor = !!on;
+  }, []);
 
   /** Loop toggle: applies to the armed routine immediately, and sticks. */
   const setEffectLoop = useCallback((on) => {
@@ -3192,6 +3226,9 @@ export default function App({ launch = null }) {
     onCharAnim: setShowCharAnim,
     // Only meaningful when an effect is playing on a loaded PC/NPC.
     charAnimEnabled: !!modelInfo?.effect?.onActor,
+    attachFx,
+    onAttachFx: setAttachFx,
+    attachFxEnabled: !!modelInfo?.effect?.onActor,
     speed: effectSpeed,
     onSpeed: setEffectSpeed,
     onSeek: restartEffect,
@@ -4289,14 +4326,17 @@ export default function App({ launch = null }) {
     const nextAudio = AUDIO_VIEWS.has(leftView)
       || (leftView === 'files' && (browserKind === 'music' || browserKind === 'sfx'));
 
-    // Zones keeps a loaded zone; anything else starts empty — except Effects,
-    // which keeps a PC/NPC so spells can play on the actor (attachEffectSystem).
+    // Zones keeps a loaded zone; Effects keeps a PC/NPC; returning NPC/PC from
+    // Effects keeps that same actor (no reload) and restores path UI.
     const actor = modelRef.current;
-    const keepActorForEffects = leftView === 'effects'
-      && actor
-      && actor.kind !== 'zone'
-      && actor.isRenderable;
-    if (!(prevZone && nextZone) && !keepActorForEffects) unloadModel();
+    const isEntity = !!(actor && actor.kind !== 'zone' && actor.isRenderable);
+    const keepActorForEffects = leftView === 'effects' && isEntity;
+    const keepActorFromEffects = isEntity
+      && prev === 'effects'
+      && (leftView === 'npc' || leftView === 'pc');
+    if (!(prevZone && nextZone) && !keepActorForEffects && !keepActorFromEffects) {
+      unloadModel();
+    }
     if (!(prevAudio && nextAudio)) player.stop();
     // Leaving the zone views silences the zone outright: the BGM and every
     // ambient/weather voice, including one-shots already in flight. Detaching
@@ -4328,6 +4368,34 @@ export default function App({ launch = null }) {
       setEffectRoutines([]);
       setEffectSchedule('');
       setEffectTransport('stopped');
+      rendererRef.current?.particleSystem?.clearEffect?.();
+      weatherAudioRef.current?.stopOneShots?.();
+      if (rendererRef.current) {
+        rendererRef.current.particleSystem = null;
+        rendererRef.current.effectMode = false;
+      }
+    }
+    // Effects → NPC/PC with actor still on stage: put the status bar / selection
+    // back on the character DAT (effect load had overwritten them).
+    if (keepActorFromEffects) {
+      const last = lastEntityRef.current;
+      if (last) {
+        setModelPath(last.modelPath);
+        setSelectedDat(last.selectedPath);
+        shownPathRef.current = last.shownPath;
+        sourcePathRef.current = last.sourcePath;
+        setModelInfo((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev };
+          delete next.effect;
+          return next;
+        });
+        setStatusText(last.name || '');
+      }
+      lastEntityRef.current = {
+        ...(lastEntityRef.current || {}),
+        view: leftView,
+      };
     }
     // Entering Effects with an actor: clear any leftover particles; list selection stays.
     if (keepActorForEffects && prev !== 'effects') {

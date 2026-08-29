@@ -16,6 +16,17 @@
 import { Vec3, Mat4, Color, PI_f, posRand, rand } from './math.js';
 import { AttachType, BillBoardType, LinkedDataType, RotationOrder, BlendFunc, PointLightParams, PositionTransform } from './types.js';
 
+/** Spell/ability gens authored against an actor (not sun/moon/zone). */
+function isActorAttach(attach) {
+  return attach === AttachType.SourceActor
+    || attach === AttachType.TargetActor
+    || attach === AttachType.SourceToTargetBasis
+    || attach === AttachType.TargetActorSourceFacing
+    || attach === AttachType.SourceActorTargetFacing
+    || attach === AttachType.TargetToSourceBasis
+    || attach === AttachType.SourceActorWeapon;
+}
+
 let particleCounter = 1;
 
 class SubParticle {
@@ -462,6 +473,11 @@ export class ParticleGenerator {
       this.activeParticles = [];
       return;
     }
+    // Freeze actor attach on first sample — spawn at the character, do not ride
+    // the animation (TargetActor in-game is a world point, not a bone follow).
+    if (isActorAttach(this.def.attachType) && !this._actorAttachFrozen) {
+      this.updateAssociatedPosition(elapsedFrames);
+    }
     this.emit(elapsedFrames);
     for (const p of this.activeParticles) p.update(elapsedFrames);
     this.activeParticles = this.activeParticles.filter((p) => !p.isComplete());
@@ -544,9 +560,20 @@ export class ParticleGenerator {
     } else if (attach === AttachType.Moon) {
       this.genAssociatedPosition.copyFrom(this.runtime.getMoonPosition())
         .addInPlace(this.runtime.camera.getPosition());
+    } else if (isActorAttach(attach)) {
+      // DAT attachFlags name a joint (joint1 = target, joint0 = source). Sample
+      // once at spawn so the FX does not ride the animation; authored
+      // basePosition / ground projection still apply on top.
+      if (this._actorAttachFrozen) return;
+      const j = (this.def.attachedJoint1 || this.def.attachedJoint0 || 0) | 0;
+      const pos = this.runtime.getActorAttachPosition?.(j);
+      if (pos) {
+        this.genAssociatedPosition.copyFrom(pos);
+        this._actorAttachFrozen = true;
+      } else {
+        this.genAssociatedPosition.set(0, 0, 0);
+      }
     }
-    // Actor attach types need an actor association, which effects never have:
-    // a spell renders identically whether or not a character is on screen.
   }
 
   getAssociatedPosition() { return this.genAssociatedPosition; }

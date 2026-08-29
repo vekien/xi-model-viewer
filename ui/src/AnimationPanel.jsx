@@ -91,6 +91,7 @@ export function AnimationPanel({ pc, anim }) {
           transport = 'playing', onPlay, onPause, onStop,
           loop = true, onLoop,
           charAnim = false, onCharAnim, charAnimEnabled = true,
+          attachFx = true, onAttachFx, attachFxEnabled = true,
           speed = 1, onSpeed, volume, onVolume } = anim ?? {};
 
   if (actionGroups.length === 0 && anims.length === 0 && schedules.length === 0) return null;
@@ -242,6 +243,22 @@ export function AnimationPanel({ pc, anim }) {
 
       <hr/>
 
+      {onAttachFx && (
+        <Field
+          className={`pc-ctrl pc-charanim${attachFxEnabled ? '' : ' is-disabled'}`}
+          disabled={!attachFxEnabled}
+        >
+          <Checkbox
+            checked={!!attachFx && !!attachFxEnabled}
+            onChange={onAttachFx}
+            className="checkbox"
+            disabled={!attachFxEnabled}
+          >
+            <span className="icon check-icon">check</span>
+          </Checkbox>
+          <Label className="pc-charanim-label">Attach FX to Character</Label>
+        </Field>
+      )}
       {onCharAnim && (
         <Field
           className={`pc-ctrl pc-charanim${charAnimEnabled ? '' : ' is-disabled'}`}

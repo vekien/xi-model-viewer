@@ -3079,6 +3079,11 @@ button.update-dl-btn .update-dl-meta {
   display: flex; gap: 10px;
   z-index: 20;
 }
+
+.data-viewer .panel {
+  padding: 2px;;
+}
+
 /* Make room for the open-failure banner when present. */
 .file-open-banner + .data-viewer { top: 118px; }
 /* .panel is fixed-position by default; these live in the viewer's flex row. */

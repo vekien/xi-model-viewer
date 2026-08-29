@@ -6,10 +6,11 @@
 // "Schedule" dropdown; each 0x02 command spawns one generator at a start delay
 // for an emit duration. Play the routine and the generators draw the effect.
 //
-// Every generator in these DATs is authored to attach to the target actor
-// (attachType = TargetActor) and is not auto-running, so with no actor present
-// they emit at the world origin for their scheduled window and then drain — no
-// skeleton or actor rig is needed to preview them.
+// Each 0x05 generator carries attachType in attachFlags (low 4 bits): None,
+// SourceActor, TargetActor, joints, etc. Spell gens are almost always
+// TargetActor (actor root / feet); authored basePosition and GroundProjection
+// (0x42) / decal place the visual on the ground or body. With no actor they
+// emit at the world origin for their scheduled window and then drain.
 
 import { parseSections } from './zone.js';
 

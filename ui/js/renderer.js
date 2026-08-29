@@ -871,6 +871,8 @@ export class Renderer {
     this.effectMode = false;
     this.effectPaused = false;
     this.effectSpeed = 1;
+    // Spell TargetActor attach at skinned AABB centre when a character is on stage.
+    this.attachFxToActor = true;
 
     this.rotArray = new Float32Array(MAX_JOINTS * 4);
     this.transArray = new Float32Array(MAX_JOINTS * 4);
@@ -1800,6 +1802,48 @@ export class Renderer {
       (a[1] + b[1]) * 0.5,
       (a[2] + b[2]) * 0.5,
     ];
+  }
+
+  /**
+   * Particle-space origin for TargetActor/SourceActor gens on a character.
+   *
+   * `jointId` is attachedJoint1/0 from the 0x05 header. Those values are stable
+   * *slot IDs* across every spell DAT (0, 1, 21, 43, 48, 49…) — not raw skeleton
+   * indices (Stone V uses 48; treating that as bone 48 puts rocks on the torso).
+   * Map slots to a height along the actor: 0/48+ → feet, low IDs → waist, 21 →
+   * mid, 43 → upper. XZ always comes from the skeleton root (actor position).
+   *
+   * DAT point D → particle P so DISPLAY_ROT(P) matches ENTITY_ROT(D) on screen:
+   * P = (−Dx, Dy, −Dz). null → world origin (toggle off / no entity).
+   */
+  getActorAttachPosition(jointId = 0) {
+    if (!this.attachFxToActor) return null;
+    if (this.effectMode || !this.model || this.model.kind === 'zone' || !this.pose) {
+      return null;
+    }
+    const root = this.pose.trans?.[0];
+    if (!root) return null;
+
+    const slot = jointId | 0;
+    // Height fraction from feet (0) toward head (1). Y-down DAT: footY > headY.
+    let t = 0;
+    if (slot <= 0 || slot >= 48) t = 0;          // root / ground-target slots
+    else if (slot <= 12) t = 0.28;             // lower torso (Fire = 1)
+    else if (slot <= 30) t = 0.52;             // mid / hit (21)
+    else t = 0.82;                             // upper (Thunder/Blizzard = 43)
+
+    let x = root[0];
+    let y = root[1];
+    let z = root[2];
+    const b = this.computeBounds();
+    if (b && t > 0) {
+      const footY = b.footY ?? Math.max(b.min[1], b.max[1]);
+      const headY = Math.min(b.min[1], b.max[1]);
+      y = footY + (headY - footY) * t;
+    } else if (b && t === 0) {
+      y = b.footY ?? root[1];
+    }
+    return new Vec3(-x, y, -z);
   }
 
   /** Reset the camera to frame whatever is on screen — a model/zone or a
@@ -3084,6 +3128,14 @@ export class Renderer {
 
     const toDat = (v) => new Vec3(-v.x, -v.y, v.z);
     const self = this;
+    system.getActorAttachPosition = (jointId) => self.getActorAttachPosition(jointId);
+    // GroundProjection (0x42) / decal: entity floor plane in particle DAT Y.
+    // Zones keep null until real terrain queries exist; bare effect stage = y0.
+    system.floorQuery = (pos) => {
+      if (self.model?.kind === 'zone') return null;
+      if (self.model && self.pose && self.floorY != null) return self.floorY;
+      return 0;
+    };
     system.camera = {
       getPosition() {
         const e = self.camera.eye;
