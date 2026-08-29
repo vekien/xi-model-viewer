@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listArrowHandler, useScrollIntoView } from './useListArrows.js';
+import { Tooltip } from './Tooltip.jsx';
 
 // images.json (from dev/bake-images.mjs): [{ id, name, entries: [{ name, path }] }]
 // path is backslash `ROM…\N.DAT`, relative to the game directory.
@@ -144,11 +145,13 @@ function ImageRow({ entry, selected, onSelectImage }) {
   const ref = useScrollIntoView(selected);
   return (
     <div className={`node${selected ? ' selected' : ''}`}>
-      <div className="row" ref={ref} onClick={() => onSelectImage?.(entry)} title={entry.path}>
-        <span className="caret icon" />
-        <span className="kind icon">image</span>
-        <span className="zone-name">{entry.name}</span>
-      </div>
+      <Tooltip content={entry.path}>
+        <div className="row" ref={ref} onClick={() => onSelectImage?.(entry)}>
+          <span className="caret icon" />
+          <span className="kind icon">image</span>
+          <span className="zone-name">{entry.name}</span>
+        </div>
+      </Tooltip>
     </div>
   );
 }

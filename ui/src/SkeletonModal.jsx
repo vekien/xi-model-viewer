@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@headlessui/react';
+import { Tooltip } from './Tooltip.jsx';
 
 /** Matches xi-tools export naming / the fixed Skeleton panel. */
 const boneName = (i) => `bone${String(i).padStart(4, '0')}`;
@@ -110,9 +111,11 @@ export function SkeletonModal({
         <span className="icon">accessibility_new</span>
         <span className="modal-title mono">{title}</span>
         <span className="skel-count mono">{joints.length} joints</span>
-        <Button className="icon-btn modal-close" onClick={onClose} title="Close">
-          <span className="icon">close</span>
-        </Button>
+        <Tooltip content="Close">
+          <Button className="icon-btn modal-close" onClick={onClose}>
+            <span className="icon">close</span>
+          </Button>
+        </Tooltip>
       </div>
       <div className="skel-modal-body">{rows}</div>
     </div>,

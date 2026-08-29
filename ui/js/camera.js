@@ -59,6 +59,20 @@ function norm(v) {
   return [v[0] / l, v[1] / l, v[2] / l];
 }
 
+/** Rotate vector `v` about unit-ish `axis` by `angle` (Rodrigues). */
+function rotateVec(v, axis, angle) {
+  if (Math.abs(angle) < 1e-12) return [v[0], v[1], v[2]];
+  const a = norm(axis);
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  const d = (1 - c) * (a[0] * v[0] + a[1] * v[1] + a[2] * v[2]);
+  return [
+    c * v[0] + s * (a[1] * v[2] - a[2] * v[1]) + d * a[0],
+    c * v[1] + s * (a[2] * v[0] - a[0] * v[2]) + d * a[1],
+    c * v[2] + s * (a[0] * v[1] - a[1] * v[0]) + d * a[2],
+  ];
+}
+
 export const FLY_SPEED_MIN = 1;
 export const FLY_SPEED_MAX = 300;
 /** Zone fly default (half the old 50). Entity default is 1/6 of this. */
@@ -77,7 +91,7 @@ function loadFlySpeed(key, fallback) {
 export class OrbitCamera {
   constructor() {
     this.mode = 'orbit';          // 'orbit' | 'fly'
-    this.yUp = false;            // false = FFXI entity Y-down; true = zone/editor Y-up
+    this.yUp = true;             // display space is Y-up for every content kind
     this.rangeKind = 'entity';    // 'zone' | 'entity' — picks default fly speed
     this.target = [0, 0, 0];
     this.yaw = 0.6;
@@ -151,16 +165,81 @@ export class OrbitCamera {
   }
 
   /**
-   * Same yaw-sign rule as flyLook below: flipping the up vector flips which
-   * world yaw direction reads as screen-right, so Y-up orbiting (Effects view —
-   * the only orbit+Y-up combination) needs the opposite sign or left/right
-   * invert. Pitch and pan are immune: pitch raises the eye in both conventions,
-   * and pan derives its axes from `this.up`, which flips with the view itself.
+   * Orbit the view.
+   *  - No pivot: tumble around the look-at target (zones / default).
+   *  - With pivot (entity centre): rotate eye + target around that point so a
+   *    prior pan is kept — the character stays put on screen while the camera
+   *    swings around them.
+   *
+   * Yaw sign matches flyLook (Y-up needs the opposite sign). Pitch is clamped on
+   * the pivot→eye elevation so top-down never crosses the pole and flips.
    */
-  orbit(dx, dy) {
+  orbit(dx, dy, pivot = null) {
     const yawSign = this.yUp ? -1 : 1;
-    this.yaw += yawSign * dx * 0.01;
-    this.pitch = Math.min(Math.max(this.pitch + dy * 0.01, -1.55), 1.55);
+    const dYaw = yawSign * dx * 0.01;
+    const dPitch = dy * 0.01;
+    const pitchLimit = 1.55;
+
+    if (!pivot || this.mode === 'fly') {
+      this.yaw += dYaw;
+      this.pitch = Math.min(Math.max(this.pitch + dPitch, -pitchLimit), pitchLimit);
+      this.userFramed = true;
+      return;
+    }
+
+    const up = this.up;
+    const e = this.eye;
+    const t = this.target;
+    // Offsets from the model pivot — rotate these rigidly (same yaw then pitch).
+    let eOff = [e[0] - pivot[0], e[1] - pivot[1], e[2] - pivot[2]];
+    let tOff = [t[0] - pivot[0], t[1] - pivot[1], t[2] - pivot[2]];
+
+    // Elevation of the eye above the pivot (same convention as this.pitch).
+    const eDist = Math.hypot(eOff[0], eOff[1], eOff[2]);
+    if (eDist < 1e-6) return;
+    const eHoriz = Math.hypot(eOff[0], eOff[2]) || 1e-6;
+    const elev = this.yUp
+      ? Math.atan2(eOff[1], eHoriz)
+      : Math.atan2(-eOff[1], eHoriz);
+    // Clamp the applied pitch so we never cross ±pitchLimit about the pivot.
+    const aPitch = Math.min(Math.max(elev + dPitch, -pitchLimit), pitchLimit) - elev;
+
+    // 1) Yaw around world-up through the pivot.
+    if (Math.abs(dYaw) > 1e-12) {
+      eOff = rotateVec(eOff, up, dYaw);
+      tOff = rotateVec(tOff, up, dYaw);
+    }
+
+    // 2) Pitch around the horizontal axis ⊥ up and pivot→eye (stable at poles:
+    //    length → 0 and we skip, already clamped by elev).
+    if (Math.abs(aPitch) > 1e-12) {
+      // right = up × eOff  →  screen-right when looking toward the pivot
+      const r = cross(up, eOff);
+      const rLen = Math.hypot(r[0], r[1], r[2]);
+      if (rLen > 1e-5) {
+        const right = [r[0] / rLen, r[1] / rLen, r[2] / rLen];
+        // Negate so drag-down matches classic orbit (pitch += dy).
+        eOff = rotateVec(eOff, right, -aPitch);
+        tOff = rotateVec(tOff, right, -aPitch);
+      }
+    }
+
+    const e2 = [pivot[0] + eOff[0], pivot[1] + eOff[1], pivot[2] + eOff[2]];
+    const t2 = [pivot[0] + tOff[0], pivot[1] + tOff[1], pivot[2] + tOff[2]];
+    this.target = t2;
+
+    // Rebuild spherical eye-about-target state so getters stay consistent.
+    const ox = e2[0] - t2[0];
+    const oy = e2[1] - t2[1];
+    const oz = e2[2] - t2[2];
+    const dist = Math.hypot(ox, oy, oz);
+    if (dist < 1e-6) return;
+    this.distance = Math.min(Math.max(dist, this.minDistance), this.maxDistance);
+    const horiz = Math.hypot(ox, oz);
+    // Near top-down, atan2 yaw chatters — keep the previous yaw.
+    if (horiz > dist * 0.002) this.yaw = Math.atan2(ox, oz);
+    const pitch = this.yUp ? Math.atan2(oy, horiz || 1e-6) : Math.atan2(-oy, horiz || 1e-6);
+    this.pitch = Math.min(Math.max(pitch, -pitchLimit), pitchLimit);
     this.userFramed = true;
   }
 
@@ -305,7 +384,10 @@ export class OrbitCamera {
       this.far = 5000;
       this.flySpeed = Math.min(FLY_SPEED_MAX, Math.max(FLY_SPEED_MIN, this.flySpeedZone));
     } else {
-      this.yUp = false;
+      // Y-up like zones and effects: the entity pass renders through
+      // ENTITY_ROT_M (Renderer#render) rather than flipping the camera, so
+      // every view shares one convention.
+      this.yUp = true;
       this.minDistance = 0.1;
       this.maxDistance = 500;
       this.near = 0.05;
@@ -326,9 +408,13 @@ export class OrbitCamera {
       this.pitch = this.yUp ? Math.atan2(f[1], horiz) : Math.atan2(-f[1], horiz);
       this.mode = 'fly';
     } else {
-      // Drop an orbit target ahead of the fly camera.
+      // Drop an orbit target ahead of the fly camera. The 5-unit floor keeps a
+      // zone pivot off the camera's nose, but a whole entity is only a couple
+      // of units across — applying it there shoves the pivot straight past the
+      // model, so orbiting a just-framed actor swung around empty space.
       const f = this.lookDir;
-      const dist = Math.min(Math.max(this.distance, 5), this.maxDistance);
+      const floor = this.rangeKind === 'zone' ? 5 : this.minDistance;
+      const dist = Math.min(Math.max(this.distance, floor), this.maxDistance);
       this.target = [
         this.pos[0] + f[0] * dist,
         this.pos[1] + f[1] * dist,

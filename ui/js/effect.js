@@ -6,10 +6,11 @@
 // "Schedule" dropdown; each 0x02 command spawns one generator at a start delay
 // for an emit duration. Play the routine and the generators draw the effect.
 //
-// Every generator in these DATs is authored to attach to the target actor
-// (attachType = TargetActor) and is not auto-running, so with no actor present
-// they emit at the world origin for their scheduled window and then drain — no
-// skeleton or actor rig is needed to preview them.
+// Each 0x05 generator carries attachType in attachFlags (low 4 bits): None,
+// SourceActor, TargetActor, joints, etc. Spell gens are almost always
+// TargetActor (actor root / feet); authored basePosition and GroundProjection
+// (0x42) / decal place the visual on the ground or body. With no actor they
+// emit at the world origin for their scheduled window and then drain.
 
 import { parseSections } from './zone.js';
 
@@ -21,12 +22,23 @@ const CMD_SPAWN_GENERATOR = 0x02;   // ref is a generator DatId
  * The blocking behaviour isn't modelled — for a standalone preview all of them
  * amount to "play that routine too, starting at this command's time".
  */
-const CALL_OPS = new Set([0x03, 0x09, 0x3b, 0x3c]);
+const CALL_OPS = new Set([0x03, 0x09, 0x3b, 0x3c, 0x57]);
 /**
  * SoundEffect ops (effect_system.md §3: positioned / player-only / nearest /
  * global variants). A ref that doesn't resolve to a 0x3D pointer is skipped.
  */
 const SOUND_OPS = new Set([0x0a, 0x0b, 0x4a, 0x53, 0x60]);
+/**
+ * SkeletonAnimation on the CASTER — the same op dat.js parseRoutine reads for
+ * entity schedules. The ref is a clip tag, often wildcarded (`ma2?`), and
+ * resolves against whatever animations the loaded character has: a Ninjutsu DAT
+ * names its own motion and a nuke names its own, so nothing is mapped by hand.
+ *
+ * (0x09 is the target-side counterpart, but its refs — `chit`, `lhit`, `stnd` —
+ * are 0x07 SCHEDULE ids on the target's own DAT, not clips, so it stays a call
+ * op above rather than being read here.)
+ */
+const ANIM_OP = 0x05;
 
 /** Trim trailing NUL/space so a routine ref compares like a DatId key. */
 const cleanId = (s) => s.replace(/\0+$/, '').trimEnd();
@@ -49,7 +61,7 @@ const cleanId = (s) => s.replace(/\0+$/, '').trimEnd();
 function parseRoutineCommands(bytes, dv, section) {
   const base = section.start + 0x10;             // dataStart
   const end = section.start + section.size;
-  const empty = { commands: [], calls: [], sounds: [] };
+  const empty = { commands: [], calls: [], sounds: [], anims: [] };
   if (section.size < 0x30) return empty;
 
   const sec2 = dv.getInt32(base + 0x14, true);   // command-list pointer (body-relative)
@@ -58,6 +70,7 @@ function parseRoutineCommands(bytes, dv, section) {
   const commands = [];
   const calls = [];
   const sounds = [];
+  const anims = [];
   let p = base + (sec2 - 16);
   let clock = 0;                                 // Σ delays of the entries BEFORE this one
   for (let guard = 0; guard < 256 && p + 8 <= end; guard++) {
@@ -82,11 +95,12 @@ function parseRoutineCommands(bytes, dv, section) {
         if (op === CMD_SPAWN_GENERATOR) commands.push({ genId: ref, delay: at, dur: u16(p + 6) });
         else if (CALL_OPS.has(op)) calls.push({ routineId: ref, delay: at });
         else if (SOUND_OPS.has(op)) sounds.push({ soundId: ref, delay: at });
+        else if (op === ANIM_OP) anims.push({ ref, delay: at, dur: u16(p + 6) });
       }
     }
     p += entryLen;
   }
-  return { commands, calls, sounds };
+  return { commands, calls, sounds, anims };
 }
 
 /** Frames the routine spans, from its last generator's start + emit window. */
@@ -106,9 +120,9 @@ export function parseEffectRoutines(buf) {
   const routines = [];
   for (const s of parseSections(dv)) {
     if (s.typeCode !== EFFECT_ROUTINE) continue;
-    const { commands, calls, sounds } = parseRoutineCommands(bytes, dv, s);
+    const { commands, calls, sounds, anims } = parseRoutineCommands(bytes, dv, s);
     routines.push({
-      id: cleanId(s.id) || 'main', commands, calls, sounds, length: routineLength(commands),
+      id: cleanId(s.id) || 'main', commands, calls, sounds, anims, length: routineLength(commands),
     });
   }
   return routines;
@@ -133,6 +147,8 @@ export function parseEffectRoutines(buf) {
 export function flattenRoutine(routine, byId, globalById = null) {
   const commands = [];
   const sounds = [];
+  const anims = [];
+  const actorCalls = [];
   const seen = new Set();
 
   const walk = (r, offset, depth) => {
@@ -140,8 +156,17 @@ export function flattenRoutine(routine, byId, globalById = null) {
     seen.add(r);
     for (const c of r.commands) commands.push({ ...c, delay: c.delay + offset });
     for (const s of r.sounds) sounds.push({ ...s, delay: s.delay + offset });
+    for (const a of r.anims ?? []) anims.push({ ...a, delay: a.delay + offset });
     for (const call of r.calls) {
       const next = byId.get(call.routineId) ?? globalById?.get(call.routineId) ?? null;
+      if (!next) {
+        // Neither this DAT nor the shared one has it — it is a schedule on the
+        // ACTOR's own DAT. That is where the cast motions live: Fire calls
+        // `shbk`, a Ninjutsu spell calls `shnj`, a cure calls `shwh`. Handing
+        // the id up lets the caller resolve it against the loaded character.
+        actorCalls.push({ scheduleId: call.routineId, delay: offset + call.delay });
+        continue;
+      }
       walk(next, offset + call.delay, depth + 1);
     }
   };
@@ -162,5 +187,7 @@ export function flattenRoutine(routine, byId, globalById = null) {
   // (particle/math.js FPS), so no unit conversion happens here. The only 2:1
   // seam in the system is model animation clips (30fps), handled where
   // schedules meet clips in dat.js resolveScheduleClip.
-  return { commands, sounds: deduped, length: routineLength(commands) };
+  anims.sort((a, b) => a.delay - b.delay);
+  actorCalls.sort((a, b) => a.delay - b.delay);
+  return { commands, sounds: deduped, anims, actorCalls, length: routineLength(commands) };
 }

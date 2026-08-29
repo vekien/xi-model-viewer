@@ -4,6 +4,7 @@
 
 import { sniffZoneDat } from './zonedat.js';
 import { matchTablePath } from './ftable.js';
+import { matchUserPath } from './userdat.js';
 
 const strAt = (bytes, p, n) => {
   let s = '';
@@ -59,6 +60,12 @@ export function classifyDat(buffer, path = '') {
     return { kind: 'data', label: 'File table', dataKind: 'ftable' };
   }
 
+  // Per-character saves: macros, config, chat state. Nothing renderable,
+  // and the section walker only produces noise for them.
+  if (matchUserPath(path || lower)) {
+    return { kind: 'data', label: 'Character save', dataKind: 'user' };
+  }
+
   if (/\.bgw$/i.test(lower) || strAt(bytes, 0, 12).startsWith('BGMStream')) {
     return { kind: 'music', label: 'Music stream' };
   }
@@ -71,6 +78,9 @@ export function classifyDat(buffer, path = '') {
 
   if (strAt(bytes, 0, 8) === 'XISTRING') {
     return { kind: 'data', label: 'XISTRING menu strings', dataKind: 'xistring' };
+  }
+  if (strAt(bytes, 0, 5) === 'd_msg') {
+    return { kind: 'data', label: 'd_msg string table', dataKind: 'dmsg' };
   }
 
   const counts = sectionTypeCounts(bytes);

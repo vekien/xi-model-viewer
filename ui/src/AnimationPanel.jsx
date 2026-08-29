@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button } from '@headlessui/react';
+import { Button, Checkbox, Field, Label } from '@headlessui/react';
 import { Combo } from './Combo.jsx';
+import { Tooltip } from './Tooltip.jsx';
 
 /** Combo on a labelled panel row, matching the gear slots in the Characters panel. */
 function Row({ label, children }) {
@@ -87,6 +88,10 @@ export function AnimationPanel({ pc, anim }) {
   const { anims = [], currentAnim = '', onAnimChange,
           schedules = [], currentSchedule = '', onScheduleChange,
           playing, onTogglePlay, frameSink, onSeek,
+          transport = 'playing', onPlay, onPause, onStop,
+          loop = true, onLoop,
+          charAnim = false, onCharAnim, charAnimEnabled = true,
+          attachFx = true, onAttachFx, attachFxEnabled = true,
           speed = 1, onSpeed, volume, onVolume } = anim ?? {};
 
   if (actionGroups.length === 0 && anims.length === 0 && schedules.length === 0) return null;
@@ -95,7 +100,7 @@ export function AnimationPanel({ pc, anim }) {
     <div id="animbar" className="panel">
       <div className="side-separator anim-title">
         <span className="icon">animation</span>
-        Animation
+        Options
       </div>
       {actionGroups.length > 0 && (
         <>
@@ -139,21 +144,73 @@ export function AnimationPanel({ pc, anim }) {
           />
         </Row>
       )}
-      {onTogglePlay && (
+      {/* Effects: Play/Pause + bare stop / rewind / loop glyphs. */}
+      {onPlay && (
+        <Row label="Playback">
+          <Button
+            className="pc-play"
+            onClick={transport === 'playing' ? onPause : onPlay}
+          >
+            <span className="icon fill">{transport === 'playing' ? 'pause' : 'play_arrow'}</span>
+            <span>{transport === 'playing' ? 'Pause' : 'Play'}</span>
+          </Button>
+          <div className="pc-tgroup">
+            {onStop && (
+              <Tooltip content="Stop">
+                <Button
+                  className="pc-tbtn"
+                  disabled={transport === 'stopped'}
+                  aria-label="Stop"
+                  onClick={onStop}
+                >
+                  {/* stop_circle reads cleaner than the bare square at this size */}
+                  <span className="icon">stop_circle</span>
+                </Button>
+              </Tooltip>
+            )}
+            <Tooltip content="Reset">
+              <Button
+                className="pc-tbtn"
+                aria-label="Reset"
+                onClick={() => { onSeek?.(0); onSpeed?.(1); }}
+              >
+                <span className="icon">replay</span>
+              </Button>
+            </Tooltip>
+            {onLoop && (
+              <Tooltip content={loop ? 'Loop on' : 'Loop off'}>
+                <Button
+                  className={`pc-tbtn${loop ? ' on' : ''}`}
+                  aria-label="Loop"
+                  aria-pressed={loop ? 'true' : 'false'}
+                  onClick={() => onLoop(!loop)}
+                >
+                  <span className="icon">repeat</span>
+                </Button>
+              </Tooltip>
+            )}
+          </div>
+        </Row>
+      )}
+      {!onPlay && onTogglePlay && (
         <Row label="Playback">
           <Button className="pc-play" onClick={onTogglePlay}>
             <span className="icon fill">{playing ? 'stop' : 'play_arrow'}</span>
             <span>{playing ? 'Stop' : 'Play'}</span>
           </Button>
-          <Button
-            className="icon-btn pc-reset"
-            title="Reset to frame 0 and 100% speed"
-            onClick={() => { onSeek?.(0); onSpeed?.(1); }}
-          >
-            <span className="icon">restart_alt</span>
-          </Button>
+          <Tooltip content="Reset to frame 0 and 100% speed">
+            <Button
+              className="icon-btn pc-reset"
+              onClick={() => { onSeek?.(0); onSpeed?.(1); }}
+            >
+              <span className="icon">restart_alt</span>
+            </Button>
+          </Tooltip>
         </Row>
       )}
+      
+      <hr/>
+
       {frameSink && <FrameScrubber frameSink={frameSink} onSeek={onSeek} />}
       {onSpeed && (
         <Row label="Speed">
@@ -183,6 +240,42 @@ export function AnimationPanel({ pc, anim }) {
           </span>
         </Row>
       )}
+
+      <hr/>
+
+      {onAttachFx && (
+        <Field
+          className={`pc-ctrl pc-charanim${attachFxEnabled ? '' : ' is-disabled'}`}
+          disabled={!attachFxEnabled}
+        >
+          <Checkbox
+            checked={!!attachFx && !!attachFxEnabled}
+            onChange={onAttachFx}
+            className="checkbox"
+            disabled={!attachFxEnabled}
+          >
+            <span className="icon check-icon">check</span>
+          </Checkbox>
+          <Label className="pc-charanim-label">Attach FX to Character</Label>
+        </Field>
+      )}
+      {onCharAnim && (
+        <Field
+          className={`pc-ctrl pc-charanim${charAnimEnabled ? '' : ' is-disabled'}`}
+          disabled={!charAnimEnabled}
+        >
+          <Checkbox
+            checked={!!charAnim && !!charAnimEnabled}
+            onChange={onCharAnim}
+            className="checkbox"
+            disabled={!charAnimEnabled}
+          >
+            <span className="icon check-icon">check</span>
+          </Checkbox>
+          <Label className="pc-charanim-label">Show Character Animation</Label>
+        </Field>
+      )}
+
     </div>
   );
 }

@@ -100,7 +100,12 @@ export class SkeletonPose {
         } else {
           const rel = seg.transOut > 0 ? seg.transOut : RELEASE_DEFAULT;
           const release = (local - len) / rel;   // 0 at end → 1 fully back to base
-          if (release < 1) active.push({ clip: seg.clip, phase: 1, release });
+          // `<= 1`, not `< 1`: dropping the segment at release == 1 cut the fade
+          // one step short, so the last 1/rel of the travel happened in a single
+          // frame — a visible snap back to idle on a short transOut. At exactly
+          // 1 the blend already yields the base pose, so keeping it is a no-op
+          // for the result and makes the hand-off continuous.
+          if (release <= 1) active.push({ clip: seg.clip, phase: 1, release });
         }
       }
       // Base idle underlay, looping on its own length so it stays continuous

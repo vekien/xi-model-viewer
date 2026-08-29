@@ -41,6 +41,112 @@ class NoMeshProvider {
 const NO_MESH = new NoMeshProvider();
 
 /**
+ * Procedural ring (linkedDataType 0x24). RingMeshSetup fills particle.ringMeshParams
+ * after StandardParticleSetup resolves the provider — getMeshes reads them live.
+ */
+class RingMeshProvider {
+  hasMeshes(particle) {
+    const p = particle?.ringMeshParams;
+    return !!(p && p.numLayers >= 2 && p.verticesPerLayer >= 3);
+  }
+  getMeshes(particle) {
+    if (!this.hasMeshes(particle)) return [];
+    return [buildRingMesh(particle.ringMeshParams)];
+  }
+}
+
+const RING_MESH = new RingMeshProvider();
+
+/**
+ * Distortion (0x22) geometry: unit billboard quad. The drawer refracts the
+ * scene grab through it using hazeOffset — no solid fill.
+ */
+class DistortionMeshProvider {
+  constructor() {
+    // XY plane, faces +Z in local space; XYZ/Camera billboard orients it.
+    const n = 6;
+    this._mesh = {
+      count: n,
+      positions: new Float32Array([
+        -1, -1, 0,  1, -1, 0,  1, 1, 0,
+        -1, -1, 0,  1, 1, 0,  -1, 1, 0,
+      ]),
+      normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]),
+      // Neutral 0x80 — stage doubling maps to 1.0; alpha full so haze strength
+      // comes from the particle colour / keyframes.
+      colors: new Uint8Array(n * 4).fill(0x80),
+      uvs: new Float32Array([0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1]),
+      textureName: null,
+      distortion: true,
+    };
+  }
+  hasMeshes() { return true; }
+  getMeshes() { return [this._mesh]; }
+}
+
+const DISTORTION_MESH = new DistortionMeshProvider();
+
+/** Build a multi-layer ring strip from RingMeshSetup params. */
+function buildRingMesh(params) {
+  const layers = Math.max(2, params.numLayers | 0);
+  const segs = Math.max(3, Math.min(64, params.verticesPerLayer | 0));
+  const radii = params.layerRadius || [];
+  const colors = params.layerColor || [];
+  // Two tris per segment per layer gap.
+  const rings = layers - 1;
+  const numVerts = rings * segs * 6;
+  const positions = new Float32Array(numVerts * 3);
+  const normals = new Float32Array(numVerts * 3);
+  const cols = new Uint8Array(numVerts * 4);
+  const uvs = new Float32Array(numVerts * 2);
+  let vi = 0;
+  for (let L = 0; L < rings; L++) {
+    const r0 = radii[L] ?? (0.5 + L * 0.5);
+    const r1 = radii[L + 1] ?? (r0 + 0.5);
+    const c0 = colors[L] || [255, 255, 255, 180];
+    const c1 = colors[L + 1] || c0;
+    for (let s = 0; s < segs; s++) {
+      const a0 = (s / segs) * Math.PI * 2;
+      const a1 = ((s + 1) / segs) * Math.PI * 2;
+      const cos0 = Math.cos(a0), sin0 = Math.sin(a0);
+      const cos1 = Math.cos(a1), sin1 = Math.sin(a1);
+      // ring lies in XZ (Y up in DAT space for many shockwaves is vertical axis)
+      const pts = [
+        [r0 * cos0, 0, r0 * sin0, c0, s / segs, L / rings],
+        [r1 * cos0, 0, r1 * sin0, c1, s / segs, (L + 1) / rings],
+        [r1 * cos1, 0, r1 * sin1, c1, (s + 1) / segs, (L + 1) / rings],
+        [r0 * cos0, 0, r0 * sin0, c0, s / segs, L / rings],
+        [r1 * cos1, 0, r1 * sin1, c1, (s + 1) / segs, (L + 1) / rings],
+        [r0 * cos1, 0, r0 * sin1, c0, (s + 1) / segs, L / rings],
+      ];
+      for (const [x, y, z, col, u, v] of pts) {
+        positions[vi * 3] = x;
+        positions[vi * 3 + 1] = y;
+        positions[vi * 3 + 2] = z;
+        normals[vi * 3] = 0;
+        normals[vi * 3 + 1] = 1;
+        normals[vi * 3 + 2] = 0;
+        cols[vi * 4] = col[0] ?? 255;
+        cols[vi * 4 + 1] = col[1] ?? 255;
+        cols[vi * 4 + 2] = col[2] ?? 255;
+        cols[vi * 4 + 3] = col[3] ?? 180;
+        uvs[vi * 2] = u;
+        uvs[vi * 2 + 1] = v;
+        vi++;
+      }
+    }
+  }
+  return {
+    count: numVerts,
+    positions,
+    normals,
+    colors: cols,
+    uvs,
+    textureName: null,
+  };
+}
+
+/**
  * Slash-joined directory ids from the DAT root down to `dir` ("f_qu/weat/thdr"),
  * matching the path the zone loader records for each 0x2E section. The tree root
  * carries an empty id and is skipped.
@@ -485,18 +591,32 @@ export class ParticleSystem {
    * `loop` re-arms the routine once it and its trailing particles have finished,
    * giving a continuous preview.
    */
-  playEffectRoutine(commands, { loop = true, sounds = [] } = {}) {
+  playEffectRoutine(commands, { loop = true, sounds = [], anims = [], onAnim = null, onFinished = null } = {}) {
     this.clearEffect();
     const cmds = commands ?? [];
     const emitSpan = Math.max(1, ...cmds.map((c) => c.delay + Math.max(c.dur, 1)));
     this._effect = {
       commands: cmds,
       sounds,
+      // Caster animations the routine schedules (0x05). Fired on the same
+      // playhead as the generators, so they follow loop, pause and speed for
+      // free rather than needing their own timers.
+      anims,
+      onAnim,
       playhead: 0,
       fired: new Set(),
       firedSounds: new Set(),
+      firedAnims: new Set(),
       voices: [],
       loop,
+      // Parked states — both leave the routine armed so Play/Reset can run it
+      // again, and both stop #advanceEffect. `done` is a non-looping routine
+      // that played itself out; `stopped` is the user pressing Stop.
+      done: false,
+      stopped: false,
+      // Fired once when a non-looping routine parks, so the transport UI can
+      // stop claiming it is still playing an empty stage.
+      onFinished,
       length: emitSpan,
       // Grows as generators fire, to emit-end + the particles' own lifespan —
       // the frame the effect is actually over. See #advanceEffect.
@@ -527,11 +647,48 @@ export class ParticleSystem {
     this._effect.playhead = 0;
     this._effect.fired.clear();
     this._effect.firedSounds.clear();
+    this._effect.firedAnims.clear();
+    this._effect.done = false;
+    this._effect.stopped = false;
   }
+
+  /**
+   * Stop: clear the stage and rewind to frame 0, but keep the routine armed so
+   * Play can run it again. Distinct from clearEffect(), which tears the routine
+   * down entirely and needs playEffectRoutine to come back.
+   */
+  stopEffect() {
+    const e = this._effect;
+    if (!e) return;
+    this.effectManager.clearEffects(this._effectAssociation);
+    for (const v of e.voices) v.stop();
+    this.audioBackend?.stopOneShots?.();
+    e.voices.length = 0;
+    e.playhead = 0;
+    e.fired.clear();
+    e.firedSounds.clear();
+    e.firedAnims.clear();
+    e.stopped = true;
+  }
+
+  /**
+   * Turn looping on/off for the armed routine (Animation panel > Loop).
+   * Switching it back on after a one-shot has played ITSELF out replays it —
+   * but not after an explicit Stop, which should stay stopped.
+   */
+  setEffectLoop(on) {
+    const e = this._effect;
+    if (!e) return;
+    e.loop = !!on;
+    if (e.loop && e.done && !e.stopped) this.restartEffect();
+  }
+
+  /** True while the stage is empty and parked — played out, or stopped. */
+  isEffectFinished() { return !!(this._effect?.done || this._effect?.stopped); }
 
   #advanceEffect(elapsedFrames) {
     const e = this._effect;
-    if (!e) return;
+    if (!e || e.done || e.stopped) return;
     e.playhead += elapsedFrames;
 
     for (let i = 0; i < e.commands.length; i++) {
@@ -540,7 +697,9 @@ export class ParticleSystem {
       if (e.playhead < c.delay) continue;
       e.fired.add(i);
       const effect = this.areaRoot?.getChild(c.genId, SEC.EFFECT)
-        ?? this.areaRoot?.getChildRecursive(c.genId, SEC.EFFECT);
+        ?? this.areaRoot?.getChildRecursive(c.genId, SEC.EFFECT)
+        ?? this.globalRoot?.getChild(c.genId, SEC.EFFECT)
+        ?? this.globalRoot?.getChildRecursive(c.genId, SEC.EFFECT);
       if (!effect) { this.warn(`effect generator not found: ${c.genId}`); continue; }
       // A generator stops *emitting* at delay+dur, but the last particle it
       // emitted lives maxLifeSpan frames beyond that. Aero V finishes emitting
@@ -568,6 +727,16 @@ export class ParticleSystem {
       if (voice) e.voices.push(voice);
     }
 
+    // Caster animations (0x05). Same timeline as the generators, so the clip
+    // starts on the frame the routine authored it for.
+    for (let i = 0; i < e.anims.length; i++) {
+      if (e.firedAnims.has(i)) continue;
+      const a = e.anims[i];
+      if (e.playhead < a.delay) continue;
+      e.firedAnims.add(i);
+      e.onAnim?.(a);
+    }
+
     /*
      * Re-arm when the effect is genuinely finished, not on a fixed timer.
      *
@@ -582,14 +751,26 @@ export class ParticleSystem {
      * RepeatExpirationHandler particle resets its own age forever).
      */
     const allFired = e.fired.size >= e.commands.length
-      && e.firedSounds.size >= e.sounds.length;
+      && e.firedSounds.size >= e.sounds.length
+      && e.firedAnims.size >= e.anims.length;
     if (!allFired) return;
 
     e.voices = e.voices.filter((v) => !v.isComplete());
     const finished = this.effectManager.countParticles() === 0 && e.voices.length === 0;
 
     if (finished || e.playhead >= e.expectedEnd + LOOP_TAIL_FRAMES) {
-      if (!e.loop) { this.clearEffect(); return; }
+      if (!e.loop) {
+        // Play-once: drop the particles and any tail sound, but keep the
+        // routine armed. Tearing `_effect` down here left Reset and Play with
+        // nothing to restart, so a finished one-shot could not be replayed.
+        this.effectManager.clearEffects(this._effectAssociation);
+        for (const v of e.voices) v.stop();
+        this.audioBackend?.stopOneShots?.();
+        e.voices.length = 0;
+        e.done = true;
+        e.onFinished?.();
+        return;
+      }
       this.effectManager.clearEffects(this._effectAssociation);
       // Normally a no-op — `finished` already requires silence — but the
       // LOOP_TAIL_FRAMES backstop can re-arm while a sound is still going, and
@@ -600,6 +781,7 @@ export class ParticleSystem {
       e.playhead = 0;
       e.fired.clear();
       e.firedSounds.clear();
+    e.firedAnims.clear();
     }
   }
 
@@ -628,9 +810,9 @@ export class ParticleSystem {
       case LinkedDataType.StaticMesh: return this.#resolveStaticMesh(link, generator);
       case LinkedDataType.SpriteSheet:
       case LinkedDataType.LensFlare: return this.#resolveSpriteSheet(link, generator);
-      // Ring meshes, distortion, weighted meshes, point lights and audio have no
-      // drawable geometry in this viewer yet; they resolve to nothing and are
-      // skipped at draw time rather than erroring the generator.
+      case LinkedDataType.RingMesh: return RING_MESH;
+      case LinkedDataType.Distortion: return DISTORTION_MESH;
+      // Weighted meshes, point lights and audio still have no drawable geometry.
       default: return NO_MESH;
     }
   }

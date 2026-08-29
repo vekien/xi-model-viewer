@@ -16,6 +16,17 @@
 import { Vec3, Mat4, Color, PI_f, posRand, rand } from './math.js';
 import { AttachType, BillBoardType, LinkedDataType, RotationOrder, BlendFunc, PointLightParams, PositionTransform } from './types.js';
 
+/** Spell/ability gens authored against an actor (not sun/moon/zone). */
+function isActorAttach(attach) {
+  return attach === AttachType.SourceActor
+    || attach === AttachType.TargetActor
+    || attach === AttachType.SourceToTargetBasis
+    || attach === AttachType.TargetActorSourceFacing
+    || attach === AttachType.SourceActorTargetFacing
+    || attach === AttachType.TargetToSourceBasis
+    || attach === AttachType.SourceActorWeapon;
+}
+
 let particleCounter = 1;
 
 class SubParticle {
@@ -246,11 +257,13 @@ export class Particle {
   }
 
   /**
-   * Alpha-blended particle meshes snap to fully opaque past the halfway point.
-   * xim confirmed this by switching Bibiki Bay's ocean to a zone mesh, which
-   * stops snapping — so the behaviour is tied to particle meshes specifically.
+   * Alpha-blended *zone* particle meshes (sea planes, etc.) snap to fully
+   * opaque past the halfway point — xim confirmed on Bibiki Bay's ocean.
+   * Spell/ability shells (Utsusemi md00 peaks keyframe alpha at 0.5) must NOT
+   * snap: forcing a=1 makes the cage look solid and over-bright.
    */
   #shouldSnapAlpha(color) {
+    if (this.association?.kind === 'effect') return false;
     return this.blendFunc === BlendFunc.Src_InvSrc_Add
       && color.a() >= 127 / 255
       && this.meshProvider?.isParticleMesh === true;
@@ -460,6 +473,11 @@ export class ParticleGenerator {
       this.activeParticles = [];
       return;
     }
+    // Freeze actor attach on first sample — spawn at the character, do not ride
+    // the animation (TargetActor in-game is a world point, not a bone follow).
+    if (isActorAttach(this.def.attachType) && !this._actorAttachFrozen) {
+      this.updateAssociatedPosition(elapsedFrames);
+    }
     this.emit(elapsedFrames);
     for (const p of this.activeParticles) p.update(elapsedFrames);
     this.activeParticles = this.activeParticles.filter((p) => !p.isComplete());
@@ -542,8 +560,20 @@ export class ParticleGenerator {
     } else if (attach === AttachType.Moon) {
       this.genAssociatedPosition.copyFrom(this.runtime.getMoonPosition())
         .addInPlace(this.runtime.camera.getPosition());
+    } else if (isActorAttach(attach)) {
+      // DAT attachFlags name a joint (joint1 = target, joint0 = source). Sample
+      // once at spawn so the FX does not ride the animation; authored
+      // basePosition / ground projection still apply on top.
+      if (this._actorAttachFrozen) return;
+      const j = (this.def.attachedJoint1 || this.def.attachedJoint0 || 0) | 0;
+      const pos = this.runtime.getActorAttachPosition?.(j);
+      if (pos) {
+        this.genAssociatedPosition.copyFrom(pos);
+        this._actorAttachFrozen = true;
+      } else {
+        this.genAssociatedPosition.set(0, 0, 0);
+      }
     }
-    // Actor attach types need an actor association, which zone effects never have.
   }
 
   getAssociatedPosition() { return this.genAssociatedPosition; }

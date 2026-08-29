@@ -138,30 +138,32 @@ export function UiElementGroupModal({
           <span>section <b>{group.id || '—'}</b> @0x{(group.offset >>> 0).toString(16)}</span>
         </div>
         <div className="uimenu-actions">
-          <Button
-            type="button"
-            className={`uimenu-btn${notesOpen ? ' on' : ''}${sectionNote || notesDirtyRef.current ? ' has-note' : ''}`}
-            onClick={toggleNotes}
-            title="Free-text notes for this UiElementGroup"
-          >
-            Notes
-          </Button>
+          <Tooltip content="Free-text notes for this UiElementGroup">
+            <Button
+              type="button"
+              className={`uimenu-btn${notesOpen ? ' on' : ''}${sectionNote || notesDirtyRef.current ? ' has-note' : ''}`}
+              onClick={toggleNotes}
+            >
+              Notes
+            </Button>
+          </Tooltip>
         </div>
       </div>
 
       <div className="uieg-toolbar">
         <div className="uieg-filters">
-          <select
-            className="uieg-select mono"
-            value={ownerFilter}
-            onChange={(e) => setOwnerFilter(e.target.value)}
-            title="Filter by atlas owner"
-          >
-            <option value="">All owners ({sprites.length})</option>
-            {owners.map((o) => (
-              <option key={o.name} value={o.name}>{o.name} ({o.count})</option>
-            ))}
-          </select>
+          <Tooltip content="Filter by atlas owner">
+            <select
+              className="uieg-select mono"
+              value={ownerFilter}
+              onChange={(e) => setOwnerFilter(e.target.value)}
+            >
+              <option value="">All owners ({sprites.length})</option>
+              {owners.map((o) => (
+                <option key={o.name} value={o.name}>{o.name} ({o.count})</option>
+              ))}
+            </select>
+          </Tooltip>
           <input
             type="search"
             className="uieg-search mono"

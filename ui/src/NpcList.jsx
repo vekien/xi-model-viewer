@@ -4,21 +4,93 @@ import { useEffect, useState } from 'react';
 // dev/bake-lists.mjs): categories in display order, each with its entries —
 // { name, variants: [DAT paths], base?: companion DAT } or { separator }.
 
+// Survive Effects ↔ NPC unmount: open folders + entry expands stay put.
+const npcListUi = {
+  openCats: new Set(),
+  openEntries: new Set(),
+  categories: null,
+};
+
+function entryKey(catName, entry, index) {
+  const v0 = entry.variants?.[0] || entry.name || index;
+  return `${catName}::${v0}`;
+}
+
 export function NpcList({ onSelectEntry, selectedPath, onError }) {
-  const [categories, setCategories] = useState(null);
+  const [categories, setCategories] = useState(() => npcListUi.categories);
+  const [openCats, setOpenCats] = useState(() => new Set(npcListUi.openCats));
+  const [openEntries, setOpenEntries] = useState(() => new Set(npcListUi.openEntries));
+
+  useEffect(() => { npcListUi.openCats = openCats; }, [openCats]);
+  useEffect(() => { npcListUi.openEntries = openEntries; }, [openEntries]);
 
   useEffect(() => {
+    if (npcListUi.categories) {
+      setCategories(npcListUi.categories);
+      return undefined;
+    }
+    let cancelled = false;
     (async () => {
       try {
         const res = await fetch('lists/npcs.json');
         if (!res.ok) throw new Error(`${res.status} npcs.json`);
-        setCategories((await res.json()).categories);
+        const cats = (await res.json()).categories;
+        if (!cancelled) {
+          npcListUi.categories = cats;
+          setCategories(cats);
+        }
       } catch (err) {
-        onError?.(`Failed to load NPC lists: ${err.message ?? err}`);
-        setCategories([]);
+        if (!cancelled) {
+          onError?.(`Failed to load NPC lists: ${err.message ?? err}`);
+          npcListUi.categories = [];
+          setCategories([]);
+        }
       }
     })();
+    return () => { cancelled = true; };
   }, [onError]);
+
+  // Auto-expand the category/entry that owns the current selection.
+  useEffect(() => {
+    if (!categories || !selectedPath) return;
+    const sel = selectedPath.toLowerCase();
+    for (const cat of categories) {
+      for (let i = 0; i < (cat.entries?.length ?? 0); i++) {
+        const entry = cat.entries[i];
+        if (entry.separator !== undefined) continue;
+        const hit = (entry.variants ?? []).some((v) => v.toLowerCase() === sel);
+        if (!hit) continue;
+        setOpenCats((s) => {
+          if (s.has(cat.name)) return s;
+          const n = new Set(s);
+          n.add(cat.name);
+          return n;
+        });
+        if ((entry.variants?.length ?? 0) > 1) {
+          const ek = entryKey(cat.name, entry, i);
+          setOpenEntries((s) => {
+            if (s.has(ek)) return s;
+            const n = new Set(s);
+            n.add(ek);
+            return n;
+          });
+        }
+        return;
+      }
+    }
+  }, [categories, selectedPath]);
+
+  const toggleCat = (name) => setOpenCats((s) => {
+    const n = new Set(s);
+    if (n.has(name)) n.delete(name); else n.add(name);
+    return n;
+  });
+
+  const toggleEntry = (key) => setOpenEntries((s) => {
+    const n = new Set(s);
+    if (n.has(key)) n.delete(key); else n.add(key);
+    return n;
+  });
 
   return (
     <div id="tree" className="panel list-panel">
@@ -28,9 +100,12 @@ export function NpcList({ onSelectEntry, selectedPath, onError }) {
           <NpcCategory
             key={cat.name}
             category={cat}
+            open={openCats.has(cat.name)}
+            onToggle={() => toggleCat(cat.name)}
+            openEntries={openEntries}
+            onToggleEntry={toggleEntry}
             onSelectEntry={onSelectEntry}
             selectedPath={selectedPath}
-            onError={onError}
           />
         ))}
       </div>
@@ -38,15 +113,14 @@ export function NpcList({ onSelectEntry, selectedPath, onError }) {
   );
 }
 
-function NpcCategory({ category, onSelectEntry, selectedPath }) {
-  const [open, setOpen] = useState(false);
+function NpcCategory({
+  category, open, onToggle, openEntries, onToggleEntry, onSelectEntry, selectedPath,
+}) {
   const entries = category.entries;
-
-  const toggle = () => setOpen(!open);
 
   return (
     <div className={`node${open ? ' open' : ''}`}>
-      <div className="row" onClick={toggle}>
+      <div className="row" onClick={onToggle}>
         <span className="caret icon">chevron_right</span>
         <span className="kind icon">folder</span>
         <span>{category.name}</span>
@@ -57,7 +131,16 @@ function NpcCategory({ category, onSelectEntry, selectedPath }) {
             entry.separator !== undefined ? (
               <div key={i} className="side-separator">{entry.separator}</div>
             ) : (
-              <NpcEntry key={i} entry={entry} onSelectEntry={onSelectEntry} selectedPath={selectedPath} />
+              <NpcEntry
+                key={i}
+                catName={category.name}
+                index={i}
+                entry={entry}
+                open={openEntries.has(entryKey(category.name, entry, i))}
+                onToggleOpen={() => onToggleEntry(entryKey(category.name, entry, i))}
+                onSelectEntry={onSelectEntry}
+                selectedPath={selectedPath}
+              />
             ),
           )}
         </div>
@@ -66,8 +149,7 @@ function NpcCategory({ category, onSelectEntry, selectedPath }) {
   );
 }
 
-function NpcEntry({ entry, onSelectEntry, selectedPath }) {
-  const [open, setOpen] = useState(false);
+function NpcEntry({ entry, open, onToggleOpen, onSelectEntry, selectedPath }) {
   const multi = entry.variants.length > 1;
 
   const load = (variant) =>
@@ -84,7 +166,7 @@ function NpcEntry({ entry, onSelectEntry, selectedPath }) {
       <div className="row" onClick={() => load(entry.variants[0])}>
         <span
           className="caret icon"
-          onClick={(e) => { if (multi) { e.stopPropagation(); setOpen(!open); } }}
+          onClick={(e) => { if (multi) { e.stopPropagation(); onToggleOpen(); } }}
         >
           {multi ? 'chevron_right' : ''}
         </span>
@@ -98,8 +180,8 @@ function NpcEntry({ entry, onSelectEntry, selectedPath }) {
             <div key={v} className={`node${isSelected(v) ? ' selected' : ''}`}>
               <div className="row" onClick={() => load(v)}>
                 <span className="caret icon"></span>
-                <span className="kind icon">deployed_code</span>
-                <span className="mono-small">{v.replace(/\\/g, '/')}</span>
+                <span className="kind icon">draft</span>
+                <span className="mono-small">{v}</span>
               </div>
             </div>
           ))}

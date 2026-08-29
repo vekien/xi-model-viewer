@@ -11,6 +11,8 @@
 // chunk walker (see xi-tools xi/common/xi_section.py for the nine call
 // sites). Bits 26+ are flags: is_shadow, is_extracted, ver_num, is_virtual.
 
+import { inspectAsHex, inspectUserDat } from './userdat.js';
+
 /** Section type-code -> name (xi-tools SECTION_TYPE_NAMES / xim SectionType). */
 export const SECTION_TYPE_NAMES = {
   0x00: 'End', 0x01: 'Directory', 0x04: 'Table', 0x05: 'ParticleGenerator',
@@ -528,7 +530,195 @@ function peekZoneDef(bytes, dv, s) {
   };
 }
 
+/**
+ * Menu tables in ROM/118/114.DAT (and similar): type 0x04 Table (mnc2/mon_/levc),
+ * 0x49 SpellList (mgc_), 0x53 AbilityList (comm). Layout from xi-tools mnc2-pos /
+ * ui spells (record sizes after the 16-byte section header).
+ */
+export function parseInspectDataTable(buffer, offset) {
+  const bytes = buffer instanceof Uint8Array
+    ? buffer
+    : new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const start = offset | 0;
+  if (start + 0x20 > bytes.length) return null;
+  const meta = dv.getUint32(start + 4, true);
+  const type = meta & 0x7f;
+  const size = ((meta >>> 7) & 0x7ffff) * 0x10;
+  const bodyEnd = Math.min(start + (size > 0 ? size : 0), bytes.length);
+  const dataStart = start + 0x10;
+  if (dataStart >= bodyEnd) return null;
+  const id = fourcc(bytes, start).trim() || typeName(type);
+  const payload = bodyEnd - dataStart;
+
+  // ── SpellList (mgc_) ─────────────────────────────────────────────────────
+  if (type === 0x49 || id === 'mgc_') {
+    const recSize = 0x64;
+    const maxN = Math.floor(payload / recSize);
+    const columns = [
+      { key: 'idx', label: '#' },
+      { key: 'name', label: 'Name', external: true, externalDat: 'ROM/181/73.DAT' },
+      { key: 'id', label: 'id' },
+      { key: 'mp', label: 'MP' },
+      { key: 'w2', label: '+2' },
+      { key: 'b0c', label: '+0C' },
+      { key: 'b0d', label: '+0D' },
+      { key: 'u46', label: '+46' },
+      { key: 'raw', label: 'raw[0:16]' },
+    ];
+    const rows = [];
+    for (let i = 0; i < maxN; i++) {
+      const off = dataStart + i * recSize;
+      const recId = dv.getUint16(off, true);
+      if (recId === 0 || recId === 0xffff) continue;
+      const hex = [];
+      for (let b = 0; b < 16; b++) hex.push(bytes[off + b].toString(16).padStart(2, '0'));
+      rows.push({
+        idx: i,
+        name: '',
+        id: recId,
+        w2: dv.getUint16(off + 2, true),
+        b0c: bytes[off + 0x0c],
+        b0d: bytes[off + 0x0d],
+        mp: dv.getUint16(off + 0x44, true),
+        u46: dv.getUint16(off + 0x46, true),
+        raw: hex.join(' '),
+        _offset: off,
+      });
+    }
+    return {
+      kind: 'spellList',
+      id,
+      type,
+      title: 'SpellList',
+      subtitle: `${rows.length.toLocaleString()} spells · 0x${recSize.toString(16)} × ${maxN}`,
+      columns,
+      rows,
+      offset: start,
+      size: size || payload + 0x10,
+      nameDat: 'ROM/181/73.DAT',
+      nameDatLabel: 'Spell_Names',
+      note: 'Names from ROM/181/73.DAT (d_msg). MP at +0x44 is plaintext; other fields still undecoded.',
+    };
+  }
+
+  // ── AbilityList (comm) ───────────────────────────────────────────────────
+  if (type === 0x53 || id === 'comm') {
+    const recSize = 0x30;
+    const maxN = Math.floor(payload / recSize);
+    const columns = [
+      { key: 'idx', label: '#' },
+      { key: 'name', label: 'Name', external: true, externalDat: 'ROM/181/72.DAT' },
+      { key: 'id', label: 'id' },
+      { key: 'b2', label: '+2' },
+      { key: 'b3', label: '+3' },
+      { key: 'w4', label: '+4' },
+      { key: 'w8', label: '+8' },
+      { key: 'b0e', label: '+0E' },
+      { key: 'b0f', label: '+0F' },
+      { key: 'raw', label: 'raw[0:16]' },
+    ];
+    const rows = [];
+    for (let i = 0; i < maxN; i++) {
+      const off = dataStart + i * recSize;
+      const recId = dv.getUint16(off, true);
+      if (recId === 0 || recId === 0xffff) continue;
+      const hex = [];
+      for (let b = 0; b < 16; b++) hex.push(bytes[off + b].toString(16).padStart(2, '0'));
+      rows.push({
+        idx: i,
+        name: '',
+        id: recId,
+        b2: bytes[off + 2],
+        b3: bytes[off + 3],
+        w4: dv.getUint16(off + 4, true),
+        w8: dv.getUint16(off + 8, true),
+        b0e: bytes[off + 0x0e],
+        b0f: bytes[off + 0x0f],
+        raw: hex.join(' '),
+        _offset: off,
+      });
+    }
+    return {
+      kind: 'abilityList',
+      id,
+      type,
+      title: 'AbilityList',
+      subtitle: `${rows.length.toLocaleString()} abilities · 0x${recSize.toString(16)} × ${maxN}`,
+      columns,
+      rows,
+      offset: start,
+      size: size || payload + 0x10,
+      nameDat: 'ROM/181/72.DAT',
+      nameDatLabel: 'Ability_Names',
+      note: 'Names from ROM/181/72.DAT (d_msg). Fixed 0x30 records; field meanings partially known.',
+    };
+  }
+
+  // ── Generic Table (0x04): mon_ / levc as u16 arrays; mnc2 as u16 index ────
+  if (type === 0x04 || id === 'mnc2' || id === 'mon_' || id === 'levc') {
+    const count = Math.floor(payload / 2);
+    const values = [];
+    for (let i = 0; i < count; i++) {
+      values.push(dv.getUint16(dataStart + i * 2, true));
+    }
+    // Compact view: rows of 8 values
+    const columns = [
+      { key: 'base', label: 'idx' },
+      { key: 'c0', label: '+0' },
+      { key: 'c1', label: '+1' },
+      { key: 'c2', label: '+2' },
+      { key: 'c3', label: '+3' },
+      { key: 'c4', label: '+4' },
+      { key: 'c5', label: '+5' },
+      { key: 'c6', label: '+6' },
+      { key: 'c7', label: '+7' },
+    ];
+    const rows = [];
+    for (let i = 0; i < values.length; i += 8) {
+      const row = { base: i };
+      for (let c = 0; c < 8; c++) {
+        row[`c${c}`] = values[i + c] != null ? values[i + c] : '';
+      }
+      rows.push(row);
+    }
+    const nonzero = values.filter((v) => v !== 0).length;
+    const kindNote = id === 'mnc2'
+      ? 'Indexed model/animation tables (u16 words; often offsets into later data).'
+      : id === 'mon_'
+        ? 'uint16 lookup table.'
+        : id === 'levc'
+          ? 'uint16 level/curve table.'
+          : 'Generic table section (shown as u16 words).';
+    return {
+      kind: 'table',
+      id,
+      type,
+      title: 'Table',
+      subtitle: `${values.length.toLocaleString()} × u16 · ${nonzero.toLocaleString()} nonzero`,
+      columns,
+      rows,
+      offset: start,
+      size: size || payload + 0x10,
+      note: kindNote,
+      values,
+    };
+  }
+
+  return null;
+}
+
+function peekDataTable(bytes, dv, s) {
+  const t = parseInspectDataTable(bytes, s.start);
+  if (!t) return { text: null, isDataTable: true };
+  return {
+    text: t.subtitle || `${t.rows?.length ?? 0} rows`,
+    isDataTable: true,
+  };
+}
+
 const PEEKS = {
+  0x04: peekDataTable,
   0x06: peekRoute,
   0x07: peekRoutine,
   0x19: peekKeyFrames,
@@ -544,6 +734,8 @@ const PEEKS = {
   0x31: peekUiElementGroup,
   0x3D: peekSoundPointer,
   0x45: peekInfo,
+  0x49: peekDataTable,
+  0x53: peekDataTable,
   0x5D: peekBumpMap,
 };
 
@@ -1060,6 +1252,167 @@ function decodeXistringPlain(u8) {
  * Index is 12 bytes/entry at 0x38; offsets are relative to the string blob base.
  * See xi-tools docs/dats/ROM_97_menu_strings.md.
  */
+/**
+ * Attach d_msg names onto a SpellList / AbilityList table (by row idx).
+ * Mutates rows in place; returns the table.
+ */
+export function attachDataTableNames(table, dmsgDoc) {
+  if (!table?.rows || !dmsgDoc?.entries) return table;
+  const byIdx = new Map();
+  for (const e of dmsgDoc.entries) {
+    const t = e.text || e.texts?.find((x) => x && String(x).trim()) || '';
+    if (t) byIdx.set(e.index, t);
+  }
+  let hit = 0;
+  for (const row of table.rows) {
+    const name = byIdx.get(row.idx);
+    if (name) {
+      row.name = name;
+      hit++;
+    }
+  }
+  table.namesAttached = hit;
+  table.nameSource = dmsgDoc.magic || 'd_msg';
+  return table;
+}
+
+/**
+ * Fixed-stride d_msg string tables (spell/ability names & help, key items, …).
+ * Header at 0x10: file_size, table_offset, table_size(=0), stride, …, num.
+ * Optional XOR bitmask on the block region (0xFF for key items). Auto-detected.
+ * See xi-tools xi/common/xi_dmsg.py.
+ */
+export function inspectDmsg(buffer) {
+  const bytes = new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const fileSize = bytes.byteLength;
+  if (fileSize < 0x40) return null;
+  if (strAt(bytes, 0, 5) !== 'd_msg') return null;
+
+  const declaredSize = dv.getUint32(0x14, true);
+  const tableOffset = dv.getUint32(0x18, true);
+  const tableSize = dv.getUint32(0x1c, true);
+  const stride = dv.getUint32(0x20, true);
+  const num = dv.getUint32(0x28, true);
+
+  if (tableSize !== 0) return null; // variable-stride variant not supported here
+  if (!(stride >= 16 && stride <= 0x10000)) return null;
+  if (!(num > 0 && num <= 100_000)) return null;
+  if (!(tableOffset >= 0x20 && tableOffset < fileSize)) return null;
+  if (tableOffset + num * stride > fileSize + stride) {
+    // allow slight overshoot then clamp
+  }
+  if (tableOffset + Math.min(num, 1) * stride > fileSize) return null;
+
+  const scoreBitmask = (bm) => {
+    let good = 0;
+    const limit = Math.min(num, 80);
+    for (let i = 0; i < limit; i++) {
+      const base = tableOffset + i * stride;
+      if (base + stride > fileSize) break;
+      const block = new Uint8Array(stride);
+      for (let j = 0; j < stride; j++) {
+        const b = bytes[base + j];
+        block[j] = bm ? (b ^ bm) : b;
+      }
+      const texts = dmsgBlockTexts(block);
+      if (texts.some((t) => /[A-Za-z\u3040-\u30ff\u4e00-\u9fff]/.test(t))) good++;
+    }
+    return good;
+  };
+
+  const score0 = scoreBitmask(0);
+  const scoreFf = scoreBitmask(0xff);
+  const bitmask = scoreFf > score0 + 5 ? 0xff : 0;
+
+  const entries = [];
+  const warnings = [];
+  if (declaredSize && declaredSize !== fileSize) {
+    warnings.push(`header size ${declaredSize.toLocaleString()} ≠ file ${fileSize.toLocaleString()}`);
+  }
+
+  const actualNum = Math.min(num, Math.floor((fileSize - tableOffset) / stride));
+  for (let i = 0; i < actualNum; i++) {
+    const base = tableOffset + i * stride;
+    const block = new Uint8Array(stride);
+    for (let j = 0; j < stride; j++) {
+      const b = bytes[base + j];
+      block[j] = bitmask ? (b ^ bitmask) : b;
+    }
+    const texts = dmsgBlockTexts(block);
+    // Key items put the name in a later sub-slot; pick first non-empty as primary.
+    const primary = texts.find((t) => t && t.trim()) || texts[0] || '';
+    entries.push({
+      index: i,
+      offset: base,
+      text: primary,
+      texts, // all sub-strings (name, plural, desc, …)
+      byteLength: primary.length,
+    });
+  }
+
+  return {
+    kind: 'dmsg',
+    label: 'd_msg string table',
+    magic: 'd_msg',
+    fileSize,
+    declaredSize,
+    tableOffset,
+    stride,
+    bitmask,
+    count: entries.length,
+    entries,
+    warnings,
+  };
+}
+
+/** Extract cp932 text sub-strings from one de-XOR'd d_msg block. */
+function dmsgBlockTexts(block) {
+  const dv = new DataView(block.buffer, block.byteOffset, block.byteLength);
+  if (block.length < 4) return [];
+  const n = dv.getUint32(0, true);
+  if (n <= 0 || n > 64) return [];
+  const texts = [];
+  for (let i = 0; i < n; i++) {
+    const eo = 4 + i * 8;
+    if (eo + 8 > block.length) break;
+    const off = dv.getUint32(eo, true);
+    if (off < 4 || off + 4 > block.length) continue;
+    const marker = dv.getUint32(off, true);
+    if (marker !== 1) continue;
+    const sp = off + 4 + 0x18;
+    if (sp >= block.length) continue;
+    let end = sp;
+    while (end < block.length && block[end] !== 0) end++;
+    if (end <= sp) {
+      texts.push('');
+      continue;
+    }
+    texts.push(decodeCp932(block.subarray(sp, end)));
+  }
+  return texts;
+}
+
+/** Best-effort cp932 (Shift-JIS) decode for d_msg payloads. */
+function decodeCp932(u8) {
+  if (!u8?.length) return '';
+  try {
+    return new TextDecoder('shift_jis').decode(u8);
+  } catch {
+    try {
+      return new TextDecoder('latin1').decode(u8);
+    } catch {
+      let s = '';
+      for (let i = 0; i < u8.length; i++) {
+        const c = u8[i];
+        if (c >= 0x20 && c < 0x7f) s += String.fromCharCode(c);
+        else if (c === 0x0a) s += '\n';
+      }
+      return s;
+    }
+  }
+}
+
 export function inspectXistring(buffer) {
   const bytes = new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -1143,7 +1496,11 @@ export function inspectXistring(buffer) {
   };
 }
 
-export function inspectDat(buffer) {
+/**
+ * @param {ArrayBuffer|Uint8Array} buffer
+ * @param {string} [path]  lets USER save files be recognised by name
+ */
+export function inspectDat(buffer, path = '') {
   const bytes = new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const len = bytes.byteLength;
@@ -1154,8 +1511,15 @@ export function inspectDat(buffer) {
   if (head8.startsWith('SeWave')) return { kind: 'other', label: 'Sound sample (SeWave)', magic: 'SeWave', fileSize };
   if (strAt(bytes, 0, 12).startsWith('BGMStream')) return { kind: 'other', label: 'Music stream (BGMStream)', magic: 'BGMStream', fileSize };
 
+  // Per-character saves under USER\ — named formats, never section walks.
+  const user = inspectUserDat(bytes, path);
+  if (user) return user;
+
   const xistring = inspectXistring(buffer);
   if (xistring) return xistring;
+
+  const dmsg = inspectDmsg(buffer);
+  if (dmsg) return dmsg;
 
   // Character-creation formats (before the section walker confuses them).
   const creation = inspectCreationDat(buffer);
@@ -1207,6 +1571,7 @@ export function inspectDat(buffer) {
       let isRoute = type === 0x06;
       let isUiMenu = type === 0x30;
       let isUiElementGroup = type === 0x31;
+      let isDataTable = type === 0x04 || type === 0x49 || type === 0x53;
       const isParticleGenerator = type === 0x05;
       let soundId = null;
       const peek = PEEKS[type];
@@ -1221,6 +1586,7 @@ export function inspectDat(buffer) {
           if (r?.isRoute) isRoute = true;
           if (r?.isUiMenu) isUiMenu = true;
           if (r?.isUiElementGroup) isUiElementGroup = true;
+          if (r?.isDataTable) isDataTable = true;
           if (r?.soundId != null) soundId = r.soundId;
         } catch { /* malformed header — list it plain */ }
       }
@@ -1234,7 +1600,7 @@ export function inspectDat(buffer) {
         size, offset: pos, flags, detail, textureName, isTexture,
         isSkeleton, skeletonKind: isSkeleton ? 'entity' : null,
         isSound, soundId, isZoneDef, isParticleGenerator, isRoute, isUiMenu,
-        isUiElementGroup,
+        isUiElementGroup, isDataTable,
       });
       const agg = summary.get(type) ?? { count: 0, bytes: 0 };
       agg.count++; agg.bytes += size;
@@ -1252,12 +1618,14 @@ export function inspectDat(buffer) {
     // Section walk may partially chew a creation DAT; prefer the dedicated view.
     const cr = inspectCreationDat(buffer);
     if (cr) return cr;
-    return {
-      kind: 'other',
+    // No structure to show, so show the bytes — better than a dead end when
+    // you are working out what an unfamiliar DAT actually holds.
+    return inspectAsHex(bytes, {
       label: 'Not a sectioned resource DAT',
-      magic: printable(head8) && head8.trim() ? head8.trim() : null,
-      fileSize,
-    };
+      note: printable(head8) && head8.trim()
+        ? `Header magic: ${head8.trim()}. No 16-byte section headers to walk.`
+        : 'No 16-byte section headers to walk — a raw table, text, or stream DAT.',
+    });
   }
   if (len - coveredBytes > 16) {
     warnings.push(`${(len - coveredBytes).toLocaleString()} unparsed bytes after the last section`);

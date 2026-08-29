@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@headlessui/react';
 import { decodeTextureRGBA } from '../js/renderer.js';
+import { Tooltip } from './Tooltip.jsx';
 
 /**
  * Draggable floating window showing a single decoded texture on a checkerboard
@@ -52,9 +53,11 @@ export function TextureModal({ tex, onClose, onFocus, zIndex = 210 }) {
       <div className="modal-header" onPointerDown={startDrag} onPointerMove={onDrag} onPointerUp={endDrag}>
         <span className="icon">image</span>
         <span className="modal-title mono">{tex.name || '(unnamed)'}</span>
-        <Button className="icon-btn modal-close" onClick={onClose} title="Close">
-          <span className="icon">close</span>
-        </Button>
+        <Tooltip content="Close">
+          <Button className="icon-btn modal-close" onClick={onClose}>
+            <span className="icon">close</span>
+          </Button>
+        </Tooltip>
       </div>
       <div className="tex-modal-body">
         <div className="tex-checker">

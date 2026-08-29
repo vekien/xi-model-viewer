@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@headlessui/react';
 import { Combo } from './Combo.jsx';
+import { Tooltip } from './Tooltip.jsx';
 
 const fmtDur = (frames, kfd) => {
   // Clip length in game-frames (30fps) → seconds.
@@ -25,9 +26,11 @@ export function DetailsPanel({ info, animClip, animId, schedule, onClose, onOpen
       <div className="details-header">
         <span className="icon">info</span>
         <span className="details-title">Details</span>
-        <Button className="icon-btn details-close" onClick={onClose} title="Close">
-          <span className="icon">close</span>
-        </Button>
+        <Tooltip content="Close">
+          <Button className="icon-btn details-close" onClick={onClose}>
+            <span className="icon">close</span>
+          </Button>
+        </Tooltip>
       </div>
 
       <div className="details-body">
@@ -90,11 +93,13 @@ export function DetailsPanel({ info, animClip, animId, schedule, onClose, onOpen
         {(shown.textures?.length ?? 0) > 0 && (
           <Section title={`Textures (${shown.textures.length})`} icon="texture">
             {shown.textures.map((t, i) => (
-              <button key={`${t.name}:${i}`} className="details-tex details-tex-btn" onClick={() => onOpenTexture?.(t)} title="View texture">
-                <span className="icon">image</span>
-                <span className="details-tex-name mono">{t.name || '(unnamed)'}</span>
-                <span className="details-tex-meta mono">{t.width}×{t.height} {t.format.toUpperCase()}</span>
-              </button>
+              <Tooltip key={`${t.name}:${i}`} content="View texture">
+                <button className="details-tex details-tex-btn" onClick={() => onOpenTexture?.(t)}>
+                  <span className="icon">image</span>
+                  <span className="details-tex-name mono">{t.name || '(unnamed)'}</span>
+                  <span className="details-tex-meta mono">{t.width}×{t.height} {t.format.toUpperCase()}</span>
+                </button>
+              </Tooltip>
             ))}
           </Section>
         )}
@@ -115,7 +120,9 @@ export function DetailsPanel({ info, animClip, animId, schedule, onClose, onOpen
               <span className="details-row-label">Clips</span>
               <span className="details-clip-list">
                 {schedule.clipIds.map((c) => (
-                  <button key={c} className="clip-link mono" onClick={() => onPlayClip?.(c)} title={`Play ${c}`}>{c}</button>
+                  <Tooltip key={c} content={`Play ${c}`}>
+                    <button className="clip-link mono" onClick={() => onPlayClip?.(c)}>{c}</button>
+                  </Tooltip>
                 ))}
               </span>
             </div>

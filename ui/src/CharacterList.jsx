@@ -498,19 +498,21 @@ export function CharacterList({ pc }) {
   };
 
   const isoBtn = (key, { disabled = false } = {}) => (
-    <button
-      type="button"
-      className={`pc-iso${isolated?.has(key) ? ' on' : ''}${disabled ? ' disabled' : ''}`}
-      title={disabled
-        ? 'Nothing equipped'
-        : isolated?.has(key) ? 'Show all (clear isolation)' : 'Isolate this DAT'}
-      aria-label="Isolate"
-      aria-pressed={isolated?.has(key) ? 'true' : 'false'}
-      disabled={disabled}
-      onClick={() => { if (!disabled) toggleIsolate?.(key); }}
+    <Tooltip content={disabled
+      ? 'Nothing equipped'
+      : isolated?.has(key) ? 'Show all (clear isolation)' : 'Isolate this DAT'}
     >
-      <span className="icon">visibility</span>
-    </button>
+      <button
+        type="button"
+        className={`pc-iso${isolated?.has(key) ? ' on' : ''}${disabled ? ' disabled' : ''}`}
+        aria-label="Isolate"
+        aria-pressed={isolated?.has(key) ? 'true' : 'false'}
+        disabled={disabled}
+        onClick={() => { if (!disabled) toggleIsolate?.(key); }}
+      >
+        <span className="icon">visibility</span>
+      </button>
+    </Tooltip>
   );
 
   // Clear isolation when a slot is switched to None (no mesh to show alone).

@@ -3,6 +3,8 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod tools;
+
 use serde::Serialize;
 use std::path::Path;
 
@@ -306,14 +308,19 @@ fn which_on_path(name: &str) -> Result<std::path::PathBuf, ()> {
     Err(())
 }
 
-/// Resolves the xi executable: a user-configured path (file, or a folder to
-/// search) wins; otherwise fall back to PATH / the known shim.
+/// Resolves the xi executable: configured path → managed/override install → PATH.
 fn resolve_xi(configured: &Option<String>) -> Option<std::path::PathBuf> {
     if let Some(c) = configured {
         if !c.trim().is_empty() {
             if let Some(f) = xi_in(Path::new(c.trim())) {
                 return Some(f);
             }
+        }
+    }
+    let managed = tools::xi_tools_dir();
+    if tools::install_complete(&managed) {
+        if let Some(f) = xi_in(&managed) {
+            return Some(f);
         }
     }
     find_xi()
@@ -481,7 +488,6 @@ fn xi_setup(folder: String, install: bool) -> XiSetupReport {
     }
 
     let mut log = String::new();
-    let mut did_sync = false;
 
     // Ensure Python 3.14 is available to uv (no-op if already present).
     {
@@ -511,7 +517,6 @@ fn xi_setup(folder: String, install: bool) -> XiSetupReport {
         c.args(["sync"]).current_dir(&root);
         match run_quiet(&mut c) {
             Ok(out) => {
-                did_sync = true;
                 let t = cmd_text(&out);
                 if !t.is_empty() {
                     log.push_str(&t);
@@ -545,6 +550,8 @@ fn xi_setup(folder: String, install: bool) -> XiSetupReport {
             }
         }
     }
+    // Only reached after a successful `uv sync` (failures return above).
+    let did_sync = true;
 
     // Confirm CLI + capture Python version
     let mut python = None;
@@ -895,6 +902,11 @@ fn main() {
             xi_run,
             xi_available,
             xi_setup,
+            tools::tools_status,
+            tools::tools_install_or_update,
+            tools::tools_set_local_path,
+            tools::tools_clear_local_path,
+            tools::pick_tools_folder,
             open_url,
             reveal_path,
             launch_args,

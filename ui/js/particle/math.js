@@ -156,6 +156,24 @@ export class Mat4 {
     return this.multiplyInPlace(r);
   }
 
+  /**
+   * Replace the upper-left 3x3 with a quaternion's rotation, leaving the
+   * translation alone. Skeleton joints carry [x, y, z, w] world quaternions
+   * (js/pose.js), which is how an actor-attached generator gets its basis.
+   */
+  setRotationFromQuaternionInPlace(qx, qy, qz, qw) {
+    const m = this.m;
+    const x2 = qx + qx, y2 = qy + qy, z2 = qz + qz;
+    const xx = qx * x2, xy = qx * y2, xz = qx * z2;
+    const yy = qy * y2, yz = qy * z2, zz = qz * z2;
+    const wx = qw * x2, wy = qw * y2, wz = qw * z2;
+    m[0] = 1 - (yy + zz); m[1] = xy + wz;       m[2] = xz - wy;
+    m[4] = xy - wz;       m[5] = 1 - (xx + zz); m[6] = yz + wx;
+    m[8] = xz + wy;       m[9] = yz - wx;       m[10] = 1 - (xx + yy);
+    m[3] = 0; m[7] = 0; m[11] = 0; m[15] = 1;
+    return this;
+  }
+
   rotateZYXInPlace(xRad, yRad, zRad) {
     if (xRad === 0 && yRad === 0 && zRad === 0) return this;
     const sX = Math.sin(xRad), sY = Math.sin(yRad), sZ = Math.sin(zRad);

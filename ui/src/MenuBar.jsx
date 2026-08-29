@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Tooltip } from './Tooltip.jsx';
 import { ScenePanel } from './ScenePanel.jsx';
+import { GraphicsPanel } from './GraphicsPanel.jsx';
 
 const MENUS = [
   {
@@ -44,8 +45,7 @@ const MENUS = [
   {
     label: 'Assets',
     items: [
-      { id: 'assets-files', label: 'File Browser', icon: 'folder_open' },
-      { id: 'assets-data', label: 'Data', icon: 'database' },
+      { id: 'assets-files', label: 'DAT Browser', icon: 'folder_open' },
       { id: 'assets-characters', label: 'Characters', icon: 'person' },
       { id: 'assets-npcs', label: 'NPCs', icon: 'pets' },
       { id: 'assets-zones', label: 'Zones', icon: 'map' },
@@ -74,16 +74,21 @@ const VIEW_TOOLBAR = MENUS.find((m) => m.label === 'View').items
  */
 export function MenuBar({
   onAction, checks = {}, flySpeed = 0, fps = 0, fov = 45, onFov,
-  graphicsOpen = false, sequencerOpen = false,
-  bgColor = '#1a1a24', onBgColor, onFloor, onClearFloor, selectedFloor = '',
+  sequencerOpen = false,
+  bgColor = '#1a1a24', onBgColor, bgImage = '', onBgImage,
+  floorTileScale = 1, onFloorTileScale,
+  onFloor, onClearFloor, selectedFloor = '',
+  shadowsOn = false, shadowDistance = 90, onShadowDistance,
+  renderHeight = 0, onRenderHeight, bufferSize = null,
+  fpsCap = 0, onFpsCap, onGraphicsOpenChange,
 }) {
   const [active, setActive] = useState(null);   // { label, left, top } | null
-  const [camera, setCamera] = useState(null);   // { left, top } | null
-  const [scene, setScene] = useState(null);     // { left, top } | null — FOV-style popover
+  const [scene, setScene] = useState(null);     // { left, top } | null
+  const [graphics, setGraphics] = useState(null); // { left, top } | null
   const barRef = useRef(null);
   const panelRef = useRef(null);
-  const camRef = useRef(null);
   const sceneRef = useRef(null);
+  const gfxRef = useRef(null);
 
   useEffect(() => {
     if (!active) return;
@@ -101,32 +106,23 @@ export function MenuBar({
     };
   }, [active]);
 
-  // The camera popover dismisses the same way, but independently — opening a
-  // menu shouldn't leave it hanging, and vice versa.
-  useEffect(() => {
-    if (!camera) return;
-    const close = (e) => {
-      if (barRef.current?.contains(e.target)) return;
-      if (camRef.current?.contains(e.target)) return;
-      setCamera(null);
-    };
-    const onKey = (e) => e.key === 'Escape' && setCamera(null);
-    document.addEventListener('pointerdown', close);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('pointerdown', close);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [camera]);
+  // Shared: Combo options portal to <body>; never treat those clicks as "outside".
+  const isComboPortalClick = (t) => !!(
+    t?.closest?.(
+      '.combo-options, .combo-option, .combo-input, [data-headlessui-portal], [role="listbox"], [role="option"]',
+    )
+  );
 
   useEffect(() => {
     if (!scene) return;
     const close = (e) => {
       if (barRef.current?.contains(e.target)) return;
       if (sceneRef.current?.contains(e.target)) return;
+      if (isComboPortalClick(e.target)) return;
       setScene(null);
     };
     const onKey = (e) => e.key === 'Escape' && setScene(null);
+    // pointerdown bubbles before Listbox selects — use capture:false and skip portals
     document.addEventListener('pointerdown', close);
     document.addEventListener('keydown', onKey);
     return () => {
@@ -135,27 +131,56 @@ export function MenuBar({
     };
   }, [scene]);
 
+  useEffect(() => {
+    if (!graphics) return;
+    const close = (e) => {
+      if (barRef.current?.contains(e.target)) return;
+      if (gfxRef.current?.contains(e.target)) return;
+      if (isComboPortalClick(e.target)) return;
+      setGraphics(null);
+      onGraphicsOpenChange?.(false);
+    };
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      setGraphics(null);
+      onGraphicsOpenChange?.(false);
+    };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [graphics, onGraphicsOpenChange]);
+
   const openMenu = (label, target) => {
     const rect = target.getBoundingClientRect();
-    setCamera(null);
     setScene(null);
+    setGraphics(null);
+    onGraphicsOpenChange?.(false);
     setActive({ label, left: rect.left, top: rect.bottom + 10 });
-  };
-
-  const toggleCamera = (target) => {
-    if (camera) { setCamera(null); return; }
-    const rect = target.getBoundingClientRect();
-    setActive(null);
-    setScene(null);
-    setCamera({ left: rect.left, top: rect.bottom + 10 });
   };
 
   const toggleScene = (target) => {
     if (scene) { setScene(null); return; }
     const rect = target.getBoundingClientRect();
     setActive(null);
-    setCamera(null);
+    setGraphics(null);
+    onGraphicsOpenChange?.(false);
     setScene({ left: rect.left, top: rect.bottom + 10 });
+  };
+
+  const toggleGraphics = (target) => {
+    if (graphics) {
+      setGraphics(null);
+      onGraphicsOpenChange?.(false);
+      return;
+    }
+    const rect = target.getBoundingClientRect();
+    setActive(null);
+    setScene(null);
+    setGraphics({ left: rect.left, top: rect.bottom + 10 });
+    onGraphicsOpenChange?.(true);
   };
 
   const activate = (id, label) => {
@@ -213,19 +238,23 @@ export function MenuBar({
             type="button"
             className="view-tool"
             aria-label="Reload DAT"
-            onClick={() => { setActive(null); setCamera(null); setScene(null); onAction('reload-dat', 'Reload DAT'); }}
+            onClick={() => {
+              setActive(null); setScene(null);
+              setGraphics(null); onGraphicsOpenChange?.(false);
+              onAction('reload-dat', 'Reload DAT');
+            }}
           >
             <span className="icon">refresh</span>
           </button>
         </Tooltip>
         {/* Panel openers, grouped apart from the on/off toggles to their left. */}
-        <Tooltip content="Graphics Settings" placement="bottom">
+        <Tooltip content="Graphics — shadows, resolution, FPS, FOV" placement="bottom">
           <button
             type="button"
-            className={`view-tool${graphicsOpen ? ' on' : ''}`}
+            className={`view-tool${graphics ? ' on' : ''}`}
             aria-label="Graphics Settings"
-            aria-expanded={graphicsOpen}
-            onClick={() => { setActive(null); setCamera(null); setScene(null); onAction('graphics', 'Graphics Settings'); }}
+            aria-expanded={!!graphics}
+            onClick={(e) => toggleGraphics(e.currentTarget)}
           >
             <span className="icon">display_settings</span>
           </button>
@@ -247,20 +276,13 @@ export function MenuBar({
             className={`view-tool${sequencerOpen ? ' on' : ''}`}
             aria-label="Camera Sequencer"
             aria-expanded={sequencerOpen}
-            onClick={() => { setActive(null); setCamera(null); setScene(null); onAction('camera-sequencer', 'Camera Sequencer'); }}
+            onClick={() => {
+              setActive(null); setScene(null);
+              setGraphics(null); onGraphicsOpenChange?.(false);
+              onAction('camera-sequencer', 'Camera Sequencer');
+            }}
           >
             <span className="icon">movie</span>
-          </button>
-        </Tooltip>
-        <Tooltip content="Camera" placement="bottom">
-          <button
-            type="button"
-            className={`view-tool${camera ? ' on' : ''}`}
-            aria-label="Camera settings"
-            aria-expanded={!!camera}
-            onClick={(e) => toggleCamera(e.currentTarget)}
-          >
-            <span className="icon">videocam</span>
           </button>
         </Tooltip>
         <Tooltip content="Fly speed — scroll the viewport with WASD on to change" placement="bottom">
@@ -272,43 +294,45 @@ export function MenuBar({
         </Tooltip>
       </div>
 
-      {camera &&
-        createPortal(
-          <div
-            className="menu-panel cam-panel"
-            ref={camRef}
-            style={{ position: 'fixed', left: camera.left, top: camera.top }}
-          >
-            <div className="cam-row">
-              <span className="cam-label">Field of view</span>
-              <span className="cam-val mono">{fov}°</span>
-            </div>
-            <input
-              type="range" min="20" max="120" step="1" value={fov}
-              onChange={(e) => onFov?.(+e.target.value)}
-              className="vol-slider"
-              style={{ '--fill': `${((fov - 20) / 100) * 100}%` }}
-            />
-            <button type="button" className="cam-reset" onClick={() => onFov?.(45)}>
-              Reset to 45°
-            </button>
-          </div>,
-          document.body,
-        )}
-
       {scene &&
         createPortal(
           <div
-            className="menu-panel cam-panel scene-panel-pop"
+            className="menu-panel tool-pop"
             ref={sceneRef}
             style={{ position: 'fixed', left: scene.left, top: scene.top }}
           >
             <ScenePanel
               bgColor={bgColor}
               onBg={onBgColor}
+              bgImage={bgImage}
+              onBgImage={onBgImage}
               onFloor={onFloor}
               onClearFloor={onClearFloor}
               selectedFloor={selectedFloor}
+              floorTileScale={floorTileScale}
+              onFloorTileScale={onFloorTileScale}
+            />
+          </div>,
+          document.body,
+        )}
+
+      {graphics &&
+        createPortal(
+          <div
+            className="menu-panel tool-pop"
+            ref={gfxRef}
+            style={{ position: 'fixed', left: graphics.left, top: graphics.top }}
+          >
+            <GraphicsPanel
+              shadowsOn={shadowsOn}
+              shadowDistance={shadowDistance}
+              onShadowDistance={onShadowDistance}
+              renderHeight={renderHeight}
+              onRenderHeight={onRenderHeight}
+              fpsCap={fpsCap}
+              onFpsCap={onFpsCap}
+              fov={fov}
+              onFov={onFov}
             />
           </div>,
           document.body,

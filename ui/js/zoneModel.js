@@ -125,13 +125,13 @@ function transformBoundsDisplay(local, matrix) {
 }
 
 /**
- * @param {{ meshes: Map, placements: any[], textures: Map, collision?: any }} parsed
+ * @param {{ meshes: Map, meshNames?: Set<string>, placements: any[], textures: Map, collision?: any }} parsed
  * @param {string} sourceName
  * @param {{ includeSky?: boolean }} [opts]  includeSky kept for compat; sky/water
  *   always baked into a separate `env` layer and toggled in the renderer.
  */
 export function zoneToModel(parsed, sourceName = '', opts = {}) {
-  const { meshes, placements, textures: texMap, collision: rawCollision } = parsed;
+  const { meshes, meshNames, placements, textures: texMap, collision: rawCollision } = parsed;
 
   // Precompute local bounds per mesh (for placement focus + zone camera fit).
   const localBounds = new Map();
@@ -262,7 +262,7 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
   const placedWorld = [];
   for (const p of placements) {
     if (!isSanePlacement(p)) { skippedWild++; continue; }
-    const resolved = resolveMeshName(p.meshId, meshes);
+    const resolved = resolveMeshName(p.meshId, meshes, meshNames);
     if (!resolved) { skippedMissing++; continue; }
     placedMeshes.add(resolved);
     // Aliases (section id / short tail) count as placed too.

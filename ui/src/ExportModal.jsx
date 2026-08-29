@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button, Checkbox, Field, Label } from '@headlessui/react';
 import { backend } from '../js/backend.js';
 import { Combo } from './Combo.jsx';
+import { Tooltip } from './Tooltip.jsx';
 import { parseAudioHeader, toWav, FMT_ATRAC3 } from '../js/audio.js';
 
 const sanitize = (name) => name.replace(/[<>:"/\\|?*]+/g, '_').trim() || 'export';
@@ -107,9 +108,11 @@ export function ExportModal({ open, spec, onClose, onStatus }) {
         <div className="modal-header" onPointerDown={startDrag} onPointerMove={onDrag} onPointerUp={endDrag}>
           <span className="icon">download</span>
           <span className="modal-title">Export {spec.typeLabel}</span>
-          <Button className="icon-btn modal-close" onClick={onClose} title="Close">
-            <span className="icon">close</span>
-          </Button>
+          <Tooltip content="Close">
+            <Button className="icon-btn modal-close" onClick={onClose}>
+              <span className="icon">close</span>
+            </Button>
+          </Tooltip>
         </div>
 
         <div className="modal-body">

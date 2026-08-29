@@ -221,20 +221,28 @@ function parseRoutine(r, sec) {
  * `animations`. Raw `refs` are kept on the result so a merged model (schedule
  * DATs + separate motion DATs) can re-resolve against the combined clip set.
  */
+/**
+ * Concrete clip ids a single routine ref resolves to. `?` is the client's
+ * wildcard for the body-slot digit (`at0?`), so it matches by prefix.
+ *
+ * Shared with the effect scheduler: a spell DAT's 0x05 commands name clips the
+ * same way, which is what lets a Ninjutsu effect find the character's ninjutsu
+ * motion without anything being mapped by hand.
+ */
+export function matchAnimRef(ref, ids) {
+  const q = ref.indexOf('?');
+  if (q >= 0) {
+    const prefix = ref.slice(0, q);
+    return ids.filter((id) => id.startsWith(prefix));
+  }
+  if (ids.includes(ref)) return [ref];
+  // Ref may already be a display base (at0) while tracks are slotted (at00).
+  return ids.filter((id) => animDisplayName(id) === ref || id.startsWith(ref));
+}
+
 export function resolveScheduleRefs(schedules, animations) {
   const ids = animations.map((a) => a.id);
-
-  /** Concrete clip ids a single command ref resolves to. */
-  const matchRef = (ref) => {
-    const q = ref.indexOf('?');
-    if (q >= 0) {
-      const prefix = ref.slice(0, q);
-      return ids.filter((id) => id.startsWith(prefix));
-    }
-    if (ids.includes(ref)) return [ref];
-    // Ref may already be a display base (at0) while tracks are slotted (at00).
-    return ids.filter((id) => animDisplayName(id) === ref || id.startsWith(ref));
-  };
+  const matchRef = (ref) => matchAnimRef(ref, ids);
 
   const out = [];
   for (const sched of schedules) {

@@ -261,11 +261,12 @@ export function PlacementPanel({
             </div>
           )}
 
-          <div
-            className="plc-resize"
-            onPointerDown={startResize}
-            title="Drag to resize"
-          />
+          <Tooltip content="Drag to resize">
+            <div
+              className="plc-resize"
+              onPointerDown={startResize}
+            />
+          </Tooltip>
         </>
       )}
 
@@ -316,40 +317,43 @@ function renderMeshGroup(g, ctx) {
             const moved = !!isPlacementMoved?.(p);
             const hidden = !!(isPlacementHidden?.(p) || p.userHidden);
             return (
-              <div
+              <Tooltip
                 key={p.name}
-                ref={sel ? selectedRef : undefined}
-                className={`plc-row plc-inst${sel ? ' selected' : ''}${moved ? ' moved' : ''}${hidden ? ' vis-off' : ''}`}
-                onClick={(e) => { e.stopPropagation(); onSelectInstance?.(p); }}
-                title={`#${p.index}  pos ${fmt3(p.rawPos)}${moved ? ' · moved' : ''}${hidden ? ' · hidden' : ''}`}
+                content={`#${p.index}  pos ${fmt3(p.rawPos)}${moved ? ' · moved' : ''}${hidden ? ' · hidden' : ''}`}
               >
-                <span className="caret icon" />
-                {typeof onTogglePlacementVisible === 'function' && (
-                  <VisBtn
-                    state={hidden ? 'off' : 'on'}
-                    showLabel="Show object"
-                    hideLabel="Hide object"
-                    onClick={() => onTogglePlacementVisible(p)}
-                  />
-                )}
-                <span className="kind icon">place</span>
-                <span className="plc-name">{p.name}</span>
-                {moved && typeof onResetPlacement === 'function' && (
-                  <Tooltip content="Reset object placement">
-                    <button
-                      type="button"
-                      className="icon-btn plc-reset"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onResetPlacement(p);
-                      }}
-                    >
-                      <span className="icon">restart_alt</span>
-                    </button>
-                  </Tooltip>
-                )}
-                <span className="mono-small plc-idx">{p.index}</span>
-              </div>
+                <div
+                  ref={sel ? selectedRef : undefined}
+                  className={`plc-row plc-inst${sel ? ' selected' : ''}${moved ? ' moved' : ''}${hidden ? ' vis-off' : ''}`}
+                  onClick={(e) => { e.stopPropagation(); onSelectInstance?.(p); }}
+                >
+                  <span className="caret icon" />
+                  {typeof onTogglePlacementVisible === 'function' && (
+                    <VisBtn
+                      state={hidden ? 'off' : 'on'}
+                      showLabel="Show object"
+                      hideLabel="Hide object"
+                      onClick={() => onTogglePlacementVisible(p)}
+                    />
+                  )}
+                  <span className="kind icon">place</span>
+                  <span className="plc-name">{p.name}</span>
+                  {moved && typeof onResetPlacement === 'function' && (
+                    <Tooltip content="Reset object placement">
+                      <button
+                        type="button"
+                        className="icon-btn plc-reset"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onResetPlacement(p);
+                        }}
+                      >
+                        <span className="icon">restart_alt</span>
+                      </button>
+                    </Tooltip>
+                  )}
+                  <span className="mono-small plc-idx">{p.index}</span>
+                </div>
+              </Tooltip>
             );
           })}
         </div>
@@ -395,26 +399,28 @@ function renderVfxGroup(g, ctx) {
           {g.instances.map((p) => {
             const hidden = !!(p.userHidden || p.hidden);
             return (
-              <div
+              <Tooltip
                 key={p.key || p.name}
-                ref={undefined}
-                className={`plc-row plc-inst${hidden ? ' vis-off' : ''}`}
-                onClick={(e) => { e.stopPropagation(); onSelectEffect?.(p); }}
-                title={`${p.id || ''}  pos ${fmt3(p.rawPos || p.pos)}${p.weatherId ? ` · ${p.weatherId}` : ''}${hidden ? ' · hidden' : ''}`}
+                content={`${p.id || ''}  pos ${fmt3(p.rawPos || p.pos)}${p.weatherId ? ` · ${p.weatherId}` : ''}${hidden ? ' · hidden' : ''}`}
               >
-                <span className="caret icon" />
-                {typeof onToggleEffectVisible === 'function' && (
-                  <VisBtn
-                    state={hidden ? 'off' : 'on'}
-                    showLabel="Show effect"
-                    hideLabel="Hide effect"
-                    onClick={() => onToggleEffectVisible(p)}
-                  />
-                )}
-                <span className="kind icon">bolt</span>
-                <span className="plc-name">{p.name}</span>
-                {p.weatherId && <span className="mono-small plc-idx">{p.weatherId}</span>}
-              </div>
+                <div
+                  className={`plc-row plc-inst${hidden ? ' vis-off' : ''}`}
+                  onClick={(e) => { e.stopPropagation(); onSelectEffect?.(p); }}
+                >
+                  <span className="caret icon" />
+                  {typeof onToggleEffectVisible === 'function' && (
+                    <VisBtn
+                      state={hidden ? 'off' : 'on'}
+                      showLabel="Show effect"
+                      hideLabel="Hide effect"
+                      onClick={() => onToggleEffectVisible(p)}
+                    />
+                  )}
+                  <span className="kind icon">bolt</span>
+                  <span className="plc-name">{p.name}</span>
+                  {p.weatherId && <span className="mono-small plc-idx">{p.weatherId}</span>}
+                </div>
+              </Tooltip>
             );
           })}
         </div>

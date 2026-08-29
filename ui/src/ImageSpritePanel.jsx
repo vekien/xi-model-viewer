@@ -149,24 +149,25 @@ function SpriteRow({ sprite: s, selected, onSelect }) {
   const sh = s.src?.h ?? 0;
   return (
     <div className={`node${selected ? ' selected' : ''}`}>
-      <div
-        className="row img-sprite-row"
-        ref={ref}
-        onClick={() => onSelect?.(s)}
-        title={`atlas “${s.owner}” · src ${sw}×${sh}@(${s.src?.x},${s.src?.y}) · @0x${s.offset.toString(16)}`}
-      >
-        <span className="caret icon" />
-        <span className="kind icon">crop_free</span>
-        <span className="zone-name">
-          <span className="img-sprite-owner">{s.owner || '?'}</span>
-          {s.header && s.header !== s.owner && (
-            <span className="mono-small img-sprite-hdr"> · after {s.header}</span>
-          )}
-        </span>
-        <span className="mono-small zone-id">
-          {sw}×{sh}
-        </span>
-      </div>
+      <Tooltip content={`atlas “${s.owner}” · src ${sw}×${sh}@(${s.src?.x},${s.src?.y}) · @0x${s.offset.toString(16)}`}>
+        <div
+          className="row img-sprite-row"
+          ref={ref}
+          onClick={() => onSelect?.(s)}
+        >
+          <span className="caret icon" />
+          <span className="kind icon">crop_free</span>
+          <span className="zone-name">
+            <span className="img-sprite-owner">{s.owner || '?'}</span>
+            {s.header && s.header !== s.owner && (
+              <span className="mono-small img-sprite-hdr"> · after {s.header}</span>
+            )}
+          </span>
+          <span className="mono-small zone-id">
+            {sw}×{sh}
+          </span>
+        </div>
+      </Tooltip>
     </div>
   );
 }

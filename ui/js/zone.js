@@ -745,7 +745,15 @@ export function parseDatTextures(datBuffer) {
 // ── name resolution helpers (LOD suffix + fuzzy texture match) ───────────────
 const norm = (s) => s.replace(/ /g, '').replace(/_/g, '').toLowerCase();
 
-export function resolveMeshName(meshId, meshes) {
+/**
+ * Placement mesh id → key in the `meshes` map.
+ *
+ * @param {string} meshId          0x1C placement mesh id
+ * @param {Map} meshes             name/alias → prims (see parseZone)
+ * @param {Set<string>} [meshNames] real 0x2E mesh names (parseZone `meshNames`).
+ *   Pass it: without it the fuzzy pass may latch onto a section-fourcc alias.
+ */
+export function resolveMeshName(meshId, meshes, meshNames = null) {
   if (!meshId) return null;
   if (meshes.has(meshId)) return meshId;
   const base = ['_l', '_m', '_h'].includes(meshId.slice(-2)) ? meshId.slice(0, -2) : meshId;
@@ -763,10 +771,26 @@ export function resolveMeshName(meshId, meshes) {
   //    and the gate body vanishes while wgtc_sup still draws.
   const MIN_FUZZ = 4;
   if (want.length < MIN_FUZZ) return null;
+  const lowId = meshId.toLowerCase();
   for (const key of meshes.keys()) {
+    // Fuzzy matching is for DECORATED names, so only a real mesh name is a legal
+    // target. A section-fourcc alias is 4 chars of DatId that regularly collide
+    // with the tail of an unrelated placement id — `ship_room` (a sub-area
+    // placeholder with no mesh of its own) landing on `room`, the fourcc of
+    // `room-hanyou`, drew a house interior on Mhaura's dock. Placements that
+    // legitimately store a raw DatId hit the exact match above, never this pass.
+    if (meshNames && !meshNames.has(key)) continue;
     const k = norm(key);
     if (k.length < MIN_FUZZ) continue;
-    if (k.endsWith(want) || want.endsWith(k)) return key;
+    if (k.endsWith(want)) return key;
+    if (want.endsWith(k)) {
+      // The tail has to survive on the RAW ids too, or norm() dropping an
+      // underscore invents a boundary that isn't there: `gal_tub_atari01`
+      // matching `t_ari01`, `hit_misaki1_m` matching the visual `misaki_1_m`.
+      // Leading separators are exempt — `xboss_ramp` → `_boss_ramp` is real.
+      if (lowId.endsWith(key.toLowerCase().replace(/^[_ ]+/, ''))) return key;
+      continue;
+    }
     if (k.split(/\s+/).includes(want)) return key;
   }
   return null;
@@ -830,6 +854,9 @@ export function parseZone(datBuffer, keyTables) {
   // switching weather appeared to change nothing. Keep them all, with the
   // directory path, and let the particle system resolve by scope.
   const meshSections = [];        // { path, id, name, prims }
+  // Which keys in `meshes` are real 0x2E mesh names rather than the fourcc
+  // aliases added below — resolveMeshName's fuzzy pass may only target these.
+  const meshNames = new Set();
   // Per-weather sky shells under weat/<id>/ — same mesh name can appear in many
   // weather folders with different textures (clod_a01 × clod/mist/thdr/…).
   // First-wins on `meshes` would keep only one and hide clouds for other weathers.
@@ -875,12 +902,15 @@ export function parseZone(datBuffer, keyTables) {
       if (primVertCount(next) > primVertCount(prev)) meshes.set(key, next);
     };
     keepRicher(meshName, prims);
+    meshNames.add(meshName);
     // Aliases for prototype placements that store a short id / section fourcc.
     if (s.id) keepRicher(s.id, prims);
     const parts = meshName.split(/\s+/).filter(Boolean);
     if (parts.length > 1) {
       const tail = parts[parts.length - 1];
-      if (tail) keepRicher(tail, prims);
+      // The "category meshid" tail IS the authored mesh id, so it counts as a
+      // name; only the fourcc alias is excluded from fuzzy matching.
+      if (tail) { keepRicher(tail, prims); meshNames.add(tail); }
     }
   }
 
@@ -924,7 +954,7 @@ export function parseZone(datBuffer, keyTables) {
   }
 
   return {
-    meshes, placements, textures, meshIdToName, meshSections,
+    meshes, meshNames, placements, textures, meshIdToName, meshSections,
     collision, interactions, subAreas, weatherSky,
   };
 }

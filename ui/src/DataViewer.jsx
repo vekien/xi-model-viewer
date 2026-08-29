@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { fmtBytes } from '../js/dat/inspect.js';
 import { ENTITY_MODEL_OFFSET, GEAR_SLOTS, GEAR_TABLES, RACE_LABELS, gearIndex } from '../js/dat/modelids.js';
 import { Combo } from './Combo.jsx';
+import { Tooltip } from './Tooltip.jsx';
 
 /** Cap on rendered file-table rows — the base table registers ~50k ids. */
 const FT_MAX_ROWS = 1000;
 
 /**
- * Assets > Data — DAT structure over the viewport. Left panel is the folder
+ * DAT structure inspector over the viewport. Left panel is the folder
  * tree the client walks (0x01/0x00 sections); right column is the file card
  * and a per-type census. Resources are listed with a header peek (dimensions,
  * joint counts, sound ids), never their payload.
@@ -60,18 +61,18 @@ function ZoneTabs({ tabs, activeKey, onSelect }) {
   return (
     <div className="data-zone-tabs" role="tablist" aria-label="Zone DATs">
       {tabs.map((t) => (
-        <button
-          key={t.key}
-          type="button"
-          role="tab"
-          aria-selected={activeKey === t.key}
-          className={`data-zone-tab${activeKey === t.key ? ' on' : ''}`}
-          title={t.rel || t.path}
-          onClick={() => { if (activeKey !== t.key) onSelect?.(t.path); }}
-        >
-          <span className="icon">{t.icon}</span>
-          {t.label}
-        </button>
+        <Tooltip key={t.key} content={t.rel || t.path}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeKey === t.key}
+            className={`data-zone-tab${activeKey === t.key ? ' on' : ''}`}
+            onClick={() => { if (activeKey !== t.key) onSelect?.(t.path); }}
+          >
+            <span className="icon">{t.icon}</span>
+            {t.label}
+          </button>
+        </Tooltip>
       ))}
     </div>
   );
@@ -79,7 +80,7 @@ function ZoneTabs({ tabs, activeKey, onSelect }) {
 
 export function DataViewer({
   doc, sources, onSelectSource, onOpenTexture, onOpenSkeleton, onOpenZoneDef,
-  onOpenRoute, onOpenUiMenu, onOpenUiElementGroup, onOpenParticle, onPlaySound, playingSoundKey, onRevealPath, onOpenDat, onRenderFile,
+  onOpenRoute, onOpenUiMenu, onOpenUiElementGroup, onOpenDataTable, onOpenParticle, onPlaySound, playingSoundKey, onRevealPath, onOpenDat, onRenderFile,
 }) {
   if (!doc) {
     return (
@@ -161,6 +162,54 @@ export function DataViewer({
     );
   }
 
+  if (doc.kind === 'dmsg') {
+    return (
+      <DmsgView
+        doc={doc}
+        sources={sources}
+        zoneChrome={zoneChrome}
+        onSelectSource={onSelectSource}
+        onRevealPath={onRevealPath}
+      />
+    );
+  }
+
+  if (doc.kind === 'macros') {
+    return (
+      <MacroBookView
+        doc={doc}
+        sourceItems={sourceItems}
+        activeSource={activeSource}
+        onSelectSource={onSelectSource}
+        onRevealPath={onRevealPath}
+      />
+    );
+  }
+
+  if (doc.kind === 'macrotitles') {
+    return (
+      <MacroTitlesView
+        doc={doc}
+        sourceItems={sourceItems}
+        activeSource={activeSource}
+        onSelectSource={onSelectSource}
+        onRevealPath={onRevealPath}
+      />
+    );
+  }
+
+  if (doc.kind === 'hex') {
+    return (
+      <HexView
+        doc={doc}
+        sourceItems={sourceItems}
+        activeSource={activeSource}
+        onSelectSource={onSelectSource}
+        onRevealPath={onRevealPath}
+      />
+    );
+  }
+
   if (doc.kind === 'other') {
     return (
       <div className="data-viewer">
@@ -213,6 +262,7 @@ export function DataViewer({
       onOpenRoute={onOpenRoute}
       onOpenUiMenu={onOpenUiMenu}
       onOpenUiElementGroup={onOpenUiElementGroup}
+      onOpenDataTable={onOpenDataTable}
       onOpenParticle={onOpenParticle}
       onPlaySound={onPlaySound}
       playingSoundKey={playingSoundKey}
@@ -251,19 +301,22 @@ function StructureToolbar({
             onChange={(e) => setQuery(e.target.value)}
           />
           {query && (
-            <button
-              type="button"
-              className="list-search-clear"
-              onClick={() => setQuery('')}
-              title="Clear"
-            >
-              <span className="icon">close</span>
-            </button>
+            <Tooltip content="Clear">
+              <button
+                type="button"
+                className="list-search-clear"
+                onClick={() => setQuery('')}
+              >
+                <span className="icon">close</span>
+              </button>
+            </Tooltip>
           )}
           {query.trim() && matchCount != null && (
-            <span className="data-struct-match mono" title={totalHint || ''}>
-              {matchCount.toLocaleString()}
-            </span>
+            <Tooltip content={totalHint || ''}>
+              <span className="data-struct-match mono">
+                {matchCount.toLocaleString()}
+              </span>
+            </Tooltip>
           )}
         </div>
       )}
@@ -327,7 +380,7 @@ function countRes(node) {
 function SectionsView({
   doc, sourceItems, activeSource, zoneChrome, onSelectSource,
   onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenRoute, onOpenUiMenu,
-  onOpenUiElementGroup,
+  onOpenUiElementGroup, onOpenDataTable,
   onOpenParticle, onPlaySound, playingSoundKey,
   onRevealPath, onRenderFile,
 }) {
@@ -379,6 +432,7 @@ function SectionsView({
               onOpenRoute={onOpenRoute}
               onOpenUiMenu={onOpenUiMenu}
               onOpenUiElementGroup={onOpenUiElementGroup}
+              onOpenDataTable={onOpenDataTable}
               onOpenParticle={onOpenParticle}
               onPlaySound={onPlaySound}
               playingSoundKey={playingSoundKey}
@@ -568,9 +622,11 @@ function FtableView({ doc, onOpenDat }) {
             onChange={(e) => setQuery(e.target.value)}
           />
           {query && (
-            <button className="list-search-clear" onClick={() => setQuery('')} title="Clear">
-              <span className="icon">close</span>
-            </button>
+            <Tooltip content="Clear">
+              <button className="list-search-clear" onClick={() => setQuery('')}>
+                <span className="icon">close</span>
+              </button>
+            </Tooltip>
           )}
         </div>
         <div className="data-tree">
@@ -653,9 +709,11 @@ function SearchWrap({ query, setQuery, placeholder, children }) {
         onChange={(e) => setQuery(e.target.value)}
       />
       {query && (
-        <button className="list-search-clear" onClick={() => setQuery('')} title="Clear">
-          <span className="icon">close</span>
-        </button>
+        <Tooltip content="Clear">
+          <button className="list-search-clear" onClick={() => setQuery('')}>
+            <span className="icon">close</span>
+          </button>
+        </Tooltip>
       )}
     </div>
   );
@@ -698,12 +756,14 @@ function NpcListView({ doc, sources, zoneChrome, onSelectSource, onRevealPath })
             <SearchWrap query={query} setQuery={setQuery} placeholder="Filter by name or id…" />
             <div className="data-tree">
               {filtered.map((n) => (
-                <div key={n.index} className="data-row" title={`record ${n.index} · target index ${n.id & 0x3ff}`}>
-                  <span className="data-ft-id mono">{n.index}</span>
-                  <span className="data-id mono">{n.name}</span>
-                  {n.events > 0 && <span className="data-ev-badge mono">{n.events} event{n.events === 1 ? '' : 's'}</span>}
-                  <span className="data-size mono">0x{n.id.toString(16).toUpperCase().padStart(8, '0')}</span>
-                </div>
+                <Tooltip key={n.index} content={`record ${n.index} · target index ${n.id & 0x3ff}`}>
+                  <div className="data-row">
+                    <span className="data-ft-id mono">{n.index}</span>
+                    <span className="data-id mono">{n.name}</span>
+                    {n.events > 0 && <span className="data-ev-badge mono">{n.events} event{n.events === 1 ? '' : 's'}</span>}
+                    <span className="data-size mono">0x{n.id.toString(16).toUpperCase().padStart(8, '0')}</span>
+                  </div>
+                </Tooltip>
               ))}
               {filtered.length === 0 && <div className="data-ft-more">No NPCs match “{query}”.</div>}
             </div>
@@ -839,19 +899,21 @@ function EventNode({ ev, dialogTexts, defaultOpen }) {
         </span>
       </div>
       {open && ev.opcodes.map((o, i) => (
-        <div key={i} className="data-row data-op-row" title={o.args ? `args: ${o.args}` : undefined}>
-          <span className="data-op-off mono">{o.offset.toString(16).toUpperCase().padStart(4, '0')}</span>
-          <span className="data-op-hex mono">{o.op.toString(16).toUpperCase().padStart(2, '0')}</span>
-          <span className="data-op-name mono">{o.name}</span>
-          <span className="data-op-extra mono">
-            {o.dialogRef >= 0 && dialogTexts?.[o.dialogRef] != null
-              ? `#${o.dialogRef} “${dialogTexts[o.dialogRef].replace(/\s+/g, ' ').slice(0, 70)}${dialogTexts[o.dialogRef].length > 70 ? '…' : ''}”`
-              : o.dialogRef >= 0 ? `dialog #${o.dialogRef}`
-                : o.zoneRef >= 0 ? `zone ${o.zoneRef}`
-                  : o.actors.length ? o.actors.map((x) => x.label).join(' → ')
-                    : ''}
-          </span>
-        </div>
+        <Tooltip key={i} content={o.args ? `args: ${o.args}` : ''}>
+          <div className="data-row data-op-row">
+            <span className="data-op-off mono">{o.offset.toString(16).toUpperCase().padStart(4, '0')}</span>
+            <span className="data-op-hex mono">{o.op.toString(16).toUpperCase().padStart(2, '0')}</span>
+            <span className="data-op-name mono">{o.name}</span>
+            <span className="data-op-extra mono">
+              {o.dialogRef >= 0 && dialogTexts?.[o.dialogRef] != null
+                ? `#${o.dialogRef} “${dialogTexts[o.dialogRef].replace(/\s+/g, ' ').slice(0, 70)}${dialogTexts[o.dialogRef].length > 70 ? '…' : ''}”`
+                : o.dialogRef >= 0 ? `dialog #${o.dialogRef}`
+                  : o.zoneRef >= 0 ? `zone ${o.zoneRef}`
+                    : o.actors.length ? o.actors.map((x) => x.label).join(' → ')
+                      : ''}
+            </span>
+          </div>
+        </Tooltip>
       ))}
     </div>
   );
@@ -896,28 +958,29 @@ function XistringView({ doc, sources, zoneChrome, onSelectSource, onRevealPath }
             <SearchWrap query={query} setQuery={setQuery} placeholder="Filter by index or text…" />
             <div className="data-tree">
               {shown.map((e) => (
-                <div
+                <Tooltip
                   key={e.index}
-                  className="data-dlg-entry"
-                  title={`#${e.index} · blob+0x${e.blobOffset.toString(16).toUpperCase()} · file 0x${e.offset.toString(16).toUpperCase()} · len ${e.length}${e.flags ? ` · flags 0x${e.flags.toString(16)}` : ''}`}
+                  content={`#${e.index} · blob+0x${e.blobOffset.toString(16).toUpperCase()} · file 0x${e.offset.toString(16).toUpperCase()} · len ${e.length}${e.flags ? ` · flags 0x${e.flags.toString(16)}` : ''}`}
                 >
-                  <div className="data-dlg-head">
-                    <span className="data-ft-id mono">{e.index}</span>
-                    <span className="data-dlg-speaker mono">
-                      0x{e.offset.toString(16).toUpperCase()}
-                    </span>
+                  <div className="data-dlg-entry">
+                    <div className="data-dlg-head">
+                      <span className="data-ft-id mono">{e.index}</span>
+                      <span className="data-dlg-speaker mono">
+                        0x{e.offset.toString(16).toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="data-dlg-text">
+                      {e.text
+                        ? e.text.split('\n').map((line, i) => (
+                          <span key={i}>
+                            {i > 0 && <br />}
+                            {line}
+                          </span>
+                        ))
+                        : <span className="data-dlg-empty">(empty)</span>}
+                    </div>
                   </div>
-                  <div className="data-dlg-text">
-                    {e.text
-                      ? e.text.split('\n').map((line, i) => (
-                        <span key={i}>
-                          {i > 0 && <br />}
-                          {line}
-                        </span>
-                      ))
-                      : <span className="data-dlg-empty">(empty)</span>}
-                  </div>
-                </div>
+                </Tooltip>
               ))}
               {filtered.length > FT_MAX_ROWS && (
                 <div className="data-ft-more">
@@ -944,6 +1007,128 @@ function XistringView({ doc, sources, zoneChrome, onSelectSource, onRevealPath }
               {doc.idWord != null && doc.idWord !== 0 && (
                 <Row label="Id word" value={`0x${doc.idWord.toString(16).toUpperCase()}`} />
               )}
+            </>
+          )}
+        />
+        {doc.warnings?.length > 0 && (
+          <div className="panel data-card">
+            <div className="data-card-title"><span className="icon">warning</span>Warnings</div>
+            <div className="data-empty-sub" style={{ padding: '8px 12px' }}>
+              {doc.warnings.map((w, i) => <div key={i}>{w}</div>)}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * d_msg string tables (spell/ability names & help, key items, mounts, …).
+ * Searchable index → primary text; extra sub-strings shown when present.
+ */
+function DmsgView({ doc, sources, zoneChrome, onSelectSource, onRevealPath }) {
+  const [query, setQuery] = useState('');
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return doc.entries;
+    return doc.entries.filter((e) => {
+      if (String(e.index) === q) return true;
+      if (e.text?.toLowerCase().includes(q)) return true;
+      if (e.texts?.some((t) => t.toLowerCase().includes(q))) return true;
+      return `0x${e.offset.toString(16)}`.includes(q);
+    });
+  }, [doc, query]);
+  const shown = filtered.length > FT_MAX_ROWS ? filtered.slice(0, FT_MAX_ROWS) : filtered;
+  const nonempty = useMemo(
+    () => doc.entries.filter((e) => e.text || e.texts?.some(Boolean)).length,
+    [doc],
+  );
+
+  return (
+    <div className="data-viewer">
+      <div className="panel data-main">
+        <div className="data-card-title">
+          <span className="icon">menu_book</span>d_msg
+          <span className="data-card-note mono">
+            {filtered.length === doc.entries.length
+              ? `${doc.entries.length.toLocaleString()} entries`
+              : `${filtered.length.toLocaleString()} of ${doc.entries.length.toLocaleString()}`}
+            {nonempty < doc.entries.length
+              ? ` · ${nonempty.toLocaleString()} with text`
+              : ''}
+          </span>
+        </div>
+        {zoneChrome}
+        {!doc.entries.length ? (
+          <ZoneEmptyState
+            icon="menu_book"
+            title="No entries"
+            sub="This d_msg table has no blocks."
+          />
+        ) : (
+          <>
+            <SearchWrap query={query} setQuery={setQuery} placeholder="Filter by index or text…" />
+            <div className="data-tree">
+              {shown.map((e) => {
+                const lines = (e.texts?.length ? e.texts : [e.text]).filter((t) => t != null && t !== '');
+                return (
+                  <Tooltip
+                    key={e.index}
+                    content={`#${e.index} · 0x${e.offset.toString(16).toUpperCase()}`}
+                  >
+                    <div className="data-dlg-entry">
+                      <div className="data-dlg-head">
+                        <span className="data-ft-id mono">{e.index}</span>
+                        <span className="data-dlg-speaker mono">
+                          0x{e.offset.toString(16).toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="data-dlg-text">
+                        {lines.length === 0
+                          ? <span className="data-dlg-empty">(empty)</span>
+                          : lines.map((t, ti) => (
+                            <div key={ti} className={ti > 0 ? 'data-dmsg-sub' : undefined}>
+                              {ti > 0 && lines.length > 1 ? (
+                                <span className="data-dmsg-sub-label mono">[{ti}] </span>
+                              ) : null}
+                              {String(t).split('\n').map((line, li) => (
+                                <span key={li}>
+                                  {li > 0 && <br />}
+                                  {line}
+                                </span>
+                              ))}
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  </Tooltip>
+                );
+              })}
+              {filtered.length > FT_MAX_ROWS && (
+                <div className="data-ft-more">
+                  Showing the first {FT_MAX_ROWS.toLocaleString()} of {filtered.length.toLocaleString()} — narrow the filter to see the rest.
+                </div>
+              )}
+              {filtered.length === 0 && (
+                <div className="data-ft-more">No entries match “{query}”.</div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+      <div className="data-side">
+        <FileCard
+          doc={doc}
+          activeSource={doc.fullPath || ''}
+          onSelectSource={onSelectSource}
+          onRevealPath={onRevealPath}
+          extraRows={(
+            <>
+              <Row label="Entries" value={doc.entries.length.toLocaleString()} />
+              <Row label="Stride" value={`${doc.stride} B`} />
+              <Row label="Table @ " value={`0x${doc.tableOffset.toString(16).toUpperCase()}`} />
+              <Row label="XOR" value={doc.bitmask ? `0x${doc.bitmask.toString(16).toUpperCase()}` : 'none'} />
             </>
           )}
         />
@@ -1100,17 +1285,18 @@ function DialogView({ doc, sources, zoneChrome, onSelectSource, onRevealPath }) 
 function DlgLine({ entry, speaker, indent = 0 }) {
   if (!entry) return null;
   return (
-    <div
-      className="data-dlg-entry"
-      style={indent ? { paddingLeft: 8 + indent * 14 } : undefined}
-      title={`line ${entry.index} · offset 0x${entry.offset.toString(16).toUpperCase()} · ${entry.length} bytes`}
-    >
-      <div className="data-dlg-head">
-        <span className="data-ft-id mono">{entry.index}</span>
-        <span className="data-dlg-speaker">{speaker}</span>
+    <Tooltip content={`line ${entry.index} · offset 0x${entry.offset.toString(16).toUpperCase()} · ${entry.length} bytes`}>
+      <div
+        className="data-dlg-entry"
+        style={indent ? { paddingLeft: 8 + indent * 14 } : undefined}
+      >
+        <div className="data-dlg-head">
+          <span className="data-ft-id mono">{entry.index}</span>
+          <span className="data-dlg-speaker">{speaker}</span>
+        </div>
+        <div className="data-dlg-text">{entry.text || <span className="data-dlg-empty">(empty)</span>}</div>
       </div>
-      <div className="data-dlg-text">{entry.text || <span className="data-dlg-empty">(empty)</span>}</div>
-    </div>
+    </Tooltip>
   );
 }
 
@@ -1176,20 +1362,21 @@ function DlgUnreferencedNode({ entries }) {
 /** One file-table row: model/file id, optional race+slot, DAT path. */
 function FtRow({ e, onOpenDat, indent = 0, tableRace = null }) {
   return (
-    <div
-      className="data-row data-ft-row"
-      style={indent ? { paddingLeft: 8 + indent * 14 } : undefined}
-      title={`file id ${e.id} · FTABLE 0x${e.ftVal.toString(16).toUpperCase().padStart(4, '0')} (subdir ${e.ftVal >> 7} · file ${e.ftVal & 0x7f}) — click to inspect`}
-      onClick={() => onOpenDat?.(e.dat, {
-        tableRace: tableRace || e.tableRace || null,
-        races: e.races,
-      })}
-    >
-      <span className="data-ft-id mono">{e.modelId ?? e.id}</span>
-      {e.raceLabel && <span className="data-type">{e.raceLabel} {e.slot}</span>}
-      <span className="data-id mono">{e.dat}</span>
-      <span className="data-size mono">{e.modelId != null ? `id ${e.id}` : `ROM ${e.rom}`}</span>
-    </div>
+    <Tooltip content={`file id ${e.id} · FTABLE 0x${e.ftVal.toString(16).toUpperCase().padStart(4, '0')} (subdir ${e.ftVal >> 7} · file ${e.ftVal & 0x7f}) — click to inspect`}>
+      <div
+        className="data-row data-ft-row"
+        style={indent ? { paddingLeft: 8 + indent * 14 } : undefined}
+        onClick={() => onOpenDat?.(e.dat, {
+          tableRace: tableRace || e.tableRace || null,
+          races: e.races,
+        })}
+      >
+        <span className="data-ft-id mono">{e.modelId ?? e.id}</span>
+        {e.raceLabel && <span className="data-type">{e.raceLabel} {e.slot}</span>}
+        <span className="data-id mono">{e.dat}</span>
+        <span className="data-size mono">{e.modelId != null ? `id ${e.id}` : `ROM ${e.rom}`}</span>
+      </div>
+    </Tooltip>
   );
 }
 
@@ -1235,7 +1422,7 @@ function GearSlotNode({ node, onOpenDat, tableRace }) {
   );
 }
 
-function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenRoute, onOpenUiMenu, onOpenUiElementGroup, onOpenParticle, onPlaySound, playingSoundKey }) {
+function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenRoute, onOpenUiMenu, onOpenUiElementGroup, onOpenDataTable, onOpenParticle, onPlaySound, playingSoundKey }) {
   const [open, setOpen] = useState(depth < 4 || !!forceOpen);
   // While filtering, keep matching branches expanded.
   const expanded = forceOpen || open;
@@ -1282,6 +1469,7 @@ function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onOpenZ
               onOpenRoute={onOpenRoute}
               onOpenUiMenu={onOpenUiMenu}
               onOpenUiElementGroup={onOpenUiElementGroup}
+              onOpenDataTable={onOpenDataTable}
               onOpenParticle={onOpenParticle}
               onPlaySound={onPlaySound}
               playingSoundKey={playingSoundKey}
@@ -1298,6 +1486,7 @@ function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onOpenZ
               onOpenRoute={onOpenRoute}
               onOpenUiMenu={onOpenUiMenu}
               onOpenUiElementGroup={onOpenUiElementGroup}
+              onOpenDataTable={onOpenDataTable}
               onOpenParticle={onOpenParticle}
               onPlaySound={onPlaySound}
               playingSoundKey={playingSoundKey}
@@ -1308,7 +1497,7 @@ function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onOpenZ
   );
 }
 
-function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenRoute, onOpenUiMenu, onOpenUiElementGroup, onOpenParticle, onPlaySound, playingSoundKey }) {
+function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenRoute, onOpenUiMenu, onOpenUiElementGroup, onOpenDataTable, onOpenParticle, onPlaySound, playingSoundKey }) {
   const isTex = !!(res.isTexture || res.textureName
     || res.type === 0x20 || res.type === 0x5D
     || res.name === 'Texture' || res.name === 'BumpMap');
@@ -1327,6 +1516,12 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
     || res.name === 'UiMenu');
   const isUiElementGroup = !!(res.isUiElementGroup || res.type === 0x31 || res.type === 49
     || res.name === 'UiElementGroup');
+  const isDataTable = !!(res.isDataTable
+    || res.type === 0x04 || res.type === 4
+    || res.type === 0x49 || res.type === 73
+    || res.type === 0x53 || res.type === 83
+    || res.name === 'Table' || res.name === 'SpellList' || res.name === 'AbilityList'
+    || ['mnc2', 'mon_', 'levc', 'mgc_', 'comm'].includes(String(res.id || '').trim()));
   const isParticle = !!(res.isParticleGenerator || res.type === 0x05 || res.type === 5
     || res.name === 'ParticleGenerator');
   const soundKey = isSound && res.soundId != null
@@ -1335,14 +1530,15 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
   const soundPlaying = !!(soundKey && playingSoundKey === soundKey);
   const texClick = isTex && !!onOpenTexture;
   const skelClick = isSkel && !!onOpenSkeleton;
-  // ZoneDef / Particle / Route / Ui* stay activatable so a missing handler still logs.
+  // ZoneDef / Particle / Route / Ui* / tables stay activatable so a missing handler still logs.
   const zdefClick = isZoneDef;
   const routeClick = isRoute;
   const uiMenuClick = isUiMenu;
   const uiEgClick = isUiElementGroup;
+  const dataTableClick = isDataTable;
   const particleClick = isParticle;
   const soundClick = isSound && res.soundId != null && !!onPlaySound;
-  const clickable = texClick || skelClick || soundClick || zdefClick || particleClick || routeClick || uiMenuClick || uiEgClick;
+  const clickable = texClick || skelClick || soundClick || zdefClick || particleClick || routeClick || uiMenuClick || uiEgClick || dataTableClick;
   const openKey = res.textureName || res.id?.trim() || null;
   const onActivate = (e) => {
     e?.preventDefault?.();
@@ -1351,6 +1547,9 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
     else if (particleClick) {
       if (typeof onOpenParticle === 'function') onOpenParticle(res);
       else console.error('ParticleGenerator click: onOpenParticle handler missing', res);
+    } else if (dataTableClick) {
+      if (typeof onOpenDataTable === 'function') onOpenDataTable(res);
+      else console.error('DataTable click: onOpenDataTable handler missing', res);
     } else if (uiEgClick) {
       if (typeof onOpenUiElementGroup === 'function') onOpenUiElementGroup(res);
       else console.error('UiElementGroup click: onOpenUiElementGroup handler missing', res);
@@ -1367,52 +1566,50 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
     else if (texClick && openKey) onOpenTexture(openKey);
   };
   const flags = res.flags ?? [];
-  const hint = soundClick ? (soundPlaying ? 'click to stop' : 'click to play')
-    : particleClick ? 'click to play'
-      : uiEgClick ? 'click to view sprites'
-        : uiMenuClick ? 'click to view layout'
-          : routeClick ? 'click to view path'
-            : zdefClick ? 'click to view placements'
-              : 'click to view';
+  const at = `offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`;
+  const tip = soundClick
+    ? (soundPlaying ? `Click to stop se ${res.soundId}` : `Click to play se ${res.soundId}`)
+    : particleClick
+      ? `Click to play particle · ${String(res.id || '').trim() || 'generator'}`
+      : dataTableClick
+        ? `Click to view table · ${at}`
+        : uiEgClick
+          ? `Click to view element group / sprites · ${at}`
+          : uiMenuClick
+            ? `Click to view menu layout · ${at}`
+            : routeClick
+              ? `Click to view camera path · ${at}`
+              : zdefClick
+                ? `Click to view placements · ${at}`
+                : skelClick
+                  ? `Click to view skeleton tree · ${at}`
+                  : texClick
+                    ? `Click to view texture · ${at}`
+                    : `${at}${flags.length ? ` · ${flags.join(', ')}` : ''}`;
   return (
-    <div
-      className={`data-row data-res-row${isTex ? ' data-res-tex' : ''}${isSkel ? ' data-res-skel' : ''}${isZoneDef ? ' data-res-zdef' : ''}${isRoute ? ' data-res-route' : ''}${isUiMenu ? ' data-res-uimenu' : ''}${isUiElementGroup ? ' data-res-uieg' : ''}${isParticle ? ' data-res-fx' : ''}${isSound ? ' data-res-sfx' : ''}${soundPlaying ? ' data-res-sfx-play' : ''}${clickable ? ' data-res-click' : ''}`}
-      style={{ paddingLeft: 8 + depth * 14 }}
-      title={soundClick
-        ? (soundPlaying ? `Click to stop se ${res.soundId}` : `Click to play se ${res.soundId}`)
-        : particleClick
-          ? `Click to play particle · ${String(res.id || '').trim() || 'generator'}`
-          : uiEgClick
-            ? `Click to view element group / sprites · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
-            : uiMenuClick
-              ? `Click to view menu layout · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
-              : routeClick
-                ? `Click to view camera path · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
-                : zdefClick
-                  ? `Click to view placements · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
-                  : skelClick
-                    ? `Click to view skeleton tree · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
-                    : texClick
-                      ? `Click to view texture · offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}`
-                      : `offset 0x${(res.offset ?? 0).toString(16).toUpperCase()}${flags.length ? ` · ${flags.join(', ')}` : ''}`}
-      onClick={clickable ? onActivate : undefined}
-      role={clickable ? 'button' : undefined}
-      tabIndex={clickable ? 0 : undefined}
-      onKeyDown={clickable ? (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onActivate(e); }
-      } : undefined}
-    >
-      <span className="data-caret-pad" />
-      <span className={`icon data-kind${soundPlaying ? ' data-sfx-icon-play' : ''}`}>{res.icon}</span>
-      <span className="data-id mono">{res.id || '····'}</span>
-      <span className="data-type">{res.name}</span>
-      {res.detail && <span className="data-detail mono">{res.detail}</span>}
-      {clickable && !res.detail && (
-        <span className="data-detail data-tex-hint">{hint}</span>
-      )}
-      {flags.length > 0 && <span className="data-flags mono">{flags.join(' ')}</span>}
-      <span className="data-size mono">{fmtBytes(res.size)}</span>
-    </div>
+    <Tooltip content={tip}>
+      <div
+        className={`data-row data-res-row${isTex ? ' data-res-tex' : ''}${isSkel ? ' data-res-skel' : ''}${isZoneDef ? ' data-res-zdef' : ''}${isRoute ? ' data-res-route' : ''}${isUiMenu ? ' data-res-uimenu' : ''}${isUiElementGroup ? ' data-res-uieg' : ''}${isDataTable ? ' data-res-table' : ''}${isParticle ? ' data-res-fx' : ''}${isSound ? ' data-res-sfx' : ''}${soundPlaying ? ' data-res-sfx-play' : ''}${clickable ? ' data-res-click' : ''}`}
+        style={{ paddingLeft: 8 + depth * 14 }}
+        onClick={clickable ? onActivate : undefined}
+        role={clickable ? 'button' : undefined}
+        tabIndex={clickable ? 0 : undefined}
+        onKeyDown={clickable ? (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onActivate(e); }
+        } : undefined}
+      >
+        <span className="data-caret-pad" />
+        <span className={`icon data-kind${soundPlaying ? ' data-sfx-icon-play' : ''}`}>{res.icon}</span>
+        <span className="data-id mono">{res.id || '····'}</span>
+        <span className="data-type">{res.name}</span>
+        {res.detail && <span className="data-detail mono">{res.detail}</span>}
+        {clickable && !res.detail && (
+          <span className="data-detail data-tex-hint">click to view</span>
+        )}
+        {flags.length > 0 && <span className="data-flags mono">{flags.join(' ')}</span>}
+        <span className="data-size mono">{fmtBytes(res.size)}</span>
+      </div>
+    </Tooltip>
   );
 }
 
@@ -1436,26 +1633,28 @@ function PathRow({ label, value, mono, onClick, ellipsis }) {
     return (
       <div className="details-row">
         <span className="details-row-label">{label}</span>
-        <span
-          className={`details-row-value${mono ? ' mono' : ''}${ellipsis ? ' details-path-ellipsis' : ''}`}
-          title={ellipsis ? value : undefined}
-        >
-          {value}
-        </span>
+        <Tooltip content={ellipsis ? value : ''}>
+          <span
+            className={`details-row-value${mono ? ' mono' : ''}${ellipsis ? ' details-path-ellipsis' : ''}`}
+          >
+            {value}
+          </span>
+        </Tooltip>
       </div>
     );
   }
   return (
     <div className="details-row">
       <span className="details-row-label">{label}</span>
-      <button
-        type="button"
-        className={`details-row-value details-path-link${mono ? ' mono' : ''}${ellipsis ? ' details-path-ellipsis' : ''}`}
-        title={value}
-        onClick={onClick}
-      >
-        {value}
-      </button>
+      <Tooltip content={value}>
+        <button
+          type="button"
+          className={`details-row-value details-path-link${mono ? ' mono' : ''}${ellipsis ? ' details-path-ellipsis' : ''}`}
+          onClick={onClick}
+        >
+          {value}
+        </button>
+      </Tooltip>
     </div>
   );
 }
@@ -1464,6 +1663,215 @@ function PathRow({ label, value, mono, onClick, ellipsis }) {
  * Right-hand File card: zone identity, this DAT's stats, related zone DATs,
  * full path (ellipsis) at the bottom.
  */
+/** The 24-byte header most USER saves share, as File-card rows. */
+function userHeaderRows(header) {
+  if (!header) return null;
+  return (
+    <>
+      <FileSubhead>USER header</FileSubhead>
+      <Row label="Version" value={header.version} mono />
+      <Row
+        label="Character"
+        value={`0x${header.charId.toString(16).toUpperCase().padStart(8, '0')}`}
+        mono
+      />
+      <Row label="Digest" value={header.digest} mono />
+    </>
+  );
+}
+
+/**
+ * A macro book: 20 slots, the Ctrl bar then the Alt bar. Empty slots are kept
+ * so the palette reads like the in-game one rather than a packed list.
+ */
+function MacroBookView({ doc, sourceItems, activeSource, onSelectSource, onRevealPath }) {
+  const [hideEmpty, setHideEmpty] = useState(true);
+  const shown = hideEmpty ? doc.macros.filter((m) => !m.empty) : doc.macros;
+
+  return (
+    <div className="data-viewer">
+      <div className="panel data-main">
+        <div className="data-card-title">
+          <span className="icon">keyboard_command_key</span>Macros
+          <span className="data-card-note mono">
+            {doc.used} of {doc.macros.length} used
+          </span>
+        </div>
+        <div className="data-struct-bar">
+          <button
+            type="button"
+            className={`data-cat${hideEmpty ? ' on' : ''}`}
+            onClick={() => setHideEmpty((v) => !v)}
+          >
+            {hideEmpty ? 'Used only' : 'All 20 slots'}
+          </button>
+        </div>
+        {doc.used === 0 && hideEmpty ? (
+          <ZoneEmptyState
+            icon="keyboard_command_key"
+            title="Empty macro book"
+            sub="No slot in this book has a title or a command line."
+          />
+        ) : (
+          <div className="data-tree">
+            {shown.map((m) => (
+              <Tooltip key={m.index} content={`slot ${m.index} · offset 0x${m.offset.toString(16).toUpperCase()}`}>
+                <div className={`data-macro${m.empty ? ' empty' : ''}`}>
+                  <div className="data-macro-head">
+                    <span className="data-macro-key mono">{m.bar}+{m.key}</span>
+                    <span className="data-macro-title">
+                      {m.title || <span className="data-dlg-empty">(untitled)</span>}
+                    </span>
+                  </div>
+                  {m.lines.length > 0 && (
+                    <div className="data-macro-lines">
+                      {m.lines.map((l) => (
+                        <div key={l.index} className="data-macro-line mono">{l.text}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </Tooltip>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="data-side">
+        <FileCard
+          doc={doc}
+          isCreation={false}
+          sourceItems={sourceItems}
+          activeSource={activeSource}
+          onSelectSource={onSelectSource}
+          onRevealPath={onRevealPath}
+          extraRows={userHeaderRows(doc.header)}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** mcr.ttl / mcr_2.ttl — the names shown on the macro book selector. */
+function MacroTitlesView({ doc, sourceItems, activeSource, onSelectSource, onRevealPath }) {
+  return (
+    <div className="data-viewer">
+      <div className="panel data-main">
+        <div className="data-card-title">
+          <span className="icon">bookmarks</span>Macro books
+          <span className="data-card-note mono">{doc.named} named</span>
+        </div>
+        <div className="data-tree">
+          {doc.titles.map((t) => (
+            <Tooltip key={t.book} content={`offset 0x${t.offset.toString(16).toUpperCase()}`}>
+              <div className="data-row">
+                <span className="data-ft-id mono">{t.book}</span>
+                <span className="data-id mono">
+                  {t.name || <span className="data-dlg-empty">(unnamed)</span>}
+                </span>
+              </div>
+            </Tooltip>
+          ))}
+        </div>
+      </div>
+      <div className="data-side">
+        <FileCard
+          doc={doc}
+          isCreation={false}
+          sourceItems={sourceItems}
+          activeSource={activeSource}
+          onSelectSource={onSelectSource}
+          onRevealPath={onRevealPath}
+          extraRows={userHeaderRows(doc.header)}
+        />
+      </div>
+    </div>
+  );
+}
+
+const HEX_COLS = 16;
+
+/** Classic offset / hex / ASCII rows. Built once per doc — the byte view is
+ *  static, and re-slicing thousands of rows on every render is wasteful. */
+function hexRows(bytes) {
+  const rows = [];
+  for (let off = 0; off < bytes.length; off += HEX_COLS) {
+    const slice = bytes.subarray(off, Math.min(off + HEX_COLS, bytes.length));
+    let hex = '';
+    let ascii = '';
+    for (let i = 0; i < HEX_COLS; i++) {
+      const b = i < slice.length ? slice[i] : null;
+      hex += b == null ? '   ' : `${b.toString(16).padStart(2, '0')} `;
+      if (i === 7) hex += ' ';
+      if (b != null) ascii += (b >= 0x20 && b < 0x7f) ? String.fromCharCode(b) : '.';
+    }
+    rows.push({ off, hex: hex.trimEnd(), ascii });
+  }
+  return rows;
+}
+
+/**
+ * Fallback for a DAT with no structure we can name: the bytes themselves, plus
+ * any ASCII runs. Deliberately claims nothing about the layout.
+ */
+function HexView({ doc, sourceItems, activeSource, onSelectSource, onRevealPath }) {
+  const rows = useMemo(() => hexRows(doc.bytes), [doc.bytes]);
+  const elided = doc.fileSize - doc.shownBytes;
+
+  return (
+    <div className="data-viewer">
+      <div className="panel data-main">
+        <div className="data-card-title">
+          <span className="icon">data_array</span>{doc.label}
+          <span className="data-card-note mono">{fmtBytes(doc.fileSize)}</span>
+        </div>
+        {doc.note && <div className="data-hex-note">{doc.note}</div>}
+        <div className="data-tree data-hex">
+          {rows.map((r) => (
+            <div key={r.off} className="data-hex-row mono">
+              <span className="data-hex-off">{r.off.toString(16).padStart(8, '0')}</span>
+              <span className="data-hex-bytes">{r.hex}</span>
+              <span className="data-hex-ascii">{r.ascii}</span>
+            </div>
+          ))}
+          {elided > 0 && (
+            <div className="data-ft-more">
+              Showing the first {doc.shownBytes.toLocaleString()} bytes
+              — {elided.toLocaleString()} more not displayed.
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="data-side">
+        <FileCard
+          doc={doc}
+          isCreation={false}
+          sourceItems={sourceItems}
+          activeSource={activeSource}
+          onSelectSource={onSelectSource}
+          onRevealPath={onRevealPath}
+          extraRows={userHeaderRows(doc.header)}
+        />
+        {doc.strings.length > 0 && (
+          <div className="panel data-card">
+            <div className="data-card-title">
+              <span className="icon">abc</span>Text runs
+              <span className="data-card-note mono">{doc.strings.length}</span>
+            </div>
+            <div className="data-hex-strings">
+              {doc.strings.map((t) => (
+                <div key={t.offset} className="data-hex-string">
+                  <span className="data-hex-off mono">{t.offset.toString(16).padStart(8, '0')}</span>
+                  <span className="mono">{t.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function FileCard({
   doc, isCreation, sourceItems, activeSource, onSelectSource, onRevealPath, onRenderFile, extraRows,
 }) {
@@ -1535,6 +1943,13 @@ function FileCard({
           <Row label="Magic" value="XISTRING" mono />
           <Row label="Strings" value={doc.entries.length.toLocaleString()} />
         </>
+      ) : doc.kind === 'dmsg' ? (
+        <>
+          <Row label="Kind" value={doc.label || 'd_msg'} />
+          <Row label="Magic" value="d_msg" mono />
+          <Row label="Entries" value={doc.entries.length.toLocaleString()} />
+          <Row label="Stride" value={`${doc.stride} B`} />
+        </>
       ) : null}
       {extraRows}
 
@@ -1547,21 +1962,21 @@ function FileCard({
               const active = !!(activeSource && abs
                 && activeSource.toLowerCase() === abs.toLowerCase());
               return (
-                <button
-                  key={d.key}
-                  type="button"
-                  className={`data-zone-dat${active ? ' on' : ''}`}
-                  title={abs || d.rel}
-                  onClick={() => {
-                    if (abs && onSelectSource) onSelectSource(abs);
-                  }}
-                >
-                  <span className="data-zone-dat-label">{d.label}</span>
-                  <span className="data-zone-dat-path mono">{d.rel}</span>
-                  {d.fileId != null && (
-                    <span className="data-zone-dat-fid mono">{d.fileId}</span>
-                  )}
-                </button>
+                <Tooltip key={d.key} content={abs || d.rel}>
+                  <button
+                    type="button"
+                    className={`data-zone-dat${active ? ' on' : ''}`}
+                    onClick={() => {
+                      if (abs && onSelectSource) onSelectSource(abs);
+                    }}
+                  >
+                    <span className="data-zone-dat-label">{d.label}</span>
+                    <span className="data-zone-dat-path mono">{d.rel}</span>
+                    {d.fileId != null && (
+                      <span className="data-zone-dat-fid mono">{d.fileId}</span>
+                    )}
+                  </button>
+                </Tooltip>
               );
             })}
           </div>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@headlessui/react';
 import { backend } from '../js/backend.js';
 import { gameCandidates, normRel, relFromAbs } from '../js/gamePath.js';
-import { animDisplayName, groupAnimations, mergeModels, parseEntity, resolveScheduleClip } from '../js/dat.js';
+import { animDisplayName, groupAnimations, matchAnimRef, mergeModels, parseEntity, resolveScheduleClip } from '../js/dat.js';
 import { Renderer } from '../js/renderer.js';
 import { FileTree } from './FileTree.jsx';
 import { MenuBar } from './MenuBar.jsx';
@@ -31,7 +31,7 @@ import { TextureModal } from './TextureModal.jsx';
 import { HelpModal } from './HelpModal.jsx';
 import { UpdateModal } from './UpdateModal.jsx';
 import { LightGizmo, DEFAULT_LIGHT_DIR } from './LightGizmo.jsx';
-import { GraphicsModal } from './GraphicsModal.jsx';
+
 import { CameraSequencer } from './CameraSequencer.jsx';
 import { parseFloorTexture } from '../js/dat.js';
 import { extractKeyTables, parseZone, parseDatTextures, parseZoneDefAt } from '../js/zone.js';
@@ -44,6 +44,7 @@ import {
   clonePlacementPose, applyPlacementPose, posesEqual,
 } from '../js/zoneModel.js';
 import { pickZoneAt } from '../js/zonePick.js';
+import { loadDatTypeLists, makeDatTypeLookup } from '../js/dattypes.js';
 import { pickGizmoAxis, axisDragDelta } from '../js/zoneGizmo.js';
 import { parseEnvironments, parseEnvironmentsByRoot, resolveEnvironment, defaultWeather, listWeathers, terrainLightingFromEnv, skyDomeFromEnv, EnvironmentManager } from '../js/environment.js';
 import { parseSections } from '../js/zone.js';
@@ -53,14 +54,16 @@ import { parseParticleGenerator } from '../js/particle/parser.js';
 import { ParticleSystem } from '../js/particle/system.js';
 import { parseEffectRoutines, flattenRoutine } from '../js/effect.js';
 import { EffectList } from './EffectList.jsx';
+import { ensureXiToolsOnBoot } from '../js/toolsBoot.js';
 import { WeatherAudio } from '../js/particle/audio.js';
 import { toAudioBuffer, parseAudioHeader, FMT_ATRAC3 } from '../js/audio.js';
 import { parseImageDat, textureForSet } from '../js/images.js';
-import { inspectDat, parseInspectSkeleton, parseInspectRoute, parseInspectUiMenu, parseInspectUiElementGroup } from '../js/dat/inspect.js';
+import { inspectDat, parseInspectSkeleton, parseInspectRoute, parseInspectUiMenu, parseInspectUiElementGroup, parseInspectDataTable, inspectDmsg, attachDataTableNames } from '../js/dat/inspect.js';
 import { SkeletonModal } from './SkeletonModal.jsx';
 import { RouteModal } from './RouteModal.jsx';
 import { UiMenuModal } from './UiMenuModal.jsx';
 import { UiElementGroupModal } from './UiElementGroupModal.jsx';
+import { DataTableModal } from './DataTableModal.jsx';
 import { CliOutputPanel } from './CliOutputPanel.jsx';
 import { DatNotesModal } from './DatNotesModal.jsx';
 import { datFileKey, getNote, loadNotes } from '../js/notes.js';
@@ -84,12 +87,14 @@ import { WeatherPanel } from './WeatherPanel.jsx';
 import { Tooltip } from './Tooltip.jsx';
 import { loadZoneNavmesh } from '../js/navmesh.js';
 import { launchZoneRel } from '../js/launch.js';
+import { normalizeBgId, resolveBgUrl } from './bgs.js';
 
 const DEFAULT_DAT_SUFFIX = 'ROM\\5\\3.DAT';
 const DEFAULT_BG = '#303438';
 const LAST_DAT_KEY = 'lastDat';
 const LAST_VIEW_KEY = 'lastView';
 const LAST_IMAGE_KEY = 'lastImage';
+const LAST_EFFECT_KEY = 'lastEffect';
 const ANIM_SEL_KEY = 'lastAnimSel';
 /** Per-zone camera poses keyed by zone path (lowercase). */
 const ZONE_CAM_KEY = 'zoneCameras';
@@ -115,7 +120,7 @@ function readZoneCamera(key) {
   const snap = readZoneCamMap()[key];
   return snap && Array.isArray(snap.target) ? snap : null;
 }
-const VIEWS = ['files', 'npc', 'pc', 'creation', 'music', 'sfx', 'zones', 'images', 'effects', 'data'];
+const VIEWS = ['files', 'npc', 'pc', 'creation', 'music', 'sfx', 'zones', 'images', 'effects'];
 /** Views that browse individual models, where fly controls are a hindrance. */
 const ORBIT_VIEWS = new Set(['files', 'npc', 'pc', 'creation']);
 /** Views with a Details panel — model/zone stats, or an effect's sprite images. */
@@ -128,7 +133,7 @@ const ZONE_VIEWS = new Set(['zones']);
 const AUDIO_VIEWS = new Set(['music', 'sfx']);
 // Views that put their own content on screen as soon as they open. Restoring
 // one of these at startup must not also load the last/default DAT.
-const SELF_LOADING_VIEWS = new Set(['pc', 'creation', 'images', 'music', 'sfx', 'effects', 'data']);
+const SELF_LOADING_VIEWS = new Set(['pc', 'creation', 'images', 'music', 'sfx', 'effects']);
 // A schedule sequence lays segments on a timeline; a joint whose segment hasn't
 // started yet would show bind pose (T-pose flash each loop). Underlay a looping
 // idle so those joints rest naturally — battle idle for weapon actions if it's
@@ -182,6 +187,8 @@ const loadSettings = (gamePath) => {
     showXiConsole: localStorage.getItem('showXiConsole') !== '0',
     autoCloseXiConsole: localStorage.getItem('autoCloseXiConsole') === '1',
     xiPath: localStorage.getItem('xiPath') || '',
+    showGrid: localStorage.getItem('showGrid') === '1',
+    showAxes: localStorage.getItem('showAxes') === '1',
   };
 };
 
@@ -200,6 +207,12 @@ function particleParsers(zoneResource, warnings) {
  * name ("lvup    lvu1"); the trailing token is the texture's own id. Display
  * only — the raw name stays the lookup key.
  */
+/**
+ * Cross-fade between cast stages, and from the release back to idle, in 30fps
+ * clip frames. SkeletonPose.evaluate consumes it as a segment's `transOut`.
+ */
+const CAST_BLEND_FRAMES = 9;   // 0.3s
+
 const texLabel = (name) => String(name ?? '').trim().split(/\s+/).pop() || String(name ?? '');
 
 function buildParticleTree(buffer, parsers, warnings) {
@@ -343,6 +356,8 @@ export default function App({ launch = null }) {
   const canvasRef = useRef(null);
   const rendererRef = useRef(null);
   const modelRef = useRef(null);
+  // Entity (NPC/PC) still on stage after Effects — restore path UI when leaving.
+  const lastEntityRef = useRef(null);
   const loadGenRef = useRef(0);       // drop stale async load results
   const overlayGenRef = useRef(0);    // which load gen owns the loading overlay
   const appliedPlayRef = useRef({ kind: null, id: '' }); // last applied anim/schedule (gear-swap resume)
@@ -395,6 +410,37 @@ export default function App({ launch = null }) {
     });
     return () => { alive = false; };
   }, [minimal]);
+
+  // xi-tools: auto-install / update from GitHub (same policy as xi-zone-editor).
+  // Does not block the UI; status text only when something actually changed.
+  useEffect(() => {
+    if (minimal) return undefined;
+    let alive = true;
+    const xiPath = localStorage.getItem('xiPath') || '';
+    ensureXiToolsOnBoot({ xiPath }).then((result) => {
+      if (!alive || !result) return;
+      const st = result.status;
+      if (st?.toolsDir && result.changed) {
+        try { localStorage.setItem('xiPath', st.toolsDir); } catch { /* quota */ }
+        setSettings((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev, xiPath: st.toolsDir };
+          settingsRef.current = next;
+          return next;
+        });
+      } else if (st?.toolsDir && !(localStorage.getItem('xiPath') || '').trim()) {
+        try { localStorage.setItem('xiPath', st.toolsDir); } catch { /* quota */ }
+        setSettings((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev, xiPath: st.toolsDir };
+          settingsRef.current = next;
+          return next;
+        });
+      }
+      if (result.changed && result.message) setStatusText(result.message);
+    });
+    return () => { alive = false; };
+  }, [minimal]);
   const [exportSpec, setExportSpec] = useState(null);
   const [leftView, setLeftViewState] = useState(() => {
     // A launch zone arrives on the Zones page. Set as the *initial* view, not a
@@ -413,13 +459,19 @@ export default function App({ launch = null }) {
     setLeftViewState(v);
     localStorage.setItem(LAST_VIEW_KEY, v);
   }, []);
-  // What the File Browser last opened (zone/image/…); drives the right-hand
-  // panels without leaving Assets > File Browser.
+  // What the DAT Browser last opened (zone/image/…); drives the right-hand
+  // panels without leaving Assets > DAT Browser.
   const [browserKind, setBrowserKind] = useState(null);
-  // FTABLE paths for File Browser search (ROM\…\n.DAT).
+  // Structure owns the viewport when the DAT Browser has nothing rendered, or
+  // what it opened is a plain table. Otherwise it's the status-bar overlay.
+  const dataOwnsPage = browserKind === 'data' || (leftView === 'files' && !browserKind);
+  // FTABLE paths for DAT Browser search (ROM\…\n.DAT).
   const [filePathIndex, setFilePathIndex] = useState(null);
   const fileIndexRef = useRef(null);
-  // File → Open DAT from a non-browser view: switch to File Browser, then open.
+  // (path) => 'Zone' | 'Gear' | … for the tree's type badges; null until the
+  // baked lists and the FTABLE map have loaded.
+  const [datTypeOf, setDatTypeOf] = useState(null);
+  // File → Open DAT from a non-browser view: switch to DAT Browser, then open.
   const pendingBrowserFileRef = useRef(null);
   // Browsing single models rather than a zone: fly controls put the camera
   // somewhere arbitrary and WASD swallows typing in the filter boxes, so drop
@@ -479,12 +531,20 @@ export default function App({ launch = null }) {
   );
   const [uiEgWindows, setUiEgWindows] = useState([]); // [{ id, group, title }]
   const uiEgIdRef = useRef(0);
+  const [dataTableWindows, setDataTableWindows] = useState([]); // [{ id, table, title }]
+  const dataTableIdRef = useRef(0);
   const zonePlacementsRef = useRef(null); // raw 0x1C list from last loadZone
   const dataStructOpenRef = useRef(false); // keep loadZone in sync without TDZ
   // Data Struct ParticleGenerator preview (plays on main canvas).
   const [fxPreview, setFxPreview] = useState(null); // { genId, title, note, error, ownsScene }
   const fxPreviewTokenRef = useRef(0);
   const [selectedFloor, setSelectedFloor] = useState('');
+  // Scene > Floor Repeat: multiplier on the floor texture's tiling. Persisted,
+  // and re-applied by the renderer whenever a new floor texture is loaded.
+  const [floorTileScale, setFloorTileScaleState] = useState(() => {
+    const v = parseFloat(localStorage.getItem('floorTileScale'));
+    return Number.isFinite(v) ? Math.min(4, Math.max(0.25, v)) : 1;
+  });
   const [playing, setPlayingState] = useState(false);
   // Animation playback rate, 0.1–2.0 (10%–200%). Mirrored to a ref so the
   // renderer-lifecycle effect can seed a freshly-built renderer without listing
@@ -507,12 +567,9 @@ export default function App({ launch = null }) {
   const animTick = useRef(null);
   const [showTex, setShowTex] = useState(true);
   const [showWireframe, setShowWireframe] = useState(false);
-  // Origin axis gizmo. Defaults on in Effects (particles play at 0,0,0 with no
-  // other geometry to judge position against) and off everywhere else; the
-  // view-change effect below re-applies that default on every switch.
-  const [showAxes, setShowAxes] = useState(() => localStorage.getItem(LAST_VIEW_KEY) === 'effects');
-  // World grid (the floor, as lines). Off until asked for; sticks across views.
-  const [showGrid, setShowGrid] = useState(false);
+  // Origin axis gizmo + world grid — persisted (Settings + View menu).
+  const [showAxes, setShowAxes] = useState(() => localStorage.getItem('showAxes') === '1');
+  const [showGrid, setShowGrid] = useState(() => localStorage.getItem('showGrid') === '1');
   const [showSkeleton, setShowSkeleton] = useState(false);
   const [showAlpha, setShowAlpha] = useState(true);
   // Zone blend submeshes: LEQUAL depth (on) vs strict LESS (off). Default on.
@@ -548,7 +605,9 @@ export default function App({ launch = null }) {
   fpsCapRef.current = fpsCap;
   const [renderHeight, setRenderHeight] = useState(() => {
     const v = parseInt(localStorage.getItem('renderHeight'), 10);
-    return Number.isFinite(v) && v > 0 ? v : 0;   // 0 = follow the window
+    // Only known presets — a corrupt/huge value OOMs the canvas (seen 33M×33M).
+    const allowed = new Set([0, 720, 900, 1080, 1440, 1800, 2160]);
+    return allowed.has(v) ? v : 0;   // 0 = follow the window
   });
   // Mirrors what the renderer actually sized its buffer to, so the Graphics
   // panel can show it. Sampled while the panel is open — resize() is the only
@@ -595,7 +654,9 @@ export default function App({ launch = null }) {
   const [effectEntry, setEffectEntry] = useState(null);     // { name, dir, file, path } | null
   const [effectRoutines, setEffectRoutines] = useState([]); // 0x07 routines in the effect DAT
   const [effectSchedule, setEffectSchedule] = useState(''); // active routine id (AltanaViewer "Schedule")
-  const [effectPlaying, setEffectPlaying] = useState(true);
+  // 'playing' | 'paused' | 'stopped'. Pause freezes the stage as it is; Stop
+  // clears it and rewinds — the old single Play/Stop button only ever paused.
+  const [effectTransport, setEffectTransport] = useState('playing');
   const [effectSpeed, setEffectSpeedState] = useState(1);
   const effectRoutinesRef = useRef([]);                     // mirror for stable playback callbacks
   const effectSpeedRef = useRef(1);
@@ -604,6 +665,28 @@ export default function App({ launch = null }) {
     return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.6;
   });
   const effectVolumeRef = useRef(effectVolume);
+  // Effects loop by default — a spell preview is over in a second or two. The
+  // choice sticks, and the ref is what the arming calls read.
+  const [effectLoop, setEffectLoopState] = useState(
+    () => localStorage.getItem('effectLoop') !== '0',
+  );
+  const effectLoopRef = useRef(effectLoop);
+  // Called from the render loop when a non-looping routine plays itself out —
+  // a ref so arming the routine never has to be redone when the callback
+  // identity changes.
+  const effectFinishedRef = useRef(() => {});
+  // Animation panel > Show Character Animation. The effect DAT's 0x05 commands
+  // name the caster's clip, so a Ninjutsu effect finds the ninjutsu motion and a
+  // nuke finds the cast motion with nothing mapped by hand.
+  const [showCharAnim, setShowCharAnimState] = useState(
+    () => localStorage.getItem('showCharAnim') === '1',
+  );
+  const showCharAnimRef = useRef(showCharAnim);
+  // Spawn TargetActor FX at the character AABB centre (default on).
+  const [attachFx, setAttachFxState] = useState(
+    () => localStorage.getItem('attachFxToChar') !== '0',
+  );
+  const attachFxRef = useRef(attachFx);
   const effectSfxOnRef = useRef(true);
   const effectTokenRef = useRef(0);                         // drop stale effect-load results
   const zoneMusicRef = useRef(null);                        // zone_music.json (server zone_settings)
@@ -890,25 +973,41 @@ export default function App({ launch = null }) {
   // --- renderer lifecycle --------------------------------------------------
 
   useEffect(() => {
-    const renderer = new Renderer(canvasRef.current);
-    renderer.screenOffsetX = explorerOpen ? 180 : 0;
+    // Sequencer HMR / crash can leave body.cinematic on and hide the whole UI.
+    document.body.classList.remove('cinematic');
+    const canvas = canvasRef.current;
+    // Recover from a runaway backing store (seen at 33M×33M — freezes the tab).
+    if (canvas && (canvas.width > 8192 || canvas.height > 8192)) {
+      canvas.width = 1;
+      canvas.height = 1;
+    }
+    const renderer = new Renderer(canvas);
+    renderer.screenOffsetX = 0;
     rendererRef.current = renderer;
     // Dev-only escape hatch for driving/inspecting the renderer from the
     // console (headless verification, quick probes). Not part of the app API.
     // Exposed as the ref, not the instance — StrictMode mounts twice and a
     // captured instance goes stale the moment the second one takes over.
     if (import.meta.env.DEV) window.__xiRendererRef = rendererRef;
+    renderer.renderHeight = renderHeight;
     renderer.setFogOverride({ enabled: fogOn, scale: fogScale });
     renderer.showShadows = showShadows;
     renderer.shadowRange = shadowDistance;
     renderer.setCustomSunDir(customSunDir);
     renderer.camera.fovDegrees = fov;
+    {
+      const id = normalizeBgId(localStorage.getItem('bgImage') || 'none');
+      const url = resolveBgUrl(id);
+      if (url) renderer.setBackgroundImage(url);
+    }
+    renderer.setFloorTileScale(floorTileScale);
     renderer.playbackSpeed = playbackSpeedRef.current;
     renderer.showSkybox = localStorage.getItem('skybox') === '1';
     // Unplaced orphans use per-row eyes in Objects (always eligible to draw).
     renderer.showUnplaced = true;
     // Restore View > Toggle WASD from last session.
     if (wasdRef.current) renderer.camera.setMode('fly');
+    renderer.attachFxToActor = attachFxRef.current;
     // Seed the toolbar readout so it never shows 0 before the first frame.
     setFlySpeed(Math.round(renderer.camera.flySpeed));
 
@@ -953,7 +1052,6 @@ export default function App({ launch = null }) {
     };
     raf = requestAnimationFrame(frame);
 
-    const canvas = canvasRef.current;
     const onWheel = (e) => {
       e.preventDefault();
       if (renderer.camera.sequenceLock) return;
@@ -1093,7 +1191,6 @@ export default function App({ launch = null }) {
 
   useEffect(() => {
     try { localStorage.setItem('explorer', explorerOpen ? '1' : '0'); } catch { /* quota */ }
-    if (rendererRef.current) rendererRef.current.screenOffsetX = explorerOpen ? 180 : 0;
   }, [explorerOpen]);
 
   useEffect(() => {
@@ -1384,6 +1481,20 @@ export default function App({ launch = null }) {
       try {
         localStorage.setItem(LAST_DAT_KEY, JSON.stringify({ paths, name: displayName, opts: { focusPaths, weaponSlots, battleTable, parts } }));
       } catch { /* quota / private mode */ }
+      // Remember NPC/PC for Effects → back without a full reload.
+      if (model.kind !== 'zone' && model.kind !== 'creation') {
+        const view = leftViewRef.current === 'pc' || leftViewRef.current === 'npc'
+          ? leftViewRef.current
+          : (lastEntityRef.current?.view ?? 'npc');
+        lastEntityRef.current = {
+          view,
+          selectedPath: primaryPath.toLowerCase(),
+          modelPath: relativeName(primaryPath),
+          shownPath: primaryPath,
+          sourcePath: paths[paths.length - 1],
+          name: displayName,
+        };
+      }
       return { ok: true };
     } catch (err) {
       console.error(err);
@@ -1444,19 +1555,26 @@ export default function App({ launch = null }) {
       return buildDatTree(bytes, dv, parseSections(dv), parsers, (m) => warnings.push(m));
     };
 
-    if (!globalEffectsRef.current) {
+    // Zone particle path only needs root+textures. Do NOT stash this as the
+    // full globalEffectsRef — loadEffect needs routines from ROM/0/0.DAT too,
+    // and an early incomplete cache would permanently drop shared routine links.
+    let zoneGlobalRoot = globalEffectsRef.current?.root ?? null;
+    let zoneGlobalTextures = globalEffectsRef.current?.textures ?? null;
+    if (!zoneGlobalRoot) {
       try {
         const { data: buf } = await backend.readPrefer(gameCandidates('ROM\\0\\0.DAT', settings));
-        globalEffectsRef.current = { root: treeOf(buf, globalParsers), textures: parseDatTextures(buf) };
+        zoneGlobalRoot = treeOf(buf, globalParsers);
+        zoneGlobalTextures = parseDatTextures(buf);
       } catch (e) {
         console.warn('shared effects DAT (ROM/0/0.DAT) unavailable', e);
-        globalEffectsRef.current = { root: null, textures: new Map() };
+        zoneGlobalRoot = null;
+        zoneGlobalTextures = new Map();
       }
     }
 
     const system = new ParticleSystem({
       zoneRoot: treeOf(treeBuf, zoneParsers),
-      globalRoot: globalEffectsRef.current.root,
+      globalRoot: zoneGlobalRoot,
       zoneMeshIdToName: parsed.meshIdToName,
       zoneMeshes: parsed.meshes,
       zoneMeshSections: parsed.meshSections,
@@ -1475,7 +1593,10 @@ export default function App({ launch = null }) {
 
   /** Load ROM/0/0.DAT once — the shared effects tree spell DATs link into. */
   const ensureGlobalEffects = useCallback(async (settings, warnings) => {
-    if (globalEffectsRef.current) return globalEffectsRef.current;
+    // Must include `routines`. A partial cache (root/textures only) is treated
+    // as incomplete and rebuilt so linked 0x03 targets still resolve.
+    const cur = globalEffectsRef.current;
+    if (cur?.root && cur?.routines) return cur;
     try {
       const { data: buf } = await backend.readPrefer(gameCandidates('ROM\\0\\0.DAT', settings));
       globalEffectsRef.current = {
@@ -1578,28 +1699,182 @@ export default function App({ launch = null }) {
         await Promise.all([...warmIds].map((id) => audio.warm(id)));
         if (token !== effectTokenRef.current) return;
       }
-
-      system.playEffectRoutine(routine.flat.commands, { loop: true, sounds: routine.flat.sounds });
-
       const renderer = rendererRef.current;
+      const actor = modelRef.current;
+      const onActor = !!(actor && actor.kind !== 'zone' && actor.isRenderable && renderer?.model === actor);
+
+      // Caster animation: resolve each 0x05 ref against THIS character's clips.
+      // A ref that doesn't resolve is dropped, which is how the weapon-skill
+      // (`wz*`) refs degrade when the motion pack holding them isn't loaded.
+      let animCues = [];
+      let windup = 0;
+      if (onActor && showCharAnimRef.current) {
+        // `actor.animations` entries ARE clips (id + jointTracks +
+        // lengthInFrames) — there is no `.clip` wrapper. That only appears once
+        // groupAnimations() buckets them for the Anim dropdown.
+        const ids = actor.animations.map((a) => a.id);
+        const clipById = new Map(actor.animations.map((a) => [a.id, a]));
+        /**
+         * A ref like `mb0?` matches SEVERAL clips — `mb00`, `mb01` — and those
+         * are body-region layers of one motion, not alternatives. Taking the
+         * first played only the half that tracked the legs. groupAnimations
+         * merges them into a single layered clip, which is what the Characters
+         * view feeds the renderer (see resolveScheduleClip).
+         */
+        const findClip = (ref) => {
+          const parts = matchAnimRef(ref, ids).map((id) => clipById.get(id)).filter(Boolean);
+          if (!parts.length) return null;
+          return groupAnimations(parts)[0]?.clip ?? null;
+        };
+        // `idl` and nothing else. `std` is a stand-UP motion, not a stance.
+        const idleClip = () => findClip('idl?') ?? pickBaseIdle(actor);
+
+        // A call the effect DAT can't satisfy is a schedule on the ACTOR — this
+        // is where the cast motions live (`shbk` black, `shnj` ninjutsu, `shwh`
+        // white). Every race ships the `sh*` schedules EMPTY while the `ca*`
+        // twin carries the ref, so read the twin's ref when the direct one is
+        // blank (verified identical on Hume/Taru/Galka/Mithra).
+        const schedById = new Map((actor.schedules ?? []).map((sc) => [sc.id, sc]));
+        const schoolRef = (id) => (schedById.get(id)?.refs ?? [])[0]
+          ?? (id.startsWith('sh') ? (schedById.get(`ca${id.slice(2)}`)?.refs ?? [])[0] : null)
+          ?? null;
+
+        /**
+         * Full cast — wind-up → hold → release — as ONE clip with `segments`,
+         * not a run of setAnimation calls. That hands the whole thing to
+         * SkeletonPose.evaluate, which already cross-fades a finished segment
+         * back to `baseClip` over `transOut` frames and rests undriven joints
+         * there instead of the bind pose. Firing separate clips could only
+         * snap.
+         *
+         * The three stages are the same clip base with the stage digit walked
+         * (`mb0?`/`mb1?`/`mb2?` for black magic), so this is derived, not a
+         * table. Segment delays are 30fps clip frames; the routine clock is
+         * 60/s, hence the doubling on the way out.
+         */
+        const buildCast = (scheduleId) => {
+          // ONLY the magic-cast schedules have the three-stage structure.
+          // `ca<school>` / `sh<school>` map to `m*0/1/2` = wind-up/hold/release.
+          // Everything else a routine can call — res0, damg, sway, gurd, pary —
+          // is a self-contained motion, and walking its stage digit invents a
+          // sequence that does not exist: `res0` refs `rx0?`, so the walk
+          // played rx0 → rx1 → rx2, i.e. Raise I then II then III.
+          if (!/^(ca|sh)/.test(scheduleId)) return null;
+          const ref = schoolRef(scheduleId);
+          if (!ref) return null;
+          const base = ref.slice(0, 2);
+          // Belt and braces: the cast families all start with `m`.
+          if (!base.startsWith('m')) return null;
+          const inC = findClip(`${base}0?`);
+          const holdC = findClip(`${base}1?`);
+          const outC = findClip(`${base}2?`);
+          if (!inC || !outC) return null;
+          const len = (c) => c.lengthInFrames ?? 0;
+          const segments = [{ clip: inC, delay: 0, transOut: CAST_BLEND_FRAMES }];
+          let at = len(inC);
+          if (holdC) {
+            segments.push({ clip: holdC, delay: at, transOut: CAST_BLEND_FRAMES });
+            at += len(holdC);
+          }
+          // The release runs its own length (~1s for most schools) and then
+          // fades out over CAST_BLEND_FRAMES rather than cutting to idle.
+          segments.push({ clip: outC, delay: at, transOut: CAST_BLEND_FRAMES });
+          return { segments, releaseFrame: at, endFrame: at + len(outC) + CAST_BLEND_FRAMES };
+        };
+
+        const cast = (routine.flat.actorCalls ?? []).map((c) => buildCast(c.scheduleId)).find(Boolean);
+        if (cast) {
+          windup = cast.releaseFrame * 2;   // the effect lands on the release
+          const jointTracks = new Map();
+          for (const s of cast.segments) for (const [j, t] of s.clip.jointTracks) jointTracks.set(j, t);
+          const idle = idleClip();
+          // TWO cues, not one. Stretching the cast clip to cover the effect
+          // can't work: the renderer loops on lengthInFrames, and an effect
+          // outlives its own emission window (particles have their own
+          // lifespans), so any length guessed from the routine wrapped early
+          // and replayed the wind-up over the still-running spell. Instead the
+          // cast runs exactly its own length, then hands over to the idle,
+          // which loops cleanly on its own until the effect re-arms and
+          // re-fires cue one.
+          animCues = [{
+            delay: 0,
+            clip: {
+              id: 'cast',
+              segments: cast.segments,
+              jointTracks,
+              lengthInFrames: cast.endFrame,
+              numFrames: Math.max(...cast.segments.map((s) => s.clip.numFrames ?? 0)),
+              keyFrameDuration: 1,
+              // Undriven joints and finished segments settle here, not bind pose.
+              baseClip: idle,
+              parts: cast.segments.map((s) => s.clip.id),
+            },
+          }];
+          // Hand over to the looping idle the frame the cast finishes.
+          if (idle) animCues.push({ delay: cast.endFrame * 2, clip: idle });
+        } else {
+          // No cast schedule: fall back to whatever 0x05 named outright.
+          animCues = (routine.flat.anims ?? [])
+            .map((a) => ({ delay: a.delay, clip: findClip(a.ref) }))
+            .filter((a) => a.clip);
+        }
+      }
+      if (onActor && !showCharAnimRef.current) {
+        renderer.setAnimation(actorIdleClip());
+        renderer.playing = true;
+      }
+      // Shift the whole effect so it fires on the cast's release frame.
+      const shift = (arr) => (windup ? arr.map((x) => ({ ...x, delay: x.delay + windup })) : arr);
+      system.playEffectRoutine(shift(routine.flat.commands), {
+        loop: effectLoopRef.current,
+        sounds: shift(routine.flat.sounds),
+        anims: animCues,
+        // Routine ticks are 60/s and clips are 30fps, but setAnimation starts at
+        // frame 0 either way — the delay is what the effect clock already
+        // applied, so nothing is converted here.
+        onAnim: (a) => {
+          const r = rendererRef.current;
+          if (!r || !a.clip) return;
+          r.setAnimation(a.clip);
+          r.playing = true;
+        },
+        onFinished: effectFinishedRef.current,
+      });
       setWasd(false);                    // effects orbit; fly controls would fight the framing
-      // Already showing an effect? Keep the orbit — only frame the first one so
-      // switching effects doesn't yank the camera back each time.
-      const keepCamera = renderer.effectMode;
-      renderer.setEffectScene(system, textures, keepCamera);
+
+      if (onActor) {
+        // Keep the character mesh; composite particles like a zone weather pass.
+        renderer.attachFxToActor = attachFxRef.current;
+        renderer.attachEffectSystem(system, textures);
+      } else {
+        // Empty stage: wipe any prior model and frame the origin once.
+        const keepCamera = renderer.effectMode;
+        renderer.setEffectScene(system, textures, keepCamera);
+        modelRef.current = null;
+      }
+      // Status bar + Data Struct always name the effect DAT (even on-actor).
+      setModelPath(rel);
+      shownPathRef.current = abs;
       renderer.effectSpeed = effectSpeedRef.current;
       renderer.effectPaused = false;
 
-      modelRef.current = null;
       effectRoutinesRef.current = routines;
       setEffectEntry(entry);
       setEffectRoutines(routines);
       setEffectSchedule(routine.id);
-      setEffectPlaying(true);
-      setModelPath(rel);
+      setEffectTransport('playing');
       setSelectedDat(abs.toLowerCase());
-      shownPathRef.current = abs;
       setDataSources([{ id: 'effect', label: rel, path: abs }]);
+      if (dataStructOpenRef.current) {
+        queueMicrotask(() => dataStructReloadRef.current?.(abs));
+      }
+      try {
+        localStorage.setItem(LAST_EFFECT_KEY, JSON.stringify({
+          name: entry.name,
+          path: rel,
+          cat: entry.cat ?? null,
+        }));
+      } catch { /* quota */ }
 
       // Details panel: the effect's sprite images (click to view, same as gear
       // textures) plus what the DAT actually contains.
@@ -1607,35 +1882,51 @@ export default function App({ launch = null }) {
       const sheets = dir.collectByTypeRecursive(SEC.SPRITE_SHEET);
       const pmeshes = dir.collectByTypeRecursive(SEC.PARTICLE_MESH);
       const countVerts = (list) => list.reduce(
-        (n, r) => n + (r.meshes ?? []).reduce((m, x) => m + (x.count ?? 0), 0), 0,
+        (n, r) => n + (r.meshes ?? []).reduce((m, x) => m + (x.count ?? 0), 0),
+        0,
       );
       const verts = countVerts(sheets) + countVerts(pmeshes);
+      const effectMeta = {
+        path: rel,
+        category: entry.cat ?? '—',
+        generators: routine.flat.commands.length,
+        sounds: routine.flat.sounds.length,
+        spriteSheets: sheets.length,
+        particleMeshes: pmeshes.length,
+        onActor,
+      };
+      const effectTextures = [...ownTextures.values()].map((t) => ({
+        name: texLabel(t.name), width: t.width, height: t.height, format: t.format, data: t.data,
+      }));
       setTexWindows([]);   // close viewers from the previous effect
-      setModelInfo({
-        name: entry.name,
-        joints: null,
-        verts,
-        tris: Math.floor(verts / 3),
-        animCount: 0,
-        scheduleCount: routines.length,
-        textures: [...ownTextures.values()].map((t) => ({
-          name: texLabel(t.name), width: t.width, height: t.height, format: t.format, data: t.data,
-        })),
-        parts: [],
-        effect: {
-          path: rel,
-          category: entry.cat ?? '—',
-          generators: routine.flat.commands.length,
-          sounds: routine.flat.sounds.length,
-          spriteSheets: sheets.length,
-          particleMeshes: pmeshes.length,
-        },
-      });
-      setStatusText(
-        routine.flat.commands.length
-          ? `${entry.name}  ·  ${routine.flat.commands.length} generators`
-          : `${entry.name}  ·  no particle routine`,
-      );
+      if (onActor) {
+        setModelInfo((prev) => ({
+          ...(prev ?? { name: entry.name, joints: null, verts: 0, tris: 0, animCount: 0, parts: [] }),
+          scheduleCount: routines.length,
+          effect: effectMeta,
+          // Keep actor textures; append effect sheets for the Details list.
+          textures: [
+            ...((prev?.textures ?? []).filter((t) => !effectTextures.some((e) => e.name === t.name))),
+            ...effectTextures,
+          ],
+        }));
+      } else {
+        setModelInfo({
+          name: entry.name,
+          joints: null,
+          verts,
+          tris: Math.floor(verts / 3),
+          animCount: 0,
+          scheduleCount: routines.length,
+          textures: effectTextures,
+          parts: [],
+          effect: effectMeta,
+        });
+      }
+      const genLabel = routine.flat.commands.length
+        ? `${entry.name}  ·  ${routine.flat.commands.length} generators`
+        : `${entry.name}  ·  no particle routine`;
+      setStatusText(onActor ? `${genLabel}  ·  on actor` : genLabel);
     } catch (e) {
       console.warn('[effect] load failed', abs, e);
       if (token === effectTokenRef.current) {
@@ -1668,12 +1959,90 @@ export default function App({ launch = null }) {
     if (rendererRef.current) rendererRef.current.effectSpeed = clamped;
   }, []);
 
-  const toggleEffectPlay = useCallback(() => {
-    setEffectPlaying((p) => {
-      const next = !p;
-      if (rendererRef.current) rendererRef.current.effectPaused = !next;
-      return next;
-    });
+  /** The actor's idle clip — every PC and NPC skeleton ships `idl0` or `std0`. */
+  const actorIdleClip = useCallback(() => {
+    const actor = modelRef.current;
+    if (!actor?.animations?.length) return null;
+    const ids = actor.animations.map((a) => a.id);
+    const parts = matchAnimRef('idl?', ids)
+      .map((id) => actor.animations.find((a) => a.id === id))
+      .filter(Boolean);
+    return parts.length ? (groupAnimations(parts)[0]?.clip ?? null) : pickBaseIdle(actor);
+  }, []);
+
+  const setShowCharAnim = useCallback((on) => {
+    showCharAnimRef.current = !!on;
+    setShowCharAnimState(!!on);
+    try { localStorage.setItem('showCharAnim', on ? '1' : '0'); } catch { /* quota */ }
+    // Takes effect on the next effect load / schedule change — the cue list is
+    // baked when the routine is armed. Either way settle the actor on its idle
+    // rather than the bind pose, so a half-played cast is never left frozen.
+    const r = rendererRef.current;
+    if (!on && r) {
+      r.setAnimation(actorIdleClip());
+      r.playing = true;
+    }
+  }, [actorIdleClip]);
+
+  const setAttachFx = useCallback((on) => {
+    attachFxRef.current = !!on;
+    setAttachFxState(!!on);
+    try { localStorage.setItem('attachFxToChar', on ? '1' : '0'); } catch { /* quota */ }
+    if (rendererRef.current) rendererRef.current.attachFxToActor = !!on;
+  }, []);
+
+  /** Loop toggle: applies to the armed routine immediately, and sticks. */
+  const setEffectLoop = useCallback((on) => {
+    effectLoopRef.current = !!on;
+    setEffectLoopState(!!on);
+    try { localStorage.setItem('effectLoop', on ? '1' : '0'); } catch { /* quota */ }
+    rendererRef.current?.particleSystem?.setEffectLoop(!!on);
+    // setEffectLoop replays a one-shot that had played itself out (but never a
+    // stopped one), so the transport must not be left reading "paused".
+    const sys = rendererRef.current?.particleSystem;
+    if (on && sys && !sys.isEffectFinished()) {
+      if (rendererRef.current) rendererRef.current.effectPaused = false;
+      setEffectTransport('playing');
+    }
+  }, []);
+
+  // A one-shot that reaches its end leaves an empty stage, which is the same
+  // place Stop leaves it — so the transport reads "stopped" and Play re-runs it.
+  effectFinishedRef.current = () => setEffectTransport('stopped');
+
+  /** Play: resume a pause, or re-run a stopped/finished routine from frame 0. */
+  const playEffect = useCallback(() => {
+    const renderer = rendererRef.current;
+    // An empty parked stage has nothing to un-pause, so Play must re-arm it.
+    if (renderer?.particleSystem?.isEffectFinished()) {
+      renderer.particleSystem.restartEffect();
+    }
+    if (renderer) {
+      renderer.effectPaused = false;
+      if (showCharAnimRef.current) renderer.playing = true;
+    }
+    setEffectTransport('playing');
+  }, []);
+
+  /** Pause: freeze the stage exactly as it is — actor included. */
+  const pauseEffect = useCallback(() => {
+    const r = rendererRef.current;
+    if (r) {
+      r.effectPaused = true;
+      // The cast motion is part of the effect, so it holds too. Only while this
+      // feature is driving the actor: otherwise pausing an effect would freeze
+      // a clip the user picked by hand from the Anim dropdown.
+      if (showCharAnimRef.current) r.playing = false;
+    }
+    setEffectTransport('paused');
+  }, []);
+
+  /** Stop: clear the stage and rewind, leaving the routine ready for Play. */
+  const stopEffect = useCallback(() => {
+    const renderer = rendererRef.current;
+    renderer?.particleSystem?.stopEffect();
+    if (renderer) renderer.effectPaused = false;
+    setEffectTransport('stopped');
   }, []);
 
   const changeEffectSchedule = useCallback((id) => {
@@ -1681,10 +2050,10 @@ export default function App({ launch = null }) {
     const system = rendererRef.current?.particleSystem;
     if (!system) return;
     const routine = effectRoutinesRef.current.find((r) => r.id === id);
-    if (!routine) { system.clearEffect(); setEffectPlaying(false); return; }
-    system.playEffectRoutine(routine.flat.commands, { loop: true, sounds: routine.flat.sounds });
+    if (!routine) { system.clearEffect(); setEffectTransport('stopped'); return; }
+    system.playEffectRoutine(routine.flat.commands, { loop: effectLoopRef.current, sounds: routine.flat.sounds, onFinished: effectFinishedRef.current });
     rendererRef.current.effectPaused = false;
-    setEffectPlaying(true);
+    setEffectTransport('playing');
   }, []);
 
   /** Reset: restart the routine from frame 0 (speed reset is handled by onSpeed). */
@@ -1692,7 +2061,7 @@ export default function App({ launch = null }) {
     const renderer = rendererRef.current;
     renderer?.particleSystem?.restartEffect();
     if (renderer) renderer.effectPaused = false;
-    setEffectPlaying(true);
+    setEffectTransport('playing');
   }, []);
 
   /** Close Data Struct particle preview modal (does not touch the main view). */
@@ -2608,7 +2977,25 @@ export default function App({ launch = null }) {
           return;
         }
         // Lists that own no model on boot — don't resurrect the last DAT behind them.
-        if (restoredView === 'music' || restoredView === 'sfx' || restoredView === 'effects' || restoredView === 'data') return;
+        if (restoredView === 'music' || restoredView === 'sfx') return;
+        // Effects: replay the last spell/ability (empty stage) so reload lands
+        // on a live preview, not a blank origin with upside-down helpers.
+        if (restoredView === 'effects') {
+          setWasd(false);
+          try {
+            const last = JSON.parse(localStorage.getItem(LAST_EFFECT_KEY) || 'null');
+            if (last?.path) {
+              await loadEffect({
+                name: last.name || last.path,
+                path: last.path,
+                cat: last.cat ?? undefined,
+              });
+              return;
+            }
+          } catch { /* stale/corrupt — fall through to framed empty stage */ }
+          rendererRef.current?.frameEffect?.();
+          return;
+        }
 
         // Prefer the last successfully loaded DAT; fall back to the default demo model.
         let paths = null;
@@ -2657,7 +3044,9 @@ export default function App({ launch = null }) {
         setStatusText(`Startup failed: ${err.message ?? err}`);
       }
     })();
-  }, [loadModel, loadZone, setWasd, openLaunchZone]);
+  // loadImage is declared below this effect; the async body closes over it safely,
+  // but listing it in deps would hit the temporal dead zone on first render.
+  }, [loadModel, loadZone, loadEffect, setWasd, openLaunchZone]);
 
   // Debug/verification hook (used by the headless capture flow)
   useEffect(() => {
@@ -2710,11 +3099,15 @@ export default function App({ launch = null }) {
       if (e.key !== 'Escape') return;
       if (exportSpec) { setExportSpec(null); e.preventDefault(); return; }
       if (settingsOpen) { setSettingsOpen(false); e.preventDefault(); return; }
-      if (graphicsOpen) { setGraphicsOpen(false); e.preventDefault(); return; }
       if (helpOpen) { setHelpOpen(false); e.preventDefault(); return; }
       if (datNotesOpen) { setDatNotesOpen(false); e.preventDefault(); return; }
       if (fxPreview) {
         closeFxPreview();
+        e.preventDefault();
+        return;
+      }
+      if (dataTableWindows.length > 0) {
+        setDataTableWindows((prev) => prev.slice(0, -1));
         e.preventDefault();
         return;
       }
@@ -2750,7 +3143,7 @@ export default function App({ launch = null }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [exportSpec, settingsOpen, graphicsOpen, helpOpen, datNotesOpen, texWindows.length, skelWindows.length, zdefWindows.length, routeWindows.length, uiMenuWindows.length, uiEgWindows.length, fxPreview, closeFxPreview]);
+  }, [exportSpec, settingsOpen, helpOpen, datNotesOpen, texWindows.length, skelWindows.length, zdefWindows.length, routeWindows.length, uiMenuWindows.length, uiEgWindows.length, dataTableWindows.length, fxPreview, closeFxPreview]);
 
   // --- handlers ------------------------------------------------------------
 
@@ -2823,8 +3216,19 @@ export default function App({ launch = null }) {
     schedules: effectRoutines.map((r) => ({ id: r.id, clipIds: [] })),
     currentSchedule: effectSchedule,
     onScheduleChange: changeEffectSchedule,
-    playing: effectPlaying,
-    onTogglePlay: toggleEffectPlay,
+    transport: effectTransport,
+    onPlay: playEffect,
+    onPause: pauseEffect,
+    onStop: stopEffect,
+    loop: effectLoop,
+    onLoop: setEffectLoop,
+    charAnim: showCharAnim,
+    onCharAnim: setShowCharAnim,
+    // Only meaningful when an effect is playing on a loaded PC/NPC.
+    charAnimEnabled: !!modelInfo?.effect?.onActor,
+    attachFx,
+    onAttachFx: setAttachFx,
+    attachFxEnabled: !!modelInfo?.effect?.onActor,
     speed: effectSpeed,
     onSpeed: setEffectSpeed,
     onSeek: restartEffect,
@@ -2918,11 +3322,33 @@ export default function App({ launch = null }) {
     setSelectedFloor('');
   }, []);
 
+  const changeFloorTileScale = useCallback((v) => {
+    const s = Math.min(4, Math.max(0.25, Number(v) || 1));
+    setFloorTileScaleState(s);
+    try { localStorage.setItem('floorTileScale', String(s)); } catch { /* quota */ }
+    rendererRef.current?.setFloorTileScale(s);
+  }, []);
+
   const setBg = useCallback((hex) => {
     rendererRef.current.setClearColor(hex);
     rendererRef.current.setFog({ color: hex });   // fade toward the background
     localStorage.setItem('bgColor', hex);
     setSettings((s) => (s ? { ...s, bgColor: hex } : s));
+  }, []);
+
+  // Scene > Background Image — store bare filename or 'none'.
+  const [bgImage, setBgImageState] = useState(() => (
+    normalizeBgId(localStorage.getItem('bgImage') || 'none')
+  ));
+  const setBgImage = useCallback((id) => {
+    const next = normalizeBgId(id);
+    setBgImageState(next);
+    try {
+      if (next !== 'none') localStorage.setItem('bgImage', next);
+      else localStorage.removeItem('bgImage');
+    } catch { /* quota */ }
+    const url = resolveBgUrl(next);
+    rendererRef.current?.setBackgroundImage(url || null);
   }, []);
 
   // Fog on/off + a distance scale over whatever the scene authored. For zones
@@ -2954,7 +3380,7 @@ export default function App({ launch = null }) {
   const [imageSet, setImageSet] = useState(null);
   const [imageSprite, setImageSprite] = useState(null);
 
-  // ── Assets > Data (DAT structure inspector) ────────────────────────────────
+  // ── DAT structure inspector (DAT Browser page + status-bar overlay) ───────
   const [dataDoc, setDataDoc] = useState(null);         // inspectDat result + path
   // Status-bar overlay: peek structure without leaving the live zone/model/etc.
   const [dataStructOpen, setDataStructOpenState] = useState(false);
@@ -3052,7 +3478,7 @@ export default function App({ launch = null }) {
           doc = await buildZoneDatDoc(zkind, bytes, rel, settingsRef.current, dataTablesRef);
           if (token !== dataTokenRef.current) return;
         } else {
-          doc = inspectDat(buf);
+          doc = inspectDat(buf, path);
         }
       }
       dataTexturesRef.current = null;
@@ -3124,7 +3550,9 @@ export default function App({ launch = null }) {
                 ? `${finalDoc.entries.length.toLocaleString()} dialog lines${zoneSuffix}`
                 : finalDoc.kind === 'xistring'
                   ? `${finalDoc.entries.length.toLocaleString()} XISTRING entries`
-                  : finalDoc.label;
+                  : finalDoc.kind === 'dmsg'
+                    ? `${finalDoc.entries.length.toLocaleString()} d_msg entries`
+                    : finalDoc.label;
       if (!opts.overlay) {
         setStatusText(opts.notice ? `${rel} — ${opts.notice}` : baseStatus);
       }
@@ -3143,8 +3571,8 @@ export default function App({ launch = null }) {
   const toggleDataStruct = useCallback(async () => {
     if (dataStructOpen) {
       setDataStructOpen(false);
-      // Drop overlay-only docs; keep docs that own the page (browserKind data).
-      if (browserKind !== 'data' && leftView !== 'data') {
+      // Drop overlay-only docs; keep docs that own the page.
+      if (!dataOwnsPage) {
         setDataDoc(null);
         dataBufRef.current = null;
         dataTexturesRef.current = null;
@@ -3169,7 +3597,7 @@ export default function App({ launch = null }) {
     setDataStructOpen(true);
     // Restore prior status (zone name, etc.) — structure lives in the overlay.
     setStatusText(dataStructStatusRef.current || '');
-  }, [dataStructOpen, browserKind, leftView, selectedDat, statusText, loadDatData, player, dataSources]);
+  }, [dataStructOpen, dataOwnsPage, selectedDat, statusText, loadDatData, player, dataSources]);
 
   /** Re-parse floating inspect windows from the current dataBufRef (after reload). */
   const refreshOpenInspectWindows = useCallback(() => {
@@ -3310,25 +3738,25 @@ export default function App({ launch = null }) {
     const onKey = (e) => {
       if (e.key !== 'Escape' || !dataStructOpen) return;
       // Let the earlier handler claim Escape first when a modal/window is open.
-      if (exportSpec || settingsOpen || graphicsOpen || helpOpen || datNotesOpen) return;
+      if (exportSpec || settingsOpen || helpOpen || datNotesOpen) return;
       if (fxPreview || skelWindows.length || texWindows.length || zdefWindows.length) return;
-      if (routeWindows.length || uiMenuWindows.length || uiEgWindows.length) return;
+      if (routeWindows.length || uiMenuWindows.length || uiEgWindows.length || dataTableWindows.length) return;
       toggleDataStruct();
       e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [dataStructOpen, toggleDataStruct, exportSpec, settingsOpen, graphicsOpen, helpOpen,
+  }, [dataStructOpen, toggleDataStruct, exportSpec, settingsOpen, helpOpen,
     datNotesOpen, skelWindows.length, texWindows.length, zdefWindows.length, routeWindows.length,
-    uiMenuWindows.length, uiEgWindows.length, fxPreview]);
+    uiMenuWindows.length, uiEgWindows.length, dataTableWindows.length, fxPreview]);
 
   /** Switch the Data Struct inspector to another DAT in the current multi-file set. */
   const selectDataSource = useCallback(async (path) => {
     if (!path) return;
     await loadDatData(path, {
-      overlay: dataStructOpen || (browserKind !== 'data' && leftView !== 'data'),
+      overlay: dataStructOpen || !dataOwnsPage,
     });
-  }, [loadDatData, dataStructOpen, browserKind, leftView]);
+  }, [loadDatData, dataStructOpen, dataOwnsPage]);
 
   /**
    * A row in the file-table view names a DAT — jump the inspector to it.
@@ -3541,6 +3969,68 @@ export default function App({ launch = null }) {
       raiseModal(`uieg:${id}`);
       return [...prev, { id, key, title, group, offset }];
     });
+  }, [raiseModal]);
+
+  const openDataTable = useCallback((res) => {
+    const tag = (res?.id && String(res.id).trim()) || res?.name || 'Table';
+    if (!dataBufRef.current || res?.offset == null) {
+      setStatusText("Couldn't parse table (no DAT buffer)");
+      return;
+    }
+    let table = null;
+    try {
+      table = parseInspectDataTable(dataBufRef.current, res.offset);
+    } catch (e) {
+      console.warn('parseInspectDataTable', e);
+    }
+    if (!table?.rows) {
+      setStatusText(`Couldn't parse table ${tag}`);
+      return;
+    }
+    const title = `${table.id || tag} · ${table.title || 'Table'}`;
+    const key = `dtable:${res.offset}`;
+    const offset = res.offset;
+
+    const pushWin = (tbl) => {
+      setDataTableWindows((prev) => {
+        const i = prev.findIndex((w) => w.key === key);
+        if (i >= 0) {
+          const copy = prev.slice();
+          const [hit] = copy.splice(i, 1);
+          const next = { ...hit, table: tbl, title, offset };
+          copy.push(next);
+          raiseModal(`dtable:${next.id}`);
+          return copy;
+        }
+        const id = ++dataTableIdRef.current;
+        raiseModal(`dtable:${id}`);
+        return [...prev, { id, key, title, table: tbl, offset }];
+      });
+    };
+
+    pushWin(table);
+
+    // SpellList / AbilityList: pull names from d_msg name DATs when game path is set.
+    const nameDat = table.nameDat;
+    if (nameDat && settingsRef.current?.gamePath) {
+      const rel = nameDat.replace(/\//g, '\\');
+      backend.readPrefer(gameCandidates(rel, settingsRef.current))
+        .then(({ data }) => {
+          const dmsg = inspectDmsg(data);
+          if (!dmsg) return;
+          const enriched = attachDataTableNames(
+            { ...table, rows: table.rows.map((r) => ({ ...r })) },
+            dmsg,
+          );
+          enriched.nameDatPath = rel;
+          setDataTableWindows((prev) => prev.map((w) => (
+            w.key === key ? { ...w, table: enriched } : w
+          )));
+        })
+        .catch((e) => {
+          console.warn('name DAT load failed', nameDat, e);
+        });
+    }
   }, [raiseModal]);
 
   const closeRouteWin = useCallback((id) => {
@@ -3826,19 +4316,27 @@ export default function App({ launch = null }) {
     if (prev === leftView) return;
     prevViewRef.current = leftView;
 
-    // File Browser / Data can host zone content in-place via browserKind.
+    // DAT Browser can host zone content in-place via browserKind.
     const prevZone = ZONE_VIEWS.has(prev)
-      || ((prev === 'files' || prev === 'data') && browserKind === 'zone');
+      || (prev === 'files' && browserKind === 'zone');
     const nextZone = ZONE_VIEWS.has(leftView)
-      || ((leftView === 'files' || leftView === 'data') && browserKind === 'zone');
+      || (leftView === 'files' && browserKind === 'zone');
     const prevAudio = AUDIO_VIEWS.has(prev)
-      || ((prev === 'files' || prev === 'data') && (browserKind === 'music' || browserKind === 'sfx'));
+      || (prev === 'files' && (browserKind === 'music' || browserKind === 'sfx'));
     const nextAudio = AUDIO_VIEWS.has(leftView)
-      || ((leftView === 'files' || leftView === 'data') && (browserKind === 'music' || browserKind === 'sfx'));
+      || (leftView === 'files' && (browserKind === 'music' || browserKind === 'sfx'));
 
-    // Zones keeps a loaded zone; anything else starts empty. Characters
-    // reloads itself on arrival, so unloading here just clears the old actor.
-    if (!(prevZone && nextZone)) unloadModel();
+    // Zones keeps a loaded zone; Effects keeps a PC/NPC; returning NPC/PC from
+    // Effects keeps that same actor (no reload) and restores path UI.
+    const actor = modelRef.current;
+    const isEntity = !!(actor && actor.kind !== 'zone' && actor.isRenderable);
+    const keepActorForEffects = leftView === 'effects' && isEntity;
+    const keepActorFromEffects = isEntity
+      && prev === 'effects'
+      && (leftView === 'npc' || leftView === 'pc');
+    if (!(prevZone && nextZone) && !keepActorForEffects && !keepActorFromEffects) {
+      unloadModel();
+    }
     if (!(prevAudio && nextAudio)) player.stop();
     // Leaving the zone views silences the zone outright: the BGM and every
     // ambient/weather voice, including one-shots already in flight. Detaching
@@ -3850,28 +4348,63 @@ export default function App({ launch = null }) {
       setZoneTrack(null);
       zoneMusicIdRef.current = null;
     }
-    if (leftView !== 'images' && leftView !== 'files' && leftView !== 'data') {
+    if (leftView !== 'images' && leftView !== 'files') {
       setImageEntry(null); setImageDoc(null); setImageSet(null); setImageSprite(null);
     }
-    if (leftView !== 'data' && leftView !== 'files') {
+    if (leftView !== 'files') {
       setDataDoc(null); dataBufRef.current = null; dataTexturesRef.current = null;
     }
-    // Keep browserKind when moving between File Browser and Data (same openers).
-    if (leftView !== 'files' && leftView !== 'data') setBrowserKind(null);
+    if (leftView !== 'files') setBrowserKind(null);
     setDataStructOpen(false);
-    setShowAxes(leftView === 'effects' || (leftView === 'files' && browserKind === 'effect'));
-    // Leaving Effects: unloadModel already tore down the particle scene; drop the
-    // selection so returning starts clean instead of showing dead transport rows.
     // Re-entering Character Creation frames the model once more; while you are
     // in it, the camera is yours.
     if (leftView !== 'creation') crFramedRef.current = false;
     if (leftView !== 'pc') rendererRef.current?.setMeshSourceFilter(null);
+    // Leaving Effects: disarm playback, but keep effectEntry so the list still
+    // highlights the last DAT when you return (Character ↔ Effects).
     if ((prev === 'effects' || (prev === 'files' && browserKind === 'effect'))
       && leftView !== 'effects' && leftView !== 'files') {
       effectRoutinesRef.current = [];
-      setEffectEntry(null);
       setEffectRoutines([]);
       setEffectSchedule('');
+      setEffectTransport('stopped');
+      rendererRef.current?.particleSystem?.clearEffect?.();
+      weatherAudioRef.current?.stopOneShots?.();
+      if (rendererRef.current) {
+        rendererRef.current.particleSystem = null;
+        rendererRef.current.effectMode = false;
+      }
+    }
+    // Effects → NPC/PC with actor still on stage: put the status bar / selection
+    // back on the character DAT (effect load had overwritten them).
+    if (keepActorFromEffects) {
+      const last = lastEntityRef.current;
+      if (last) {
+        setModelPath(last.modelPath);
+        setSelectedDat(last.selectedPath);
+        shownPathRef.current = last.shownPath;
+        sourcePathRef.current = last.sourcePath;
+        setModelInfo((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev };
+          delete next.effect;
+          return next;
+        });
+        setStatusText(last.name || '');
+      }
+      lastEntityRef.current = {
+        ...(lastEntityRef.current || {}),
+        view: leftView,
+      };
+    }
+    // Entering Effects with an actor: clear any leftover particles; list selection stays.
+    if (keepActorForEffects && prev !== 'effects') {
+      rendererRef.current?.particleSystem?.clearEffect?.();
+      weatherAudioRef.current?.stopOneShots?.();
+      effectRoutinesRef.current = [];
+      setEffectRoutines([]);
+      setEffectSchedule('');
+      setEffectTransport('stopped');
     }
   }, [leftView, unloadModel, player, setZoneTrack, browserKind]);
 
@@ -3932,7 +4465,7 @@ export default function App({ launch = null }) {
     }
   }, []);
 
-  /** FTABLE path list for File Browser search (once per session / install). */
+  /** FTABLE path list for DAT Browser search (once per session / install). */
   const ensureFilePathIndex = useCallback(async () => {
     if (fileIndexRef.current) return fileIndexRef.current;
     try {
@@ -3940,6 +4473,11 @@ export default function App({ launch = null }) {
       const paths = [...byPath.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
       fileIndexRef.current = paths;
       setFilePathIndex(paths);
+      // Type badges ride along: the lists are small and the FTABLE map is
+      // already in hand. Failing here must not cost us the path index.
+      loadDatTypeLists()
+        .then((lists) => setDatTypeOf(() => makeDatTypeLookup(lists, byPath)))
+        .catch(() => {});
       return paths;
     } catch (e) {
       console.warn('file path index failed', e);
@@ -3950,11 +4488,11 @@ export default function App({ launch = null }) {
   }, []);
 
   useEffect(() => {
-    if (leftView === 'files' || leftView === 'data') ensureFilePathIndex();
+    if (leftView === 'files') ensureFilePathIndex();
   }, [leftView, ensureFilePathIndex, settings?.gamePath]);
 
   /**
-   * Assets > File Browser click: sniff the DAT and open the matching viewer
+   * Assets > DAT Browser click: sniff the DAT and open the matching viewer
    * (zone / model / image / music / sfx / effect / data inspector).
    * opts.fromOverlay — Open-in-3D from Data Struct overlay; on failure re-open
    * the overlay instead of hijacking the page into browserKind=data.
@@ -4109,6 +4647,11 @@ export default function App({ launch = null }) {
         clearData();
         clearEffect();
         player.stop();
+        // Models orbit. Dropping fly here rather than leaving it to the
+        // ORBIT_VIEWS effect matters: that effect fires on the browserKind
+        // commit, which can land after fitCamera() and re-derive the pivot
+        // from the fly pose instead of the framing we just computed.
+        if (wasdRef.current) setWasd(false);
         setBrowserKind('entity');
         setDataDoc(null);
         const absPath = String(path).replace(/\//g, '\\');
@@ -4193,7 +4736,7 @@ export default function App({ launch = null }) {
         return;
       }
 
-      // data / unknown → structure inspector (same as Assets > Data).
+      // data / unknown → structure inspector.
       clearImages();
       clearEffect();
       player.stop();
@@ -4326,6 +4869,12 @@ export default function App({ launch = null }) {
     localStorage.setItem('showXiConsole', draft.showXiConsole === false ? '0' : '1');
     localStorage.setItem('autoCloseXiConsole', draft.autoCloseXiConsole ? '1' : '0');
     localStorage.setItem('xiPath', xiPath);
+    const nextGrid = !!draft.showGrid;
+    const nextAxes = !!draft.showAxes;
+    localStorage.setItem('showGrid', nextGrid ? '1' : '0');
+    localStorage.setItem('showAxes', nextAxes ? '1' : '0');
+    setShowGrid(nextGrid);
+    setShowAxes(nextAxes);
     // Clearing a root forces its toggle off.
     const hdEnabled = hdPath ? !!draft.hdEnabled : false;
     const pivotEnabled = pivotPath ? !!draft.pivotEnabled : false;
@@ -4343,6 +4892,8 @@ export default function App({ launch = null }) {
       closeDatNotesOnSave: !!draft.closeDatNotesOnSave,
       showXiConsole: draft.showXiConsole !== false,
       autoCloseXiConsole: !!draft.autoCloseXiConsole,
+      showGrid: nextGrid,
+      showAxes: nextAxes,
     };
     setSettings(next);
     settingsRef.current = next;
@@ -4592,9 +5143,6 @@ export default function App({ launch = null }) {
           return next;
         });
         break;
-      case 'graphics':
-        setGraphicsOpen((v) => !v);
-        break;
       case 'camera-sequencer':
         setSequencerOpen((v) => !v);
         break;
@@ -4632,16 +5180,21 @@ export default function App({ launch = null }) {
         setSkybox(!showSkybox);
         break;
       case 'toggle-axes':
-        setShowAxes((v) => !v);
+        setShowAxes((v) => {
+          const next = !v;
+          try { localStorage.setItem('showAxes', next ? '1' : '0'); } catch { /* quota */ }
+          return next;
+        });
         break;
       case 'toggle-grid':
-        setShowGrid((v) => !v);
+        setShowGrid((v) => {
+          const next = !v;
+          try { localStorage.setItem('showGrid', next ? '1' : '0'); } catch { /* quota */ }
+          return next;
+        });
         break;
       case 'assets-files':
         setLeftView('files');
-        break;
-      case 'assets-data':
-        setLeftView('data');
         break;
       case 'assets-npcs':
         setLeftView('npc');
@@ -4669,14 +5222,10 @@ export default function App({ launch = null }) {
         setLeftView('effects');
         break;
       case 'open-dat':
-        // Data view inspects structure; otherwise sniff type in File Browser.
+        // Sniff the type and open it the way a click in the tree would.
         backend.pickFile(settingsRef.current?.gamePath || null)
           .then((file) => {
             if (!file) return;
-            if (leftView === 'data') {
-              loadDatData(file);
-              return;
-            }
             if (leftView === 'files') {
               loadFromTree(file);
               return;
@@ -5131,7 +5680,10 @@ export default function App({ launch = null }) {
       if (wasdRef.current) {
         if (drag.current.btn === 0 || drag.current.btn === 2) cam.flyLook(dx, dy);
       } else if (drag.current.btn === 0) {
-        cam.orbit(dx, dy);
+        // Entities/effects: orbit around the model pivot so a pan is preserved
+        // (character stays put on screen). Zones keep free tumble about look-at.
+        const pivot = rendererRef.current.getOrbitPivot?.() ?? null;
+        cam.orbit(dx, dy, pivot);
       } else {
         cam.pan(dx, dy);
       }
@@ -5270,7 +5822,11 @@ export default function App({ launch = null }) {
         )}
         <SettingsModal
           open={settingsOpen}
-          initial={settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, closeDatNotesOnSave: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }}
+          initial={{
+            ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, closeDatNotesOnSave: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
+            showGrid,
+            showAxes,
+          }}
           error={settingsError}
           onSave={saveSettings}
           onClose={() => { setSettingsOpen(false); setSettingsError(''); }}
@@ -5319,13 +5875,25 @@ export default function App({ launch = null }) {
         fps={fps}
         fov={fov}
         onFov={setFov}
-        graphicsOpen={graphicsOpen}
         sequencerOpen={sequencerOpen}
         bgColor={settings?.bgColor ?? DEFAULT_BG}
         onBgColor={setBg}
+        bgImage={bgImage}
+        onBgImage={setBgImage}
         onFloor={loadFloor}
         onClearFloor={clearFloor}
         selectedFloor={selectedFloor}
+        floorTileScale={floorTileScale}
+        onFloorTileScale={changeFloorTileScale}
+        shadowsOn={showShadows}
+        shadowDistance={shadowDistance}
+        onShadowDistance={setShadowDistance}
+        renderHeight={renderHeight}
+        onRenderHeight={setRenderHeight}
+        bufferSize={bufferSize}
+        fpsCap={fpsCap}
+        onFpsCap={setFpsCap}
+        onGraphicsOpenChange={setGraphicsOpen}
       />
 
       {/* Mounted only while open: unmounting is what releases the camera lock,
@@ -5346,11 +5914,17 @@ export default function App({ launch = null }) {
       {explorerOpen && leftView === 'files' && (
         <FileTree
           rootPath={settings?.gamePath ?? ''}
+          roots={[
+            settings?.gamePath && { path: settings.gamePath, label: 'FINAL FANTASY XI' },
+            settings?.hdPath && { path: settings.hdPath, label: 'HD' },
+            settings?.pivotPath && { path: settings.pivotPath, label: 'PIVOT' },
+          ].filter(Boolean)}
           selectedPath={selectedDat}
           revealTarget={revealTarget}
           onSelectFile={loadFromTree}
           onError={(msg) => setStatusText(msg)}
           pathIndex={filePathIndex}
+          typeOf={datTypeOf}
           settings={settings}
         />
       )}
@@ -5413,29 +5987,8 @@ export default function App({ launch = null }) {
         <EffectList onSelect={loadEffect} selectedPath={effectEntry?.path} />
       )}
 
-      {/* Data view reuses the file tree. Clicks smart-open (same as File Browser)
-          so zones/models render; pure tables still land in the inspector. */}
-      {explorerOpen && leftView === 'data' && (
-        <FileTree
-          rootPath={settings?.gamePath ?? ''}
-          roots={[
-            settings?.gamePath && { path: settings.gamePath, label: 'FINAL FANTASY XI' },
-            settings?.hdPath && { path: settings.hdPath, label: 'HD' },
-            settings?.pivotPath && { path: settings.pivotPath, label: 'PIVOT' },
-          ].filter(Boolean)}
-          selectedPath={selectedDat}
-          revealTarget={revealTarget}
-          onSelectFile={loadFromTree}
-          onError={(msg) => setStatusText(msg)}
-          pathIndex={filePathIndex}
-          settings={settings}
-        />
-      )}
-
-      {/* Structure: owned page (Data / failed open) or status-bar overlay toggle. */}
-      {(dataStructOpen
-        || (leftView === 'data' && !browserKind)
-        || browserKind === 'data') && (
+      {/* Structure: owned page (empty browser / table / failed open) or overlay. */}
+      {(dataStructOpen || dataOwnsPage) && (
         <>
           {dataDoc?.notice && (
             <div className="file-open-banner" role="status">
@@ -5453,6 +6006,7 @@ export default function App({ launch = null }) {
             onOpenRoute={openDataRoute}
             onOpenUiMenu={openDataUiMenu}
             onOpenUiElementGroup={openDataUiElementGroup}
+            onOpenDataTable={openDataTable}
             onOpenParticle={openDataParticle}
             onPlaySound={playDataSound}
             playingSoundKey={playingSoundKey}
@@ -5460,8 +6014,7 @@ export default function App({ launch = null }) {
             onOpenDat={openDatFromTable}
             onRenderFile={dataDoc?.fullPath ? () => {
               const path = dataDoc.fullPath;
-              const fromOverlay = dataStructOpen
-                || (browserKind !== 'data' && leftView !== 'data');
+              const fromOverlay = dataStructOpen || !dataOwnsPage;
               setDataStructOpen(false);
               // Composed character/NPC/creation already on screen — just dismiss.
               if (fromOverlay && modelRef.current
@@ -5499,8 +6052,8 @@ export default function App({ launch = null }) {
         </>
       )}
 
-      {!dataStructOpen && (leftView === 'images' || (leftView === 'files' && browserKind === 'image')
-        || (leftView === 'data' && browserKind === 'image')) && imageDoc && (
+      {!dataStructOpen && (leftView === 'images' || (leftView === 'files' && browserKind === 'image'))
+        && imageDoc && (
         <>
           <ImageViewer
             doc={imageDoc}
@@ -5568,10 +6121,10 @@ export default function App({ launch = null }) {
           controls — Images/Music/SFX have their own right-hand panels.
           Creation is ORBIT but not browserKind==='entity', so list it explicitly. */}
       {/* PC/NPC/Creation own the viewport directly (browserKind is cleared on
-          view switch). File Browser / Data need browserKind==='entity'. */}
+          view switch). DAT Browser needs browserKind==='entity'. */}
       {!dataStructOpen && !player.current
         && (leftView === 'pc' || leftView === 'npc' || leftView === 'creation'
-          || ((ORBIT_VIEWS.has(leftView) || leftView === 'data') && browserKind === 'entity'))
+          || (ORBIT_VIEWS.has(leftView) && browserKind === 'entity'))
         && (
         <AnimationPanel
           pc={leftView === 'pc' ? pc : null}
@@ -5800,6 +6353,17 @@ export default function App({ launch = null }) {
         />
       ))}
 
+      {dataTableWindows.map((w, i) => (
+        <DataTableModal
+          key={w.id}
+          table={w.table}
+          title={w.title}
+          zIndex={modalZ(`dtable:${w.id}`, 2110 + i)}
+          onClose={() => setDataTableWindows((prev) => prev.filter((x) => x.id !== w.id))}
+          onFocus={() => raiseModal(`dtable:${w.id}`)}
+        />
+      ))}
+
       {uiMenuWindows.map((w, i) => (
         <UiMenuModal
           key={w.id}
@@ -5879,7 +6443,11 @@ export default function App({ launch = null }) {
 
       <SettingsModal
         open={settingsOpen}
-        initial={settings ?? { gamePath: '', hdPath: '', hdEnabled: false, bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, closeDatNotesOnSave: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }}
+        initial={{
+          ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, closeDatNotesOnSave: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
+          showGrid,
+          showAxes,
+        }}
         error={settingsError}
         onSave={saveSettings}
         onClose={() => { setSettingsOpen(false); setSettingsError(''); }}
@@ -5890,19 +6458,6 @@ export default function App({ launch = null }) {
         spec={exportSpec}
         onClose={() => setExportSpec(null)}
         onStatus={(msg) => setStatusText(msg)}
-      />
-
-      <GraphicsModal
-        open={graphicsOpen}
-        onClose={() => setGraphicsOpen(false)}
-        shadowsOn={showShadows}
-        shadowDistance={shadowDistance}
-        onShadowDistance={setShadowDistance}
-        renderHeight={renderHeight}
-        onRenderHeight={setRenderHeight}
-        bufferSize={bufferSize}
-        fpsCap={fpsCap}
-        onFpsCap={setFpsCap}
       />
 
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
