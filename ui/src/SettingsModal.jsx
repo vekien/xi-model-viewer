@@ -130,11 +130,21 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
     }
   }, []);
 
+  // Reset draft/tab/position only when the modal *opens* — not on every parent
+  // re-render. App passes a fresh `initial={{...}}` each frame (FPS, etc.), and
+  // depending on that object identity was snapping the panel back to General
+  // and clearing drag position while the user was still in it.
+  const wasOpen = useRef(false);
   useEffect(() => {
     if (!open) {
+      wasOpen.current = false;
       detachProgress();
       return undefined;
     }
+    const justOpened = !wasOpen.current;
+    wasOpen.current = true;
+    if (!justOpened) return undefined;
+
     setDraft(initial);
     setPos(null);
     setTab('general');
@@ -155,8 +165,9 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
       if (path) runXiSetup(path, false);
     });
     return () => detachProgress();
+    // intentionally omit `initial` — snapshot only on open
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initial]);
+  }, [open, detachProgress, refreshTools, runXiSetup]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -412,32 +423,6 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
                       <span className="icon check-icon">check</span>
                     </Checkbox>
                     <Label className="check-label">Auto-play idle animation on load</Label>
-                  </Field>
-                </div>
-
-                <div className="form-row">
-                  <Field className="check-field">
-                    <Checkbox
-                      checked={!!draft.showGrid}
-                      onChange={(v) => setDraft({ ...draft, showGrid: v })}
-                      className="checkbox"
-                    >
-                      <span className="icon check-icon">check</span>
-                    </Checkbox>
-                    <Label className="check-label">Show grid</Label>
-                  </Field>
-                </div>
-
-                <div className="form-row">
-                  <Field className="check-field">
-                    <Checkbox
-                      checked={!!draft.showAxes}
-                      onChange={(v) => setDraft({ ...draft, showAxes: v })}
-                      className="checkbox"
-                    >
-                      <span className="icon check-icon">check</span>
-                    </Checkbox>
-                    <Label className="check-label">Show axes</Label>
                   </Field>
                 </div>
 

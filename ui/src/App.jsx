@@ -4869,12 +4869,7 @@ export default function App({ launch = null }) {
     localStorage.setItem('showXiConsole', draft.showXiConsole === false ? '0' : '1');
     localStorage.setItem('autoCloseXiConsole', draft.autoCloseXiConsole ? '1' : '0');
     localStorage.setItem('xiPath', xiPath);
-    const nextGrid = !!draft.showGrid;
-    const nextAxes = !!draft.showAxes;
-    localStorage.setItem('showGrid', nextGrid ? '1' : '0');
-    localStorage.setItem('showAxes', nextAxes ? '1' : '0');
-    setShowGrid(nextGrid);
-    setShowAxes(nextAxes);
+    // Grid/axes live on the toolbar only — don't clobber them from Settings save.
     // Clearing a root forces its toggle off.
     const hdEnabled = hdPath ? !!draft.hdEnabled : false;
     const pivotEnabled = pivotPath ? !!draft.pivotEnabled : false;
@@ -4892,8 +4887,6 @@ export default function App({ launch = null }) {
       closeDatNotesOnSave: !!draft.closeDatNotesOnSave,
       showXiConsole: draft.showXiConsole !== false,
       autoCloseXiConsole: !!draft.autoCloseXiConsole,
-      showGrid: nextGrid,
-      showAxes: nextAxes,
     };
     setSettings(next);
     settingsRef.current = next;
