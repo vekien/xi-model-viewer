@@ -72,11 +72,11 @@ export function ImageList({ selectedPath, onSelectImage, onError }) {
 
   return (
     <div id="tree" className="panel zone-panel">
-      <div className="zone-search">
-        <span className="icon">search</span>
+      <div className="list-search-wrap">
         <input
-          type="search"
-          placeholder="Filter images…"
+          className="list-search"
+          type="text"
+          placeholder="Search images…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           spellCheck={false}

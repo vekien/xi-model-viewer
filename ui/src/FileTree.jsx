@@ -196,9 +196,8 @@ export function FileTree({
         </Tooltip>
       </div>
       <div className="list-search-wrap">
-        <span className="icon">search</span>
         <input
-          type="search"
+          type="text"
           className="list-search"
           placeholder="Search files…"
           value={query}

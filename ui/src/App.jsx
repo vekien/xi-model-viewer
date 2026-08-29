@@ -693,6 +693,7 @@ export default function App({ launch = null }) {
   // Animation panel > Show Character Animation. The effect DAT's 0x05 commands
   // name the caster's clip, so a Ninjutsu effect finds the ninjutsu motion and a
   // nuke finds the cast motion with nothing mapped by hand.
+  // Off by default — only play caster clips when the user turns this on.
   const [showCharAnim, setShowCharAnimState] = useState(
     () => localStorage.getItem('showCharAnim') === '1',
   );
@@ -707,8 +708,8 @@ export default function App({ launch = null }) {
   const zoneMusicRef = useRef(null);                        // zone_music.json (server zone_settings)
   const zoneMusicIdRef = useRef(null);                      // zone id of the loaded zone
   const zoneCamKeyRef = useRef('');
-  /** Zone fly/orbit can land anywhere — one F-style reset when leaving for Effects/PC/NPC. */
-  const forceCamResetFromZoneRef = useRef(false);
+  /** Assets view switch — one F-style reset so the next load doesn't keep a wild camera. */
+  const forceCamResetOnViewRef = useRef(false);
   const [zoneTrack, setZoneTrackState] = useState(null);    // resolved BGM for this zone + time
   const zoneTrackRef = useRef(null);
   const setZoneTrack = useCallback((t) => { zoneTrackRef.current = t; setZoneTrackState(t); }, []);
@@ -719,6 +720,14 @@ export default function App({ launch = null }) {
   const [todPlaying, setTodPlaying] = useState(false);
   const [plcSelected, setPlcSelected] = useState('');       // 'mesh:…' | 'inst:…'
   const [plcOpen, setPlcOpen] = useState(true);
+  const [actorsOpen, setActorsOpen] = useState(() => {
+    try { return localStorage.getItem('effectActorsOpen') !== '0'; } catch { return true; }
+  });
+  const setActorsOpenPersist = useCallback((v) => {
+    const next = typeof v === 'function' ? v(actorsOpen) : !!v;
+    setActorsOpen(next);
+    try { localStorage.setItem('effectActorsOpen', next ? '1' : '0'); } catch { /* quota */ }
+  }, [actorsOpen]);
   // Click zone viewport → select Objects row (no camera focus) + hover wireframe.
   const [liveSelection, setLiveSelection] = useState(() => {
     try { return localStorage.getItem('liveSelection') === '1'; } catch { return false; }
@@ -1249,12 +1258,12 @@ export default function App({ launch = null }) {
     const { focusPaths = null, weaponSlots = null, battleTable = null, parts = null, displayPath = null } = opts;
     // Keep framing when the caller asks (gear swap) or the user has already
     // orbit/pan/zoomed on an entity — browsing successive DATs shouldn't yank
-    // the camera. Zone → entity always fits (wild fly pose + different scale/up).
+    // the camera. Assets view switches force a fresh F-style fit.
     const prev = modelRef.current;
     const prevEntity = !!(prev && prev.kind !== 'zone' && !rendererRef.current?.effectMode);
-    const forceFromZone = forceCamResetFromZoneRef.current;
-    if (forceFromZone) forceCamResetFromZoneRef.current = false;
-    const keepCamera = !forceFromZone && !!(opts.keepCamera
+    const forceViewReset = forceCamResetOnViewRef.current;
+    if (forceViewReset) forceCamResetOnViewRef.current = false;
+    const keepCamera = !forceViewReset && !!(opts.keepCamera
       || (rendererRef.current?.camera?.userFramed && prevEntity));
     // Gear swaps (keepCamera) are snappy — skip the full-screen overlay there.
     const showOverlay = !opts.keepCamera;
@@ -1434,8 +1443,7 @@ export default function App({ launch = null }) {
       // same actor keep the user's camera.
       if (keepCamera) renderer.snapFloorToFeet();
       else renderer.fitCamera();
-      // Leaving a zone: full F reset even if something else tried to keep framing.
-      if (forceFromZone) renderer.resetCamera();
+      if (forceViewReset) renderer.resetCamera();
 
       const statsOf = (models) => ({
         joints: models.find((m) => m.skeleton)?.skeleton.joints.length ?? null,
@@ -1885,20 +1893,20 @@ export default function App({ launch = null }) {
       });
       setWasd(false);                    // effects orbit; fly controls would fight the framing
 
-      const forceFromZone = forceCamResetFromZoneRef.current;
-      if (forceFromZone) forceCamResetFromZoneRef.current = false;
+      const forceViewReset = forceCamResetOnViewRef.current;
+      if (forceViewReset) forceCamResetOnViewRef.current = false;
 
       if (onActor) {
         // Keep the character mesh; composite particles like a zone weather pass.
         renderer.attachFxToActor = attachFxRef.current;
         renderer.attachEffectSystem(system, textures);
-        if (forceFromZone) renderer.resetCamera();
+        if (forceViewReset) renderer.resetCamera();
       } else {
         // Empty stage: wipe any prior model and frame the origin once.
-        // Zone → Effects: full F framing (not keepView of the wild zone camera).
-        const keepCamera = !forceFromZone && renderer.effectMode;
+        // Assets view switch: full F framing (not keepView of the prior camera).
+        const keepCamera = !forceViewReset && renderer.effectMode;
         renderer.setEffectScene(system, textures, keepCamera);
-        if (forceFromZone) renderer.frameEffect();
+        if (forceViewReset) renderer.frameEffect();
         modelRef.current = null;
       }
       // Status bar + Data Struct always name the effect DAT (even on-actor).
@@ -4538,21 +4546,24 @@ export default function App({ launch = null }) {
       setEffectTransport('stopped');
     }
 
-    // Zone fly/orbit can be anywhere — one F-style reset when landing on Effects/PC/NPC.
-    if (prevZone && (leftView === 'effects' || leftView === 'pc' || leftView === 'npc')) {
-      forceCamResetFromZoneRef.current = true;
-      setWasd(false);
-      const r = rendererRef.current;
-      if (r) {
+    // Any Assets > X switch: one F-style camera reset (and force the next load to fit).
+    forceCamResetOnViewRef.current = true;
+    const r = rendererRef.current;
+    if (r) {
+      if (!nextZone) {
+        setWasd(false);
         r.camera?.setMode?.('orbit');
-        if (leftView === 'effects') {
-          // Empty stage (or kept actor) — frame like F immediately; loads re-frame too.
+      }
+      if (leftView === 'effects') {
+        if (keepActorForEffects && modelRef.current) r.resetCamera();
+        else {
           r.effectMode = true;
           r.frameEffect();
-          if (keepActorForEffects) r.resetCamera();
-        } else if (modelRef.current) {
-          r.resetCamera();
         }
+      } else if (modelRef.current) {
+        focusOrResetCameraRef.current?.();
+      } else if (!nextZone && leftView !== 'creation') {
+        r.camera?.setRangeFor?.('entity');
       }
     }
   }, [leftView, unloadModel, player, setZoneTrack, browserKind, setWasd]);
@@ -6402,13 +6413,16 @@ export default function App({ launch = null }) {
         && effectEntry && (
         <div id="effect-stack">
           <AnimationPanel anim={effectAnim} />
-          <EffectActorsPanel
-            tab={effectActorTab}
-            onTab={setEffectActorTab}
-            pc={pc}
-            selectedPath={selectedDat}
-            onSelectNpc={loadEffectNpc}
-          />
+          {actorsOpen && (
+            <EffectActorsPanel
+              tab={effectActorTab}
+              onTab={setEffectActorTab}
+              pc={pc}
+              selectedPath={selectedDat}
+              onSelectNpc={loadEffectNpc}
+              onClose={() => setActorsOpenPersist(false)}
+            />
+          )}
         </div>
       )}
 
@@ -6496,6 +6510,15 @@ export default function App({ launch = null }) {
                   <button className="status-link" onClick={() => setSkeletonOpen((v) => !v)}>Skeleton</button>
                 </>
               )}
+              {((leftView === 'effects') || (leftView === 'files' && browserKind === 'effect'))
+                && effectEntry && (
+                <>
+                  <span className="status-sep">·</span>
+                  <button className="status-link" onClick={() => setActorsOpenPersist((v) => !v)}>
+                    {actorsOpen ? 'Hide actors' : 'Actors'}
+                  </button>
+                </>
+              )}
               {modelInfo && (DETAIL_VIEWS.has(leftView)
                 || (leftView === 'files' && (browserKind === 'zone' || browserKind === 'effect')))
                 && !(leftView === 'files' && browserKind && !['entity', 'zone', 'effect'].includes(browserKind)) && (
@@ -6531,6 +6554,15 @@ export default function App({ launch = null }) {
                 <>
                   <span className="status-sep">·</span>
                   <button className="status-link" onClick={() => setSkeletonOpen((v) => !v)}>Skeleton</button>
+                </>
+              )}
+              {((leftView === 'effects') || (leftView === 'files' && browserKind === 'effect'))
+                && effectEntry && (
+                <>
+                  <span className="status-sep">·</span>
+                  <button className="status-link" onClick={() => setActorsOpenPersist((v) => !v)}>
+                    {actorsOpen ? 'Hide actors' : 'Actors'}
+                  </button>
                 </>
               )}
               {(DETAIL_VIEWS.has(leftView)

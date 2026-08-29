@@ -208,8 +208,6 @@ export function AnimationPanel({ pc, anim }) {
           </Tooltip>
         </Row>
       )}
-      
-      <hr/>
 
       {frameSink && <FrameScrubber frameSink={frameSink} onSeek={onSeek} />}
       {onSpeed && (
@@ -240,8 +238,6 @@ export function AnimationPanel({ pc, anim }) {
           </span>
         </Row>
       )}
-
-      <hr/>
 
       {onAttachFx && (
         <Field

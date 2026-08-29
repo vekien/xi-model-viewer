@@ -134,11 +134,11 @@ export function ZoneList({ selectedPath, onSelectZone, onError }) {
 
   return (
     <div id="tree" className="panel zone-panel">
-      <div className="zone-search">
-        <span className="icon">search</span>
+      <div className="list-search-wrap">
         <input
-          type="search"
-          placeholder="Filter zones…"
+          className="list-search"
+          type="text"
+          placeholder="Search zones…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           spellCheck={false}

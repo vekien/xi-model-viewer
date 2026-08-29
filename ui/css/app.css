@@ -329,6 +329,10 @@ body:has(#img-sprites) #placements {
   align-self: stretch;
   flex: 0 0 auto;
 }
+/* Options (#animbar) never uses dividers — kill any leftover <hr>. */
+#animbar hr {
+  display: none !important;
+}
 
 .tool-pop-body strong { color: #6fb9ff; }
 
@@ -525,26 +529,47 @@ body:has(#img-sprites) #placements {
    stray border — the highlighted row is the feedback that matters. */
 .list-scroll:focus, .list-scroll:focus-visible { outline: none; }
 
-/* Effects list: sticky search box above the category tree. */
+/* Shared left-list chrome: search row above the scroller (Effects / Files / Zones / Images).
+   Match global text inputs so type=search vs type=text don't diverge. */
 .list-search-wrap {
   flex: 0 0 auto;
   display: flex; align-items: center; gap: 6px;
   padding: 8px 10px;
   border-bottom: 1px solid var(--ring);
 }
-.list-search-wrap > .icon { font-size: 17px; color: var(--muted); flex: 0 0 auto; }
-.list-search {
-  flex: 1 1 auto; min-width: 0;
-  background: rgba(0, 0, 0, 0.22);
-  border: 1px solid var(--ring-strong);
-  border-radius: 6px;
-  padding: 5px 8px;
+input.list-search,
+input[type='search'].list-search,
+input[type='text'].list-search {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  font: 400 12px/1.4 var(--font-mono);
   color: var(--text);
-  font: 400 13px/1.3 var(--font-ui);
+  background: linear-gradient(180deg, var(--gray-900), var(--gray-850));
+  border: 1px solid var(--ring);
+  border-radius: 7px;
+  min-height: 30px;
+  padding: 5px 9px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
   outline: none;
+  transition: border-color 0.12s ease;
+  /* Kill UA search-field chrome (WebKit cancel button layout quirks). */
+  -webkit-appearance: none;
+  appearance: none;
 }
-.list-search:focus { border-color: var(--accent); }
-.list-search::placeholder { color: var(--muted); }
+input.list-search:focus,
+input[type='search'].list-search:focus,
+input[type='text'].list-search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+input.list-search::placeholder,
+input[type='search'].list-search::placeholder,
+input[type='text'].list-search::placeholder {
+  color: var(--muted);
+  font-family: var(--font-ui);
+}
 .list-search-clear {
   flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
@@ -562,13 +587,13 @@ body:has(#img-sprites) #placements {
 
 .tree-browse {
   flex: 0 0 auto;
-  padding: 7px 10px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--ring);
 }
 .tree-browse-btn {
   display: flex; align-items: center; gap: 7px;
   width: 100%;
-  padding: 5px 9px;
+  padding: 5px 8px;
   min-height: 0;
   background: transparent;
   border: 1px solid var(--ring-strong);
@@ -581,7 +606,7 @@ body:has(#img-sprites) #placements {
 }
 .tree-browse-btn:hover { background: rgba(255,255,255,0.07); color: var(--text); border-color: rgba(255,255,255,0.2); }
 .tree-browse-btn .icon { font-size: 16px; color: inherit; }
-.tree-scroll { flex: 1 1 auto; overflow: auto; padding: 6px 4px; }
+.tree-scroll { flex: 1 1 auto; overflow: auto; padding: 10px 0; }
 .tree-search-results { padding: 2px 0 8px; }
 .tree-hit-path {
   flex: 1 1 auto; min-width: 0;
@@ -619,7 +644,7 @@ body:has(#img-sprites) #placements {
 .node.selected > .row .badge { color: #0b1420; background: rgba(0, 0, 0, 0.15); }
 
 .side-separator {
-  color: var(--gray-500);
+  color: var(--accent);
   font: 600 11px/1.4 var(--font-ui);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -929,25 +954,6 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
 
 .zone-panel { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
 .zone-panel .zone-count { flex: 0 0 auto; }
-.zone-search {
-  flex: 0 0 auto;
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--ring);
-}
-.zone-search .icon { color: var(--gray-500); font-size: 18px; }
-.zone-search input {
-  flex: 1 1 auto; min-width: 0;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid var(--ring);
-  border-radius: 6px;
-  color: var(--text);
-  font: 400 13px/1.3 var(--font-ui);
-  padding: 6px 9px;
-  outline: none;
-}
-.zone-search input:focus { border-color: var(--accent); }
-.zone-search input::placeholder { color: var(--gray-500); }
 .zone-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .zone-id { color: var(--gray-500); margin-left: 6px; flex: 0 0 auto; }
 .node.selected > .row .zone-id { color: rgba(0, 0, 0, 0.5); }
@@ -1072,7 +1078,8 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
 #weather .wx-header,
 #placements .plc-header,
 #details .details-header,
-#skeleton .details-header {
+#skeleton .details-header,
+#effect-actors .details-header {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1084,7 +1091,8 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
 #weather .wx-header > .icon,
 #placements .plc-header > .icon,
 #details .details-header > .icon,
-#skeleton .details-header > .icon {
+#skeleton .details-header > .icon,
+#effect-actors .details-header > .icon {
   color: var(--accent);
   font-size: 18px;
   flex: 0 0 auto;
@@ -1206,10 +1214,14 @@ button.seg-tab.active .icon { color: var(--accent); }
 #effect-actors {
   position: relative;
   flex: 1 1 auto;
-  min-height: 160px;
-  max-height: min(440px, calc(100vh - 280px));
+  min-height: 200px;
+  /* Tall enough for full Character gear (Race + Face + weapons + armor + gearset). */
+  max-height: min(625px, calc(100vh - 200px));
   overflow: hidden;
   z-index: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 .fx-actor-body {
   flex: 1 1 auto;
@@ -1222,11 +1234,24 @@ button.seg-tab.active .icon { color: var(--accent); }
 .fx-actor-pc {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   padding: 0;
   margin: 0;
   overflow: auto;
   min-height: 0;
+}
+.fx-actor-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fx-actor-sec-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 2px 0 -2px;
 }
 .fx-actor-npc {
   flex: 1 1 auto;
@@ -1245,7 +1270,7 @@ button.seg-tab.active .icon { color: var(--accent); }
   right: auto !important;
   bottom: auto !important;
   width: 100%;
-  height: auto;
+  height: 100%;
   max-height: none;
   flex: 1 1 auto;
   min-height: 0;
@@ -1255,9 +1280,13 @@ button.seg-tab.active .icon { color: var(--accent); }
   background: transparent;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  border-radius: 0;
 }
 .fx-actor-npc .list-scroll {
-  padding: 0;
+  padding: 4px 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 /* --- Status bars (two floating pills) -------------------------------------- */
@@ -1702,26 +1731,11 @@ body:has(#weather) #placements {
 .plc-sfx-play .icon { font-size: 16px; }
 .plc-idx.on-air { color: #5ec8c8; }
 
-.plc-search {
-  flex: 0 0 auto;
-  display: flex; align-items: center; gap: 6px;
+/* Objects search reuses .list-search-wrap; no bottom rule (list shell is below). */
+#placements .plc-search {
   padding: 0;
-  border: none;
-  margin: 0;
+  border-bottom: none;
 }
-.plc-search .icon { color: var(--gray-500); font-size: 16px; }
-.plc-search input {
-  flex: 1 1 auto; min-width: 0;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid var(--ring);
-  border-radius: 5px;
-  color: var(--text);
-  font: 400 12px/1.2 var(--font-ui);
-  padding: 4px 7px;
-  outline: none;
-}
-.plc-search input:focus { border-color: var(--accent); }
-.plc-search input::placeholder { color: var(--gray-500); }
 
 /* Dark inset list well (tabs / settings language). */
 .plc-list-shell {

@@ -1,22 +1,30 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Combo } from './Combo.jsx';
 import { NpcList } from './NpcList.jsx';
+import { Tooltip } from './Tooltip.jsx';
 
 /**
- * Effects-only actor picker under Options: Character (race/face/body/gearset)
- * or NPC list. Switching a PC slot loads the character; picking an NPC loads it.
+ * Effects-only actor picker under Options: Character (full gear) or NPC list.
  */
 export function EffectActorsPanel({
   tab, onTab,
   pc,
   selectedPath,
   onSelectNpc,
+  onClose,
 }) {
   return (
     <div id="effect-actors" className="panel">
-      <div className="panel-title">
+      <div className="details-header">
         <span className="icon">groups</span>
-        Actors
+        <span className="details-title">Actors</span>
+        {onClose && (
+          <Tooltip content="Close">
+            <button type="button" className="icon-btn details-close" onClick={onClose}>
+              <span className="icon">close</span>
+            </button>
+          </Tooltip>
+        )}
       </div>
 
       <div className="seg-tabs" role="tablist">
@@ -43,7 +51,7 @@ export function EffectActorsPanel({
       <div className="fx-actor-body">
         {tab === 'pc' && <EffectPcStrip pc={pc} />}
         {tab === 'npc' && (
-          <div className="fx-actor-npc">
+          <div className="fx-actor-npc plc-list-shell">
             <NpcList
               onSelectEntry={onSelectNpc}
               selectedPath={selectedPath}
@@ -55,6 +63,19 @@ export function EffectActorsPanel({
   );
 }
 
+/** Same slots as CharacterList (face + weapons + armor). */
+const PC_SLOTS = [
+  { key: 'face', label: 'Face', section: null },
+  { key: 'main', label: 'Main', section: 'Weapon' },
+  { key: 'sub', label: 'Sub', section: 'Weapon' },
+  { key: 'range', label: 'Ranged', section: 'Weapon' },
+  { key: 'head', label: 'Head', section: 'Armor' },
+  { key: 'body', label: 'Body', section: 'Armor' },
+  { key: 'hands', label: 'Hands', section: 'Armor' },
+  { key: 'legs', label: 'Legs', section: 'Armor' },
+  { key: 'feet', label: 'Feet', section: 'Armor' },
+];
+
 function EffectPcStrip({ pc }) {
   const {
     races, race, setRace, slots, sel, setSel, applyGearSet,
@@ -63,9 +84,6 @@ function EffectPcStrip({ pc }) {
     () => (races ?? []).map((r) => ({ id: r.id, label: r.label })),
     [races],
   );
-  const faceItems = slots?.face ?? [];
-  const bodyItems = slots?.body ?? [];
-  const mainItems = slots?.main ?? [];
 
   const gearItems = useMemo(() => {
     try {
@@ -108,30 +126,38 @@ function EffectPcStrip({ pc }) {
     if (entry) applyGearSet?.(entry);
   };
 
+  const slotRow = (s) => {
+    const items = slots?.[s.key];
+    if (!items?.length) return null;
+    const typed = s.section === 'Weapon' || s.section === 'Armor';
+    return (
+      <div className="pc-ctrl" key={s.key}>
+        <span className="pc-ctrl-label">{s.label}</span>
+        <Combo value={sel?.[s.key]} items={items} onChange={pick(s.key)} groupByType={typed} />
+      </div>
+    );
+  };
+
+  const section = (name) => {
+    const rows = PC_SLOTS.filter((s) => s.section === name).map(slotRow).filter(Boolean);
+    if (!rows.length) return null;
+    return (
+      <div className="fx-actor-section" key={name}>
+        <div className="fx-actor-sec-title">{name}</div>
+        {rows}
+      </div>
+    );
+  };
+
   return (
     <div className="fx-actor-pc">
       <div className="pc-ctrl">
         <span className="pc-ctrl-label">Race</span>
         <Combo value={race} items={raceItems} onChange={setRace} />
       </div>
-      {faceItems.length > 0 && (
-        <div className="pc-ctrl">
-          <span className="pc-ctrl-label">Face</span>
-          <Combo value={sel?.face} items={faceItems} onChange={pick('face')} />
-        </div>
-      )}
-      {bodyItems.length > 0 && (
-        <div className="pc-ctrl">
-          <span className="pc-ctrl-label">Body</span>
-          <Combo value={sel?.body} items={bodyItems} onChange={pick('body')} groupByType />
-        </div>
-      )}
-      {mainItems.length > 0 && (
-        <div className="pc-ctrl">
-          <span className="pc-ctrl-label">Main</span>
-          <Combo value={sel?.main} items={mainItems} onChange={pick('main')} groupByType />
-        </div>
-      )}
+      {slotRow(PC_SLOTS[0]) /* Face */}
+      {section('Weapon')}
+      {section('Armor')}
       <div className="pc-ctrl">
         <span className="pc-ctrl-label">Gearset</span>
         <Combo value={gearId} items={gearItems} onChange={onGear} placeholder="— none —" />

@@ -270,14 +270,14 @@ export function PlacementPanel({
             </button>
           </div>
 
-          <div className="plc-search">
-            <span className="icon">search</span>
+          <div className="list-search-wrap plc-search">
             <input
-              type="search"
+              type="text"
+              className="list-search"
               placeholder={
-                tab === 'vfx' ? 'Filter effect…'
-                  : tab === 'sfx' ? 'Filter sound…'
-                    : 'Filter mesh, sky, collision…'
+                tab === 'vfx' ? 'Search VFX…'
+                  : tab === 'sfx' ? 'Search SFX…'
+                    : 'Search objects…'
               }
               value={query}
               onChange={(e) => setQuery(e.target.value)}

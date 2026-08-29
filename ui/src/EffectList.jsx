@@ -101,7 +101,6 @@ export function EffectList({ onSelect, selectedPath }) {
   return (
     <div id="tree" className="panel list-panel">
       <div className="list-search-wrap">
-        <span className="icon">search</span>
         <input
           className="list-search"
           type="text"
