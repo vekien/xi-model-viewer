@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@headlessui/react';
 import { backend } from '../js/backend.js';
-import { gameCandidates, normRel, relFromAbs } from '../js/gamePath.js';
+import { gameCandidates, normRel, pathKey, relFromAbs } from '../js/gamePath.js';
 import { animDisplayName, groupAnimations, matchAnimRef, mergeModels, parseEntity, resolveScheduleClip } from '../js/dat.js';
 import { Renderer } from '../js/renderer.js';
 import { FileTree } from './FileTree.jsx';
@@ -1255,7 +1255,10 @@ export default function App({ launch = null }) {
    *   keepCamera  — don't re-fit the camera (gear swap on the same actor).
    */
   const loadModel = useCallback(async (paths, displayName, opts = {}) => {
-    const { focusPaths = null, weaponSlots = null, battleTable = null, parts = null, displayPath = null } = opts;
+    const {
+      focusPaths = null, weaponSlots = null, battleTable = null, parts = null,
+      displayPath = null, animOnlyPaths = null,
+    } = opts;
     // Keep framing when the caller asks (gear swap) or the user has already
     // orbit/pan/zoomed on an entity — browsing successive DATs shouldn't yank
     // the camera. Assets view switches force a fresh F-style fit.
@@ -1279,14 +1282,22 @@ export default function App({ launch = null }) {
       } else {
         setStatusText(`Loading ${displayName}…`);
       }
+      const settings0 = settingsRef.current;
+      // Schedule / motion packs: never HD (stubs empty the Anim list + WS play).
+      const animOnly = new Set(
+        (animOnlyPaths ?? focusPaths ?? []).map((p) => pathKey(p, settings0)),
+      );
       const parsed = [];
       const skipped = [];
-      const parse1 = async (path) => {
+      const parse1 = async (path, forceSkipHd = false) => {
         const settings = settingsRef.current;
         const rel = relFromAbs(path, settings);
+        const skipHd = forceSkipHd || animOnly.has(pathKey(path, settings));
+        const cands = rel !== path
+          ? gameCandidates(rel, settings, { skipHd })
+          : (skipHd ? gameCandidates(path, settings, { skipHd: true }) : [path]);
         const { path: resolved, data: buffer } = await backend.readPrefer(
-          // Already-absolute paths outside either root (Open DAT…) read as-is.
-          rel !== path ? gameCandidates(rel, settings) : [path],
+          cands.length ? cands : [path],
         );
         return { path: resolved, model: parseEntity(buffer, resolved) };
       };
@@ -1312,15 +1323,16 @@ export default function App({ launch = null }) {
       // only known after parsing it — resolve + merge that battle DAT now so the
       // weapon rests in its own stance (e.g. a greatsword held two-handed), not
       // the hand-to-hand fists idle. Non-focus, so it never enters the lists.
+      // Battle-idle packs are animation DATs → game/pivot only (never HD).
       if (battleTable && weaponSlots?.main?.length) {
-        const mainSet = new Set(weaponSlots.main.map((p) => p.toLowerCase()));
-        const weapon = parsed.find((e) => mainSet.has(e.path.toLowerCase()))?.model;
+        const mainSet = new Set(weaponSlots.main.map((p) => pathKey(p, settingsRef.current)));
+        const weapon = parsed.find((e) => mainSet.has(pathKey(e.path, settingsRef.current)))?.model;
         const type = weapon?.info?.weaponAnimationType;
         const rel = type != null ? battleTable[type] : null;
         if (rel) {
-          const abs = `${settingsRef.current.gamePath}\\${normRel(rel)}`;
-          if (!parsed.some((e) => relFromAbs(e.path, settingsRef.current).toLowerCase() === normRel(rel).toLowerCase())) {
-            try { parsed.push(await parse1(abs)); } catch (err) { console.warn(`battle idle ${abs}:`, err); }
+          const key = pathKey(rel, settingsRef.current);
+          if (!parsed.some((e) => pathKey(e.path, settingsRef.current) === key)) {
+            try { parsed.push(await parse1(rel, true)); } catch (err) { console.warn(`battle idle ${rel}:`, err); }
           }
         }
       }
@@ -1342,8 +1354,8 @@ export default function App({ launch = null }) {
       if (weaponSlots && refs.length > 127) {
         const overrides = new Map();
         for (const [slot, handRefIdx] of [['main', 127], ['sub', 126]]) {
-          const slotSet = new Set((weaponSlots[slot] ?? []).map((p) => p.toLowerCase()));
-          const weapon = parsed.find((e) => slotSet.has(e.path.toLowerCase()))?.model;
+          const slotSet = new Set((weaponSlots[slot] ?? []).map((p) => pathKey(p, settingsRef.current)));
+          const weapon = parsed.find((e) => slotSet.has(pathKey(e.path, settingsRef.current)))?.model;
           const stdIdx = weapon?.info?.standardJointIndex;
           if (stdIdx == null) continue;
           const grip = refs[stdIdx];
@@ -1383,11 +1395,11 @@ export default function App({ launch = null }) {
         .filter((g) => g.clip.jointTracks.size > 0 && g.clip.numFrames > 0);
       let schedSrc = model.schedules ?? [];
       if (focusPaths?.length) {
-        const fset = new Set(focusPaths.map((p) => p.toLowerCase()));
+        const fset = new Set(focusPaths.map((p) => pathKey(p, settingsRef.current)));
         const fBases = new Set();   // clip display-names (body-slot digit stripped)
         const fScheds = new Set();
         for (const { path, model: m } of parsed) {
-          if (!fset.has(path.toLowerCase())) continue;
+          if (!fset.has(pathKey(path, settingsRef.current))) continue;
           for (const a of m.animations) fBases.add(animDisplayName(a.id));
           for (const s of m.schedules ?? []) fScheds.add(s.id);
         }
@@ -1528,7 +1540,10 @@ export default function App({ launch = null }) {
       releaseOverlay();
       setStatusText(skipped.length ? `${skipped.length} missing DAT${skipped.length > 1 ? 's' : ''} skipped` : '');
       try {
-        localStorage.setItem(LAST_DAT_KEY, JSON.stringify({ paths, name: displayName, opts: { focusPaths, weaponSlots, battleTable, parts } }));
+        localStorage.setItem(LAST_DAT_KEY, JSON.stringify({
+          paths, name: displayName,
+          opts: { focusPaths, animOnlyPaths, weaponSlots, battleTable, parts },
+        }));
       } catch { /* quota / private mode */ }
       // Remember NPC/PC for Effects → back without a full reload.
       if (model.kind !== 'zone' && model.kind !== 'creation') {
@@ -1562,6 +1577,7 @@ export default function App({ launch = null }) {
       const abs = (p) => `${settingsRef.current.gamePath}\\${p}`;
       loadModel(entry.paths.map(abs), entry.name, {
         focusPaths: entry.focusPaths?.map(abs) ?? null,
+        animOnlyPaths: entry.animOnlyPaths?.map(abs) ?? null,
         weaponSlots: entry.weaponSlots
           ? Object.fromEntries(Object.entries(entry.weaponSlots).map(([k, v]) => [k, (v ?? []).map(abs)]))
           : null,

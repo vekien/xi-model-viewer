@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { backend } from '../js/backend.js';
 import { gameCandidates } from '../js/gamePath.js';
 import { parseAudioHeader, toAudioBuffer, FMT_ATRAC3 } from '../js/audio.js';
+import { Tooltip } from './Tooltip.jsx';
 
 // FFXI ships music across seven sound roots; each aligns with an expansion.
 const ROOTS = [
@@ -25,9 +26,18 @@ async function loadNames() {
   return new Map();
 }
 
+function trackMatches(t, q) {
+  if ((t.name || '').toLowerCase().includes(q)) return true;
+  if ((t.file || '').toLowerCase().includes(q)) return true;
+  if ((t.num || '').includes(q)) return true;
+  if (`music${(t.num || '').padStart(3, '0')}`.includes(q)) return true;
+  return false;
+}
+
 export function MusicList({ gamePath, hdPath = '', hdEnabled = false, onError, player }) {
   const [names, setNames] = useState(null);
   const [roots, setRoots] = useState(null);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     if (!gamePath) return;
@@ -64,15 +74,52 @@ export function MusicList({ gamePath, hdPath = '', hdEnabled = false, onError, p
     return () => { cancelled = true; };
   }, [gamePath]);
 
+  const q = query.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    if (!roots) return null;
+    if (!q) return roots;
+    const out = [];
+    for (const group of roots) {
+      const labelHit = (group.label || '').toLowerCase().includes(q)
+        || (group.root || '').toLowerCase().includes(q);
+      const tracks = labelHit
+        ? group.tracks
+        : group.tracks.filter((t) => trackMatches(t, q));
+      if (tracks.length) out.push({ ...group, tracks });
+    }
+    return out;
+  }, [roots, q]);
+
   return (
     <div id="tree" className="panel list-panel">
+      <div className="list-search-wrap">
+        <input
+          className="list-search"
+          type="text"
+          placeholder="Search music…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          spellCheck={false}
+        />
+        {query && (
+          <Tooltip content="Clear">
+            <button type="button" className="list-search-clear" onClick={() => setQuery('')}>
+              <span className="icon">close</span>
+            </button>
+          </Tooltip>
+        )}
+      </div>
       <div className="list-scroll">
         {roots === null && <div className="side-note">Scanning music…</div>}
         {roots?.length === 0 && <div className="side-note">No music found under the game folder.</div>}
-        {roots?.map((group) => (
+        {filtered && filtered.length === 0 && (
+          <div className="side-note">No music matches “{query.trim()}”.</div>
+        )}
+        {filtered?.map((group) => (
           <MusicGroup
             key={group.root}
             group={group}
+            searching={!!q}
             player={player}
             onError={onError}
             settings={{ gamePath, hdPath, hdEnabled }}
@@ -83,17 +130,18 @@ export function MusicList({ gamePath, hdPath = '', hdEnabled = false, onError, p
   );
 }
 
-function MusicGroup({ group, player, onError, settings }) {
+function MusicGroup({ group, searching, player, onError, settings }) {
   const [open, setOpen] = useState(group.root === 'sound');
+  const show = searching || open;
   return (
-    <div className={`node${open ? ' open' : ''}`}>
-      <div className="row" onClick={() => setOpen(!open)}>
+    <div className={`node${show ? ' open' : ''}`}>
+      <div className="row" onClick={searching ? undefined : () => setOpen(!open)}>
         <span className="caret icon">chevron_right</span>
         <span className="kind icon">library_music</span>
         <span>{group.label}</span>
         <span className="badge">{group.tracks.length}</span>
       </div>
-      {open && (
+      {show && (
         <div className="children">
           {group.tracks.map((t) => (
             <TrackRow key={t.file} track={t} player={player} onError={onError} settings={settings} />

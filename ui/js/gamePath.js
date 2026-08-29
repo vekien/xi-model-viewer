@@ -1,13 +1,21 @@
 /** Normalize a game-relative path to Windows-style separators. */
 export const normRel = (rel) => String(rel || '').replace(/\//g, '\\').replace(/^[\\/]+/, '');
 
+/** ROM-relative key for equality (HD/game/pivot abs → same `rom\…` key). */
+export function pathKey(path, settings) {
+  return normRel(relFromAbs(path, settings)).toLowerCase();
+}
+
 /**
  * Absolute path candidates for a game-relative **or** absolute path.
  * Order when toggles are on: Pivot → HD → game install.
  * Absolute paths under a known root are rewritten to the same relative key
  * so pivot/HD overrides apply even when the tree click was under Game/HD.
+ *
+ * @param {{ skipHd?: boolean }} [opts]  Animation/schedule DATs must not use HD
+ *   overrides (empty/stub packs break weapon skills and motion lists).
  */
-export function gameCandidates(relOrAbs, settings) {
+export function gameCandidates(relOrAbs, settings, opts = {}) {
   let r = normRel(relOrAbs);
   // Absolute path under game/hd/pivot → strip to ROM\…
   const stripped = relFromAbs(r, settings);
@@ -19,7 +27,7 @@ export function gameCandidates(relOrAbs, settings) {
   }
   const out = [];
   if (settings?.pivotEnabled && settings?.pivotPath) out.push(`${settings.pivotPath}\\${r}`);
-  if (settings?.hdEnabled && settings?.hdPath) out.push(`${settings.hdPath}\\${r}`);
+  if (!opts.skipHd && settings?.hdEnabled && settings?.hdPath) out.push(`${settings.hdPath}\\${r}`);
   if (settings?.gamePath) out.push(`${settings.gamePath}\\${r}`);
   // Last resort: original absolute path (Open DAT outside roots)
   if (/^[a-zA-Z]:\\/.test(normRel(relOrAbs)) || String(relOrAbs).startsWith('\\\\')) {

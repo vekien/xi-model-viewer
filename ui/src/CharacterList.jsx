@@ -358,7 +358,8 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
     // upper-body + waist companion packs (baked in dev/bake-lists.mjs) so
     // locomotion animates the whole body, not just the legs. They stay out of
     // focusPaths so they feed playback without flooding the Animation lists.
-    const paths = [r.base, ...(raceData.current.get(race)?.motionExtra ?? [])];
+    const motionExtra = raceData.current.get(race)?.motionExtra ?? [];
+    const paths = [r.base, ...motionExtra];
     const weaponSlots = {};
     // Per-part breakdown for the Details panel (label + which DATs each slot contributed).
     const parts = [{ key: 'race', label: 'Race', itemLabel: r.label, paths: [r.base] }];
@@ -383,7 +384,11 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
     // Focus = the schedule DATs only. Motion packs still load (schedules
     // resolve clips out of them) but must not flood the Animation lists.
     const focusPaths = act ? [...act.paths] : [];
-    if (act) paths.push(...focusPaths, ...(act.motionPaths ?? []));
+    const motionPaths = act?.motionPaths ?? [];
+    if (act) paths.push(...focusPaths, ...motionPaths);
+    // Motion / schedule packs must load from game (or pivot), never HD — HD
+    // stubs empty the Anim list and break weapon skills when HD is enabled.
+    const animOnlyPaths = [...motionExtra, ...focusPaths, ...motionPaths];
 
     const unique = [...new Set(paths)];
     // Prefix race so a shared face label never collapses two skeletons into one key.
@@ -412,6 +417,7 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
       paths: unique,
       displayPath,
       focusPaths,
+      animOnlyPaths,
       weaponSlots,
       // The equipped weapon rests in its own battle stance (btl): App resolves
       // the right entry by the weapon's animation type after parsing it.
