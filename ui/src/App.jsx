@@ -8,6 +8,7 @@ import { FileTree } from './FileTree.jsx';
 import { MenuBar } from './MenuBar.jsx';
 import { NpcList } from './NpcList.jsx';
 import { CharacterList, useCharacter } from './CharacterList.jsx';
+import { EffectActorsPanel } from './EffectActorsPanel.jsx';
 import { CreationList, useCreation } from './CreationList.jsx';
 import {
   buildCreationModel, parseSqleMotion, CreationAnimator, restoreCreationBind, CREATION_CLIPS,
@@ -41,7 +42,7 @@ import { armGeneratorPreview } from '../js/particlePreview.js';
 import { checkForUpdate, checkForUpdateManual, dismissUpdate } from '../js/update.js';
 import {
   zoneDatRelPath, zoneToModel, rebuildZoneDraws, buildPlacementDraws, translatePlacementDisplay,
-  clonePlacementPose, applyPlacementPose, posesEqual,
+  clonePlacementPose, applyPlacementPose, posesEqual, pickPvsRegion, applyPvsRegion,
 } from '../js/zoneModel.js';
 import { pickZoneAt } from '../js/zonePick.js';
 import { loadDatTypeLists, makeDatTypeLookup } from '../js/dattypes.js';
@@ -58,7 +59,7 @@ import { ensureXiToolsOnBoot } from '../js/toolsBoot.js';
 import { WeatherAudio } from '../js/particle/audio.js';
 import { toAudioBuffer, parseAudioHeader, FMT_ATRAC3 } from '../js/audio.js';
 import { parseImageDat, textureForSet } from '../js/images.js';
-import { inspectDat, parseInspectSkeleton, parseInspectRoute, parseInspectUiMenu, parseInspectUiElementGroup, parseInspectDataTable, inspectDmsg, attachDataTableNames } from '../js/dat/inspect.js';
+import { inspectDat, parseInspectSkeleton, parseInspectRoute, parseInspectUiMenu, parseInspectUiElementGroup, parseInspectDataTable, parseInspectEffectRoutine, parseInspectSpriteSheet, parseInspectParticleMesh, parseInspectKeyFrame, parseInspectWeightedMesh, inspectDmsg, attachDataTableNames } from '../js/dat/inspect.js';
 import { SkeletonModal } from './SkeletonModal.jsx';
 import { RouteModal } from './RouteModal.jsx';
 import { UiMenuModal } from './UiMenuModal.jsx';
@@ -183,6 +184,7 @@ const loadSettings = (gamePath) => {
     bgColor: localStorage.getItem('bgColor') || DEFAULT_BG,
     autoPlay: localStorage.getItem('autoPlay') === '1',
     autoWasdZones: localStorage.getItem('autoWasdZones') !== '0',
+    autoFocusZoneObject: localStorage.getItem('autoFocusZoneObject') !== '0',
     closeDatNotesOnSave: localStorage.getItem('closeDatNotesOnSave') === '1',
     showXiConsole: localStorage.getItem('showXiConsole') !== '0',
     autoCloseXiConsole: localStorage.getItem('autoCloseXiConsole') === '1',
@@ -616,6 +618,14 @@ export default function App({ launch = null }) {
   const [zoneBrightness, setZoneBrightness] = useState(0); // 0 = zone default, 1 = unlit
   const [showCollision, setShowCollision] = useState(false);
   const [showEffects, setShowEffects] = useState(true);
+  // Region culling: draw only the MZB visibility set for the region the camera
+  // is in, the way the client does. Off = every placement at once, which is
+  // what a viewer wants for an overview but stacks the far-region copies of
+  // geometry that zones like Ru'Aun Gardens carry.
+  const [regionCull, setRegionCull] = useState(() => localStorage.getItem('regionCull') !== '0');
+  const regionCullRef = useRef(regionCull);
+  regionCullRef.current = regionCull;
+  const [hasRegions, setHasRegions] = useState(false);
   // Camera readouts for the toolbar. Fly speed is mirrored from the camera each
   // frame; FOV is owned here and pushed down, since nothing else writes it.
   const [flySpeed, setFlySpeed] = useState(0);
@@ -628,7 +638,9 @@ export default function App({ launch = null }) {
   const fovRef = useRef(fov);
   fovRef.current = fov;
   const [showNavmesh, setShowNavmesh] = useState(false);
-  const [showSkybox, setShowSkyboxState] = useState(() => localStorage.getItem('skybox') === '1');
+  // Sky, clouds and weather shells are on unless the user turned them off —
+  // a zone without its weather isn't what the zone looks like.
+  const [showSkybox, setShowSkyboxState] = useState(() => localStorage.getItem('skybox') !== '0');
   // Persisted skybox preference — kept across zone switches and sessions.
   const setSkybox = useCallback((on) => {
     const next = !!on;
@@ -637,9 +649,12 @@ export default function App({ launch = null }) {
     if (rendererRef.current) rendererRef.current.showSkybox = next;
   }, []);
   const [hasCollision, setHasCollision] = useState(false);
-  /** Zone particle effects for Objects → Visual Effects tab. */
+  /** Zone particle effects for Objects → VFX tab. */
   const [effectGroups, setEffectGroups] = useState(null);
   const [vfxHiddenTick, setVfxHiddenTick] = useState(0);
+  /** Zone positional SFX for Objects → SFX tab. */
+  const [soundGroups, setSoundGroups] = useState(null);
+  const [sfxListTick, setSfxListTick] = useState(0);
   const [hasNavmesh, setHasNavmesh] = useState(false);
   const [hasSkybox, setHasSkybox] = useState(false);
   const [selectedDat, setSelectedDat] = useState('');
@@ -691,7 +706,9 @@ export default function App({ launch = null }) {
   const effectTokenRef = useRef(0);                         // drop stale effect-load results
   const zoneMusicRef = useRef(null);                        // zone_music.json (server zone_settings)
   const zoneMusicIdRef = useRef(null);                      // zone id of the loaded zone
-  const zoneCamKeyRef = useRef('');                         // path key for per-zone camera save
+  const zoneCamKeyRef = useRef('');
+  /** Zone fly/orbit can land anywhere — one F-style reset when leaving for Effects/PC/NPC. */
+  const forceCamResetFromZoneRef = useRef(false);
   const [zoneTrack, setZoneTrackState] = useState(null);    // resolved BGM for this zone + time
   const zoneTrackRef = useRef(null);
   const setZoneTrack = useCallback((t) => { zoneTrackRef.current = t; setZoneTrackState(t); }, []);
@@ -1002,7 +1019,7 @@ export default function App({ launch = null }) {
     }
     renderer.setFloorTileScale(floorTileScale);
     renderer.playbackSpeed = playbackSpeedRef.current;
-    renderer.showSkybox = localStorage.getItem('skybox') === '1';
+    renderer.showSkybox = localStorage.getItem('skybox') !== '0';
     // Unplaced orphans use per-row eyes in Objects (always eligible to draw).
     renderer.showUnplaced = true;
     // Restore View > Toggle WASD from last session.
@@ -1018,6 +1035,24 @@ export default function App({ launch = null }) {
     let shownFps = -1;
     let fpsFrames = 0;
     let fpsWindowStart = last;
+    let lastRegionCheck = 0;
+    // Resolve the camera to an MZB visibility set and re-bake only when the
+    // region actually changes — you have to cross a region boundary for that,
+    // so the steady-state cost is one box test per region every 150 ms.
+    const updateRegions = () => {
+      const model = modelRef.current;
+      if (!model || model.kind !== 'zone' || !model.pvsRegions?.length) return;
+      const want = regionCullRef.current ? pickPvsRegion(model, renderer.camera.target) : null;
+      if ((want?.ptr ?? null) === (model.activeRegion ?? null)) return;
+      if (!applyPvsRegion(model, want)) return;
+      rebuildZoneDraws(model);
+      renderer.reloadZoneBatches(model);
+      // Culling can drop two thirds of a zone, so say so rather than leaving it
+      // looking like geometry went missing.
+      setStatusText(want
+        ? `Region ${model.pvsRegions.indexOf(want) + 1}/${model.pvsRegions.length} — ${want.members.size} objects visible`
+        : 'No region — drawing every object');
+    };
     const frame = (now) => {
       raf = requestAnimationFrame(frame);
       // FPS cap (0 = uncapped): skip the draw when under the target interval.
@@ -1032,6 +1067,7 @@ export default function App({ launch = null }) {
       if (wasdRef.current && !renderer.camera.sequenceLock) {
         renderer.camera.flyUpdate(dt, heldKeys.current);
       }
+      if (now - lastRegionCheck > 150) { lastRegionCheck = now; updateRegions(); }
       renderer.render(dt);
       // The camera owns fly speed and changes it from the wheel, from zone vs
       // entity range presets and from localStorage, so mirror it here rather
@@ -1079,8 +1115,8 @@ export default function App({ launch = null }) {
         return;
       }
       if (k === 'f') {
-        rendererRef.current?.resetCamera();
         e.preventDefault();
+        focusOrResetCameraRef.current?.();
         return;
       }
       if (k === 'w' || k === 'a' || k === 's' || k === 'd' || k === 'q' || k === 'e') {
@@ -1213,10 +1249,12 @@ export default function App({ launch = null }) {
     const { focusPaths = null, weaponSlots = null, battleTable = null, parts = null, displayPath = null } = opts;
     // Keep framing when the caller asks (gear swap) or the user has already
     // orbit/pan/zoomed on an entity — browsing successive DATs shouldn't yank
-    // the camera. Zone → entity still fits (different scale/up-axis).
+    // the camera. Zone → entity always fits (wild fly pose + different scale/up).
     const prev = modelRef.current;
     const prevEntity = !!(prev && prev.kind !== 'zone' && !rendererRef.current?.effectMode);
-    const keepCamera = !!(opts.keepCamera
+    const forceFromZone = forceCamResetFromZoneRef.current;
+    if (forceFromZone) forceCamResetFromZoneRef.current = false;
+    const keepCamera = !forceFromZone && !!(opts.keepCamera
       || (rendererRef.current?.camera?.userFramed && prevEntity));
     // Gear swaps (keepCamera) are snappy — skip the full-screen overlay there.
     const showOverlay = !opts.keepCamera;
@@ -1396,6 +1434,8 @@ export default function App({ launch = null }) {
       // same actor keep the user's camera.
       if (keepCamera) renderer.snapFloorToFeet();
       else renderer.fitCamera();
+      // Leaving a zone: full F reset even if something else tried to keep framing.
+      if (forceFromZone) renderer.resetCamera();
 
       const statsOf = (models) => ({
         joints: models.find((m) => m.skeleton)?.skeleton.joints.length ?? null,
@@ -1460,6 +1500,7 @@ export default function App({ launch = null }) {
       setTexWindows([]);   // close texture windows from the previous model
       setObjectGroups(null);
       setEffectGroups(null);
+      setSoundGroups(null);
       setPlcSelected('');
       setHasCollision(false);
       setHasNavmesh(false);
@@ -1486,14 +1527,16 @@ export default function App({ launch = null }) {
         const view = leftViewRef.current === 'pc' || leftViewRef.current === 'npc'
           ? leftViewRef.current
           : (lastEntityRef.current?.view ?? 'npc');
-        lastEntityRef.current = {
-          view,
-          selectedPath: primaryPath.toLowerCase(),
-          modelPath: relativeName(primaryPath),
-          shownPath: primaryPath,
-          sourcePath: paths[paths.length - 1],
-          name: displayName,
-        };
+      lastEntityRef.current = {
+        view: leftViewRef.current === 'effects'
+          ? (effectActorTabRef.current === 'pc' ? 'pc' : 'npc')
+          : view,
+        selectedPath: primaryPath.toLowerCase(),
+        modelPath: relativeName(primaryPath),
+        shownPath: primaryPath,
+        sourcePath: paths[paths.length - 1],
+        name: displayName,
+      };
       }
       return { ok: true };
     } catch (err) {
@@ -1842,14 +1885,20 @@ export default function App({ launch = null }) {
       });
       setWasd(false);                    // effects orbit; fly controls would fight the framing
 
+      const forceFromZone = forceCamResetFromZoneRef.current;
+      if (forceFromZone) forceCamResetFromZoneRef.current = false;
+
       if (onActor) {
         // Keep the character mesh; composite particles like a zone weather pass.
         renderer.attachFxToActor = attachFxRef.current;
         renderer.attachEffectSystem(system, textures);
+        if (forceFromZone) renderer.resetCamera();
       } else {
         // Empty stage: wipe any prior model and frame the origin once.
-        const keepCamera = renderer.effectMode;
+        // Zone → Effects: full F framing (not keepView of the wild zone camera).
+        const keepCamera = !forceFromZone && renderer.effectMode;
         renderer.setEffectScene(system, textures, keepCamera);
+        if (forceFromZone) renderer.frameEffect();
         modelRef.current = null;
       }
       // Status bar + Data Struct always name the effect DAT (even on-actor).
@@ -2305,7 +2354,7 @@ export default function App({ launch = null }) {
         ? parsed.placements.map((p, i) => ({
           index: p.index ?? i,
           meshId: p.meshId || '',
-          fileIdLink: p.fileIdLink ?? null,
+          subAreaId: p.subAreaId ?? null,
           pos: p.pos || [0, 0, 0],
           rot: p.rot || [0, 0, 0],
           scale: p.scale || [1, 1, 1],
@@ -2457,6 +2506,7 @@ export default function App({ launch = null }) {
       );
       const hasSky = !!skyDome || hasClouds;
       setHasCollision(!!model.collision?.positions?.length);
+      setHasRegions(!!model.pvsRegions?.length);
       setHasSkybox(hasSky);
       setWeatherList(envs ? listWeathers(envs) : []);
       setWeather(weather0 || '');
@@ -2466,7 +2516,7 @@ export default function App({ launch = null }) {
       renderer.showCollision = false;
       renderer.showNavmesh = false;
       // Restore the saved skybox preference (off if this zone has no sky).
-      setSkybox(hasSky && localStorage.getItem('skybox') === '1');
+      setSkybox(hasSky && localStorage.getItem('skybox') !== '0');
       // Unplaced: always drawable; default hidden via per-row userHidden eyes.
       renderer.showUnplaced = true;
       for (const p of model.zonePlacements ?? []) {
@@ -2490,6 +2540,8 @@ export default function App({ launch = null }) {
       }).catch(() => { setHasNavmesh(false); });
       setObjectGroups(model.objectGroups ?? []);
       setEffectGroups(particleSystem?.listEffectGroups?.() ?? []);
+      setSoundGroups(particleSystem?.listSoundGroups?.() ?? []);
+      setSfxListTick((n) => n + 1);
       setPlcSelected('');
       setPlcOpen(true);
       // Fresh zone — drop edit history / originals from the previous area.
@@ -2557,9 +2609,26 @@ export default function App({ launch = null }) {
     }
     r.setMeshSourceFilter(paths);
   }, []);
+  // Effects ACTORS panel can drive the same PC composer as Assets > Characters.
+  const [effectActorTab, setEffectActorTab] = useState('pc'); // 'pc' | 'npc'
+  const effectActorTabRef = useRef(effectActorTab);
+  effectActorTabRef.current = effectActorTab;
+  const loadEffectNpc = useCallback((entry) => {
+    setEffectActorTab('npc');
+    effectActorTabRef.current = 'npc';
+    loadNpcEntry({ ...entry, keepCamera: true });
+  }, [loadNpcEntry]);
+  const loadEffectPc = useCallback((entry) => {
+    setEffectActorTab('pc');
+    effectActorTabRef.current = 'pc';
+    loadNpcEntry({ ...entry, keepCamera: leftViewRef.current === 'effects' });
+  }, [loadNpcEntry]);
   const pc = useCharacter({
-    enabled: leftView === 'pc' && !!settings?.gamePath,
-    onLoad: loadNpcEntry,
+    enabled: (leftView === 'pc' || leftView === 'effects') && !!settings?.gamePath,
+    onLoad: (entry) => {
+      if (leftViewRef.current === 'effects') loadEffectPc(entry);
+      else loadNpcEntry(entry);
+    },
     onError: (msg) => setStatusText(msg),
     onIsolationChange: applyPcIsolation,
   });
@@ -3060,19 +3129,20 @@ export default function App({ launch = null }) {
 
   // --- texture windows -----------------------------------------------------
 
-  const openTexture = useCallback((tex) => {
+  const openTexture = useCallback((tex, opts = {}) => {
+    const initialPos = opts.initialPos || null;
     setTexWindows((prev) => {
       const i = prev.findIndex((w) => w.tex.name === tex.name);
       if (i >= 0) {
         const next = prev.slice();
         const [w] = next.splice(i, 1);
-        next.push(w);
+        next.push(initialPos ? { ...w, initialPos } : w);
         raiseModal(`tex:${w.id}`);
         return next;
       }
       const id = ++texIdRef.current;
       raiseModal(`tex:${id}`);
-      return [...prev, { id, tex, cascade: id - 1 }];
+      return [...prev, { id, tex, cascade: id - 1, initialPos }];
     });
   }, [raiseModal]);
 
@@ -3858,7 +3928,7 @@ export default function App({ launch = null }) {
       .map((p, i) => ({
         index: Number.isFinite(p.index) && p.index >= 0 ? p.index : i,
         meshId: p.meshId || p.mesh || p.name || '',
-        fileIdLink: p.fileIdLink ?? null,
+        subAreaId: p.subAreaId ?? null,
         pos: p.rawPos || p.pos || [0, 0, 0],
         rot: p.rot || [0, 0, 0],
         scale: p.scale || [1, 1, 1],
@@ -3979,7 +4049,19 @@ export default function App({ launch = null }) {
     }
     let table = null;
     try {
-      table = parseInspectDataTable(dataBufRef.current, res.offset);
+      // 0x07 / 0x21 / 0x1F share the table modal.
+      if (res?.isEffectRoutine || res?.type === 0x07 || res?.name === 'EffectRoutine') {
+        table = parseInspectEffectRoutine(dataBufRef.current, res.offset);
+      } else if (res?.isSpriteSheet || res?.type === 0x21 || res?.name === 'SpriteSheetMesh') {
+        table = parseInspectSpriteSheet(dataBufRef.current, res.offset);
+      } else if (res?.isParticleMesh || res?.type === 0x1F || res?.name === 'ParticleMesh') {
+        table = parseInspectParticleMesh(dataBufRef.current, res.offset);
+      } else if (res?.isKeyFrame || res?.type === 0x19 || res?.name === 'ParticleKeyFrameData') {
+        table = parseInspectKeyFrame(dataBufRef.current, res.offset);
+      } else if (res?.isWeightedMesh || res?.type === 0x25 || res?.name === 'WeightedMesh') {
+        table = parseInspectWeightedMesh(dataBufRef.current, res.offset);
+      }
+      if (!table?.rows) table = parseInspectDataTable(dataBufRef.current, res.offset);
     } catch (e) {
       console.warn('parseInspectDataTable', e);
     }
@@ -3991,24 +4073,72 @@ export default function App({ launch = null }) {
     const key = `dtable:${res.offset}`;
     const offset = res.offset;
 
+    // Sprite / particle mesh + atlas: tile side-by-side so the texture isn't buried.
+    let tablePos = null;
+    let texPos = null;
+    const pairTex = table.kind === 'spriteSheet' || table.kind === 'particleMesh' || table.kind === 'weightedMesh';
+    if (pairTex) {
+      const vw = window.innerWidth || 1200;
+      const vh = window.innerHeight || 800;
+      const gap = 14;
+      const top = Math.max(56, Math.round(vh * 0.1));
+      const tableW = Math.min(560, Math.round(vw * 0.48));
+      const texW = 300;
+      const total = tableW + gap + texW;
+      const left0 = Math.max(16, Math.round((vw - total) / 2));
+      tablePos = { x: left0, y: top };
+      texPos = { x: left0 + tableW + gap, y: top };
+    }
+
     const pushWin = (tbl) => {
       setDataTableWindows((prev) => {
         const i = prev.findIndex((w) => w.key === key);
         if (i >= 0) {
           const copy = prev.slice();
           const [hit] = copy.splice(i, 1);
-          const next = { ...hit, table: tbl, title, offset };
+          const next = { ...hit, table: tbl, title, offset, initialPos: tablePos };
           copy.push(next);
           raiseModal(`dtable:${next.id}`);
           return copy;
         }
         const id = ++dataTableIdRef.current;
         raiseModal(`dtable:${id}`);
-        return [...prev, { id, key, title, table: tbl, offset }];
+        return [...prev, { id, key, title, table: tbl, offset, initialPos: tablePos }];
       });
     };
 
     pushWin(table);
+
+    // Sprite / particle mesh → open atlas texture(s) when this DAT has them.
+    const texNames = table.kind === 'spriteSheet' || table.kind === 'particleMesh' || table.kind === 'weightedMesh'
+      ? (table.textureNames?.length ? table.textureNames : (table.textureName ? [table.textureName] : []))
+      : [];
+    if (texNames.length) {
+      try {
+        const map = ensureDataTextures();
+        if (map?.size) {
+          let slot = 0;
+          for (const raw of texNames) {
+            const want = String(raw).replace(/\s+/g, '').toLowerCase();
+            if (!want) continue;
+            let tex = map.get(raw) || null;
+            if (!tex) {
+              for (const [k, v] of map) {
+                const kk = String(k).replace(/\s+/g, '').toLowerCase();
+                if (kk === want || kk.includes(want) || want.includes(kk)) { tex = v; break; }
+              }
+            }
+            if (!tex) continue;
+            const pos = texPos
+              ? { x: texPos.x + slot * 28, y: texPos.y + slot * 28 }
+              : null;
+            openTexture(tex, { initialPos: pos });
+            slot += 1;
+            if (slot >= 4) break; // don't flood the desktop
+          }
+        }
+      } catch { /* texture optional */ }
+    }
 
     // SpellList / AbilityList: pull names from d_msg name DATs when game path is set.
     const nameDat = table.nameDat;
@@ -4031,7 +4161,7 @@ export default function App({ launch = null }) {
           console.warn('name DAT load failed', nameDat, e);
         });
     }
-  }, [raiseModal]);
+  }, [raiseModal, ensureDataTextures, openTexture]);
 
   const closeRouteWin = useCallback((id) => {
     setRouteWindows((prev) => prev.filter((w) => w.id !== id));
@@ -4136,7 +4266,7 @@ export default function App({ launch = null }) {
         zonePlacementsRef.current = placements.map((p, i) => ({
           index: p.index ?? i,
           meshId: p.meshId || '',
-          fileIdLink: p.fileIdLink ?? null,
+          subAreaId: p.subAreaId ?? null,
           pos: p.pos || [0, 0, 0],
           rot: p.rot || [0, 0, 0],
           scale: p.scale || [1, 1, 1],
@@ -4298,6 +4428,7 @@ export default function App({ launch = null }) {
     setPlayingState(false);
     setObjectGroups(null);
     setEffectGroups(null);
+    setSoundGroups(null);
     setPlcOpen(false);
     setPlcSelected('');
     setWeatherList([]);
@@ -4406,7 +4537,25 @@ export default function App({ launch = null }) {
       setEffectSchedule('');
       setEffectTransport('stopped');
     }
-  }, [leftView, unloadModel, player, setZoneTrack, browserKind]);
+
+    // Zone fly/orbit can be anywhere — one F-style reset when landing on Effects/PC/NPC.
+    if (prevZone && (leftView === 'effects' || leftView === 'pc' || leftView === 'npc')) {
+      forceCamResetFromZoneRef.current = true;
+      setWasd(false);
+      const r = rendererRef.current;
+      if (r) {
+        r.camera?.setMode?.('orbit');
+        if (leftView === 'effects') {
+          // Empty stage (or kept actor) — frame like F immediately; loads re-frame too.
+          r.effectMode = true;
+          r.frameEffect();
+          if (keepActorForEffects) r.resetCamera();
+        } else if (modelRef.current) {
+          r.resetCamera();
+        }
+      }
+    }
+  }, [leftView, unloadModel, player, setZoneTrack, browserKind, setWasd]);
 
   const loadImage = useCallback(async (entry) => {
     const settings = settingsRef.current;
@@ -4865,6 +5014,7 @@ export default function App({ launch = null }) {
     localStorage.setItem('bgColor', draft.bgColor);
     localStorage.setItem('autoPlay', draft.autoPlay ? '1' : '0');
     localStorage.setItem('autoWasdZones', draft.autoWasdZones === false ? '0' : '1');
+    localStorage.setItem('autoFocusZoneObject', draft.autoFocusZoneObject === false ? '0' : '1');
     localStorage.setItem('closeDatNotesOnSave', draft.closeDatNotesOnSave ? '1' : '0');
     localStorage.setItem('showXiConsole', draft.showXiConsole === false ? '0' : '1');
     localStorage.setItem('autoCloseXiConsole', draft.autoCloseXiConsole ? '1' : '0');
@@ -4884,6 +5034,7 @@ export default function App({ launch = null }) {
       pivotEnabled,
       xiPath,
       autoWasdZones: draft.autoWasdZones !== false,
+      autoFocusZoneObject: draft.autoFocusZoneObject !== false,
       closeDatNotesOnSave: !!draft.closeDatNotesOnSave,
       showXiConsole: draft.showXiConsole !== false,
       autoCloseXiConsole: !!draft.autoCloseXiConsole,
@@ -4994,7 +5145,7 @@ export default function App({ launch = null }) {
         break;
       }
       case 'reset-camera':
-        rendererRef.current.resetCamera();
+        focusOrResetCamera();
         break;
       case 'toggle-wasd':
         setWasd(!wasdRef.current);
@@ -5172,6 +5323,13 @@ export default function App({ launch = null }) {
       case 'toggle-skybox':
         setSkybox(!showSkybox);
         break;
+      case 'toggle-region-cull':
+        setRegionCull((v) => {
+          const next = !v;
+          try { localStorage.setItem('regionCull', next ? '1' : '0'); } catch { /* quota */ }
+          return next;
+        });
+        break;
       case 'toggle-axes':
         setShowAxes((v) => {
           const next = !v;
@@ -5239,12 +5397,59 @@ export default function App({ launch = null }) {
 
   /** Frame camera on a zone placement (or all instances of a mesh type). */
   const focusBounds = useCallback((min, max) => {
-    const cam = rendererRef.current?.camera;
+    const r = rendererRef.current;
+    const cam = r?.camera;
     if (!cam || !min || !max) return;
     if (!wasdRef.current && settingsRef.current?.autoWasdZones !== false) setWasd(true);
-    cam.fit(min, max);
+    const canvas = r.canvas;
+    const aspect = canvas?.clientWidth > 0 && canvas?.clientHeight > 0
+      ? canvas.clientWidth / canvas.clientHeight
+      : undefined;
+    cam.fit(min, max, aspect ? { aspect } : undefined);
     // fit() already reseats fly mode when active
   }, [setWasd]);
+
+  /**
+   * F / Reset Camera: with a zone object selected, frame that selection;
+   * otherwise frame the whole model/zone (fixed FOV fit — not the old radius×2.4).
+   */
+  const focusOrResetCamera = useCallback(() => {
+    const r = rendererRef.current;
+    if (!r) return;
+    const model = modelRef.current;
+    if (model?.kind === 'zone') {
+      const key = plcSelectedRef.current || '';
+      const placements = model.zonePlacements || [];
+      if (key.startsWith('inst:')) {
+        const name = key.slice(5);
+        const p = placements.find((x) => x.name === name);
+        if (p?.bounds) {
+          focusBounds(p.bounds.min, p.bounds.max);
+          return;
+        }
+      } else if (key.startsWith('mesh:')) {
+        const mesh = key.slice(5);
+        let min = [Infinity, Infinity, Infinity];
+        let max = [-Infinity, -Infinity, -Infinity];
+        let any = false;
+        for (const p of placements) {
+          if (p.mesh !== mesh || !p.bounds) continue;
+          any = true;
+          for (let i = 0; i < 3; i++) {
+            if (p.bounds.min[i] < min[i]) min[i] = p.bounds.min[i];
+            if (p.bounds.max[i] > max[i]) max[i] = p.bounds.max[i];
+          }
+        }
+        if (any) {
+          focusBounds(min, max);
+          return;
+        }
+      }
+    }
+    r.resetCamera();
+  }, [focusBounds]);
+  const focusOrResetCameraRef = useRef(focusOrResetCamera);
+  focusOrResetCameraRef.current = focusOrResetCamera;
 
   const focusEffectInstance = useCallback((entry) => {
     if (!entry?.pos) return;
@@ -5276,6 +5481,59 @@ export default function App({ launch = null }) {
       [max[0] + pad, max[1] + pad, max[2] + pad],
     );
   }, [focusBounds]);
+
+  const refreshSoundGroups = useCallback(() => {
+    const sys = rendererRef.current?.particleSystem;
+    setSoundGroups(sys?.listSoundGroups?.() ?? []);
+    setSfxListTick((n) => n + 1);
+  }, []);
+
+  const focusSoundInstance = useCallback((entry) => {
+    if (!entry?.pos) return;
+    const [x, y, z] = entry.pos;
+    const pad = Math.max(6, (entry.far || 0) * 0.05, 4);
+    focusBounds([x - pad, y - pad, z - pad], [x + pad, y + pad, z + pad]);
+    const se = entry.soundId != null ? `se${String(entry.soundId).padStart(6, '0')}` : '';
+    setStatusText(`${entry.name}${se ? `  ${se}` : ''}${entry.active === false ? '  (out of range)' : ''}`);
+    plcSelectedRef.current = entry.key || '';
+    setPlcSelected(entry.key || '');
+  }, [focusBounds]);
+
+  const focusSoundGroup = useCallback((group) => {
+    const list = group?.instances;
+    if (!list?.length) return;
+    let min = [Infinity, Infinity, Infinity];
+    let max = [-Infinity, -Infinity, -Infinity];
+    let any = false;
+    for (const p of list) {
+      const pos = p.pos;
+      if (!pos) continue;
+      any = true;
+      for (let i = 0; i < 3; i++) {
+        if (pos[i] < min[i]) min[i] = pos[i];
+        if (pos[i] > max[i]) max[i] = pos[i];
+      }
+    }
+    if (!any) return;
+    const pad = 8;
+    focusBounds(
+      [min[0] - pad, min[1] - pad, min[2] - pad],
+      [max[0] + pad, max[1] + pad, max[2] + pad],
+    );
+    const se = group.soundId != null ? `se${String(group.soundId).padStart(6, '0')}` : group.name;
+    setStatusText(`${se} · ${list.length} source${list.length === 1 ? '' : 's'}`);
+    plcSelectedRef.current = `sfxg:${group.soundId ?? group.name}`;
+    setPlcSelected(`sfxg:${group.soundId ?? group.name}`);
+  }, [focusBounds]);
+
+  const playZoneSfx = useCallback((entry) => {
+    const soundId = entry?.soundId;
+    if (soundId == null) {
+      setStatusText('No sound id on this source');
+      return;
+    }
+    playDataSound({ soundId, offset: entry.key || soundId });
+  }, [playDataSound]);
 
   // Live weather/time for the TOD clock and sequencer (avoid stale closures).
   const todStateRef = useRef({ weather: '', minutes: 12 * 60 });
@@ -5321,6 +5579,8 @@ export default function App({ launch = null }) {
           renderer.particleSystem?.rebuildEffectCatalog?.();
           setEffectGroups(renderer.particleSystem?.listEffectGroups?.() ?? []);
           setVfxHiddenTick((n) => n + 1);
+          setSoundGroups(renderer.particleSystem?.listSoundGroups?.() ?? []);
+          setSfxListTick((n) => n + 1);
         } else {
           // Smooth sun / ambient every tick; sky colours catch up on a short lag.
           renderer.setTerrainLighting(env.getTerrainLighting());
@@ -5424,10 +5684,11 @@ export default function App({ launch = null }) {
     syncZonePickHighlight();
   }, [syncZonePickHighlight]);
 
-  /** Panel click: select + frame camera (existing behaviour). */
+  /** Panel click: select, and frame the camera unless Auto Focus is off. */
   const focusPlacementGroup = useCallback((group) => {
     if (!group?.instances?.length) return;
     selectPlacementGroup(group);
+    if (settingsRef.current?.autoFocusZoneObject === false) return;
     let min = [Infinity, Infinity, Infinity];
     let max = [-Infinity, -Infinity, -Infinity];
     for (const p of group.instances) {
@@ -5444,6 +5705,7 @@ export default function App({ launch = null }) {
   const focusPlacementInstance = useCallback((p) => {
     if (!p) return;
     selectPlacementInstance(p);
+    if (settingsRef.current?.autoFocusZoneObject === false) return;
     if (p.bounds) focusBounds(p.bounds.min, p.bounds.max);
   }, [focusBounds, selectPlacementInstance]);
 
@@ -5816,7 +6078,7 @@ export default function App({ launch = null }) {
         <SettingsModal
           open={settingsOpen}
           initial={{
-            ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, closeDatNotesOnSave: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
+            ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, autoFocusZoneObject: true, closeDatNotesOnSave: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
             showGrid,
             showAxes,
           }}
@@ -5855,10 +6117,12 @@ export default function App({ launch = null }) {
           navmesh: showNavmesh,
           soundMarkers: showSoundMarkers,
           skybox: showSkybox,
+          regionCull,
           effects: showEffects,
           axes: showAxes,
           grid: showGrid,
           noCollision: !hasCollision,
+          noRegions: !hasRegions,
           noNavmesh: !hasNavmesh,
           noSkybox: !hasSkybox,
           noHdPath: !settings?.hdPath,
@@ -6099,6 +6363,13 @@ export default function App({ launch = null }) {
           onToggleEffectGroupVisible={toggleEffectGroupVisible}
           onSelectEffect={focusEffectInstance}
           onSelectEffectGroup={focusEffectGroup}
+          soundGroups={soundGroups}
+          sfxListTick={sfxListTick}
+          onRefreshSoundGroups={refreshSoundGroups}
+          onSelectSound={focusSoundInstance}
+          onSelectSoundGroup={focusSoundGroup}
+          onPlaySound={playZoneSfx}
+          playingSoundKey={playingSoundKey}
           onResetPlacement={(p) => {
             rememberOriginalPose(p);
             resetPlacementPose(p);
@@ -6125,12 +6396,20 @@ export default function App({ launch = null }) {
         />
       )}
 
-      {/* Standalone effect: Schedule picker + transport + speed (no scrubber —
-          a live particle sim isn't frame-seekable). */}
+      {/* Effects: Options transport + Actors (PC/NPC) stacked on the right. */}
       {!dataStructOpen
         && ((leftView === 'effects') || (leftView === 'files' && browserKind === 'effect'))
         && effectEntry && (
-        <AnimationPanel anim={effectAnim} />
+        <div id="effect-stack">
+          <AnimationPanel anim={effectAnim} />
+          <EffectActorsPanel
+            tab={effectActorTab}
+            onTab={setEffectActorTab}
+            pc={pc}
+            selectedPath={selectedDat}
+            onSelectNpc={loadEffectNpc}
+          />
+        </div>
       )}
 
       {/* Left floating bar: DAT path + Data Struct toggle */}
@@ -6303,6 +6582,7 @@ export default function App({ launch = null }) {
           key={w.id}
           tex={w.tex}
           cascadeOffset={w.cascade}
+          initialPos={w.initialPos || null}
           zIndex={modalZ(`tex:${w.id}`, 210 + i)}
           onClose={() => closeTexture(w.id)}
           onFocus={() => focusTexture(w.id)}
@@ -6351,6 +6631,7 @@ export default function App({ launch = null }) {
           key={w.id}
           table={w.table}
           title={w.title}
+          initialPos={w.initialPos || null}
           zIndex={modalZ(`dtable:${w.id}`, 2110 + i)}
           onClose={() => setDataTableWindows((prev) => prev.filter((x) => x.id !== w.id))}
           onFocus={() => raiseModal(`dtable:${w.id}`)}
@@ -6437,7 +6718,7 @@ export default function App({ launch = null }) {
       <SettingsModal
         open={settingsOpen}
         initial={{
-          ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, closeDatNotesOnSave: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
+          ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, autoFocusZoneObject: true, closeDatNotesOnSave: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
           showGrid,
           showAxes,
         }}

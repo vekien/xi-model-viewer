@@ -1775,13 +1775,24 @@ export class Renderer {
     if (!this.pose || !this.model) return;
     const bounds = this.computeBounds();
     if (!bounds) return;
-    // Bounds are DAT; the camera lives in display space.
-    const a = toEntityPt(bounds.min);
-    const b = toEntityPt(bounds.max);
-    this.camera.fit(
-      [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.min(a[2], b[2])],
-      [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.max(a[2], b[2])],
-    );
+    // Zones: zoneBounds are already display-space (−x,−y,z). Entities: mesh
+    // bounds are DAT Y-down → map through ENTITY_ROT to match the draw pass.
+    let min;
+    let max;
+    if (this.model.kind === 'zone') {
+      min = bounds.min;
+      max = bounds.max;
+    } else {
+      const a = toEntityPt(bounds.min);
+      const b = toEntityPt(bounds.max);
+      min = [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.min(a[2], b[2])];
+      max = [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.max(a[2], b[2])];
+    }
+    const canvas = this.canvas;
+    const aspect = canvas?.clientWidth > 0 && canvas?.clientHeight > 0
+      ? canvas.clientWidth / canvas.clientHeight
+      : undefined;
+    this.camera.fit(min, max, aspect ? { aspect } : undefined);
     this.snapFloorToFeet(bounds);
   }
 

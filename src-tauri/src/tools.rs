@@ -156,25 +156,122 @@ fn emit_log(app: &AppHandle, line: impl AsRef<str>) {
 
 fn gh_client() -> reqwest::blocking::Client {
     reqwest::blocking::Client::builder()
-        .user_agent("xi-model-viewer")
+        // GitHub asks for a descriptive UA; bare short names sometimes get 403s.
+        .user_agent(format!(
+            "xi-model-viewer/{} (+https://github.com/{GH_OWNER}/xi-model-viewer)",
+            env!("CARGO_PKG_VERSION")
+        ))
         .timeout(Duration::from_secs(120))
         .build()
         .expect("http client")
 }
 
+/// Prefer the JSON API; on 403 rate-limit (common for unauthenticated 60/hr),
+/// fall back to the public releases/latest redirect + known zip asset name so
+/// Install/Update still works without a token.
 fn fetch_latest_release() -> Result<serde_json::Value, String> {
+    match fetch_latest_release_api() {
+        Ok(v) => Ok(v),
+        Err(api_err) => fetch_latest_release_html_fallback()
+            .map_err(|fb| format!("{api_err} (HTML fallback also failed: {fb})")),
+    }
+}
+
+fn fetch_latest_release_api() -> Result<serde_json::Value, String> {
     let url = format!("https://api.github.com/repos/{GH_OWNER}/{GH_REPO}/releases/latest");
-    let mut req = gh_client().get(&url);
+    let mut req = gh_client()
+        .get(&url)
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28");
     if let Ok(tok) = std::env::var("GITHUB_TOKEN") {
         if !tok.trim().is_empty() {
             req = req.bearer_auth(tok.trim());
         }
     }
     let resp = req.send().map_err(|e| format!("GitHub request failed: {e}"))?;
-    if !resp.status().is_success() {
-        return Err(format!("GitHub HTTP {}", resp.status()));
+    let status = resp.status();
+    if !status.is_success() {
+        let remaining = resp
+            .headers()
+            .get("x-ratelimit-remaining")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("?")
+            .to_string();
+        let reset = resp
+            .headers()
+            .get("x-ratelimit-reset")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.parse::<i64>().ok());
+        let reset_hint = reset
+            .map(|ts| {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(0);
+                let mins = ((ts - now).max(0) + 59) / 60;
+                format!("; try again in ~{mins} min, or set GITHUB_TOKEN")
+            })
+            .unwrap_or_else(String::new);
+        let body = resp.text().unwrap_or_default();
+        let short: String = body.chars().take(160).collect();
+        return Err(if short.is_empty() {
+            format!("GitHub HTTP {status} (rate remaining {remaining}{reset_hint})")
+        } else {
+            format!("GitHub HTTP {status} (rate remaining {remaining}{reset_hint}): {short}")
+        });
     }
     resp.json().map_err(|e| format!("bad GitHub JSON: {e}"))
+}
+
+/// No API quota: follow /releases/latest → tag page, build the zip asset URL
+/// (`xi-tools-vX.Y.Z.zip` as published on the repo).
+fn fetch_latest_release_html_fallback() -> Result<serde_json::Value, String> {
+    let client = reqwest::blocking::Client::builder()
+        .user_agent(format!(
+            "xi-model-viewer/{} (+https://github.com/{GH_OWNER}/xi-model-viewer)",
+            env!("CARGO_PKG_VERSION")
+        ))
+        .timeout(Duration::from_secs(60))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let latest = format!("https://github.com/{GH_OWNER}/{GH_REPO}/releases/latest");
+    let resp = client
+        .get(&latest)
+        .send()
+        .map_err(|e| format!("releases/latest: {e}"))?;
+    let loc = resp
+        .headers()
+        .get(reqwest::header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+        .ok_or_else(|| {
+            format!(
+                "no redirect from releases/latest (HTTP {})",
+                resp.status()
+            )
+        })?;
+
+    // .../releases/tag/v1.5.12
+    let tag = loc
+        .rsplit('/')
+        .next()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| format!("could not parse tag from {loc}"))?;
+
+    let name = format!("xi-tools-{tag}.zip");
+    let url = format!("https://github.com/{GH_OWNER}/{GH_REPO}/releases/download/{tag}/{name}");
+
+    // Same shape pick_zip_asset expects from the API payload.
+    Ok(serde_json::json!({
+        "tag_name": tag,
+        "assets": [{
+            "name": name,
+            "browser_download_url": url,
+        }]
+    }))
 }
 
 pub fn tools_status_local() -> ToolsStatus {
@@ -194,30 +291,39 @@ pub fn tools_status_local() -> ToolsStatus {
     }
 }
 
-fn tools_status_sync() -> ToolsStatus {
-    let mut st = tools_status_local();
-    match fetch_latest_release() {
-        Ok(rel) => {
-            if let Some(tag) = rel.get("tag_name").and_then(|v| v.as_str()) {
-                st.latest_version = Some(normalize_version(tag));
-                st.update_available =
-                    (is_newer(tag, &st.local_version) || !st.installed) && !st.using_local_override;
-            }
-        }
-        Err(e) => st.error = Some(e),
-    }
-    st
+/// Disk-only. Does **not** call GitHub — Settings / boot status must not burn
+/// the unauthenticated API quota. Use `tools_check_updates` when the user (or
+/// a deliberate boot update pass) asks for a release check.
+#[tauri::command]
+pub fn tools_status() -> ToolsStatus {
+    tools_status_local()
 }
 
+/// One network round-trip to compare the managed install against GitHub latest.
 #[tauri::command]
-pub async fn tools_status() -> ToolsStatus {
-    tauri::async_runtime::spawn_blocking(tools_status_sync)
-        .await
-        .unwrap_or_else(|e| {
-            let mut st = tools_status_local();
-            st.error = Some(format!("status task failed: {e}"));
-            st
-        })
+pub async fn tools_check_updates() -> ToolsStatus {
+    tauri::async_runtime::spawn_blocking(|| {
+        let mut st = tools_status_local();
+        if st.using_local_override {
+            return st;
+        }
+        match fetch_latest_release() {
+            Ok(rel) => {
+                if let Some(tag) = rel.get("tag_name").and_then(|v| v.as_str()) {
+                    st.latest_version = Some(normalize_version(tag));
+                    st.update_available = is_newer(tag, &st.local_version) || !st.installed;
+                }
+            }
+            Err(e) => st.error = Some(e),
+        }
+        st
+    })
+    .await
+    .unwrap_or_else(|e| {
+        let mut st = tools_status_local();
+        st.error = Some(format!("update check failed: {e}"));
+        st
+    })
 }
 
 #[tauri::command]

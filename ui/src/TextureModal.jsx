@@ -7,13 +7,17 @@ import { Tooltip } from './Tooltip.jsx';
  * Draggable floating window showing a single decoded texture on a checkerboard
  * (so alpha is visible). Opened from the Details panel's texture list; title is
  * the texture's name. Small textures are upscaled with crisp nearest-neighbour.
- * Always opens centered; drag to move. zIndex from App stacks focus order.
+ * Default center; optional initialPos pins first open (e.g. beside a sheet table).
  */
-export function TextureModal({ tex, onClose, onFocus, zIndex = 210 }) {
+export function TextureModal({ tex, onClose, onFocus, zIndex = 210, initialPos = null }) {
   const canvasRef = useRef(null);
   const panelRef = useRef(null);
   const dragState = useRef(null);
-  const [pos, setPos] = useState(null);   // null = centered
+  const [pos, setPos] = useState(() => (
+    initialPos && Number.isFinite(initialPos.x) && Number.isFinite(initialPos.y)
+      ? { x: initialPos.x, y: initialPos.y }
+      : null
+  ));
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -24,6 +28,12 @@ export function TextureModal({ tex, onClose, onFocus, zIndex = 210 }) {
     const img = new ImageData(new Uint8ClampedArray(rgba), tex.width, tex.height);
     canvas.getContext('2d').putImageData(img, 0, 0);
   }, [tex]);
+
+  // Pairing layout (sprite sheet + atlas) can pass a fresh initialPos on re-open.
+  useEffect(() => {
+    if (!initialPos || !Number.isFinite(initialPos.x) || !Number.isFinite(initialPos.y)) return;
+    setPos({ x: initialPos.x, y: initialPos.y });
+  }, [initialPos?.x, initialPos?.y, tex?.name]);
 
   if (!tex) return null;
 

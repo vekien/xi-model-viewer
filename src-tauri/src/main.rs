@@ -735,6 +735,106 @@ fn app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AppReleaseInfo {
+    version: String,
+    tag: String,
+    name: String,
+    url: String,
+    download_url: String,
+    download_name: String,
+    download_bytes: u64,
+    notes: String,
+    published_at: String,
+}
+
+/// Newest app release via github.com HTML (no api.github.com, no browser CORS).
+#[tauri::command]
+fn app_latest_release() -> Result<AppReleaseInfo, String> {
+    const OWNER: &str = "vekien";
+    const REPO: &str = "xi-model-viewer";
+
+    let client = reqwest::blocking::Client::builder()
+        .user_agent(format!(
+            "xi-model-viewer/{} (+https://github.com/{OWNER}/{REPO})",
+            env!("CARGO_PKG_VERSION")
+        ))
+        .timeout(std::time::Duration::from_secs(12))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let latest = format!("https://github.com/{OWNER}/{REPO}/releases/latest");
+    let resp = client
+        .get(&latest)
+        .send()
+        .map_err(|e| format!("releases/latest: {e}"))?;
+    let loc = resp
+        .headers()
+        .get(reqwest::header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+        .ok_or_else(|| {
+            format!(
+                "no redirect from releases/latest (HTTP {})",
+                resp.status()
+            )
+        })?;
+
+    let tag = loc
+        .rsplit('/')
+        .next()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| format!("could not parse tag from {loc}"))?;
+    let version = tag.trim_start_matches(['v', 'V']).to_string();
+
+    let mut download_name = format!("xi-model-viewer-{tag}.exe");
+    let mut download_url =
+        format!("https://github.com/{OWNER}/{REPO}/releases/download/{tag}/{download_name}");
+
+    // Optional: scrape expanded_assets for the real .exe name.
+    let assets_url = format!(
+        "https://github.com/{OWNER}/{REPO}/releases/expanded_assets/{tag}"
+    );
+    if let Ok(assets_resp) = client.get(&assets_url).send() {
+        if assets_resp.status().is_success() {
+            if let Ok(html) = assets_resp.text() {
+                if let Some(cap) = html
+                    .split("href=\"")
+                    .filter_map(|s| s.split('"').next())
+                    .find(|h| h.to_ascii_lowercase().ends_with(".exe"))
+                {
+                    let href = if cap.starts_with("http") {
+                        cap.to_string()
+                    } else {
+                        format!("https://github.com{cap}")
+                    };
+                    download_url = href.clone();
+                    if let Some(name) = href.rsplit('/').next() {
+                        if !name.is_empty() {
+                            download_name = name.to_string();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(AppReleaseInfo {
+        version,
+        tag: tag.clone(),
+        name: tag.clone(),
+        url: format!("https://github.com/{OWNER}/{REPO}/releases/tag/{tag}"),
+        download_url,
+        download_name,
+        download_bytes: 0,
+        notes: String::new(),
+        published_at: String::new(),
+    })
+}
+
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
     // Empty title arg so `start` treats the URL as the target, not a window title.
@@ -903,6 +1003,7 @@ fn main() {
             xi_available,
             xi_setup,
             tools::tools_status,
+            tools::tools_check_updates,
             tools::tools_install_or_update,
             tools::tools_set_local_path,
             tools::tools_clear_local_path,
@@ -910,7 +1011,8 @@ fn main() {
             open_url,
             reveal_path,
             launch_args,
-            app_version
+            app_version,
+            app_latest_release
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

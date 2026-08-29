@@ -19,7 +19,7 @@ export function ZoneDefModal({
     const q = query.trim().toLowerCase();
     if (!q) return list;
     return list.filter((p) => {
-      const hay = `${p.index} ${p.meshId || ''} ${p.fileIdLink ?? ''}`.toLowerCase();
+      const hay = `${p.index} ${p.meshId || ''} ${p.subAreaId ?? ''}`.toLowerCase();
       return hay.includes(q);
     });
   }, [placements, query]);
@@ -100,7 +100,7 @@ export function ZoneDefModal({
               <th className="mono">Position</th>
               <th className="mono">Rotation</th>
               <th className="mono">Scale</th>
-              <th className="mono">Link</th>
+              <th className="mono">Sub-area</th>
             </tr>
           </thead>
           <tbody>
@@ -128,7 +128,7 @@ export function ZoneDefModal({
                   {fmt3(p.scale?.[0])}, {fmt3(p.scale?.[1])}, {fmt3(p.scale?.[2])}
                 </td>
                 <td className="mono">
-                  {p.fileIdLink != null ? p.fileIdLink : '—'}
+                  {p.subAreaId != null ? p.subAreaId : '—'}
                 </td>
               </tr>
             ))}

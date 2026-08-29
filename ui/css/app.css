@@ -319,17 +319,15 @@ body:has(#img-sprites) #placements {
   font-weight: 600;
   letter-spacing: 0.04em;
 }
-.tool-pop-body hr, .panel hr {
+.tool-pop-body hr,
+.panel hr {
   width: 100%;
   height: 0;
-  margin: 5px 0;
+  margin: 0;
   border: none;
-  border-top: 1px solid #333;
-}
-
-.panel hr {
-  width: 500px;
-  margin: 5px -20px;
+  border-top: 1px solid var(--ring);
+  align-self: stretch;
+  flex: 0 0 auto;
 }
 
 .tool-pop-body strong { color: #6fb9ff; }
@@ -634,7 +632,6 @@ body:has(#img-sprites) #placements {
 .mono-small { font-family: var(--font-mono); font-size: 11px; }
 
 /* Details: part selector (composed characters) */
-.details-part-combo { margin: 5px 10px 0; padding-bottom: 6px; }
 .details-part-combo .combo-input { width: 100%; }
 
 /* --- Character panel (race/gear composer) ---------------------------------- */
@@ -1037,18 +1034,231 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
 /* Same top-right band and width as #weather / #placements, so the three never
    disagree about where that column sits. Rows reuse .pc-ctrl so the labels line
    up exactly like the Characters panel's gear slots. */
+/* --- Right-rail panels: one spacing contract --------------------------------
+   padding 12 all around, gap 12 between children. Titles have no extra pad. */
+#animbar,
+#effect-actors,
+#weather,
+#placements,
+#details,
+#skeleton {
+  box-sizing: border-box;
+  width: 320px;
+  padding: 12px !important;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  flex: 0 0 auto;
+  font: 600 11px/1.2 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gray-200);
+}
+.panel-title > .icon {
+  color: var(--accent);
+  font-size: 18px;
+  flex: 0 0 auto;
+}
+
+/* Title rows that also hold tools (weather / objects / details / skeleton) */
+#weather .wx-header,
+#placements .plc-header,
+#details .details-header,
+#skeleton .details-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0 !important;
+  min-height: 0 !important;
+  flex: 0 0 auto;
+}
+#weather .wx-header > .icon,
+#placements .plc-header > .icon,
+#details .details-header > .icon,
+#skeleton .details-header > .icon {
+  color: var(--accent);
+  font-size: 18px;
+  flex: 0 0 auto;
+}
+
+#weather .wx-body,
+#details .details-body,
+#skeleton .skel-body {
+  margin: 0;
+  padding: 0 !important;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+}
+/* Objects list shell fills the panel; inner body scrolls. */
+#placements .plc-list-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+#placements .plc-body {
+  margin: 0;
+  padding: 2px 0 4px !important;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: block;
+  overflow: auto;
+}
+
+#details .details-part-combo {
+  margin: 0;
+  padding: 0;
+}
+
+/* Shared segmented tabs (Actors Character/NPC, Objects Mesh/VFX, …) */
+.seg-tabs {
+  display: flex;
+  gap: 2px;
+  margin: 0;
+  padding: 3px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--ring);
+  border-radius: 9px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+  flex: 0 0 auto;
+}
+button.seg-tab {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 0 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  box-shadow: none;
+  color: var(--muted);
+  font: 500 12px/1 var(--font-ui);
+  cursor: pointer;
+}
+button.seg-tab .icon { font-size: 15px; color: inherit; }
+button.seg-tab:hover,
+button.seg-tab:active {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--gray-200);
+}
+button.seg-tab.on,
+button.seg-tab.on:hover,
+button.seg-tab.on:active,
+button.seg-tab.active,
+button.seg-tab.active:hover,
+button.seg-tab.active:active {
+  color: var(--gray-50);
+  background: linear-gradient(180deg, var(--gray-700), var(--gray-800));
+  border-color: var(--ring-strong);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 1px 2px rgba(0, 0, 0, 0.35);
+}
+button.seg-tab.on .icon,
+button.seg-tab.active .icon { color: var(--accent); }
+
 #animbar {
-  top: 12px; 
+  top: 12px;
+  right: 12px;
+}
+
+/* Effects: Options + Actors stacked top-right (both in-flow under the stack). */
+#effect-stack {
+  position: fixed;
+  top: 12px;
   right: 12px;
   width: 320px;
-  display: flex; 
-  flex-direction: column; 
-  gap: 8px;
+  max-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 25;
+  pointer-events: none;
 }
-#animbar .side-separator { padding: 4px 0 2px; }
-/* Blue icon beside the title, matching the other panel headers. */
-.anim-title { display: flex; align-items: center; gap: 6px; }
-.anim-title .icon { color: var(--accent); font-size: 18px; }
+#effect-stack > .panel { pointer-events: auto; }
+/* Kill #animbar's usual fixed placement so it stacks above Actors. */
+#effect-stack #animbar {
+  position: relative !important;
+  top: auto !important;
+  right: auto !important;
+  left: auto !important;
+  bottom: auto !important;
+  width: 100% !important;
+  flex: 0 0 auto;
+  z-index: auto !important;
+}
+#effect-actors {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 160px;
+  max-height: min(440px, calc(100vh - 280px));
+  overflow: hidden;
+  z-index: auto;
+}
+.fx-actor-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.fx-actor-pc {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0;
+  margin: 0;
+  overflow: auto;
+  min-height: 0;
+}
+.fx-actor-npc {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+}
+.fx-actor-npc #tree.list-panel {
+  position: static !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: 100%;
+  height: auto;
+  max-height: none;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 !important;
+  box-shadow: none;
+  border: none;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.fx-actor-npc .list-scroll {
+  padding: 0;
+}
 
 /* --- Status bars (two floating pills) -------------------------------------- */
 /* Left:  DAT path · Data Struct
@@ -1281,20 +1491,13 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
 /* --- Zone weather / time-of-day panel (top-right, above Objects) ----------- */
 #weather {
   top: 12px; right: 12px;
-  width: 320px;
-  padding: 0;
   z-index: 27;
 }
-.wx-header {
-  display: flex; align-items: center; gap: 6px;
-  padding: 7px 10px 7px 12px;
-  min-height: 38px;
-}
-.wx-header > .icon { color: var(--accent); font-size: 18px; }
-.wx-time { color: var(--gray-300); font-size: 12px; margin-right: 8px; }
-.wx-switch { flex: 0 0 auto; }
-.wx-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 9px; }
-.wx-weather { display: flex; flex-direction: column; gap: 9px; }
+.wx-time { color: var(--gray-300); font-size: 12px; margin-left: auto; margin-right: 4px; }
+.wx-switch { flex: 0 0 auto; margin-left: auto; }
+.wx-weather { display: flex; flex-direction: column; gap: 12px; }
+.wx-header .wx-switch { margin-left: 0; }
+.wx-header .wx-time + .wx-switch { margin-left: 0; }
 /* Weather/time stay usable while the sky is hidden, just dimmed. */
 .wx-weather.wx-off { opacity: 0.5; }
 .wx-nosky {
@@ -1304,7 +1507,7 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
   opacity: 0.72;
   padding: 2px 0 1px;
 }
-.wx-row { display: flex; align-items: center; gap: 8px; }
+.wx-row { display: flex; align-items: center; gap: 12px; }
 .wx-row .combo-input { flex: 1 1 auto; width: auto; min-width: 0; }
 /* Every Zone row leads with a 20x20 control — icon or toggle button — so the
    sliders after them all start on the same vertical line. */
@@ -1404,60 +1607,15 @@ body:has(#weather) #placements {
 
 #placements {
   top: 12px; right: 12px;
-  width: 320px;
   height: 500px;              /* default; JS overrides while expanded */
   max-height: calc(100vh - 80px);
-  display: flex; flex-direction: column;
-  padding: 0;
   z-index: 26;
   overflow: hidden;
 }
 #placements.minimized {
   height: auto !important;
 }
-.plc-header {
-  display: flex; align-items: center; gap: 6px;
-  padding: 7px 8px 7px 12px;
-  flex: 0 0 auto;
-  min-height: 38px;
-}
-.plc-header > .icon { color: var(--accent); font-size: 18px; }
-.plc-meta { color: var(--gray-400); font-size: 11px; margin-right: 2px; }
-.plc-tabs {
-  flex: 0 0 auto;
-  display: flex;
-  gap: 12px;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--ring);
-}
-/* Kill global `button` / `button.active` chrome (inset top highlight, gradient). */
-.plc-tab,
-.plc-tab:hover,
-.plc-tab:active,
-.plc-tab.active {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 28px;
-  padding: 6px 2px 7px;
-  margin: 0;
-  border: none;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  color: var(--gray-500);
-  font: 500 12px/1.2 var(--font-ui);
-  cursor: pointer;
-}
-.plc-tab .icon { font-size: 15px; opacity: 0.85; }
-.plc-tab:hover { color: var(--text); }
-.plc-tab.active {
-  color: var(--text);
-  border-bottom-color: var(--accent);
-}
-.plc-tab.active .icon { color: var(--accent); opacity: 1; }
+.plc-meta { color: var(--gray-400); font-size: 11px; margin-right: auto; }
 .plc-group.env-weather .plc-name { color: #9ec8ff; }
 .plc-group.env-weather .kind { color: #9ec8ff; }
 .plc-tool {
@@ -1518,45 +1676,140 @@ body:has(#weather) #placements {
 }
 .plc-reset .icon { font-size: 16px; }
 .plc-row.plc-inst.moved .plc-name { color: #f0c080; }
+
+.plc-sfx-play {
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: var(--gray-400);
+  opacity: 0.85;
+}
+.plc-sfx-play:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+.plc-sfx-play.on {
+  color: var(--accent);
+  opacity: 1;
+}
+.plc-sfx-play .icon { font-size: 16px; }
+.plc-idx.on-air { color: #5ec8c8; }
+
 .plc-search {
   flex: 0 0 auto;
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--ring);
+  display: flex; align-items: center; gap: 6px;
+  padding: 0;
+  border: none;
+  margin: 0;
 }
-.plc-search .icon { color: var(--gray-500); font-size: 18px; }
+.plc-search .icon { color: var(--gray-500); font-size: 16px; }
 .plc-search input {
   flex: 1 1 auto; min-width: 0;
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid var(--ring);
-  border-radius: 6px;
+  border-radius: 5px;
   color: var(--text);
-  font: 400 13px/1.3 var(--font-ui);
-  padding: 6px 9px;
+  font: 400 12px/1.2 var(--font-ui);
+  padding: 4px 7px;
   outline: none;
 }
 .plc-search input:focus { border-color: var(--accent); }
 .plc-search input::placeholder { color: var(--gray-500); }
-.plc-body { flex: 1 1 auto; overflow: auto; padding: 4px 0; min-height: 0; }
-.plc-body:focus, .plc-body:focus-visible { outline: none; }   /* see .list-scroll */
+
+/* Dark inset list well (tabs / settings language). */
+.plc-list-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--ring);
+  border-radius: 9px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+.plc-body {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 2px 0 4px;
+  min-height: 0;
+}
+.plc-body:focus, .plc-body:focus-visible { outline: none; }
+
+.plc-section-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px 3px;
+  margin: 2px 0 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(12, 14, 18, 0.96) 60%, rgba(12, 14, 18, 0.75));
+}
+.plc-section-title .icon { font-size: 13px; color: var(--gray-400); }
+.plc-section-count {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--gray-500);
+  opacity: 0.9;
+}
+.plc-sec-sky .plc-section-title .icon { color: #5eb0ff; }
+.plc-sec-water .plc-section-title .icon { color: #5eb0ff; }
+.plc-sec-collision .plc-section-title .icon { color: #d98a8a; }
+.plc-sec-subarea .plc-section-title .icon { color: #c9a227; }
+.plc-section + .plc-section { margin-top: 2px; }
 .plc-group > .plc-mesh .caret { transition: transform 0.12s ease; }
 .plc-group.open > .plc-mesh .caret { transform: rotate(90deg); }
 .plc-row {
-  display: flex; align-items: center; gap: 6px;
-  padding: 4px 10px 4px 8px;
+  display: flex; align-items: center; gap: 4px;
+  padding: 1px 8px 1px 4px;
   cursor: pointer;
   white-space: nowrap;
-  min-height: 26px;
+  min-height: 20px;
+  line-height: 1.15;
 }
 .plc-row:hover { background: rgba(255, 255, 255, 0.06); }
 .plc-group.selected > .plc-mesh,
 .plc-row.selected { background: rgba(100, 180, 255, 0.18); }
-.plc-row .caret { width: 18px; font-size: 16px; color: var(--gray-500); flex: 0 0 auto; }
-.plc-row .kind { font-size: 16px; color: var(--gray-400); flex: 0 0 auto; }
-.plc-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
-.plc-idx { color: var(--gray-500); margin-left: auto; flex: 0 0 auto; }
-.plc-instances { padding-left: 8px; }
+.plc-row .caret { width: 14px; font-size: 14px; color: var(--gray-500); flex: 0 0 auto; }
+.plc-row .kind { font-size: 14px; color: var(--gray-400); flex: 0 0 auto; }
+.plc-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+.plc-idx { color: var(--gray-500); margin-left: auto; flex: 0 0 auto; font-size: 11px; }
+.plc-instances { padding-left: 6px; }
 .plc-inst .kind { color: var(--gray-500); }
+#placements .plc-row .badge {
+  font-size: 10px;
+  min-width: 1.4em;
+  padding: 0 5px;
+  line-height: 16px;
+  height: 16px;
+}
+#placements .plc-vis {
+  width: 18px;
+  height: 18px;
+}
+#placements .plc-vis .icon { font-size: 14px; }
+#placements .plc-sfx-play {
+  width: 18px;
+  height: 18px;
+}
+#placements .plc-sfx-play .icon { font-size: 14px; }
 .plc-group.env-sky .plc-name,
 .plc-group.env-water .plc-name { color: #5eb0ff; font-weight: 500; }
 .plc-group.env-sky .kind,
@@ -1567,6 +1820,14 @@ body:has(#weather) #placements {
 .plc-group.env-unplaced .kind { color: var(--gray-500); }
 .plc-group.env-unplaced.dim { opacity: 0.45; }
 .plc-group.env-unplaced.selected > .plc-mesh .plc-name { color: var(--text); font-style: normal; }
+.plc-group.env-collision .plc-name { color: var(--gray-400); font-style: italic; }
+.plc-group.env-collision .kind { color: #d98a8a; }
+.plc-group.env-collision.dim { opacity: 0.45; }
+.plc-group.env-collision.selected > .plc-mesh .plc-name { color: var(--text); font-style: normal; }
+.plc-group.env-subarea .plc-name { color: var(--gray-400); font-style: italic; }
+.plc-group.env-subarea .kind { color: #c9a227; }
+.plc-group.env-subarea.dim { opacity: 0.45; }
+.plc-group.env-subarea.selected > .plc-mesh .plc-name { color: var(--text); font-style: normal; }
 .plc-footer {
   flex: 0 0 auto;
   border-top: 1px solid var(--ring);
@@ -1634,9 +1895,9 @@ body:has(#details) .light-gizmo.details-open {
 
 #details {
   right: 12px; bottom: 52px;
-  width: 320px; max-height: 60vh;
-  display: flex; flex-direction: column;
+  max-height: 60vh;
   z-index: 30;
+  overflow: hidden;
 }
 /* Playback panel sits left of the objects panel (same top band) */
 #animbar { z-index: 25; }
@@ -1647,11 +1908,11 @@ body:has(#placements) #animbar { right: 344px; }
 /* Flush right, same as Details — the two overlap when both are open. */
 #skeleton {
   right: 12px; bottom: 52px;
-  width: 420px; max-height: 60vh;
-  display: flex; flex-direction: column;
+  width: 420px; /* slightly wider for bone rows */
+  max-height: 60vh;
   z-index: 30;
+  overflow: hidden;
 }
-.skel-body { flex: 1 1 auto; overflow: auto; padding: 4px 0 8px; min-height: 0; }
 .skel-count { color: var(--gray-500); font-size: 11px; flex: 0 0 auto; }
 .skel-row {
   display: flex; align-items: center; gap: 6px;
@@ -1672,23 +1933,14 @@ body:has(#placements) #animbar { right: 344px; }
   padding: 2px 5px;
 }
 .skel-pos { margin-left: auto; color: var(--gray-600); font-size: 10px; }
-/* Details always flush right (under/alongside Objects, never shifted inward) */
-.details-header {
-  display: flex; align-items: center; gap: 8px;
-  padding: 9px 10px 9px 12px;
-}
-.details-header > .icon { color: var(--accent); font-size: 18px; }
-/* Panel titles read like the ANIMATION separator — uppercase, muted, spaced —
-   so every floating panel's header matches. The blue icon beside it stays. */
+/* Titles on weather / objects / details share panel-title metrics. */
 .details-title, .plc-title, .wx-title {
   flex: 1 1 auto;
   min-width: 0;
-  color: var(--gray-500);
-  font: 600 11px/1.4 var(--font-ui);
+  color: var(--gray-200);
+  font: 600 11px/1.2 var(--font-ui);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  /* The preview launch puts the zone's own name here, which can outrun the
-     header — keep it on one line rather than pushing the sky toggle out. */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1696,8 +1948,8 @@ body:has(#placements) #animbar { right: 344px; }
 .details-close { width: 24px; height: 24px; min-height: 0; background: transparent; border: none; box-shadow: none; }
 .details-close:hover { background: rgba(255, 255, 255, 0.1); }
 
-.details-body { overflow: auto; padding: 4px 0 8px; }
-.details-section { padding: 8px 12px 4px; }
+.details-section { padding: 0; }
+#details .details-section-title { margin-bottom: 0; }
 .details-section-title {
   display: flex; align-items: center; gap: 6px;
   color: var(--gray-400); font-weight: 600; font-size: 11px;
@@ -1978,7 +2230,8 @@ button.details-path-link.mono { font-family: var(--font-mono); font-size: 11px; 
   min-width: max(var(--combo-min-width, 0px), 168px);
   max-width: min(440px, calc(100vw - 24px)) !important;
   scrollbar-gutter: stable;
-  z-index: 300;
+  /* Above Settings/modals (backdrop 5000) so Combos inside dialogs stay usable. */
+  z-index: 5100;
   margin-top: 4px;
   padding: 4px;
   background:
@@ -2173,29 +2426,37 @@ button.details-path-link.mono { font-family: var(--font-mono); font-size: 11px; 
   display: flex;
   flex-direction: column;
 }
+/* Segmented control under the header — pill track, one filled chip active. */
 .settings-tabs {
   display: flex;
-  gap: 4px;
-  padding: 8px 12px 0;
-  border-bottom: 1px solid var(--ring);
+  gap: 2px;
+  margin: 10px 14px 0;
+  padding: 3px;
   flex: 0 0 auto;
+  width: fit-content;
+  max-width: calc(100% - 28px);
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--ring);
+  border-radius: 9px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 button.settings-tab {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  min-height: 32px;
-  padding: 4px 12px;
+  min-height: 28px;
+  padding: 0 14px;
   background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  border-radius: 6px 6px 0 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
   box-shadow: none;
   color: var(--muted);
-  font: 500 12px/1.2 var(--font-ui);
+  font: 500 12px/1 var(--font-ui);
   cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
 }
-button.settings-tab .icon { font-size: 16px; color: inherit; }
+button.settings-tab .icon { font-size: 15px; color: inherit; }
 button.settings-tab:hover,
 button.settings-tab:active {
   background: rgba(255, 255, 255, 0.05);
@@ -2206,22 +2467,35 @@ button.settings-tab:active {
 button.settings-tab.on,
 button.settings-tab.on:hover,
 button.settings-tab.on:active {
-  color: var(--gray-100);
-  border-bottom-color: var(--accent);
-  background: transparent;
-  box-shadow: none;
+  color: var(--gray-50);
+  background: linear-gradient(180deg, var(--gray-700), var(--gray-800));
+  border-color: var(--ring-strong);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 1px 2px rgba(0, 0, 0, 0.35);
 }
 button.settings-tab.on .icon { color: var(--accent); }
 .settings-body {
   overflow: auto;
   min-height: 0;
+  padding-top: 4px;
 }
 .settings-error { margin-bottom: 4px; }
 .settings-xitools {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 12px;
+  align-items: start;
+}
+.settings-xitools-main,
+.settings-xitools-side {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  max-width: 640px;
+  gap: 12px;
+  min-width: 0;
+}
+@media (max-width: 720px) {
+  .settings-xitools { grid-template-columns: 1fr; }
 }
 .tools-actions { flex-wrap: wrap; gap: 8px; }
 .tools-progress { display: flex; flex-direction: column; gap: 4px; }
@@ -2251,18 +2525,41 @@ button.settings-tab.on .icon { color: var(--accent); }
 .settings-cols {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 18px 22px;
+  gap: 12px;
   align-items: start;
 }
 @media (max-width: 720px) {
   .settings-cols { grid-template-columns: 1fr; }
 }
-.settings-col {
+/* Embedded dark group panels — same language as the tab track. */
+.settings-panel {
+  min-width: 0;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--ring);
+  border-radius: 10px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+  /* visible so Combos aren't clipped if the list isn't portaled */
+  overflow: visible;
+}
+.settings-panel-title {
+  padding: 8px 12px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.settings-panel-body {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  min-width: 0;
+  gap: 12px;
+  padding: 12px;
 }
+.settings-panel-body > .form-hint:first-child {
+  margin-top: -2px;
+}
+.settings-panel-body .combo-input { width: 100%; }
 .settings-col-title {
   font-size: 11px;
   font-weight: 600;
@@ -3491,6 +3788,51 @@ button.data-zone-tab.on .icon { color: var(--accent); }
   white-space: nowrap;
 }
 .data-res-table .data-kind { color: #9ec5ff; }
+.data-res-routine .data-kind,
+.data-res-routine .data-id,
+.data-res-routine .data-type,
+.data-res-routine .data-detail { color: #b8a0ff; }
+.data-res-routine .data-kind { opacity: 1; }
+.data-res-routine.data-res-click:hover .data-kind,
+.data-res-routine.data-res-click:hover .data-id,
+.data-res-routine.data-res-click:hover .data-type,
+.data-res-routine.data-res-click:hover .data-detail { color: #d4c4ff; }
+.data-res-sprites .data-kind,
+.data-res-sprites .data-id,
+.data-res-sprites .data-type,
+.data-res-sprites .data-detail { color: #7ec8e8; }
+.data-res-sprites .data-kind { opacity: 1; }
+.data-res-sprites.data-res-click:hover .data-kind,
+.data-res-sprites.data-res-click:hover .data-id,
+.data-res-sprites.data-res-click:hover .data-type,
+.data-res-sprites.data-res-click:hover .data-detail { color: #a8e0f5; }
+.data-res-pmesh .data-kind,
+.data-res-pmesh .data-id,
+.data-res-pmesh .data-type,
+.data-res-pmesh .data-detail { color: #9ad4a8; }
+.data-res-pmesh .data-kind { opacity: 1; }
+.data-res-pmesh.data-res-click:hover .data-kind,
+.data-res-pmesh.data-res-click:hover .data-id,
+.data-res-pmesh.data-res-click:hover .data-type,
+.data-res-pmesh.data-res-click:hover .data-detail { color: #b8e8c4; }
+.data-res-keys .data-kind,
+.data-res-keys .data-id,
+.data-res-keys .data-type,
+.data-res-keys .data-detail { color: #e0c070; }
+.data-res-keys .data-kind { opacity: 1; }
+.data-res-keys.data-res-click:hover .data-kind,
+.data-res-keys.data-res-click:hover .data-id,
+.data-res-keys.data-res-click:hover .data-type,
+.data-res-keys.data-res-click:hover .data-detail { color: #f0d890; }
+.data-res-wmesh .data-kind,
+.data-res-wmesh .data-id,
+.data-res-wmesh .data-type,
+.data-res-wmesh .data-detail { color: #c8a0e0; }
+.data-res-wmesh .data-kind { opacity: 1; }
+.data-res-wmesh.data-res-click:hover .data-kind,
+.data-res-wmesh.data-res-click:hover .data-id,
+.data-res-wmesh.data-res-click:hover .data-type,
+.data-res-wmesh.data-res-click:hover .data-detail { color: #e0c0f0; }
 
 /* Route modal reuses .zdef-modal chrome; accent the count. */
 .route-modal .route-count {

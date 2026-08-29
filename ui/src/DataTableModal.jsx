@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@headlessui/react';
 import { Tooltip } from './Tooltip.jsx';
 
@@ -7,12 +7,21 @@ import { Tooltip } from './Tooltip.jsx';
  * and generic Table (mnc2 / mon_ / levc).
  */
 export function DataTableModal({
-  table, title = 'Table', onClose, onFocus, zIndex = 2100,
+  table, title = 'Table', onClose, onFocus, zIndex = 2100, initialPos = null,
 }) {
   const panelRef = useRef(null);
   const dragState = useRef(null);
-  const [pos, setPos] = useState(null);
+  const [pos, setPos] = useState(() => (
+    initialPos && Number.isFinite(initialPos.x) && Number.isFinite(initialPos.y)
+      ? { x: initialPos.x, y: initialPos.y }
+      : null
+  ));
   const [query, setQuery] = useState('');
+
+  useEffect(() => {
+    if (!initialPos || !Number.isFinite(initialPos.x) || !Number.isFinite(initialPos.y)) return;
+    setPos({ x: initialPos.x, y: initialPos.y });
+  }, [initialPos?.x, initialPos?.y, table?.offset, table?.id]);
 
   const columns = table?.columns ?? [];
   const allRows = table?.rows ?? [];
@@ -46,19 +55,26 @@ export function DataTableModal({
   };
   const endDrag = () => { dragState.current = null; };
 
+  const sheetPair = table?.kind === 'spriteSheet' || table?.kind === 'particleMesh' || table?.kind === 'weightedMesh';
+  const tableW = sheetPair ? 'min(560px, 52vw)' : 'min(960px, 96vw)';
   const style = pos
     ? {
       position: 'fixed', left: pos.x, top: pos.y, transform: 'none', zIndex,
-      width: 'min(960px, 96vw)', maxHeight: 'min(78vh, 640px)',
+      width: tableW, maxHeight: 'min(78vh, 640px)',
     }
     : {
       position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex,
-      width: 'min(960px, 96vw)', maxHeight: 'min(78vh, 640px)',
+      width: tableW, maxHeight: 'min(78vh, 640px)',
     };
 
   const icon = table.kind === 'spellList' ? 'auto_fix_high'
     : table.kind === 'abilityList' ? 'bolt'
-      : 'table_rows';
+      : table.kind === 'effectRoutine' ? 'schedule'
+        : table.kind === 'spriteSheet' ? 'grid_view'
+          : table.kind === 'particleMesh' ? 'change_history'
+            : table.kind === 'keyFrame' ? 'timeline'
+              : table.kind === 'weightedMesh' ? 'animation'
+                : 'table_rows';
 
   return (
     <div className="zdef-modal datatable-modal" ref={panelRef} style={style} onPointerDown={onFocus}>

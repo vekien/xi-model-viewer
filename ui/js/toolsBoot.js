@@ -39,9 +39,8 @@ export async function toolsInstallOrUpdate() {
 }
 
 /**
- * Boot: check GitHub; auto-install or update when not on a local checkout override.
- * Skips network work when the user already has a working custom xiPath that isn't
- * the managed AppData install (keeps D:\xi-tools etc. alone).
+ * Boot (once): disk status first. Network only when self-managed needs an
+ * install or a deliberate latest-release compare — never on every Settings open.
  *
  * @param {{ xiPath?: string }} opts
  * @returns {Promise<{ status: object|null, changed: boolean, message: string }>}
@@ -51,18 +50,24 @@ export async function ensureXiToolsOnBoot(opts = {}) {
     return { status: null, changed: false, message: '' };
   }
   try {
-    let st = await toolsStatus();
+    let st = await toolsStatus(); // disk only
     const xiPath = (opts.xiPath || '').trim();
     const managed = (st.toolsDir || '').replace(/\\/g, '/').toLowerCase();
     const custom = xiPath.replace(/\\/g, '/').toLowerCase();
     const customIsManaged = custom && managed && (custom === managed || custom.startsWith(`${managed}/`));
 
-    // Local checkout override — never auto-overwrite.
-    if (st.usingLocalOverride && st.installed) {
-      return { status: st, changed: false, message: `xi-tools ${st.localVersion} (local)` };
+    // Custom install — never download over it.
+    if (st.usingLocalOverride) {
+      return {
+        status: st,
+        changed: false,
+        message: st.installed
+          ? `xi-tools custom (${st.toolsDir})`
+          : 'xi-tools custom path set',
+      };
     }
 
-    // User pointed at a custom folder that works — leave it; still report status.
+    // Legacy: xiPath points at a working checkout that is not the managed dir.
     if (xiPath && !customIsManaged) {
       const ok = await backend.xiAvailable(xiPath);
       if (ok) {
@@ -70,18 +75,33 @@ export async function ensureXiToolsOnBoot(opts = {}) {
       }
     }
 
-    if (!st.installed || st.updateAvailable) {
+    // Self-managed: missing → install. Present → one GitHub check, update if newer.
+    if (!st.installed) {
       st = await toolsInstallOrUpdate();
-      // uv venv so `xi` is runnable
-      try {
-        await backend.xiSetup(st.toolsDir, true);
-      } catch { /* setup can be retried from Settings */ }
+      try { await backend.xiSetup(st.toolsDir, true); } catch { /* Settings can retry */ }
       return {
         status: st,
         changed: true,
         message: st.installed
           ? `xi-tools ${st.localVersion} installed`
           : (st.error || 'xi-tools install incomplete'),
+      };
+    }
+
+    try {
+      st = await backend.toolsCheckUpdates();
+    } catch {
+      return { status: st, changed: false, message: `xi-tools ${st.localVersion}` };
+    }
+    if (st.updateAvailable) {
+      st = await toolsInstallOrUpdate();
+      try { await backend.xiSetup(st.toolsDir, true); } catch { /* */ }
+      return {
+        status: st,
+        changed: true,
+        message: st.installed
+          ? `xi-tools ${st.localVersion} updated`
+          : (st.error || 'xi-tools update incomplete'),
       };
     }
 

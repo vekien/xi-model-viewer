@@ -1522,6 +1522,21 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
     || res.type === 0x53 || res.type === 83
     || res.name === 'Table' || res.name === 'SpellList' || res.name === 'AbilityList'
     || ['mnc2', 'mon_', 'levc', 'mgc_', 'comm'].includes(String(res.id || '').trim()));
+  const isEffectRoutine = !!(res.isEffectRoutine
+    || res.type === 0x07 || res.type === 7
+    || res.name === 'EffectRoutine');
+  const isSpriteSheet = !!(res.isSpriteSheet
+    || res.type === 0x21 || res.type === 33
+    || res.name === 'SpriteSheetMesh');
+  const isParticleMesh = !!(res.isParticleMesh
+    || res.type === 0x1F || res.type === 31
+    || res.name === 'ParticleMesh');
+  const isKeyFrame = !!(res.isKeyFrame
+    || res.type === 0x19 || res.type === 25
+    || res.name === 'ParticleKeyFrameData');
+  const isWeightedMesh = !!(res.isWeightedMesh
+    || res.type === 0x25 || res.type === 37
+    || res.name === 'WeightedMesh');
   const isParticle = !!(res.isParticleGenerator || res.type === 0x05 || res.type === 5
     || res.name === 'ParticleGenerator');
   const soundKey = isSound && res.soundId != null
@@ -1535,7 +1550,7 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
   const routeClick = isRoute;
   const uiMenuClick = isUiMenu;
   const uiEgClick = isUiElementGroup;
-  const dataTableClick = isDataTable;
+  const dataTableClick = isDataTable || isEffectRoutine || isSpriteSheet || isParticleMesh || isKeyFrame || isWeightedMesh;
   const particleClick = isParticle;
   const soundClick = isSound && res.soundId != null && !!onPlaySound;
   const clickable = texClick || skelClick || soundClick || zdefClick || particleClick || routeClick || uiMenuClick || uiEgClick || dataTableClick;
@@ -1572,7 +1587,17 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
     : particleClick
       ? `Click to play particle · ${String(res.id || '').trim() || 'generator'}`
       : dataTableClick
-        ? `Click to view table · ${at}`
+        ? (isEffectRoutine
+          ? `Click to view routine commands · ${at}`
+          : isSpriteSheet
+            ? `Click to view sprite sheet · ${at}`
+            : isParticleMesh
+              ? `Click to view particle mesh · ${at}`
+              : isKeyFrame
+                ? `Click to view keyframe curve · ${at}`
+                : isWeightedMesh
+                  ? `Click to view weighted mesh · ${at}`
+                  : `Click to view table · ${at}`)
         : uiEgClick
           ? `Click to view element group / sprites · ${at}`
           : uiMenuClick
@@ -1589,7 +1614,7 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
   return (
     <Tooltip content={tip}>
       <div
-        className={`data-row data-res-row${isTex ? ' data-res-tex' : ''}${isSkel ? ' data-res-skel' : ''}${isZoneDef ? ' data-res-zdef' : ''}${isRoute ? ' data-res-route' : ''}${isUiMenu ? ' data-res-uimenu' : ''}${isUiElementGroup ? ' data-res-uieg' : ''}${isDataTable ? ' data-res-table' : ''}${isParticle ? ' data-res-fx' : ''}${isSound ? ' data-res-sfx' : ''}${soundPlaying ? ' data-res-sfx-play' : ''}${clickable ? ' data-res-click' : ''}`}
+        className={`data-row data-res-row${isTex ? ' data-res-tex' : ''}${isSkel ? ' data-res-skel' : ''}${isZoneDef ? ' data-res-zdef' : ''}${isRoute ? ' data-res-route' : ''}${isUiMenu ? ' data-res-uimenu' : ''}${isUiElementGroup ? ' data-res-uieg' : ''}${isDataTable ? ' data-res-table' : ''}${isEffectRoutine ? ' data-res-routine' : ''}${isSpriteSheet ? ' data-res-sprites' : ''}${isParticleMesh ? ' data-res-pmesh' : ''}${isKeyFrame ? ' data-res-keys' : ''}${isWeightedMesh ? ' data-res-wmesh' : ''}${isParticle ? ' data-res-fx' : ''}${isSound ? ' data-res-sfx' : ''}${soundPlaying ? ' data-res-sfx-play' : ''}${clickable ? ' data-res-click' : ''}`}
         style={{ paddingLeft: 8 + depth * 14 }}
         onClick={clickable ? onActivate : undefined}
         role={clickable ? 'button' : undefined}

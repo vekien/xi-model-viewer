@@ -1,25 +1,23 @@
 // Background update check.
 //
-// On boot the app asks GitHub for the latest published release and compares its
-// tag (`v1.0.8`) against the running build. A newer one raises a one-time notice
-// the user dismisses with OK; the dismissed version is remembered, so the notice
-// stays gone until the *next* release ships.
+// On boot the app asks the native backend for the latest GitHub release (Tauri
+// IPC or serve.py /fs/app-latest-release — never browser→github.com, which is
+// CORS-blocked) and compares its tag against the running build. A newer one
+// raises a one-time notice the user dismisses with OK; the dismissed version is
+// remembered, so the notice stays gone until the *next* release ships.
 //
 // Every failure path here resolves to null: the check runs detached from
-// startup, and being offline, rate-limited or behind a proxy must never surface
-// as an error the user has to deal with.
+// startup, and being offline or behind a proxy must never surface as an error
+// the user has to deal with.
 
 import { backend } from './backend.js';
 
 const REPO = 'vekien/xi-model-viewer';
 export const RELEASES_URL = `https://github.com/${REPO}/releases`;
-const LATEST_API = `https://api.github.com/repos/${REPO}/releases/latest`;
 
 // The version the user last clicked OK on. Kept out of the settings object —
 // like `booted`, it is install state rather than something Settings edits.
 const DISMISSED_KEY = 'updateDismissedVersion';
-
-const TIMEOUT_MS = 8000;
 
 /** `v1.0.8` / ` 1.0.8 ` → `1.0.8`. */
 export const normalizeVersion = (v) => String(v ?? '').trim().replace(/^v/i, '');
@@ -68,49 +66,29 @@ export function dismissUpdate(version) {
 }
 
 /**
- * The newest published (non-draft, non-prerelease) release, or null.
- *
- * `Accept` is the only header set: anything else would turn this into a CORS
- * preflight, and the plain GET is already allowed from the webview's origin.
+ * Newest release via native backend (Tauri / serve.py). Browser fetch of
+ * github.com is blocked by CORS on localhost — never call GitHub from the page.
  */
 async function fetchLatestRelease() {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
-    const res = await fetch(LATEST_API, {
-      signal: ctrl.signal,
-      cache: 'no-store',
-      headers: { Accept: 'application/vnd.github+json' },
-    });
-    if (!res.ok) return null;               // 403 = rate limited, 404 = no releases yet
-    const data = await res.json();
-    if (!data?.tag_name || data.draft || data.prerelease) return null;
-    // Prefer the release .exe asset (only one is published). Fall back to the
-    // release page if the asset list is empty or the API omits browser_download_url.
-    const assets = Array.isArray(data.assets) ? data.assets : [];
-    const exe = assets.find((a) => /\.exe$/i.test(String(a?.name || '')))
-      || assets.find((a) => /\.exe$/i.test(String(a?.browser_download_url || '')));
-    const downloadUrl = exe?.browser_download_url
-      ? String(exe.browser_download_url)
-      : '';
-    const downloadName = exe?.name ? String(exe.name) : '';
-    // GitHub assets[].size is bytes (integer).
-    const downloadBytes = Number.isFinite(Number(exe?.size)) ? Number(exe.size) : 0;
+    const info = await backend.appLatestRelease();
+    if (!info?.version && !info?.tag) return null;
+    const tag = String(info.tag || info.version || '').trim();
+    const version = normalizeVersion(info.version || tag);
+    if (!version) return null;
     return {
-      version: normalizeVersion(data.tag_name),
-      tag: String(data.tag_name),
-      name: String(data.name || '').trim(),
-      url: data.html_url || RELEASES_URL,
-      downloadUrl,
-      downloadName,
-      downloadBytes,
-      notes: String(data.body || '').trim(),
-      publishedAt: data.published_at || '',
+      version,
+      tag: tag || `v${version}`,
+      name: info.name || tag || version,
+      url: info.url || `https://github.com/${REPO}/releases/tag/${tag || version}`,
+      downloadUrl: info.downloadUrl || '',
+      downloadName: info.downloadName || '',
+      downloadBytes: info.downloadBytes || 0,
+      notes: info.notes || '',
+      publishedAt: info.publishedAt || '',
     };
   } catch {
-    return null;                            // offline / DNS / aborted
-  } finally {
-    clearTimeout(timer);
+    return null;
   }
 }
 
@@ -156,7 +134,7 @@ export async function checkForUpdateManual() {
       return {
         error: true,
         current,
-        message: 'Could not reach GitHub for updates. Check your connection and try again.',
+        message: 'Could not reach GitHub for updates (rate limit or offline). Try again in a few minutes, or open Releases in the browser.',
       };
     }
     if (compareVersions(latest.version, current) <= 0) {

@@ -142,7 +142,7 @@ export const backend = {
     return data;
   },
 
-  /** Disk + GitHub status for managed xi-tools install. */
+  /** Disk-only xi-tools status (no GitHub). */
   async toolsStatus() {
     if (!isTauri()) {
       return {
@@ -156,6 +156,22 @@ export const backend = {
       };
     }
     return tauriInvoke('tools_status');
+  },
+
+  /** One GitHub check for a newer managed release. */
+  async toolsCheckUpdates() {
+    if (!isTauri()) {
+      return {
+        installed: true,
+        localVersion: 'dev',
+        latestVersion: null,
+        updateAvailable: false,
+        toolsDir: '',
+        usingLocalOverride: false,
+        error: null,
+      };
+    }
+    return tauriInvoke('tools_check_updates');
   },
 
   /** Download / update xi-tools from GitHub releases into AppData. */
@@ -262,6 +278,27 @@ export const backend = {
       } catch { /* older shell without the command — fall through */ }
     }
     return BUILD_VERSION;
+  },
+
+  /**
+   * Newest GitHub release for this app (native HTTP — no browser CORS).
+   * Returns null when offline / unreachable.
+   */
+  async appLatestRelease() {
+    if (isTauri()) {
+      try {
+        return await tauriInvoke('app_latest_release');
+      } catch {
+        return null;
+      }
+    }
+    try {
+      const res = await fetch('/fs/app-latest-release', { cache: 'no-store' });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
   },
 
   /** Opens a URL in the system browser. */

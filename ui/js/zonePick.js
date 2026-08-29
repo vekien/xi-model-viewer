@@ -169,8 +169,14 @@ export function pickZonePlacement(placements, origin, dir, meshes = null) {
   const hits = [];
 
   for (const p of placements) {
-    if (p.kind) continue;
-    if (p.userHidden || p.dragHidden) continue;
+    // Pick whatever is actually on screen. Sub-area sets draw like world
+    // geometry (Ru'Aun's islands are mostly sub-area), unplaced and collision
+    // rows draw once their Objects-list eye is on, and all three were
+    // unselectable while this skipped every kind. Sky and water stay out: the
+    // sky rows are particle-system geometry with no zone batch at all, and the
+    // ocean shells are zone-wide planes that would swallow every click.
+    if (p.kind === 'sky' || p.kind === 'water') continue;
+    if (p.userHidden || p.dragHidden || p.pvsHidden) continue;
     const b = p.bounds;
     if (!b?.min || !b?.max) continue;
     const m = boundsMetrics(b.min, b.max);

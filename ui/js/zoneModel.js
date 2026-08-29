@@ -8,7 +8,7 @@
 // ADJACENT draws sharing identical state+texture are merged, so batching never
 // reorders anything — FFXI relies on the authored order for overlay layering.
 
-import { resolveMeshName, resolveTexture, isSkyName, isWaterName, isEnvName } from './zone.js';
+import { resolveMeshName, resolveTexture, isSkyName, isWaterName, isEnvName, isCollisionPlacement, isSubAreaPlacement } from './zone.js';
 
 /** Column-major TRS = T · Rz·Ry·Rx · S (xim / xi rotateZYX). */
 function trsMatrix(pos, rot, scale) {
@@ -251,8 +251,73 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
       rot: p.rot || [0, 0, 0],
       scale: p.scale || [1, 1, 1],
       bounds,
-      kind, // null | 'sky' | 'water' | 'unplaced'
+      kind, // null | 'sky' | 'water' | 'unplaced' | 'collision' | 'subarea'
+      subAreaId: p.subAreaId ?? null,
+      // Collision proxies never render in game, so they start hidden behind the
+      // Objects-list eye. Sub-area sets do render — inside their volume — so
+      // they start visible and are gated by region culling like world geometry.
+      // The exception is a far copy of geometry the base zone already places —
+      // see isFarCopy.
+      userHidden: kind === 'collision' || isFarCopy(resolved),
     });
+  };
+
+  // Resolve every placement once — the fuzzy pass is not cheap and both the
+  // far-copy scan below and the emit loop need the answer.
+  const resolvedFor = placements.map((p) => (
+    isSanePlacement(p) ? resolveMeshName(p.meshId, meshes, meshNames) : null
+  ));
+
+  // Far copies: `m_`/`lnd_`-prefixed stand-ins for geometry the zone already
+  // places at full detail. Ru'Aun Gardens carries `m_osid_fl_b_d` (405 v) over
+  // `osid_fl_b_d_h` (2379 v) and `m_bri_wl_00i` (279 v) inside `bri_wl_00i_h`
+  // (930 v) — the client shows one or the other by region, so drawing both
+  // stacks the cheap copy on the detailed one.
+  //
+  // The prefix alone is not enough to go on: `m_` also names ordinary props —
+  // Mog House furniture (`m_bed_02`, `m_dsk_06`), Bastok's `m_pot`, Ro'Maeve's
+  // `m_pol01_h` pillars — and hiding those would gut those zones. So require a
+  // twin: the same stem, no far prefix, actually placed in this zone, and the
+  // richer mesh. The detail suffix is stripped when matching, but only ever on
+  // a far-prefixed candidate — `bri_fl_00_m` and `bri_fl_00_h` are both real
+  // placements of their own and neither is a stand-in for the other.
+  const FAR_PREFIX = /^(m_|lnd_)/;
+  const detailStem = (n) => n.replace(/_(h|m|n|l)$/, '');
+  const vertsOf = new Map();
+  const meshVerts = (name) => {
+    if (vertsOf.has(name)) return vertsOf.get(name);
+    const prims = meshes.get(name);
+    const n = prims ? prims.reduce((a, x) => a + (x.positions?.length || 0) / 3, 0) : 0;
+    vertsOf.set(name, n);
+    return n;
+  };
+  const plainByStem = new Map();
+  placements.forEach((p, i) => {
+    const m = resolvedFor[i];
+    if (!m || FAR_PREFIX.test(m) || isCollisionPlacement(p)) return;
+    const stem = detailStem(m);
+    let set = plainByStem.get(stem);
+    if (!set) { set = new Set(); plainByStem.set(stem, set); }
+    set.add(m);
+  });
+  const farCopyCache = new Map();
+  const isFarCopy = (mesh) => {
+    if (!FAR_PREFIX.test(mesh)) return false;
+    const cached = farCopyCache.get(mesh);
+    if (cached !== undefined) return cached;
+    const stem = detailStem(mesh.replace(FAR_PREFIX, ''));
+    const own = meshVerts(mesh);
+    let far = false;
+    for (const [plainStem, names] of plainByStem) {
+      // Exact stem, or the full-detail version split into parts beneath it:
+      // `m_osid_cen_a` is one mesh standing in for `osid_cen_a_lf_h` plus
+      // `osid_cen_a_rt_h`. The `_` boundary keeps `m_pot` off `pot*`.
+      if (plainStem !== stem && !plainStem.startsWith(`${stem}_`)) continue;
+      for (const t of names) if (meshVerts(t) > own) { far = true; break; }
+      if (far) break;
+    }
+    farCopyCache.set(mesh, far);
+    return far;
   };
 
   // World geometry: 0x1C placements. Anything with a real placement is world
@@ -260,16 +325,23 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
   // classifies it for the objects panel.
   /** @type {{ meshId: string, resolved: string, pos: number[], rot: number[], scale: number[], matrix: Float32Array }[]} */
   const placedWorld = [];
-  for (const p of placements) {
+  for (let pi = 0; pi < placements.length; pi++) {
+    const p = placements[pi];
     if (!isSanePlacement(p)) { skippedWild++; continue; }
-    const resolved = resolveMeshName(p.meshId, meshes, meshNames);
+    const resolved = resolvedFor[pi];
     if (!resolved) { skippedMissing++; continue; }
     placedMeshes.add(resolved);
     // Aliases (section id / short tail) count as placed too.
     placedMeshes.add(p.meshId);
-    const kind = envKindOf(resolved);
+    // Collision-only proxies (draw distance 1.0) never render in game. Sub-area
+    // sets do, inside their own volume — shop interiors in the towns, in Ru'Aun
+    // a whole low-poly copy of the sky — so they bake like world geometry and
+    // region culling decides when they are on screen.
+    const kind = isCollisionPlacement(p) ? 'collision'
+      : isSubAreaPlacement(p) ? 'subarea' : envKindOf(resolved);
     const matrix = trsMatrix(p.pos, p.rot, p.scale);
-    emitMesh(resolved, matrix, 'world');
+    const drawn = kind !== 'collision' && !isFarCopy(resolved);
+    if (drawn) emitMesh(resolved, matrix, 'world');
     pushPlacement(p, resolved, matrix, kind);
     if (!kind) {
       placedWorld.push({
@@ -526,6 +598,8 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
     zoneBounds,
     zonePlacements,
     objectGroups,
+    pvsRegions: buildPvsRegions(parsed.pvsRegions, zonePlacements),
+    activeRegion: null,
     // Local mesh prims for Live Selection triangle picks (name → prim[]).
     zoneMeshes: meshes,
     collision,
@@ -612,6 +686,88 @@ export function bakeSpinnerDraws(spinner, angleY = 0) {
   return out;
 }
 
+// ── region visibility (PVS) ─────────────────────────────────────────────────
+// parseZone hands back the raw sets (object indices + the objects that own each
+// one). Give every region the display-space box its owners occupy so a camera
+// position can be resolved to a region, and keep the member set for the cull.
+function buildPvsRegions(raw, zonePlacements) {
+  if (!raw?.length) return [];
+  const boundsByIndex = new Map();
+  for (const p of zonePlacements) {
+    if (p.index >= 0 && p.bounds) boundsByIndex.set(p.index, p.bounds);
+  }
+  const out = [];
+  for (const r of raw) {
+    let min = [Infinity, Infinity, Infinity];
+    let max = [-Infinity, -Infinity, -Infinity];
+    let n = 0;
+    for (const i of r.owners) {
+      const b = boundsByIndex.get(i);
+      if (!b) continue;
+      n++;
+      for (let a = 0; a < 3; a++) {
+        if (b.min[a] < min[a]) min[a] = b.min[a];
+        if (b.max[a] > max[a]) max[a] = b.max[a];
+      }
+    }
+    if (!n) continue;
+    const volume = (max[0] - min[0]) * (max[1] - min[1]) * (max[2] - min[2]);
+    out.push({ ptr: r.ptr, members: r.members, bounds: { min, max }, volume, ownerCount: n });
+  }
+  return out;
+}
+
+/**
+ * Region the point stands over, or null for "no region — draw everything".
+ *
+ * A region's box is the extent of the objects that own it, so it hugs the
+ * geometry: an exact containment test almost never fires for a viewer camera,
+ * which sits above and outside. XZ is therefore tested exactly and Y with the
+ * box's own height as slack, so hovering over an island counts as being on it
+ * while looking at a zone from altitude does not. Nested boxes resolve to the
+ * smallest, so a room wins over the corridor around it.
+ *
+ * Falling back to the *nearest* region when outside them all would be wrong:
+ * regions need not tile a zone. North Gustaberg carries a single 206-object set
+ * among 4654 placements, and snapping to it would erase the zone.
+ */
+export function pickPvsRegion(model, point) {
+  const regions = model?.pvsRegions;
+  if (!regions?.length || !point) return null;
+  let best = null;
+  for (const r of regions) {
+    const { min, max } = r.bounds;
+    if (point[0] < min[0] || point[0] > max[0]) continue;
+    if (point[2] < min[2] || point[2] > max[2]) continue;
+    const padY = Math.max(20, max[1] - min[1]);
+    if (point[1] < min[1] - padY || point[1] > max[1] + padY) continue;
+    if (!best || r.volume < best.volume) best = r;
+  }
+  return best;
+}
+
+/**
+ * Mark every world placement outside `region` as `pvsHidden` (null region =
+ * draw everything). Returns true when something changed, i.e. the caller needs
+ * a rebuildZoneDraws + reloadZoneBatches.
+ */
+export function applyPvsRegion(model, region) {
+  const list = model?.zonePlacements;
+  if (!list) return false;
+  const members = region?.members ?? null;
+  let changed = false;
+  for (const p of list) {
+    // World geometry and sub-area sets are region-gated — both carry a DAT index
+    // the sets refer to. Sky/water/unplaced/collision rows carry their own
+    // visibility instead and never appear in a set.
+    const gated = p.kind == null || p.kind === 'subarea';
+    const hide = !!members && gated && p.index >= 0 && !members.has(p.index);
+    if (!!p.pvsHidden !== hide) { p.pvsHidden = hide; changed = true; }
+  }
+  model.activeRegion = region?.ptr ?? null;
+  return changed;
+}
+
 /** Strip leveleditor `game/` prefix → path relative to the install root. */
 export function zoneDatRelPath(zonePath) {
   return String(zonePath || '')
@@ -683,7 +839,7 @@ export function rebuildZoneDraws(model) {
   for (const p of model.zonePlacements) {
     // Panel-only sky rows — particle system draws those, not zone batches.
     if (p.kind === 'sky') continue;
-    if (p.dragHidden || p.userHidden) continue;
+    if (p.dragHidden || p.userHidden || p.pvsHidden) continue;
     if (!p.mesh) continue;
     const prims = meshes.get(p.mesh);
     if (!prims?.length) continue;
@@ -732,7 +888,7 @@ export function buildPlacementDraws(model, placement) {
   // Temporary mini-model path via rebuild helper with one placement.
   const tmp = {
     zoneMeshes: model.zoneMeshes,
-    zonePlacements: [{ ...placement, kind: null, dragHidden: false }],
+    zonePlacements: [{ ...placement, kind: null, dragHidden: false, pvsHidden: false }],
     textures: model.textures,
     zoneStats: {},
   };

@@ -455,16 +455,73 @@ export class OrbitCamera {
     this.mode = snap.mode === 'fly' ? 'fly' : 'orbit';
   }
 
-  /** Frame an AABB. Optional `opts.distance` overrides the auto radius framing. */
+  /**
+   * Frame an AABB in camera/display space.
+   *
+   * Entities / effects: classic radius×2.4 (stable orbit pivot + zoom).
+   * Zones: FOV-aware fill so outdoor maps aren't a tiny island in the sky.
+   * Optional `opts.distance` overrides either path.
+   */
   fit(min, max, opts = {}) {
     this.userFramed = false;
     this.target = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
-    const radius = Math.max(Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) / 2, 0.5);
-    this.distance = opts.distance != null
-      ? Math.min(Math.max(opts.distance, this.minDistance), this.maxDistance)
-      : Math.min(Math.max(radius * 2.4, this.minDistance), this.maxDistance);
+    const sx = Math.max(Math.abs(max[0] - min[0]), 0.5);
+    const sy = Math.max(Math.abs(max[1] - min[1]), 0.5);
+    const sz = Math.max(Math.abs(max[2] - min[2]), 0.5);
+    const radius = Math.max(Math.hypot(sx, sy, sz) / 2, 0.5);
     this.yaw = opts.yaw ?? 0.6;
     this.pitch = opts.pitch ?? 0.3;
+
+    let dist;
+    if (opts.distance != null) {
+      dist = opts.distance;
+    } else if (this.rangeKind === 'zone') {
+      // FOV fit: project AABB onto view right/up, fill the frustum with margin.
+      const aspect = opts.aspect > 0.1 ? opts.aspect : 16 / 9;
+      const fovY = (this.fovDegrees * Math.PI) / 180;
+      const halfY = Math.tan(fovY * 0.5) || 0.4;
+      const halfX = halfY * aspect;
+      const cp = Math.cos(this.pitch);
+      const sp = Math.sin(this.pitch);
+      const cy = Math.cos(this.yaw);
+      const syaw = Math.sin(this.yaw);
+      const ox = cp * syaw;
+      const oy = this.yUp ? sp : -sp;
+      const oz = cp * cy;
+      const fx = -ox;
+      const fy = -oy;
+      const fz = -oz;
+      const upY = this.yUp ? 1 : -1;
+      let rx = -fz * upY;
+      let rz = fx * upY;
+      const rl = Math.hypot(rx, rz) || 1;
+      rx /= rl;
+      rz /= rl;
+      const ry = 0;
+      let ux = ry * fz - rz * fy;
+      let uy = rz * fx - rx * fz;
+      let uz = rx * fy - ry * fx;
+      const ul = Math.hypot(ux, uy, uz) || 1;
+      ux /= ul; uy /= ul; uz /= ul;
+      const hx = sx * 0.5;
+      const hy = sy * 0.5;
+      const hz = sz * 0.5;
+      const extR = Math.abs(rx) * hx + Math.abs(ry) * hy + Math.abs(rz) * hz;
+      const extU = Math.abs(ux) * hx + Math.abs(uy) * hy + Math.abs(uz) * hz;
+      const dFit = Math.max(extU / halfY, extR / halfX, radius * 0.35);
+      const pad = opts.padding != null ? opts.padding : 1.12;
+      dist = dFit * pad;
+      // Stay inside the zone far plane so the subject isn't clipped away.
+      if (this.far > this.near * 2) {
+        dist = Math.min(dist, this.far * 0.85);
+      }
+    } else {
+      // Entity / effect — known-good framing (FOV path zoomed these into the face
+      // and left orbit/zoom pivoting off the model centre).
+      dist = radius * 2.4;
+    }
+    this.distance = Math.min(Math.max(dist, this.minDistance), this.maxDistance);
+
     if (this.mode === 'fly') {
       // Seat fly camera on the fitted orbit eye, looking at the target.
       const cp = Math.cos(this.pitch);

@@ -392,6 +392,32 @@ function parseZoneMeshSection(bytes, dv, section) {
 const OBJ_STRIDE_MODERN = 0x64;
 const OBJ_STRIDE_PROTO = 0x54;
 
+// Draw distance (record +0x40) of exactly 1.0 marks an object the game never
+// renders — the collision-only proxies zone authors leave in the MZB. Across
+// retail that value is carried by 15.8k placements, and their names say what it
+// is: `hitwall_*`, `kabe-atariyou` (壁当たり用, "for wall collision"), `hit_*`,
+// `id_board*` / `id_box*`. Real geometry uses 0 (no limit) or 30–1000.
+//
+// Almost everywhere those proxies have no 0x2E mesh in the DAT, so they drop out
+// as unresolved anyway. Six zones ship a mesh for one — Ru'Aun Gardens and its
+// Escha copy carry four (`id_rid_fl_lt1/lt2/rt1/rt2`), untextured low-poly floor
+// slabs sitting coplanar with the `lnd_rid_fl_*` islands they shadow, which is
+// where the z-fighting across the whole sky came from.
+const COLLISION_DRAW_DIST = 1;
+
+/** True when a 0x1C placement is a collision-only proxy the game never draws. */
+export const isCollisionPlacement = (p) => p?.drawDist === COLLISION_DRAW_DIST;
+
+// A placement tagged with a sub-area id (+0x50) is part of that sub-area's set,
+// drawn only while the player stands in the matching 0x36 'm' volume — shop and
+// inn interiors in the towns (`r_shop`, `wi_s_room`), and in Ru'Aun Gardens a
+// whole second copy of the sky: 592 low-poly islands (`m_osid_*`, `lnd_*`, built
+// on the `tu_l01`/`tu_l02` low-res atlases, ~1/6 the vertices of the `*_h`
+// originals they sit on top of). Drawing them in the base zone stacks the cheap
+// copy on the detailed one — the z-fighting across Ru'Aun's platforms.
+/** True when a 0x1C placement belongs to a sub-area rather than the base zone. */
+export const isSubAreaPlacement = (p) => p?.subAreaId != null;
+
 function zoneDefObjectStride(bytes, dv, ds, nodeCount) {
   const mode = (u32at(dv, ds) >>> 24) & 0xFF;
   if (nodeCount < 2) {
@@ -428,14 +454,60 @@ function parseZoneDef(bytes, dv, section, table1) {
     placements.push({
       meshId,
       index: i,   // stable DAT object index — lets edits target the EXACT instance of a shared mesh name
-      // fileIdLink sits at +0x50 in the modern 0x64 record; absent on 0x54 proto.
-      fileIdLink: stride >= OBJ_STRIDE_MODERN ? (dv.getUint32(b + 0x50, true) || null) : null,
+      // Region-visibility set pointer at +0x48 (see parsePvsRegions).
+      regionPtr: stride >= OBJ_STRIDE_MODERN ? (dv.getUint32(b + 0x48, true) || 0) : 0,
+      // Sub-area id at +0x50 in the modern 0x64 record; absent on 0x54 proto.
+      // Same id space as the 0x36 'm' trigger volumes — verified equal set on
+      // every zone that has any (Ru'Aun 524–539, Lower Jeuno 454–466, …).
+      // A tagged placement belongs to that sub-area's model set, so the base
+      // zone must not draw it. See isSubAreaPlacement.
+      subAreaId: stride >= OBJ_STRIDE_MODERN ? (dv.getUint32(b + 0x50, true) || null) : null,
+      // Draw distance at +0x40 (0 = no limit). 1.0 is the authoring sentinel for
+      // "collision only, never rendered" — see COLLISION_DRAW_DIST.
+      drawDist: stride >= OBJ_STRIDE_MODERN ? dv.getFloat32(b + 0x40, true) : null,
       pos: [dv.getFloat32(b + 0x10, true), dv.getFloat32(b + 0x14, true), dv.getFloat32(b + 0x18, true)],
       rot: [dv.getFloat32(b + 0x1C, true), dv.getFloat32(b + 0x20, true), dv.getFloat32(b + 0x24, true)],
       scale: [dv.getFloat32(b + 0x28, true), dv.getFloat32(b + 0x2C, true), dv.getFloat32(b + 0x30, true)],
     });
   }
   return placements;
+}
+
+// ── 0x1C region visibility sets ("PVS") ─────────────────────────────────────
+// Record +0x48 points (section-relative) at `count:u32` followed by `count`
+// object indices: the potentially-visible set for the region that object sits
+// in. The client draws exactly one of these at a time, picked by where the
+// camera is, which is why a zone can carry two copies of the same geometry
+// without ever showing both — Ru'Aun's `m_bri_pol` is in ten far-region lists
+// and the `bri_pol_h` it sits inside is in three near ones, never together.
+//
+// 246 retail zones ship these; dungeons use them as room occlusion (Pso'Xja
+// 202 regions, Gusgen 122), open zones as distance culling. Objects sharing a
+// pointer are one region, and their placements bound it.
+function parsePvsRegions(dv, section, placements) {
+  const ds = section.dataStart;
+  const sectionEnd = section.start + section.size;
+  const n = placements.length;
+  const byPtr = new Map();
+  for (const p of placements) {
+    const ptr = p.regionPtr;
+    if (!ptr) continue;
+    const seen = byPtr.get(ptr);
+    if (seen) { seen.owners.push(p.index); continue; }
+    const base = ds + ptr;
+    if (base + 4 > sectionEnd) continue;
+    const count = u32at(dv, base);
+    // Hostile input: a bogus pointer must not allocate a huge set.
+    if (count < 1 || count > n || base + 4 + count * 4 > sectionEnd) continue;
+    const members = new Set();
+    for (let k = 0; k < count; k++) {
+      const v = u32at(dv, base + 4 + k * 4);
+      if (v < n) members.add(v);
+    }
+    if (!members.size) continue;
+    byPtr.set(ptr, { ptr, members, owners: [p.index] });
+  }
+  return [...byPtr.values()];
 }
 
 /**
@@ -862,6 +934,17 @@ export function parseZone(datBuffer, keyTables) {
   // First-wins on `meshes` would keep only one and hide clouds for other weathers.
   const weatherSky = []; // { name, weather, prims }
   const seenCelestial = new Set();
+  // Section fourcc → prims, applied AFTER real mesh names so a fourcc that
+  // collides with another mesh's name cannot steal it. Dynamis Jeuno: mesh
+  // "saku06" has section id "saku"; keepRicher used to replace the real fence
+  // mesh "saku" with the flat saku06 slab (100 fences "laying around").
+  const fourccAliases = [];
+  const primVertCount = (ps) => ps.reduce((n, p) => n + ((p.positions?.length || 0) / 3), 0);
+  const keepRicher = (key, next) => {
+    const prev = meshes.get(key);
+    if (!prev) { meshes.set(key, next); return; }
+    if (primVertCount(next) > primVertCount(prev)) meshes.set(key, next);
+  };
   const stack = [];
   for (const s of sections) {
     if (s.typeCode === 0x01) { stack.push(s.id); continue; }
@@ -895,16 +978,10 @@ export function parseZone(datBuffer, keyTables) {
 
     // Prefer the richer geometry when the same name appears twice (e.g. wgtc has
     // a ~3KB stub section then a full ~44KB gate body — first-wins hid the gate).
-    const primVertCount = (ps) => ps.reduce((n, p) => n + ((p.positions?.length || 0) / 3), 0);
-    const keepRicher = (key, next) => {
-      const prev = meshes.get(key);
-      if (!prev) { meshes.set(key, next); return; }
-      if (primVertCount(next) > primVertCount(prev)) meshes.set(key, next);
-    };
     keepRicher(meshName, prims);
     meshNames.add(meshName);
-    // Aliases for prototype placements that store a short id / section fourcc.
-    if (s.id) keepRicher(s.id, prims);
+    // Defer fourcc aliases — see fourccAliases note above.
+    if (s.id && s.id !== meshName) fourccAliases.push([s.id, prims]);
     const parts = meshName.split(/\s+/).filter(Boolean);
     if (parts.length > 1) {
       const tail = parts[parts.length - 1];
@@ -913,15 +990,22 @@ export function parseZone(datBuffer, keyTables) {
       if (tail) { keepRicher(tail, prims); meshNames.add(tail); }
     }
   }
+  for (const [id, prims] of fourccAliases) {
+    if (meshNames.has(id)) continue;
+    keepRicher(id, prims);
+  }
 
   let placements = [];
   let collision = null;
+  let pvsRegions = [];
   for (const s of sections) if (s.typeCode === 0x1C) {
-    placements = parseZoneDef(bytes, dv, s, table1); // decrypts the 0x1C in place
+    const all = parseZoneDef(bytes, dv, s, table1);  // decrypts the 0x1C in place
+    // Region sets index the FULL table, so build them before filtering.
+    pvsRegions = parsePvsRegions(dv, s, all);
     // Filter placements hidden by xi's delete mechanism (moved to y ≈ -100000).
     // Without this, hidden "deleted" duplicates load as real placements, occupy a
     // Three.js .NNN suffix, and confuse the adopt-or-reinstantiate logic on restore.
-    placements = placements.filter(p => p.pos[1] > -90000);
+    placements = all.filter(p => p.pos[1] > -90000);
     collision = decodeCollision(bytes, dv, s);        // then read the collision soup
     break;
   }
@@ -955,6 +1039,6 @@ export function parseZone(datBuffer, keyTables) {
 
   return {
     meshes, meshNames, placements, textures, meshIdToName, meshSections,
-    collision, interactions, subAreas, weatherSky,
+    collision, interactions, subAreas, weatherSky, pvsRegions,
   };
 }

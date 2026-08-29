@@ -196,31 +196,155 @@ function peekAnimation(bytes, dv, s) {
   return { text: `${frames} frames · ${joints} joints` };
 }
 
-/** 0x07 — the routine's 0x05 commands reference clips/generators by 4-char tag. */
+/**
+ * 0x07 EffectRoutine opcode names (xim EffectRoutineParser / effect_system.md).
+ * Unknown ops still list as `0xNN`.
+ */
+const EFFECT_ROUTINE_OPS = {
+  0x00: 'End',
+  0x01: 'Start',
+  0x02: 'SpawnGenerator',
+  0x03: 'CallRoutine (source)',
+  0x05: 'SkeletonAnimation',
+  0x07: 'AnimationLock',
+  0x09: 'CallRoutine (target)',
+  0x0a: 'SoundEffect',
+  0x0b: 'SoundEffect',
+  0x0c: 'ModelTranslation',
+  0x0d: 'ModelRotation',
+  0x19: 'SpellEffect',
+  0x1e: 'ParticleDampen',
+  0x2d: 'StopGenerator',
+  0x3b: 'CallRoutine (block)',
+  0x3c: 'CallRoutine (block)',
+  0x3d: 'RandomChild open',
+  0x3e: 'RandomChild close',
+  0x3f: 'TransitionParticle',
+  0x4a: 'SoundEffect',
+  0x52: 'TimeBasedReplay',
+  0x53: 'SoundEffect',
+  0x57: 'CallRoutine',
+  0x59: 'AnimationLock',
+  0x60: 'SoundEffect',
+  0x64: 'Conditional',
+  0x67: 'Condition',
+  0x6b: 'Branch',
+  0x73: 'StartLoop',
+  0x85: 'EndLoop',
+};
+
+/**
+ * Full 0x07 command table for Data Struct (DataTable-shaped).
+ * Delays are relative (trail their own op); `at` is Σ of prior delays.
+ */
+export function parseInspectEffectRoutine(buffer, offset) {
+  const bytes = buffer instanceof Uint8Array
+    ? buffer
+    : new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const start = offset | 0;
+  if (start + 0x30 > bytes.length) return null;
+  const meta = dv.getUint32(start + 4, true);
+  const type = meta & 0x7f;
+  if (type !== 0x07 && type !== 0) {
+    // allow known-good offset without re-checking type
+  }
+  const size = ((meta >>> 7) & 0x7ffff) * 0x10;
+  const bodyEnd = Math.min(start + (size > 0 ? size : 0x200), bytes.length);
+  const dataStart = start + 0x10;
+  if (dataStart + 0x20 > bodyEnd) return null;
+
+  const idRaw = fourcc(bytes, start);
+  // Section header id is the 4-char tag at +0; fall back to body name if present.
+  let id = strAt(bytes, start, 4).replace(/\0/g, '').trim();
+  if (!id || !printable(id)) id = strAt(bytes, dataStart, 8).replace(/\0/g, '').trim() || 'main';
+
+  const sec2 = dv.getInt32(dataStart + 0x14, true);
+  let p = dataStart + (sec2 - 16);
+  const rows = [];
+  let clock = 0;
+  for (let guard = 0; guard < 256 && p + 8 <= bodyEnd && p >= dataStart; guard++) {
+    const op = bytes[p];
+    const n = (bytes[p + 1] | (bytes[p + 2] << 8)) & 0x1f;
+    const entryLen = Math.max(1, n) * 4;
+    if (op === 0x00) {
+      rows.push({
+        i: rows.length,
+        op: '0x00',
+        name: 'End',
+        at: clock,
+        delay: 0,
+        dur: 0,
+        ref: '',
+      });
+      break;
+    }
+    const delay = p + 6 <= bodyEnd ? (bytes[p + 4] | (bytes[p + 5] << 8)) : 0;
+    const dur = p + 8 <= bodyEnd ? (bytes[p + 6] | (bytes[p + 7] << 8)) : 0;
+    let ref = '';
+    if (p + 12 <= bodyEnd) {
+      const r = fourcc(bytes, p + 8).replace(/\0/g, '').trim();
+      if (r && printable(r)) ref = r;
+    }
+    const at = clock;
+    clock += delay;
+    const name = EFFECT_ROUTINE_OPS[op] || `op 0x${op.toString(16).padStart(2, '0')}`;
+    rows.push({
+      i: rows.length,
+      op: `0x${op.toString(16).padStart(2, '0')}`,
+      name,
+      at,
+      delay,
+      dur,
+      ref,
+    });
+    p += entryLen;
+  }
+
+  const genN = rows.filter((r) => r.op === '0x02').length;
+  const sndN = rows.filter((r) => /SoundEffect/.test(r.name)).length;
+  const callN = rows.filter((r) => /CallRoutine/.test(r.name)).length;
+  const bits = [`${rows.length} cmd${rows.length === 1 ? '' : 's'}`];
+  if (genN) bits.push(`${genN} gen`);
+  if (sndN) bits.push(`${sndN} sfx`);
+  if (callN) bits.push(`${callN} call`);
+
+  return {
+    kind: 'effectRoutine',
+    id,
+    title: 'EffectRoutine',
+    subtitle: bits.join(' · '),
+    note: 'Scheduler ticks (60/s). Delay trails its op — At = sum of prior delays.',
+    offset: start,
+    size: size || (bodyEnd - start),
+    columns: [
+      { key: 'i', label: '#' },
+      { key: 'at', label: 'At' },
+      { key: 'op', label: 'Op' },
+      { key: 'name', label: 'Command' },
+      { key: 'ref', label: 'Ref' },
+      { key: 'delay', label: 'Delay' },
+      { key: 'dur', label: 'Dur' },
+    ],
+    rows,
+  };
+}
+
+/** 0x07 — the routine's commands reference generators/clips by 4-char tag. */
 function peekRoutine(bytes, dv, s) {
   if (s.size < 0x30) return null;
-  // Data offset 0x10 holds four u32s (s1, sec2, s3, tot); sec2 — the command
-  // list pointer, data-relative — is the second, so it sits at data +0x14.
-  const sec2 = dv.getInt32(s.dataStart + 0x14, true);
-  let p = s.dataStart + (sec2 - 16);
-  const end = s.start + s.size;
+  const parsed = parseInspectEffectRoutine(bytes, s.start);
+  if (!parsed?.rows?.length) return { text: null, isEffectRoutine: true };
   const refs = [];
-  let ops = 0;
-  for (let guard = 0; guard < 128 && p + 8 <= end && p >= s.dataStart; guard++) {
-    const op = bytes[p];
-    if (op === 0x00) break;
-    ops++;
-    if (op === 0x05 && p + 12 <= end) {
-      const ref = fourcc(bytes, p + 8).trim();
-      if (ref && printable(ref)) refs.push(ref);
-    }
-    const n = (bytes[p + 1] | (bytes[p + 2] << 8)) & 0x1f;
-    p += Math.max(1, n) * 4;
+  for (const r of parsed.rows) {
+    if (r.ref && (r.op === '0x02' || r.op === '0x05')) refs.push(r.ref);
   }
-  if (!ops) return null;
   const shown = refs.slice(0, 6).join(' ') + (refs.length > 6 ? ' …' : '');
-  const cmds = `${ops} cmd${ops === 1 ? '' : 's'}`;
-  return { text: refs.length ? `${cmds} → ${shown}` : cmds };
+  const cmds = parsed.subtitle || `${parsed.rows.length} cmds`;
+  return {
+    text: refs.length ? `${cmds} → ${shown}` : cmds,
+    isEffectRoutine: true,
+  };
 }
 
 function peekSoundPointer(bytes, dv, s) {
@@ -235,10 +359,132 @@ function peekSoundPointer(bytes, dv, s) {
   };
 }
 
+/**
+ * 0x21 SpriteSheetMesh — billboard quads on a shared texture atlas.
+ * Returns a DataTable-shaped inspector (one row per sprite mesh).
+ */
+export function parseInspectSpriteSheet(buffer, offset) {
+  const bytes = buffer instanceof Uint8Array
+    ? buffer
+    : new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const start = offset | 0;
+  if (start + 0x20 > bytes.length) return null;
+  const meta = dv.getUint32(start + 4, true);
+  const type = meta & 0x7f;
+  if (type !== 0x21 && type !== 0) { /* known offset */ }
+  const size = ((meta >>> 7) & 0x7ffff) * 0x10;
+  const bodyEnd = Math.min(start + (size > 0 ? size : 0x4000), bytes.length);
+  const dataStart = start + 0x10;
+  if (dataStart + 0x18 > bodyEnd) return null;
+
+  let id = strAt(bytes, start, 4).replace(/\0/g, '').trim();
+  if (!id || !printable(id)) id = 'sheet';
+
+  const unkFlag = dv.getUint16(dataStart, true);
+  const numMesh = dv.getUint16(dataStart + 2, true);
+  if (numMesh <= 0 || numMesh > 4096) return null;
+  const lensFlareFlag = bytes[dataStart + 4];
+  const lensFlare = lensFlareFlag === 1;
+  const normalizationFlag = bytes[dataStart + 7];
+  const texScale = (unkFlag === 1 && normalizationFlag === 0) ? 1 / 256 : 1;
+  const textureName = strAt(bytes, dataStart + 8, 0x10).replace(/\0/g, ' ').replace(/\s+/g, ' ').trim();
+
+  let p = dataStart + 0x18; // after tex name (8+16 = 24 = 0x18)
+  // Layout: +0 u16 unkFlag, +2 u16 numMesh, +4 lens, +5..+6 pad, +7 norm, +8 tex[16]
+  // Wait: peek used dataStart+8 for tex — that's after 8 bytes header. Yes 0x18 from dataStart? 
+  // dataStart+0: unk16, +2 numMesh, +4 lens8, +5 pad, +6 pad, +7 norm, +8 tex16 → next at +0x18
+  const rows = [];
+  const f32 = (o) => (o + 4 <= bodyEnd ? dv.getFloat32(o, true) : 0);
+
+  for (let i = 0; i < numMesh && p + 4 <= bodyEnd; i++) {
+    const unk1 = dv.getUint16(p, true);
+    const numQuads = bytes[p + 2];
+    p += 4;
+    if (unk1 !== 0x01 && unk1 !== 1) {
+      // soft fail — stop rather than garbage rows
+      break;
+    }
+    if (lensFlare) {
+      p += 16; // 4 floats
+    }
+    const numVerts = 6 * numQuads;
+    let uMin = Infinity; let uMax = -Infinity;
+    let vMin = Infinity; let vMax = -Infinity;
+    let xMin = Infinity; let xMax = -Infinity;
+    let yMin = Infinity; let yMax = -Infinity;
+    let zMin = Infinity; let zMax = -Infinity;
+    let ok = true;
+    for (let j = 0; j < numVerts; j++) {
+      if (p + 20 > bodyEnd) { ok = false; break; }
+      const x = f32(p); const y = f32(p + 4); const z = f32(p + 8);
+      p += 12 + 4; // pos + rgba
+      const u = f32(p) * texScale;
+      const v = f32(p + 4) * texScale;
+      p += 8;
+      if (u < uMin) uMin = u; if (u > uMax) uMax = u;
+      if (v < vMin) vMin = v; if (v > vMax) vMax = v;
+      if (x < xMin) xMin = x; if (x > xMax) xMax = x;
+      if (y < yMin) yMin = y; if (y > yMax) yMax = y;
+      if (z < zMin) zMin = z; if (z > zMax) zMax = z;
+    }
+    if (!ok) break;
+    const fmt = (a, b) => (Number.isFinite(a) && Number.isFinite(b)
+      ? `${a.toFixed(3)}…${b.toFixed(3)}` : '—');
+    rows.push({
+      i,
+      quads: numQuads,
+      verts: numVerts,
+      uv: Number.isFinite(uMin) ? fmt(uMin, uMax) : '—',
+      u0: Number.isFinite(uMin) ? uMin : null,
+      u1: Number.isFinite(uMax) ? uMax : null,
+      v0: Number.isFinite(vMin) ? vMin : null,
+      v1: Number.isFinite(vMax) ? vMax : null,
+      size: Number.isFinite(xMin)
+        ? `${(xMax - xMin).toFixed(2)} × ${(yMax - yMin).toFixed(2)} × ${(zMax - zMin).toFixed(2)}`
+        : '—',
+    });
+  }
+
+  return {
+    kind: 'spriteSheet',
+    id,
+    title: 'SpriteSheetMesh',
+    subtitle: `${rows.length} sprite${rows.length === 1 ? '' : 's'}${textureName ? ` · ${textureName}` : ''}${lensFlare ? ' · lens flare' : ''}`,
+    note: textureName
+      ? `Atlas texture “${textureName}” — opens with this sheet when available in the DAT.`
+      : 'Billboard quads (6 verts each). UV is atlas space 0…1.',
+    textureName: textureName || null,
+    lensFlare,
+    offset: start,
+    size: size || (bodyEnd - start),
+    columns: [
+      { key: 'i', label: '#' },
+      { key: 'quads', label: 'Quads' },
+      { key: 'verts', label: 'Verts' },
+      { key: 'uv', label: 'UV (u… / v…)' },
+      { key: 'size', label: 'Local size' },
+    ],
+    rows,
+  };
+}
+
 function peekSpriteSheet(bytes, dv, s) {
+  const parsed = parseInspectSpriteSheet(bytes, s.start);
+  if (parsed?.rows?.length) {
+    return {
+      text: parsed.subtitle,
+      isSpriteSheet: true,
+      textureName: parsed.textureName || null,
+    };
+  }
   const numMesh = dv.getUint16(s.dataStart + 2, true);
   const tex = strAt(bytes, s.dataStart + 8, 0x10).trim();
-  return { text: tex ? `${numMesh} sprites · ${tex}` : `${numMesh} sprites` };
+  return {
+    text: tex ? `${numMesh} sprites · ${tex}` : `${numMesh} sprites`,
+    isSpriteSheet: true,
+    textureName: tex || null,
+  };
 }
 
 /**
@@ -493,19 +739,297 @@ function peekUiElementGroup(bytes, dv, s) {
   };
 }
 
+/**
+ * 0x1F ParticleMesh — triangle soup(s) with optional per-mesh textures.
+ * DataTable-shaped for the inspector; opens linked atlases when present.
+ */
+export function parseInspectParticleMesh(buffer, offset) {
+  const bytes = buffer instanceof Uint8Array
+    ? buffer
+    : new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const start = offset | 0;
+  if (start + 0x20 > bytes.length) return null;
+
+  let id = strAt(bytes, start, 4).replace(/\0/g, '').trim();
+  if (!id || !printable(id)) id = 'mesh';
+
+  let parsed = null;
+  try {
+    // Lazy import avoided — duplicate minimal read via sections helper when available.
+    // Inline port of parseParticleMesh so inspect stays self-contained on offset.
+    const dataStart = start + 0x10;
+    const version = dv.getUint32(dataStart, true);
+    if (version !== 0x3 && version !== 0x5 && version !== 0x6) return null;
+    const numWithTex = bytes[dataStart + 4];
+    const numWithoutTex = bytes[dataStart + 5];
+    const total = numWithTex + numWithoutTex;
+    if (total <= 0 || total > 64) return null;
+    const triArraySize = total <= 3 ? 3 : total <= 4 ? 4 : total <= 7 ? 7 : total <= 8 ? 8
+      : total <= 11 ? 11 : total <= 12 ? 12 : total <= 15 ? 15 : -1;
+    if (triArraySize < 0) return null;
+
+    let p = dataStart + 8;
+    const triCounts = [];
+    for (let i = 0; i < triArraySize; i++) {
+      triCounts.push(dv.getUint16(p, true));
+      p += 2;
+    }
+    if (version === 0x03) p += 2;
+
+    const textureNames = [];
+    const texIters = version === 0x03 ? 4 : numWithTex;
+    for (let i = 0; i < texIters; i++) {
+      textureNames.push(strAt(bytes, p, 0x10).replace(/\0/g, '').trim());
+      p += 0x10;
+    }
+
+    const rows = [];
+    const texSet = new Set();
+    for (let k = 0; k < total; k++) {
+      const tris = triCounts[k] | 0;
+      const numVerts = 3 * tris;
+      let xMin = Infinity; let xMax = -Infinity;
+      let yMin = Infinity; let yMax = -Infinity;
+      let zMin = Infinity; let zMax = -Infinity;
+      let uMin = Infinity; let uMax = -Infinity;
+      let vMin = Infinity; let vMax = -Infinity;
+      for (let i = 0; i < numVerts; i++) {
+        if (p + 40 > bytes.length) break;
+        const x = dv.getFloat32(p, true); p += 4;
+        const y = dv.getFloat32(p, true); p += 4;
+        const z = dv.getFloat32(p, true); p += 4;
+        p += 12; // normals
+        p += 4;  // bgra
+        const u = dv.getFloat32(p, true); p += 4;
+        const v = dv.getFloat32(p, true); p += 4;
+        if (x < xMin) xMin = x; if (x > xMax) xMax = x;
+        if (y < yMin) yMin = y; if (y > yMax) yMax = y;
+        if (z < zMin) zMin = z; if (z > zMax) zMax = z;
+        if (u < uMin) uMin = u; if (u > uMax) uMax = u;
+        if (v < vMin) vMin = v; if (v > vMax) vMax = v;
+      }
+      const tex = k < numWithTex ? (textureNames[k] || '') : '';
+      if (tex) texSet.add(tex);
+      const fmt = (a, b) => (Number.isFinite(a) && Number.isFinite(b)
+        ? `${a.toFixed(3)}…${b.toFixed(3)}` : '—');
+      rows.push({
+        i: k,
+        tris,
+        verts: numVerts,
+        texture: tex || '—',
+        size: Number.isFinite(xMin)
+          ? `${(xMax - xMin).toFixed(2)} × ${(yMax - yMin).toFixed(2)} × ${(zMax - zMin).toFixed(2)}`
+          : '—',
+        uv: Number.isFinite(uMin) ? `u ${fmt(uMin, uMax)} · v ${fmt(vMin, vMax)}` : '—',
+      });
+    }
+
+    const texList = [...texSet];
+    parsed = {
+      kind: 'particleMesh',
+      id,
+      title: 'ParticleMesh',
+      subtitle: `${rows.length} mesh${rows.length === 1 ? '' : 'es'}${texList.length ? ` · ${texList.join(', ')}` : ''}`,
+      note: texList.length
+        ? `Textures: ${texList.join(', ')} — opens when present in this DAT.`
+        : 'Untextured particle geometry (vertex colour only).',
+      textureNames: texList,
+      textureName: texList[0] || null,
+      offset: start,
+      columns: [
+        { key: 'i', label: '#' },
+        { key: 'tris', label: 'Tris' },
+        { key: 'verts', label: 'Verts' },
+        { key: 'texture', label: 'Texture' },
+        { key: 'size', label: 'Local size' },
+        { key: 'uv', label: 'UV' },
+      ],
+      rows,
+    };
+  } catch {
+    return null;
+  }
+  return parsed;
+}
+
 function peekParticleMesh(bytes, dv, s) {
+  const parsed = parseInspectParticleMesh(bytes, s.start);
+  if (parsed?.rows?.length) {
+    return {
+      text: parsed.subtitle,
+      isParticleMesh: true,
+      textureName: parsed.textureName || null,
+    };
+  }
   const total = bytes[s.dataStart + 4] + bytes[s.dataStart + 5];
-  return total ? { text: `${total} mesh${total === 1 ? '' : 'es'}` } : null;
+  return total
+    ? { text: `${total} mesh${total === 1 ? '' : 'es'}`, isParticleMesh: true }
+    : { text: null, isParticleMesh: true };
+}
+
+/**
+ * 0x19 ParticleKeyFrameData — (time, value) curve over life 0…1.
+ * Terminator is the entry with time === 1.0.
+ */
+export function parseInspectKeyFrame(buffer, offset) {
+  const bytes = buffer instanceof Uint8Array
+    ? buffer
+    : new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const start = offset | 0;
+  if (start + 0x18 > bytes.length) return null;
+
+  let id = strAt(bytes, start, 4).replace(/\0/g, '').trim();
+  if (!id || !printable(id)) id = 'keys';
+
+  const meta = dv.getUint32(start + 4, true);
+  const size = ((meta >>> 7) & 0x7ffff) * 0x10;
+  const end = Math.min(start + (size > 0 ? size : 0x1000), bytes.length);
+  const dataStart = start + 0x10;
+
+  const rows = [];
+  for (let p = dataStart; p + 8 <= end && rows.length < 4096; p += 8) {
+    const time = dv.getFloat32(p, true);
+    const value = dv.getFloat32(p + 4, true);
+    rows.push({
+      i: rows.length,
+      time,
+      value,
+      t: Number.isFinite(time) ? time.toFixed(4) : '—',
+      v: Number.isFinite(value) ? value.toFixed(6) : '—',
+    });
+    if (time === 1) break;
+  }
+  if (!rows.length) return null;
+
+  const t0 = rows[0].time;
+  const t1 = rows[rows.length - 1].time;
+  const vmin = Math.min(...rows.map((r) => r.value));
+  const vmax = Math.max(...rows.map((r) => r.value));
+
+  return {
+    kind: 'keyFrame',
+    id,
+    title: 'ParticleKeyFrameData',
+    subtitle: `${rows.length} key${rows.length === 1 ? '' : 's'} · t ${t0.toFixed(2)}…${t1.toFixed(2)} · v ${vmin.toFixed(3)}…${vmax.toFixed(3)}`,
+    note: 'Piecewise-linear curve over particle life (time 0…1). Last key is usually time = 1.',
+    offset: start,
+    columns: [
+      { key: 'i', label: '#' },
+      { key: 't', label: 'Time' },
+      { key: 'v', label: 'Value' },
+    ],
+    rows,
+  };
 }
 
 function peekKeyFrames(bytes, dv, s) {
+  const parsed = parseInspectKeyFrame(bytes, s.start);
+  if (parsed?.rows?.length) {
+    return { text: `${parsed.rows.length} keys`, isKeyFrame: true };
+  }
   const end = s.start + s.size;
   let n = 0;
   for (let p = s.dataStart; p + 8 <= end && n < 4096; p += 8) {
     n++;
     if (dv.getFloat32(p, true) === 1) break;
   }
-  return n ? { text: `${n} keys` } : null;
+  return n ? { text: `${n} keys`, isKeyFrame: true } : { text: null, isKeyFrame: true };
+}
+
+/**
+ * 0x25 WeightedMesh — morphable particle geometry: N position/normal chunks
+ * blended by particle weights (sec3 0x1E–0x22). Useful summary + texture.
+ */
+export function parseInspectWeightedMesh(buffer, offset) {
+  const bytes = buffer instanceof Uint8Array
+    ? buffer
+    : new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const start = offset | 0;
+  if (start + 0x30 > bytes.length) return null;
+
+  let id = strAt(bytes, start, 4).replace(/\0/g, '').trim();
+  if (!id || !printable(id)) id = 'wmesh';
+
+  const dataStart = start + 0x10;
+  const unk1 = dv.getUint16(dataStart, true);
+  if (unk1 !== 1) return null;
+
+  const meshConfig = bytes[dataStart + 2];
+  const enableAlphaDiscard = (meshConfig & 0x80) !== 0;
+  const numChunks = meshConfig & 0x0f;
+  if (numChunks <= 0 || numChunks > 8) return null;
+
+  const offsetExtension = bytes[dataStart + 3] * 0x10000;
+  const numPositions = dv.getUint16(dataStart + 4, true);
+  const numNormals = dv.getUint16(dataStart + 6, true);
+  const indexOffset = dv.getUint16(dataStart + 8, true) + offsetExtension + dataStart;
+  const numPrimitives = dv.getUint16(dataStart + 10, true);
+  const numVertices = numPrimitives * 3;
+  const colorOffset = dv.getUint16(dataStart + 12, true) + dataStart;
+  const uvOffset = dv.getUint16(dataStart + 14, true) + offsetExtension + dataStart;
+  const textureName = strAt(bytes, dataStart + 16, 0x10).replace(/\0/g, ' ').replace(/\s+/g, ' ').trim();
+
+  // Bounds from chunk 0 positions (first morph target).
+  let p = dataStart + 32;
+  let xMin = Infinity; let xMax = -Infinity;
+  let yMin = Infinity; let yMax = -Infinity;
+  let zMin = Infinity; let zMax = -Infinity;
+  if (p + numPositions * 12 <= bytes.length) {
+    for (let j = 0; j < numPositions; j++) {
+      const x = dv.getFloat32(p, true); p += 4;
+      const y = dv.getFloat32(p, true); p += 4;
+      const z = dv.getFloat32(p, true); p += 4;
+      if (x < xMin) xMin = x; if (x > xMax) xMax = x;
+      if (y < yMin) yMin = y; if (y > yMax) yMax = y;
+      if (z < zMin) zMin = z; if (z > zMax) zMax = z;
+    }
+  }
+
+  const sizeStr = Number.isFinite(xMin)
+    ? `${(xMax - xMin).toFixed(2)} × ${(yMax - yMin).toFixed(2)} × ${(zMax - zMin).toFixed(2)}`
+    : '—';
+
+  const rows = [
+    { field: 'Texture', value: textureName || '—' },
+    { field: 'Morph chunks', value: String(numChunks) },
+    { field: 'Positions / normals', value: `${numPositions} / ${numNormals}` },
+    { field: 'Tris / verts', value: `${numPrimitives} / ${numVertices}` },
+    { field: 'Alpha discard', value: enableAlphaDiscard ? 'yes (0.375)' : 'no' },
+    { field: 'Chunk 0 size', value: sizeStr },
+    { field: 'Index offset', value: `0x${(indexOffset - dataStart).toString(16)}` },
+    { field: 'Color / UV offset', value: `0x${(colorOffset - dataStart).toString(16)} / 0x${(uvOffset - dataStart).toString(16)}` },
+  ];
+
+  return {
+    kind: 'weightedMesh',
+    id,
+    title: 'WeightedMesh',
+    subtitle: `${numChunks} chunk${numChunks === 1 ? '' : 's'} · ${numPrimitives} tris${textureName ? ` · ${textureName}` : ''}`,
+    note: 'Morph mesh: final vertex = Σ chunk[i] × weight[i] (weights normalized). Particle sec3 0x1E–0x22 drive weights over life. Not drawn in the viewer yet.',
+    textureName: textureName || null,
+    textureNames: textureName ? [textureName] : [],
+    offset: start,
+    columns: [
+      { key: 'field', label: 'Field' },
+      { key: 'value', label: 'Value' },
+    ],
+    rows,
+  };
+}
+
+function peekWeightedMesh(bytes, dv, s) {
+  const parsed = parseInspectWeightedMesh(bytes, s.start);
+  if (parsed) {
+    return {
+      text: parsed.subtitle,
+      isWeightedMesh: true,
+      textureName: parsed.textureName || null,
+    };
+  }
+  return { text: null, isWeightedMesh: true };
 }
 
 function peekInfo(bytes, dv, s) {
@@ -726,6 +1250,7 @@ const PEEKS = {
   0x1F: peekParticleMesh,
   0x20: peekTexture,
   0x21: peekSpriteSheet,
+  0x25: peekWeightedMesh,
   0x29: peekSkeleton,
   0x2A: peekSkeletonMesh,
   0x2B: peekAnimation,
@@ -1572,6 +2097,11 @@ export function inspectDat(buffer, path = '') {
       let isUiMenu = type === 0x30;
       let isUiElementGroup = type === 0x31;
       let isDataTable = type === 0x04 || type === 0x49 || type === 0x53;
+      let isEffectRoutine = type === 0x07;
+      let isSpriteSheet = type === 0x21;
+      let isParticleMesh = type === 0x1F;
+      let isKeyFrame = type === 0x19;
+      let isWeightedMesh = type === 0x25;
       const isParticleGenerator = type === 0x05;
       let soundId = null;
       const peek = PEEKS[type];
@@ -1587,6 +2117,11 @@ export function inspectDat(buffer, path = '') {
           if (r?.isUiMenu) isUiMenu = true;
           if (r?.isUiElementGroup) isUiElementGroup = true;
           if (r?.isDataTable) isDataTable = true;
+          if (r?.isEffectRoutine) isEffectRoutine = true;
+          if (r?.isSpriteSheet) isSpriteSheet = true;
+          if (r?.isParticleMesh) isParticleMesh = true;
+          if (r?.isKeyFrame) isKeyFrame = true;
+          if (r?.isWeightedMesh) isWeightedMesh = true;
           if (r?.soundId != null) soundId = r.soundId;
         } catch { /* malformed header — list it plain */ }
       }
@@ -1600,7 +2135,8 @@ export function inspectDat(buffer, path = '') {
         size, offset: pos, flags, detail, textureName, isTexture,
         isSkeleton, skeletonKind: isSkeleton ? 'entity' : null,
         isSound, soundId, isZoneDef, isParticleGenerator, isRoute, isUiMenu,
-        isUiElementGroup, isDataTable,
+        isUiElementGroup, isDataTable, isEffectRoutine, isSpriteSheet, isParticleMesh,
+        isKeyFrame, isWeightedMesh,
       });
       const agg = summary.get(type) ?? { count: 0, bytes: 0 };
       agg.count++; agg.bytes += size;

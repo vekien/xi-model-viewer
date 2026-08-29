@@ -2,10 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Checkbox, Field, Label } from '@headlessui/react';
 import { backend } from '../js/backend.js';
 import { loadNotes, notesFilePath, revealNotesFile } from '../js/notes.js';
+import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
 
 const UV_INSTALL_URL = 'https://docs.astral.sh/uv/getting-started/installation/';
 const XI_README_HINT = 'https://github.com/vekien/xi-tools#getting-started';
+
+const TOOLS_MODE_ITEMS = [
+  { id: 'managed', label: 'Self-managed install' },
+  { id: 'custom', label: 'Custom install' },
+];
 
 /**
  * Draggable settings dialog.
@@ -15,15 +21,16 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
   const [draft, setDraft] = useState(initial);
   const [tab, setTab] = useState('general');
   const [pos, setPos] = useState(null);
-  const [xiStatus, setXiStatus] = useState(null); // uv/setup badge
+  const [xiStatus, setXiStatus] = useState(null); // uv/setup badge (custom verify)
   const [tools, setTools] = useState(null);       // ToolsStatus from Rust
   const [toolsBusy, setToolsBusy] = useState(false);
-  const [toolsMsg, setToolsMsg] = useState(''); // managed install status only
-  const [localMsg, setLocalMsg] = useState(''); // local checkout info (ok / neutral)
-  const [localErr, setLocalErr] = useState(''); // local checkout error (red)
+  const [toolsMsg, setToolsMsg] = useState('');
+  const [toolsErr, setToolsErr] = useState('');
   const [toolsProgress, setToolsProgress] = useState(null); // { label, pct, detail }
   const [toolsLog, setToolsLog] = useState('');
   const [localPathDraft, setLocalPathDraft] = useState('');
+  // 'managed' = AppData + GitHub releases; 'custom' = user checkout path
+  const [toolsMode, setToolsMode] = useState('managed');
   const [notesPath, setNotesPath] = useState('');
   const [notesErr, setNotesErr] = useState('');
   const panelRef = useRef(null);
@@ -64,22 +71,22 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
     try {
       const st = await backend.toolsStatus();
       setTools(st);
-      // Only prefill the local field when an override is active — not the managed path.
-      setLocalPathDraft(st.usingLocalOverride ? (st.toolsDir || '') : '');
-      if (st.usingLocalOverride) {
-        setToolsMsg('Managed install idle — local checkout is active.');
-        setLocalMsg(`Active · v${st.localVersion || '—'}`);
-        setLocalErr('');
+      const custom = !!st.usingLocalOverride;
+      setToolsMode(custom ? 'custom' : 'managed');
+      setLocalPathDraft(custom ? (st.toolsDir || '') : '');
+      setToolsErr('');
+      if (custom) {
+        setToolsMsg(st.toolsDir
+          ? `Custom path · ${st.toolsDir}`
+          : 'Choose your xi-tools folder.');
+      } else if (st.error && !st.installed) {
+        setToolsMsg(st.error);
+      } else if (st.installed) {
+        const latest = st.latestVersion ? ` · latest ${st.latestVersion}` : '';
+        const upd = st.updateAvailable ? ' · update available' : ' · up to date';
+        setToolsMsg(`v${st.localVersion}${latest}${upd}`);
       } else {
-        setLocalMsg('');
-        if (st.error && !st.installed) setToolsMsg(st.error);
-        else if (st.installed) {
-          const latest = st.latestVersion ? ` · latest ${st.latestVersion}` : '';
-          const upd = st.updateAvailable ? ' · update available' : '';
-          setToolsMsg(`Installed v${st.localVersion}${latest}${upd}`);
-        } else {
-          setToolsMsg('Not installed — click Install to download from GitHub.');
-        }
+        setToolsMsg('Not installed yet — click Install to download the latest release.');
       }
       return st;
     } catch (e) {
@@ -152,8 +159,7 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
     setTools(null);
     setToolsBusy(false);
     setToolsMsg('');
-    setLocalMsg('');
-    setLocalErr('');
+    setToolsErr('');
     setToolsProgress(null);
     setToolsLog('');
     setNotesErr('');
@@ -161,8 +167,8 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
       .then(() => setNotesPath(notesFilePath() || ''))
       .catch(() => setNotesPath(''));
     refreshTools().then((st) => {
-      const path = (initial?.xiPath || st?.toolsDir || '').trim();
-      if (path) runXiSetup(path, false);
+      // Only auto-verify CLI when on a custom path (managed runs setup after install).
+      if (st?.usingLocalOverride && st.toolsDir) runXiSetup(st.toolsDir, false);
     });
     return () => detachProgress();
     // intentionally omit `initial` — snapshot only on open
@@ -208,12 +214,14 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
 
   const doInstallOrUpdate = async () => {
     setToolsBusy(true);
-    setLocalErr('');
+    setToolsErr('');
     setToolsLog('');
     setToolsProgress({ label: 'Starting…', pct: 0, detail: '' });
     setToolsMsg('Installing / updating xi-tools…');
     await attachProgress();
     try {
+      // Ensure managed mode (no local override) before download.
+      try { await backend.toolsClearLocalPath(); } catch { /* */ }
       const st = await backend.toolsInstallOrUpdate();
       setTools(st);
       setDraft((d) => ({ ...d, xiPath: st.toolsDir || d.xiPath }));
@@ -223,7 +231,7 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
       if (st.toolsDir) await runXiSetup(st.toolsDir, true);
       await refreshTools();
     } catch (e) {
-      setToolsMsg(e?.message || String(e));
+      setToolsErr(e?.message || String(e));
     } finally {
       detachProgress();
       setToolsBusy(false);
@@ -233,69 +241,97 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
 
   const doCheckReleases = async () => {
     setToolsBusy(true);
+    setToolsErr('');
     setToolsMsg('Checking GitHub for releases…');
     try {
-      const st = await refreshTools();
-      if (st?.updateAvailable) {
+      const st = await backend.toolsCheckUpdates();
+      setTools(st);
+      if (st.error) setToolsErr(st.error);
+      if (st.updateAvailable) {
         setToolsMsg(`Update available: v${st.localVersion} → v${st.latestVersion}`);
-      } else if (st?.installed) {
+      } else if (st.installed) {
         setToolsMsg(`Up to date (v${st.localVersion})`);
+      } else {
+        setToolsMsg('Not installed yet — click Install to download the latest release.');
       }
+    } catch (e) {
+      setToolsErr(e?.message || String(e));
     } finally {
       setToolsBusy(false);
     }
   };
 
   const browseLocalTools = async () => {
-    setLocalErr('');
+    setToolsErr('');
     const picked = await backend.pickToolsFolder(localPathDraft || draft.xiPath || '');
     if (picked) setLocalPathDraft(picked);
   };
 
-  const applyLocalTools = async () => {
+  /** Custom install: verify folder then lock it in as the active override. */
+  const applyCustomPath = async () => {
     const path = localPathDraft.trim();
     if (!path) {
-      setLocalMsg('');
-      setLocalErr('Choose a folder first.');
+      setToolsErr('Choose your xi-tools folder first.');
       return;
     }
     setToolsBusy(true);
-    setLocalErr('');
-    setLocalMsg('Validating…');
+    setToolsErr('');
+    setToolsMsg('Verifying xi-tools…');
     try {
+      // Check only (no uv sync) — user said they already set it up.
+      const report = await backend.xiSetup(path, false);
+      setXiStatus({ busy: false, ...report });
+      if (!report?.ok) {
+        setToolsErr(report?.message || 'That folder does not look like a working xi-tools install.');
+        setToolsMsg('');
+        return;
+      }
       const st = await backend.toolsSetLocalPath(path);
       setTools(st);
       setDraft((d) => ({ ...d, xiPath: st.toolsDir }));
       setLocalPathDraft(st.toolsDir);
-      setToolsMsg('Managed install idle — local checkout is active.');
-      setLocalMsg(`Active · v${st.localVersion || '—'}`);
-      await runXiSetup(st.toolsDir, true);
+      setToolsMode('custom');
+      setToolsMsg(`Ready · ${st.toolsDir}`);
     } catch (e) {
-      setLocalMsg('');
-      setLocalErr(friendlyLocalErr(e?.message || String(e), path));
+      setToolsErr(friendlyLocalErr(e?.message || String(e), path));
+      setToolsMsg('');
     } finally {
       setToolsBusy(false);
     }
   };
 
-  const clearLocalTools = async () => {
-    setToolsBusy(true);
-    setLocalErr('');
-    setLocalMsg('');
-    try {
-      const st = await backend.toolsClearLocalPath();
-      setTools(st);
-      setLocalPathDraft('');
-      setDraft((d) => ({ ...d, xiPath: st.toolsDir || '' }));
-      setToolsMsg(st.installed
-        ? `Using downloaded release (v${st.localVersion})`
-        : 'Override cleared — install a release when ready.');
-      if (st.toolsDir && st.installed) await runXiSetup(st.toolsDir, false);
-    } catch (e) {
-      setLocalErr(e?.message || String(e));
-    } finally {
-      setToolsBusy(false);
+  const switchToolsMode = async (mode) => {
+    if (mode === toolsMode || toolsBusy) return;
+    setToolsErr('');
+    setToolsLog('');
+    setToolsProgress(null);
+    if (mode === 'managed') {
+      setToolsBusy(true);
+      setToolsMsg('Switching to self-managed install…');
+      try {
+        const st = await backend.toolsClearLocalPath();
+        setTools(st);
+        setToolsMode('managed');
+        setLocalPathDraft(st.toolsDir || '');
+        setDraft((d) => ({ ...d, xiPath: st.toolsDir || d.xiPath }));
+        setXiStatus(null);
+        if (st.installed) {
+          setToolsMsg(`v${st.localVersion}${st.updateAvailable ? ' · update available' : ' · up to date'}`);
+        } else {
+          setToolsMsg('Not installed yet — click Install to download the latest release.');
+        }
+      } catch (e) {
+        setToolsErr(e?.message || String(e));
+      } finally {
+        setToolsBusy(false);
+      }
+      return;
     }
+    // custom — show path form; seed from draft.xiPath when empty
+    setToolsMode('custom');
+    setLocalPathDraft((prev) => prev.trim() || (draft.xiPath || '').trim() || '');
+    setToolsMsg('Browse to your existing xi-tools folder, then Verify & use.');
+    setXiStatus(null);
   };
 
   const style = pos
@@ -356,290 +392,325 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
 
           {tab === 'general' && (
             <div className="settings-cols">
-              <div className="settings-col">
-                <div className="settings-col-title">Data paths</div>
+              <section className="settings-panel">
+                <div className="settings-panel-title">Data paths</div>
+                <div className="settings-panel-body">
+                  <div className="form-row">
+                    <label className="form-label">Game path</label>
+                    <div className="form-inline">
+                      <input
+                        type="text"
+                        value={draft.gamePath}
+                        spellCheck={false}
+                        onChange={(e) => setDraft({ ...draft, gamePath: e.target.value })}
+                      />
+                      <Button onClick={browse}>
+                        <span className="icon">folder_open</span>
+                        Browse
+                      </Button>
+                    </div>
+                  </div>
 
-                <div className="form-row">
-                  <label className="form-label">Game path</label>
-                  <div className="form-inline">
-                    <input
-                      type="text"
-                      value={draft.gamePath}
-                      spellCheck={false}
-                      onChange={(e) => setDraft({ ...draft, gamePath: e.target.value })}
-                    />
-                    <Button onClick={browse}>
-                      <span className="icon">folder_open</span>
-                      Browse
-                    </Button>
+                  <div className="form-row">
+                    <label className="form-label">HD path</label>
+                    <div className="form-inline">
+                      <input
+                        type="text"
+                        value={draft.hdPath ?? ''}
+                        spellCheck={false}
+                        placeholder="Optional HD pack root"
+                        onChange={(e) => setDraft({ ...draft, hdPath: e.target.value })}
+                      />
+                      <Button onClick={browseHd}>
+                        <span className="icon">folder_open</span>
+                        Browse
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <label className="form-label">Pivot path</label>
+                    <div className="form-inline">
+                      <input
+                        type="text"
+                        value={draft.pivotPath ?? ''}
+                        spellCheck={false}
+                        placeholder="Ashita / override DAT root"
+                        onChange={(e) => setDraft({ ...draft, pivotPath: e.target.value })}
+                      />
+                      <Button onClick={browsePivot}>
+                        <span className="icon">folder_open</span>
+                        Browse
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <label className="form-label">Notes file</label>
+                    <div className="form-inline">
+                      <input
+                        type="text"
+                        readOnly
+                        className="mono"
+                        value={notesPath || '%LOCALAPPDATA%\\XiModelViewer\\notes.json'}
+                        spellCheck={false}
+                      />
+                      <Button
+                        onClick={async () => {
+                          setNotesErr('');
+                          try {
+                            await revealNotesFile();
+                            setNotesPath(notesFilePath() || notesPath);
+                          } catch (e) {
+                            setNotesErr(e?.message || String(e));
+                          }
+                        }}
+                      >
+                        <span className="icon">folder_open</span>
+                        Open file
+                      </Button>
+                    </div>
+                    <div className="form-hint">
+                      Shared notes for DATs, UiMenus, and UiElementGroups.
+                      {notesErr ? ` ${notesErr}` : ''}
+                    </div>
                   </div>
                 </div>
+              </section>
 
-                <div className="form-row">
-                  <label className="form-label">HD path</label>
-                  <div className="form-inline">
-                    <input
-                      type="text"
-                      value={draft.hdPath ?? ''}
-                      spellCheck={false}
-                      placeholder="Optional HD pack root"
-                      onChange={(e) => setDraft({ ...draft, hdPath: e.target.value })}
-                    />
-                    <Button onClick={browseHd}>
-                      <span className="icon">folder_open</span>
-                      Browse
-                    </Button>
+              <section className="settings-panel">
+                <div className="settings-panel-title">Options</div>
+                <div className="settings-panel-body">
+                  <div className="form-row">
+                    <Field className="check-field">
+                      <Checkbox
+                        checked={draft.autoPlay}
+                        onChange={(v) => setDraft({ ...draft, autoPlay: v })}
+                        className="checkbox"
+                      >
+                        <span className="icon check-icon">check</span>
+                      </Checkbox>
+                      <Label className="check-label">Auto-play idle animation on load</Label>
+                    </Field>
+                  </div>
+
+                  <div className="form-row">
+                    <Field className="check-field">
+                      <Checkbox
+                        checked={draft.autoWasdZones !== false}
+                        onChange={(v) => setDraft({ ...draft, autoWasdZones: v })}
+                        className="checkbox"
+                      >
+                        <span className="icon check-icon">check</span>
+                      </Checkbox>
+                      <Label className="check-label">Auto switch to WASD for Zones</Label>
+                    </Field>
+                    <div className="form-hint">Fly camera on zone load (WASD / QE / Shift / wheel).</div>
+                  </div>
+
+                  <div className="form-row">
+                    <Field className="check-field">
+                      <Checkbox
+                        checked={draft.autoFocusZoneObject !== false}
+                        onChange={(v) => setDraft({ ...draft, autoFocusZoneObject: v })}
+                        className="checkbox"
+                      >
+                        <span className="icon check-icon">check</span>
+                      </Checkbox>
+                      <Label className="check-label">Auto Focus Zone Object</Label>
+                    </Field>
+                    <div className="form-hint">Clicking a row in the Objects list frames the camera on it. Off = select only, camera stays put.</div>
+                  </div>
+
+                  <div className="form-row">
+                    <Field className="check-field">
+                      <Checkbox
+                        checked={!!draft.closeDatNotesOnSave}
+                        onChange={(v) => setDraft({ ...draft, closeDatNotesOnSave: v })}
+                        className="checkbox"
+                      >
+                        <span className="icon check-icon">check</span>
+                      </Checkbox>
+                      <Label className="check-label">Close DAT Notes on Save</Label>
+                    </Field>
+                    <div className="form-hint">Only the whole-DAT Notes window (status bar), not UiMenu notes.</div>
                   </div>
                 </div>
-
-                <div className="form-row">
-                  <label className="form-label">Pivot path</label>
-                  <div className="form-inline">
-                    <input
-                      type="text"
-                      value={draft.pivotPath ?? ''}
-                      spellCheck={false}
-                      placeholder="Ashita / override DAT root"
-                      onChange={(e) => setDraft({ ...draft, pivotPath: e.target.value })}
-                    />
-                    <Button onClick={browsePivot}>
-                      <span className="icon">folder_open</span>
-                      Browse
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="settings-col">
-                <div className="settings-col-title">Options</div>
-
-                <div className="form-row">
-                  <Field className="check-field">
-                    <Checkbox
-                      checked={draft.autoPlay}
-                      onChange={(v) => setDraft({ ...draft, autoPlay: v })}
-                      className="checkbox"
-                    >
-                      <span className="icon check-icon">check</span>
-                    </Checkbox>
-                    <Label className="check-label">Auto-play idle animation on load</Label>
-                  </Field>
-                </div>
-
-                <div className="form-row">
-                  <Field className="check-field">
-                    <Checkbox
-                      checked={draft.autoWasdZones !== false}
-                      onChange={(v) => setDraft({ ...draft, autoWasdZones: v })}
-                      className="checkbox"
-                    >
-                      <span className="icon check-icon">check</span>
-                    </Checkbox>
-                    <Label className="check-label">Auto switch to WASD for Zones</Label>
-                  </Field>
-                  <div className="form-hint">Fly camera on zone load (WASD / QE / Shift / wheel).</div>
-                </div>
-
-                <div className="form-row">
-                  <Field className="check-field">
-                    <Checkbox
-                      checked={!!draft.closeDatNotesOnSave}
-                      onChange={(v) => setDraft({ ...draft, closeDatNotesOnSave: v })}
-                      className="checkbox"
-                    >
-                      <span className="icon check-icon">check</span>
-                    </Checkbox>
-                    <Label className="check-label">Close DAT Notes on Save</Label>
-                  </Field>
-                  <div className="form-hint">Only the whole-DAT Notes window (status bar), not UiMenu notes.</div>
-                </div>
-
-                <div className="form-row">
-                  <label className="form-label">Notes file</label>
-                  <div className="form-inline">
-                    <input
-                      type="text"
-                      readOnly
-                      className="mono"
-                      value={notesPath || '%LOCALAPPDATA%\\XiModelViewer\\notes.json'}
-                      spellCheck={false}
-                    />
-                    <Button
-                      onClick={async () => {
-                        setNotesErr('');
-                        try {
-                          await revealNotesFile();
-                          setNotesPath(notesFilePath() || notesPath);
-                        } catch (e) {
-                          setNotesErr(e?.message || String(e));
-                        }
-                      }}
-                    >
-                      <span className="icon">folder_open</span>
-                      Open file
-                    </Button>
-                  </div>
-                  <div className="form-hint">
-                    Shared notes for DATs, UiMenus, and UiElementGroups.
-                    {notesErr ? ` ${notesErr}` : ''}
-                  </div>
-                </div>
-              </div>
+              </section>
             </div>
           )}
 
           {tab === 'xitools' && (
             <div className="settings-xitools">
-              <div className="settings-col-title">Managed install</div>
-              <div className="form-hint" style={{ marginTop: -6 }}>
-                Downloads from github.com/vekien/xi-tools into %LOCALAPPDATA%\XiModelViewer\xi-tools.
-                On launch the app installs or updates automatically unless you use a local checkout.
-              </div>
-
-              <div className={`xi-status${toolsBadge ? ` ${toolsBadge.cls}` : ''}${toolsBusy ? ' busy' : ''}`}>
-                <span className={`icon${toolsBusy ? ' spin' : ''}`}>{toolsBadge?.icon || 'info'}</span>
-                <span className="xi-status-msg">{toolsMsg || 'Checking…'}</span>
-              </div>
-
-              {toolsProgress && (
-                <div className="tools-progress">
-                  <div className="tools-progress-bar">
-                    <div className="tools-progress-fill" style={{ width: `${Math.min(100, toolsProgress.pct || 0)}%` }} />
+              <div className="settings-xitools-main">
+                <section className="settings-panel">
+                  <div className="settings-panel-title">Install mode</div>
+                  <div className="settings-panel-body">
+                    <div className="form-row">
+                      <label className="form-label">How xi-tools is provided</label>
+                      <Combo
+                        value={toolsMode}
+                        items={TOOLS_MODE_ITEMS}
+                        onChange={(id) => { if (!toolsBusy) switchToolsMode(id); }}
+                      />
+                    </div>
+                    <div className="form-hint">
+                      {toolsMode === 'managed'
+                        ? 'Downloads the latest GitHub release into AppData, sets up Python/uv, and checks for updates on launch (same as XI Zone Editor).'
+                        : 'Point at an xi-tools checkout you already built. The app will only verify it — no download or uv sync.'}
+                    </div>
                   </div>
-                  <div className="tools-progress-meta mono">
-                    {toolsProgress.detail || toolsProgress.label}
+                </section>
+
+                {toolsMode === 'managed' && (
+                  <section className="settings-panel">
+                    <div className="settings-panel-title">Self-managed install</div>
+                    <div className="settings-panel-body">
+                      <div className={`xi-status${toolsBadge ? ` ${toolsBadge.cls}` : ''}${toolsBusy ? ' busy' : ''}`}>
+                        <span className={`icon${toolsBusy ? ' spin' : ''}`}>{toolsBadge?.icon || 'info'}</span>
+                        <span className="xi-status-msg">{toolsMsg || 'Checking…'}</span>
+                      </div>
+
+                      {tools?.toolsDir && !tools.usingLocalOverride && (
+                        <div className="form-hint mono">{tools.toolsDir}</div>
+                      )}
+
+                      {toolsProgress && (
+                        <div className="tools-progress">
+                          <div className="tools-progress-bar">
+                            <div className="tools-progress-fill" style={{ width: `${Math.min(100, toolsProgress.pct || 0)}%` }} />
+                          </div>
+                          <div className="tools-progress-meta mono">
+                            {toolsProgress.detail || toolsProgress.label}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="form-inline tools-actions">
+                        <Button className="active" disabled={toolsBusy} onClick={doInstallOrUpdate}>
+                          <span className="icon">download</span>
+                          {tools?.updateAvailable ? 'Update now' : (tools?.installed ? 'Reinstall / Update' : 'Install')}
+                        </Button>
+                        <Button disabled={toolsBusy} onClick={doCheckReleases}>
+                          <span className="icon">travel_explore</span>
+                          Check for updates
+                        </Button>
+                        <Tooltip content="xi-tools on GitHub">
+                          <Button className="icon-btn" onClick={() => backend.openUrl(XI_README_HINT)}>
+                            <span className="icon">open_in_new</span>
+                          </Button>
+                        </Tooltip>
+                      </div>
+
+                      {toolsErr && (
+                        <div className="form-error settings-local-err" role="alert">
+                          <span className="icon">error</span>
+                          <span>{toolsErr}</span>
+                        </div>
+                      )}
+                      {toolsLog && (
+                        <pre className="xi-status-detail mono tools-log">{toolsLog}</pre>
+                      )}
+                    </div>
+                  </section>
+                )}
+
+                {toolsMode === 'custom' && (
+                  <section className="settings-panel">
+                    <div className="settings-panel-title">Custom install</div>
+                    <div className="settings-panel-body">
+                      <div className="form-row">
+                        <label className="form-label">xi-tools folder</label>
+                        <div className="form-inline">
+                          <input
+                            type="text"
+                            value={localPathDraft}
+                            spellCheck={false}
+                            placeholder="e.g. D:\xi-tools"
+                            disabled={toolsBusy}
+                            onChange={(e) => {
+                              setLocalPathDraft(e.target.value);
+                              if (toolsErr) setToolsErr('');
+                            }}
+                          />
+                          <Button disabled={toolsBusy} onClick={browseLocalTools}>
+                            <span className="icon">folder_open</span>
+                            Browse
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="form-inline tools-actions">
+                        <Button className="active" disabled={toolsBusy} onClick={applyCustomPath}>
+                          <span className="icon">verified</span>
+                          {toolsBusy ? 'Verifying…' : 'Verify & use'}
+                        </Button>
+                        <Tooltip content="Setup guide">
+                          <Button className="icon-btn" onClick={() => backend.openUrl(XI_README_HINT)}>
+                            <span className="icon">menu_book</span>
+                          </Button>
+                        </Tooltip>
+                        {xiStatus?.status === 'missing_uv' && (
+                          <Button onClick={() => backend.openUrl(UV_INSTALL_URL)}>
+                            <span className="icon">open_in_new</span>
+                            Install uv
+                          </Button>
+                        )}
+                      </div>
+
+                      {(toolsMsg || xiStatus?.message) && !toolsErr && (
+                        <div className={`xi-status${xiStatus?.ok || tools?.usingLocalOverride ? ' ok' : ''}${xiStatus?.busy || toolsBusy ? ' busy' : ''}`}>
+                          <span className={`icon${xiStatus?.busy || toolsBusy ? ' spin' : ''}`}>
+                            {xiStatus?.busy || toolsBusy ? 'progress_activity' : (xiStatus?.ok ? 'check_circle' : 'info')}
+                          </span>
+                          <span className="xi-status-msg">{xiStatus?.message || toolsMsg}</span>
+                        </div>
+                      )}
+                      {toolsErr && (
+                        <div className="form-error settings-local-err" role="alert">
+                          <span className="icon">error</span>
+                          <span>{toolsErr}</span>
+                        </div>
+                      )}
+                      {xiStatus?.detail && xiStatus.status === 'error' && (
+                        <pre className="xi-status-detail mono">{xiStatus.detail.slice(0, 600)}</pre>
+                      )}
+                    </div>
+                  </section>
+                )}
+              </div>
+
+              <div className="settings-xitools-side">
+                <section className="settings-panel">
+                  <div className="settings-panel-title">Console</div>
+                  <div className="settings-panel-body">
+                    <div className="form-row">
+                      <Field className="check-field">
+                        <Checkbox
+                          checked={draft.showXiConsole !== false}
+                          onChange={(v) => setDraft({ ...draft, showXiConsole: v })}
+                          className="checkbox"
+                        >
+                          <span className="icon check-icon">check</span>
+                        </Checkbox>
+                        <Label className="check-label">Show console output</Label>
+                      </Field>
+                    </div>
+                    <div className="form-row">
+                      <Field className="check-field">
+                        <Checkbox
+                          checked={!!draft.autoCloseXiConsole}
+                          onChange={(v) => setDraft({ ...draft, autoCloseXiConsole: v })}
+                          className="checkbox"
+                          disabled={draft.showXiConsole === false}
+                        >
+                          <span className="icon check-icon">check</span>
+                        </Checkbox>
+                        <Label className="check-label">Auto-close console (10s)</Label>
+                      </Field>
+                    </div>
                   </div>
-                </div>
-              )}
-
-              <div className="form-inline tools-actions">
-                <Button className="active" disabled={toolsBusy} onClick={doInstallOrUpdate}>
-                  <span className="icon">download</span>
-                  {tools?.updateAvailable ? 'Update' : 'Install / Update'}
-                </Button>
-                <Button disabled={toolsBusy} onClick={doCheckReleases}>
-                  <span className="icon">travel_explore</span>
-                  Check for updates
-                </Button>
-                <Tooltip content="Setup guide">
-                  <Button className="icon-btn" onClick={() => backend.openUrl(XI_README_HINT)}>
-                    <span className="icon">menu_book</span>
-                  </Button>
-                </Tooltip>
-              </div>
-
-              {toolsLog && (
-                <pre className="xi-status-detail mono tools-log">{toolsLog}</pre>
-              )}
-
-              <div className="settings-sep" role="separator" />
-
-              <div className="settings-col-title">Local checkout (optional)</div>
-              <div className="form-hint" style={{ marginTop: -6 }}>
-                Point at a clone of xi-tools to skip the managed download. Must contain src\xi.
-              </div>
-
-              <div className="form-row">
-                <label className="form-label">Folder</label>
-                <div className="form-inline">
-                  <input
-                    type="text"
-                    value={localPathDraft}
-                    spellCheck={false}
-                    placeholder="e.g. D:\xi-tools"
-                    disabled={toolsBusy}
-                    onChange={(e) => {
-                      setLocalPathDraft(e.target.value);
-                      if (localErr) setLocalErr('');
-                    }}
-                  />
-                  <Button disabled={toolsBusy} onClick={browseLocalTools}>
-                    <span className="icon">folder_open</span>
-                    Browse
-                  </Button>
-                </div>
-              </div>
-
-              <div className="form-inline tools-actions">
-                <Button disabled={toolsBusy} onClick={applyLocalTools}>
-                  Use this folder
-                </Button>
-                <Button disabled={toolsBusy || !tools?.usingLocalOverride} onClick={clearLocalTools}>
-                  Use downloaded release
-                </Button>
-              </div>
-
-              {localErr && (
-                <div className="form-error settings-local-err" role="alert">
-                  <span className="icon">error</span>
-                  <span>{localErr}</span>
-                </div>
-              )}
-              {!localErr && localMsg && (
-                <div className={`xi-status settings-local-ok${tools?.usingLocalOverride ? ' ok' : ''}`}>
-                  <span className="icon">{tools?.usingLocalOverride ? 'check_circle' : 'info'}</span>
-                  <span className="xi-status-msg">{localMsg}</span>
-                </div>
-              )}
-
-              <div className="settings-sep" role="separator" />
-
-              <div className="settings-col-title">CLI environment</div>
-              <div className={`xi-status xi-status-compact${badge ? ` ${badge.cls}` : ''}${xiStatus?.busy ? ' busy' : ''}`}>
-                <span className={`icon${xiStatus?.busy ? ' spin' : ''}`}>{badge?.icon || 'info'}</span>
-                <span className="xi-status-msg">
-                  {xiStatus?.message
-                    || 'Python 3.14 + uv venv used for mesh export and list updates.'}
-                </span>
-                <div className="xi-status-actions">
-                  <Tooltip content="uv sync / check">
-                    <Button
-                      className="xi-action"
-                      disabled={xiStatus?.busy || toolsBusy || !(draft.xiPath || tools?.toolsDir || '').trim()}
-                      onClick={() => runXiSetup(draft.xiPath || tools?.toolsDir, true)}
-                    >
-                      <span className="icon">build</span>
-                      {xiStatus?.busy ? '…' : 'Setup'}
-                    </Button>
-                  </Tooltip>
-                  {xiStatus?.status === 'missing_uv' && (
-                    <Tooltip content="Install uv">
-                      <Button className="xi-action" onClick={() => backend.openUrl(UV_INSTALL_URL)}>
-                        <span className="icon">open_in_new</span>
-                      </Button>
-                    </Tooltip>
-                  )}
-                </div>
-              </div>
-              {xiStatus?.detail && xiStatus.status === 'error' && (
-                <pre className="xi-status-detail mono">{xiStatus.detail.slice(0, 600)}</pre>
-              )}
-
-              <div className="form-row">
-                <Field className="check-field">
-                  <Checkbox
-                    checked={draft.showXiConsole !== false}
-                    onChange={(v) => setDraft({ ...draft, showXiConsole: v })}
-                    className="checkbox"
-                  >
-                    <span className="icon check-icon">check</span>
-                  </Checkbox>
-                  <Label className="check-label">Show console output</Label>
-                </Field>
-              </div>
-
-              <div className="form-row">
-                <Field className="check-field">
-                  <Checkbox
-                    checked={!!draft.autoCloseXiConsole}
-                    onChange={(v) => setDraft({ ...draft, autoCloseXiConsole: v })}
-                    className="checkbox"
-                    disabled={draft.showXiConsole === false}
-                  >
-                    <span className="icon check-icon">check</span>
-                  </Checkbox>
-                  <Label className="check-label">Auto-close console (10s)</Label>
-                </Field>
+                </section>
               </div>
             </div>
           )}
@@ -711,8 +782,6 @@ function xiBadge(s) {
 function toolsUiBadge(st, busy) {
   if (busy) return { cls: 'working', icon: 'progress_activity' };
   if (!st) return { cls: 'neutral', icon: 'info' };
-  // Local checkout owns the active path — managed row stays neutral.
-  if (st.usingLocalOverride) return { cls: 'neutral', icon: 'pause_circle' };
   if (st.error && !st.installed) return { cls: 'err', icon: 'error' };
   if (st.updateAvailable) return { cls: 'warn', icon: 'upgrade' };
   if (st.installed) return { cls: 'ok', icon: 'check_circle' };

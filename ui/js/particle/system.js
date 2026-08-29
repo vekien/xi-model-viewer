@@ -1001,8 +1001,61 @@ export class ParticleSystem {
         far: cfg.farDistance || 0,
         near: cfg.nearDistance || 0,
         active,
+        looping: !!cfg.looping,
       });
     }
+    return out;
+  }
+
+  /**
+   * Group live positional SFX for Objects → SFX (same shape as listEffectGroups).
+   * Positions are display-space (−x, −y, z). Live — path-snapped shoreline beds move.
+   */
+  listSoundGroups() {
+    const by = new Map();
+    for (const m of this.listSoundMarkers()) {
+      const sid = m.soundId != null ? m.soundId : null;
+      const gkey = sid != null ? `id:${sid}` : `dat:${m.id || '?'}`;
+      let g = by.get(gkey);
+      if (!g) {
+        const pad = sid != null ? String(sid).padStart(6, '0') : null;
+        g = {
+          soundId: sid,
+          name: pad ? `se${pad}` : (m.id || 'sound'),
+          mesh: pad ? `se${pad}` : (m.id || 'sound'),
+          kind: 'sfx',
+          instances: [],
+        };
+        by.set(gkey, g);
+      }
+      const rawPos = [m.x, m.y, m.z];
+      const pos = [-m.x, -m.y, m.z];
+      const idx = g.instances.length;
+      g.instances.push({
+        key: `sfx:${gkey}:${m.id || idx}:${pos.map((n) => n.toFixed(2)).join(',')}`,
+        id: m.id || null,
+        soundId: sid,
+        name: m.id ? String(m.id).replace(/\0+$/, '') : (sid != null ? `se${String(sid).padStart(6, '0')}` : `sfx ${idx}`),
+        index: idx,
+        pos,
+        rawPos,
+        near: m.near || 0,
+        far: m.far || 0,
+        active: !!m.active,
+        looping: !!m.looping,
+      });
+    }
+    const out = [];
+    for (const g of by.values()) {
+      g.count = g.instances.length;
+      out.push(g);
+    }
+    out.sort((a, b) => {
+      const sa = a.soundId ?? 1e9;
+      const sb = b.soundId ?? 1e9;
+      if (sa !== sb) return sa - sb;
+      return String(a.name).localeCompare(String(b.name));
+    });
     return out;
   }
 

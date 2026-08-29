@@ -20,7 +20,7 @@ import shutil
 import sys
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, unquote
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
@@ -266,7 +266,73 @@ class Handler(SimpleHTTPRequestHandler):
             return self._vgmstream(parse_qs(url.query).get("path", [""])[0])
         if url.path == "/fs/reveal":
             return self._reveal(parse_qs(url.query).get("path", [""])[0])
+        if url.path == "/fs/app-latest-release":
+            return self._app_latest_release()
         return super().do_GET()
+
+    def _app_latest_release(self):
+        """Newest xi-model-viewer release (server-side; avoids browser CORS)."""
+        import re
+        import urllib.error
+        import urllib.request
+
+        owner, repo = "vekien", "xi-model-viewer"
+        ua = "xi-model-viewer-dev (+https://github.com/vekien/xi-model-viewer)"
+        try:
+            req = urllib.request.Request(
+                f"https://github.com/{owner}/{repo}/releases/latest",
+                headers={"User-Agent": ua},
+                method="GET",
+            )
+            # Follow redirects so final URL is .../releases/tag/vX.Y.Z
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                final = resp.geturl() or ""
+            m = re.search(r"/releases/tag/([^/?#]+)", final)
+            if not m:
+                return self._error(RuntimeError(f"no tag in redirect URL: {final}"))
+            tag = unquote(m.group(1))
+            version = tag[1:] if tag.lower().startswith("v") else tag
+            download_name = f"xi-model-viewer-{tag}.exe"
+            download_url = (
+                f"https://github.com/{owner}/{repo}/releases/download/{tag}/{download_name}"
+            )
+            try:
+                areq = urllib.request.Request(
+                    f"https://github.com/{owner}/{repo}/releases/expanded_assets/{tag}",
+                    headers={"User-Agent": ua},
+                )
+                with urllib.request.urlopen(areq, timeout=12) as aresp:
+                    html = aresp.read().decode("utf-8", errors="replace")
+                hm = re.search(r'href="(/[^"]+\.exe)"', html, re.I) or re.search(
+                    r'href="(https://github\.com/[^"]+\.exe)"', html, re.I
+                )
+                if hm:
+                    href = hm.group(1)
+                    if not href.startswith("http"):
+                        href = f"https://github.com{href}"
+                    download_url = href
+                    download_name = href.rsplit("/", 1)[-1] or download_name
+            except Exception:
+                pass
+            payload = {
+                "version": version,
+                "tag": tag,
+                "name": tag,
+                "url": f"https://github.com/{owner}/{repo}/releases/tag/{tag}",
+                "downloadUrl": download_url,
+                "downloadName": download_name,
+                "downloadBytes": 0,
+                "notes": "",
+                "publishedAt": "",
+            }
+            body = json.dumps(payload).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except Exception as e:
+            return self._error(e)
 
     def _reveal(self, raw):
         """Dev-mode stand-in for the Tauri reveal_path command."""

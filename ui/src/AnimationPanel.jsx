@@ -98,7 +98,7 @@ export function AnimationPanel({ pc, anim }) {
 
   return (
     <div id="animbar" className="panel">
-      <div className="side-separator anim-title">
+      <div className="panel-title">
         <span className="icon">animation</span>
         Options
       </div>
