@@ -422,6 +422,9 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
       // The equipped weapon rests in its own battle stance (btl): App resolves
       // the right entry by the weapon's animation type after parsing it.
       battleTable: raceData.current.get(race)?.battleByType ?? null,
+      // Parallel waist packs (btl2) for each weapon-type battle DAT.
+      skirtByType: raceData.current.get(race)?.skirtByType ?? null,
+      raceId: race,
       parts,
       keepCamera: isGearSwap,
     });

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@headlessui/react';
 import { backend } from '../js/backend.js';
 import { gameCandidates, normRel, pathKey, relFromAbs } from '../js/gamePath.js';
+import { battleSkirtPath } from '../js/pclists.js';
 import { animDisplayName, groupAnimations, matchAnimRef, mergeModels, parseEntity, resolveScheduleClip } from '../js/dat.js';
 import { Renderer } from '../js/renderer.js';
 import { FileTree } from './FileTree.jsx';
@@ -139,22 +140,60 @@ const SELF_LOADING_VIEWS = new Set(['pc', 'creation', 'images', 'music', 'sfx', 
 // started yet would show bind pose (T-pose flash each loop). Underlay a looping
 // idle so those joints rest naturally — battle idle for weapon actions if it's
 // loaded, otherwise plain idle (falling back to std).
-function pickBaseIdle(model) {
+function pickBaseIdle(model, { skipId = null } = {}) {
   const grouped = groupAnimations(model.animations);
   for (const id of ['btl', 'idl', 'std']) {
+    if (skipId && id === skipId) continue;
     const g = grouped.find((x) => x.id === id);
     if (g && g.clip.jointTracks.size > 0) return g.clip;
   }
   return null;
 }
 
+/**
+ * Battle packs only ship btl0+btl1 (legs/torso). Waist lives on race idl2.
+ * Graft any idle joints the stance is missing so battle / weapon clips don't
+ * leave skirts in bind pose — and so btl-as-underlay for attacks carries waist.
+ */
+function graftIdleWaist(grouped) {
+  const idl = grouped.find((g) => g.id === 'idl')?.clip;
+  if (!idl?.jointTracks?.size) return grouped;
+  for (const g of grouped) {
+    if (g.id === 'idl' || g.id === 'std' || !g.clip?.jointTracks) continue;
+    // Partial body-region clips (btl0/btl1, at00/at01, …) — never a lone full track.
+    const parts = g.clip.parts ?? [g.clip.id];
+    const slotted = parts.filter((p) => /[0-2]$/.test(String(p)));
+    if (slotted.length === 0) continue;
+    const hasSlot2 = slotted.some((p) => String(p).endsWith('2'));
+    if (hasSlot2) continue;
+    let grafted = 0;
+    const jt = new Map(g.clip.jointTracks);
+    for (const [j, t] of idl.jointTracks) {
+      if (!jt.has(j)) { jt.set(j, t); grafted += 1; }
+    }
+    if (grafted) g.clip = { ...g.clip, jointTracks: jt };
+  }
+  return grouped;
+}
+
+/**
+ * Attach a base underlay for undriven joints (schedule gaps / plain clips).
+ * Prefer battle stance when present, else idle — after graftIdleWaist, btl
+ * already carries waist tracks from idl.
+ */
+function withBaseIdle(model, clip) {
+  if (!clip || !model) return clip ?? null;
+  const isBtl = clip.id === 'btl'
+    || (Array.isArray(clip.parts) && clip.parts.length > 0 && clip.parts.every((p) => String(p).startsWith('btl')));
+  const base = pickBaseIdle(model, { skipId: isBtl ? 'btl' : null });
+  if (!base || base === clip || base.id === clip.id) return clip;
+  if (clip.baseClip === base) return clip;
+  return { ...clip, baseClip: base };
+}
+
 function scheduleClip(model, sched) {
   const clip = resolveScheduleClip(model, sched);
-  if (clip?.segments) {
-    const base = pickBaseIdle(model);
-    if (base) clip.baseClip = base;
-  }
-  return clip;
+  return withBaseIdle(model, clip);
 }
 
 /**
@@ -1256,8 +1295,8 @@ export default function App({ launch = null }) {
    */
   const loadModel = useCallback(async (paths, displayName, opts = {}) => {
     const {
-      focusPaths = null, weaponSlots = null, battleTable = null, parts = null,
-      displayPath = null, animOnlyPaths = null,
+      focusPaths = null, weaponSlots = null, battleTable = null, skirtByType = null,
+      parts = null, displayPath = null, animOnlyPaths = null,
     } = opts;
     // Keep framing when the caller asks (gear swap) or the user has already
     // orbit/pan/zoomed on an entity — browsing successive DATs shouldn't yank
@@ -1323,17 +1362,34 @@ export default function App({ launch = null }) {
       // only known after parsing it — resolve + merge that battle DAT now so the
       // weapon rests in its own stance (e.g. a greatsword held two-handed), not
       // the hand-to-hand fists idle. Non-focus, so it never enters the lists.
-      // Battle-idle packs are animation DATs → game/pivot only (never HD).
+      // Battle packs are animation DATs → game/pivot only (never HD).
+      // Waist btl2 lives in a parallel skirt pack (old viewer MotionB+num+idx /
+      // xim getSkirtBattleAnimationResource) — without it mid-body freezes.
       if (battleTable && weaponSlots?.main?.length) {
         const mainSet = new Set(weaponSlots.main.map((p) => pathKey(p, settingsRef.current)));
         const weapon = parsed.find((e) => mainSet.has(pathKey(e.path, settingsRef.current)))?.model;
         const type = weapon?.info?.weaponAnimationType;
         const rel = type != null ? battleTable[type] : null;
+        const loadAnimDat = async (relPath, label) => {
+          if (!relPath) return;
+          const key = pathKey(relPath, settingsRef.current);
+          if (parsed.some((e) => pathKey(e.path, settingsRef.current) === key)) return;
+          try { parsed.push(await parse1(relPath, true)); }
+          catch (err) { console.warn(`${label} ${relPath}:`, err); }
+        };
         if (rel) {
-          const key = pathKey(rel, settingsRef.current);
-          if (!parsed.some((e) => pathKey(e.path, settingsRef.current) === key)) {
-            try { parsed.push(await parse1(rel, true)); } catch (err) { console.warn(`battle idle ${rel}:`, err); }
+          await loadAnimDat(rel, 'battle idle');
+          // skirtByType[type] from bake; else MotionB+num+idx (old viewer / xim).
+          let skirt = (skirtByType && type != null) ? skirtByType[type] : null;
+          if (!skirt) {
+            const races = ['HumeM', 'HumeF', 'ElvaanM', 'ElvaanF', 'Tarutaru', 'TaruM', 'Mithra', 'Galka'];
+            if (opts.raceId) races.unshift(opts.raceId);
+            for (const rid of races) {
+              skirt = battleSkirtPath(rel, rid);
+              if (skirt) break;
+            }
           }
+          await loadAnimDat(skirt, 'battle skirt');
         }
       }
       if (!stillCurrent()) { releaseOverlay(); return; }
@@ -1391,8 +1447,12 @@ export default function App({ launch = null }) {
       // focus set (the selected action's schedule DATs), keep just the groups
       // those DATs contribute — motion packs still merge for playback but never
       // flood the list (Motion.csv rows are whole-class aggregated ranges).
-      let grouped = groupAnimations(model.animations)
-        .filter((g) => g.clip.jointTracks.size > 0 && g.clip.numFrames > 0);
+      let grouped = graftIdleWaist(
+        groupAnimations(model.animations)
+          .filter((g) => g.clip.jointTracks.size > 0 && g.clip.numFrames > 0),
+      );
+      // Full set kept for underlays / graft source even when the viewbar is focused.
+      const allGrouped = grouped;
       let schedSrc = model.schedules ?? [];
       if (focusPaths?.length) {
         const fset = new Set(focusPaths.map((p) => pathKey(p, settingsRef.current)));
@@ -1409,18 +1469,35 @@ export default function App({ launch = null }) {
         for (const s of schedSrc) for (const c of s.clipIds) fBases.add(animDisplayName(c));
         grouped = grouped.filter((g) => fBases.has(g.id));
       }
+      // Stance clips always stay on the Anim list. `btl` lives in the weapon's
+      // battle DAT (loaded via battleTable), not in Basic/race focus — without
+      // this it vanishes whenever Category isn't Battle:*.
+      for (const id of ['idl', 'std', 'btl']) {
+        const g = allGrouped.find((x) => x.id === id);
+        if (g && !grouped.some((x) => x.id === id)) grouped.push(g);
+      }
+      const stanceOrder = { idl: 0, std: 1, btl: 2 };
+      grouped = [...grouped].sort((a, b) => {
+        const sa = stanceOrder[a.id];
+        const sb = stanceOrder[b.id];
+        if (sa != null || sb != null) return (sa ?? 50) - (sb ?? 50) || a.id.localeCompare(b.id);
+        return a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' });
+      });
       animsRef.current = grouped;
       setAnims(grouped);
       setSchedules(schedSrc);
       // What to play, best first: the user's remembered pick if this actor still
-      // has it, then idle, then (for a focused action set, which has no idle)
-      // its 'main' schedule so picking a weapon skill shows the skill.
+      // has it, then idle, then battle stance (btl) when a weapon battle pack is
+      // loaded, then 'main' / first schedule (weapon skills).
       const want = animSelRef.current ?? {};
       const pickSched = (id) => schedSrc.find((s) => s.id === id && s.clipIds.length);
+      const pickAnim = (id) => grouped.find((g) => g.id === id);
+      const hasBattlePack = !!allGrouped.find((g) => g.id === 'btl');
       const chosen =
         (want.schedule && pickSched(want.schedule) && { schedule: pickSched(want.schedule) })
-        || (want.anim && grouped.find((g) => g.id === want.anim) && { anim: grouped.find((g) => g.id === want.anim) })
-        || (grouped.find((g) => g.id.toLowerCase().startsWith('idl')) && { anim: grouped.find((g) => g.id.toLowerCase().startsWith('idl')) })
+        || (want.anim && pickAnim(want.anim) && { anim: pickAnim(want.anim) })
+        || (pickAnim('idl') && { anim: pickAnim('idl') })
+        || (hasBattlePack && pickAnim('btl') && { anim: pickAnim('btl') })
         || (focusPaths?.length && (pickSched('main') ?? schedSrc.find((s) => s.clipIds.length))
           && { schedule: pickSched('main') ?? schedSrc.find((s) => s.clipIds.length) })
         || null;
@@ -1428,7 +1505,12 @@ export default function App({ launch = null }) {
       const autoPlay = settingsRef.current?.autoPlay ?? false;
       if (chosen?.anim) {
         const same = keepCamera && prevPlay.kind === 'anim' && prevPlay.id === chosen.anim.id;
-        renderer.setAnimation(chosen.anim.clip, same ? { frame: resumeFrame } : undefined);
+        // Battle btl lacks waist tracks — withBaseIdle underlays idl2 so skirts
+        // don't freeze in bind pose.
+        renderer.setAnimation(
+          withBaseIdle(model, chosen.anim.clip),
+          same ? { frame: resumeFrame } : undefined,
+        );
         renderer.playing = same ? wasPlaying : !!autoPlay;
         appliedPlayRef.current = { kind: 'anim', id: chosen.anim.id };
         setCurrentAnim(chosen.anim.id);
@@ -1575,6 +1657,7 @@ export default function App({ launch = null }) {
   const loadNpcEntry = useCallback(
     (entry) => {
       const abs = (p) => `${settingsRef.current.gamePath}\\${p}`;
+      const absMaybe = (p) => (p ? abs(p) : null);
       loadModel(entry.paths.map(abs), entry.name, {
         focusPaths: entry.focusPaths?.map(abs) ?? null,
         animOnlyPaths: entry.animOnlyPaths?.map(abs) ?? null,
@@ -1582,6 +1665,10 @@ export default function App({ launch = null }) {
           ? Object.fromEntries(Object.entries(entry.weaponSlots).map(([k, v]) => [k, (v ?? []).map(abs)]))
           : null,
         battleTable: entry.battleTable ?? null,
+        skirtByType: Array.isArray(entry.skirtByType)
+          ? entry.skirtByType.map(absMaybe)
+          : null,
+        raceId: entry.raceId ?? null,
         parts: entry.parts?.map((p) => ({ ...p, paths: p.paths.map(abs) })) ?? null,
         keepCamera: !!entry.keepCamera,
         displayPath: entry.displayPath ? abs(entry.displayPath) : null,
@@ -3247,7 +3334,8 @@ export default function App({ launch = null }) {
     rememberAnimSel({ anim: id, schedule: '' });
     appliedPlayRef.current = { kind: 'anim', id };
     const entry = animsRef.current.find((g) => g.id === id);
-    rendererRef.current.setAnimation(entry ? entry.clip : null);
+    const model = modelRef.current;
+    rendererRef.current.setAnimation(entry ? withBaseIdle(model, entry.clip) : null);
   };
 
   const handleScheduleChange = (id) => {
@@ -5860,9 +5948,12 @@ export default function App({ launch = null }) {
   }, [endPointerDrag]);
 
   const onPointerDown = (e) => {
+    // Ctrl/Cmd + left-drag pans (same as RMB) — lock at press so releasing the
+    // key mid-gesture doesn't snap back to orbit.
+    const panMod = e.button === 0 && (e.ctrlKey || e.metaKey);
     drag.current = {
       btn: e.button, x: e.clientX, y: e.clientY,
-      sx: e.clientX, sy: e.clientY, moved: false, gizmo: false,
+      sx: e.clientX, sy: e.clientY, moved: false, gizmo: false, pan: panMod,
     };
     camGestureRef.current = {
       active: true,
@@ -5871,9 +5962,11 @@ export default function App({ launch = null }) {
       pointerId: e.pointerId,
     };
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* */ }
+    if (panMod) e.preventDefault();
 
     // Prefer grabbing the XYZ gizmo over camera orbit / live pick.
     if (e.button !== 0) return;
+    if (panMod) return; // Ctrl+LMB is pan, not gizmo / pick
     if (rendererRef.current?.camera?.sequenceLock) return;
     if (modelRef.current?.kind !== 'zone') return;
 
@@ -5959,8 +6052,17 @@ export default function App({ launch = null }) {
         camGestureRef.current.moved = true;
       }
       const cam = rendererRef.current.camera;
+      // Pan: RMB / MMB, or Ctrl/Cmd + LMB (set at pointerdown).
+      const doPan = drag.current.pan
+        || drag.current.btn === 1
+        || drag.current.btn === 2
+        || (drag.current.btn === 0 && (e.ctrlKey || e.metaKey));
       if (wasdRef.current) {
-        if (drag.current.btn === 0 || drag.current.btn === 2) cam.flyLook(dx, dy);
+        if (doPan && drag.current.btn === 0) cam.pan(dx, dy);
+        else if (drag.current.btn === 0 || drag.current.btn === 2) cam.flyLook(dx, dy);
+        else cam.pan(dx, dy);
+      } else if (doPan) {
+        cam.pan(dx, dy);
       } else if (drag.current.btn === 0) {
         // Entities/effects: orbit around the model pivot so a pan is preserved
         // (character stays put on screen). Zones keep free tumble about look-at.

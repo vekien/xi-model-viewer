@@ -161,7 +161,18 @@ export class SkeletonPose {
             const track = clip.jointTracks.get(i);
             // Phase-based so a merged clip's parts (different frame counts) stay
             // in sync — same as the in-game routine scaling each clip to one window.
-            if (track) s = sampleTrack(track, clip.lengthInFrames > 0 ? frame / clip.lengthInFrames : 0);
+            if (track) {
+              s = sampleTrack(track, clip.lengthInFrames > 0 ? frame / clip.lengthInFrames : 0);
+            } else if (clip.baseClip) {
+              // Partial body clips (battle btl0+btl1, no waist btl2): undriven
+              // joints rest on idle/waist instead of bind pose.
+              const bt = clip.baseClip.jointTracks.get(i);
+              if (bt) {
+                const baseLen = clip.baseClip.lengthInFrames ?? 0;
+                const bp = baseLen > 0 ? (frame % baseLen) / baseLen : 0;
+                s = sampleTrack(bt, bp);
+              }
+            }
           }
           if (s) {
             translation = [translation[0] + s.t[0], translation[1] + s.t[1], translation[2] + s.t[2]];

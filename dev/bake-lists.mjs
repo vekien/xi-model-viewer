@@ -30,7 +30,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   expandPathSpec, parseRaceIndex, parseSlotCsv, parseMotionCsv, attachMotions,
-  baseMotionCompanions,
+  baseMotionCompanions, battleSkirtTable,
 } from '../ui/js/pclists.js';
 
 const root = join(fileURLToPath(import.meta.url), '..', '..');
@@ -165,6 +165,9 @@ for (const race of parseRaceIndex(pcIndex)) {
   // Battle entry per weapon-animation type. The CSVs' single merged "Battle"
   // row is dropped — it collapsed every weapon style onto hand-to-hand.
   const battleByType = (battleTable[race.id] ?? []).map((p) => (p ? p.replace(/\//g, '\\') : null));
+  // Battle waist (btl2): parallel pack at MotionB+motionBnum+idx — see
+  // battleSkirtPath / FFXI model viewer CModel::LoadMotion MOTION_BATTLE.
+  const skirtByType = battleSkirtTable(battleByType, race.id);
   // PC body motion is split across body-region slot DATs: the base holds only the
   // lower body, base+1 the upper body, base+3 the waist/skirt. These load with the
   // base for every pose so locomotion animates the whole body (see
@@ -179,7 +182,15 @@ for (const race of parseRaceIndex(pcIndex)) {
     const style = WEAPON_STYLE[type];
     if (!dat || !style || seen.has(dat)) return;
     seen.add(dat);
-    actions.push({ id: `syn:btl${type}`, label: `Battle: ${style}`, group: 'Battle', paths: [dat], motionPaths: [] });
+    // paths = main battle (btl0/1 schedules); motionPaths = waist skirt (btl2).
+    const skirt = skirtByType[type];
+    actions.push({
+      id: `syn:btl${type}`,
+      label: `Battle: ${style}`,
+      group: 'Battle',
+      paths: [dat],
+      motionPaths: skirt ? [skirt] : [],
+    });
   });
   actions.push(...csvActs.filter((a) => !(a.group === 'Battle' && a.label === 'Battle')));
 
@@ -187,7 +198,7 @@ for (const race of parseRaceIndex(pcIndex)) {
   // which have no PC equipment tables and so can't produce a look).
   const lookRace = gearModels[race.id]?.lookRace;
   races.push({ id: race.id, label: race.label, base: race.base, lookRace,
-               motionExtra, battleByType, slots, actions });
+               motionExtra, battleByType, skirtByType, slots, actions });
 }
 write('characters.json', { races });
 

@@ -8,6 +8,7 @@ const GITHUB = 'https://github.com/vekien/xi-model-viewer';
 const GENERAL_CONTROLS = [
   ['Left Mouse', 'Rotate'],
   ['Right Mouse', 'Pan'],
+  ['Ctrl + Left Mouse', 'Pan'],
   ['Wheel', 'Zoom'],
 ];
 const ZONE_CONTROLS = [

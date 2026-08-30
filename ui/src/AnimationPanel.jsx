@@ -122,7 +122,16 @@ export function AnimationPanel({ pc, anim }) {
             value={currentAnim}
             items={[
               { id: '', label: '— bind pose —' },
-              ...anims.map((g) => ({ id: g.id, label: g.label ?? g.id, badge: g.clip.parts?.length })),
+              ...anims.map((g) => {
+                // btl is the battle-stance clip (not a Schedule). Schedules are
+                // ati0/atb0/… attack routines that *reference* anim layers.
+                const label = g.label
+                  ?? (g.id === 'btl' ? 'btl — battle stance'
+                    : g.id === 'idl' ? 'idl — idle'
+                      : g.id === 'std' ? 'std — stand'
+                        : g.id);
+                return { id: g.id, label, badge: g.clip.parts?.length };
+              }),
             ]}
             onChange={onAnimChange}
           />
