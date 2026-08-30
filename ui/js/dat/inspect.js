@@ -187,7 +187,186 @@ function peekSkeleton(bytes, dv, s) {
 function peekSkeletonMesh(bytes, dv, s) {
   // 6 flag bytes, i32 instr offset, 2 bytes, i32 joint-array offset, u16 count.
   const joints = dv.getUint16(s.dataStart + 16, true);
-  return joints ? { text: `${joints} joints` } : null;
+  return joints
+    ? { text: `${joints} joints`, isSkeletonMesh: true }
+    : { text: null, isSkeletonMesh: true };
+}
+
+/**
+ * 0x2A SkeletonMesh — skinned entity mesh (not zone WeightedMesh 0x25).
+ * Layout matches dat.js parseSkeletonMesh.
+ */
+export function parseInspectSkeletonMesh(buffer, offset) {
+  const bytes = buffer instanceof Uint8Array
+    ? buffer
+    : new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const start = offset | 0;
+  if (start + 0x30 > bytes.length) return null;
+
+  let id = strAt(bytes, start, 4).replace(/\0/g, '').trim();
+  if (!id || !printable(id)) id = 'smesh';
+
+  const meta = dv.getUint32(start + 4, true);
+  const type = meta & 0x7f;
+  if (type !== 0x2a && type !== 0) {
+    // still try if caller passed a known-good offset
+  }
+  const size = ((meta >>> 7) & 0x7ffff) * 0x10;
+  const bodyEnd = Math.min(start + (size > 0 ? size : 0x400), bytes.length);
+  const dataStart = start + 0x10;
+  if (dataStart + 0x20 > bodyEnd) return null;
+
+  const flags3 = bytes[dataStart + 2];
+  const clothEffect = (flags3 & 0x01) !== 0;
+  const useJointArray = (flags3 & 0x80) !== 0;
+  const occludeType = bytes[dataStart + 3];
+  const symmetric = bytes[dataStart + 4] === 0x01;
+
+  const instructionOffset = 2 * dv.getInt32(dataStart + 6, true);
+  const jointArrayOffset = 2 * dv.getInt32(dataStart + 12, true);
+  const numJoints = dv.getUint16(dataStart + 16, true);
+  const vertexCountsOffset = 2 * dv.getInt32(dataStart + 18, true);
+  const numVertexCounts = dv.getUint16(dataStart + 22, true);
+  const vertexJointMappingOffset = 2 * dv.getInt32(dataStart + 24, true);
+  const vertexDataOffset = 2 * dv.getInt32(dataStart + 30, true);
+
+  let singleCount = 0;
+  let doubleCount = 0;
+  if (numVertexCounts >= 2 && dataStart + vertexCountsOffset + 4 <= bodyEnd) {
+    singleCount = dv.getUint16(dataStart + vertexCountsOffset, true);
+    doubleCount = dv.getUint16(dataStart + vertexCountsOffset + 2, true);
+  }
+  const totalVerts = singleCount + doubleCount;
+
+  // Joint map (local ref → skeleton joint).
+  const jointRows = [];
+  if (numJoints > 0 && numJoints < 512 && dataStart + jointArrayOffset + numJoints * 2 <= bodyEnd) {
+    for (let i = 0; i < numJoints; i++) {
+      const j = dv.getUint16(dataStart + jointArrayOffset + i * 2, true);
+      jointRows.push({ i: String(i), joint: String(j) });
+    }
+  }
+
+  // Walk instruction stream (opcodes from dat.js parseSkeletonMesh).
+  const textures = [];
+  let strips = 0;
+  let lists = 0;
+  let instrOps = 0;
+  let ip = dataStart + instructionOffset;
+  const end = bodyEnd;
+  if (ip >= dataStart && ip + 2 <= end) {
+    let guard = 0;
+    while (ip + 2 <= end && guard++ < 50000) {
+      const op = dv.getUint16(ip, true);
+      ip += 2;
+      instrOps += 1;
+      if (op === 0xffff) break;
+      if (op === 0x8000) {
+        // texture name — 16 bytes
+        if (ip + 16 > end) break;
+        const name = strAt(bytes, ip, 16).replace(/\0/g, '').trim();
+        if (name && printable(name) && !textures.includes(name)) textures.push(name);
+        ip += 16;
+        continue;
+      }
+      if (op === 0x8010) {
+        // render props block (44 bytes) — see dat.js readRenderProps
+        if (ip + 44 > end) break;
+        ip += 44;
+        continue;
+      }
+      if (op === 0x5453) {
+        // textured tri strip: u16 nTris, 3×(u16 + 2×f32) + (n-1)×(u16 + 2×f32)
+        if (ip + 2 > end) break;
+        const nTris = dv.getUint16(ip, true);
+        ip += 2;
+        // first 3 corners: each u16 + 2 f32 = 10 bytes; then (nTris-1) more
+        const need = 3 * 10 + Math.max(0, nTris - 1) * 10;
+        if (ip + need > end) break;
+        ip += need;
+        strips += 1;
+        continue;
+      }
+      if (op === 0x0054) {
+        // textured tri list: u16 nTris, nTris × 3 × (u16 + 2 f32)
+        if (ip + 2 > end) break;
+        const nTris = dv.getUint16(ip, true);
+        ip += 2;
+        const need = nTris * 3 * 10;
+        if (ip + need > end) break;
+        ip += need;
+        lists += 1;
+        continue;
+      }
+      if (op === 0x0043) {
+        // untextured list: u16 nTris, nTris × (3×u16 + u32)
+        if (ip + 2 > end) break;
+        const nTris = dv.getUint16(ip, true);
+        ip += 2;
+        const need = nTris * (6 + 4);
+        if (ip + need > end) break;
+        ip += need;
+        lists += 1;
+        continue;
+      }
+      if (op === 0x4353) {
+        // untextured strip: u16 nTris, 3×u16 + u32 + (n-1)×u16
+        if (ip + 2 > end) break;
+        const nTris = dv.getUint16(ip, true);
+        ip += 2;
+        const need = 6 + 4 + Math.max(0, nTris - 1) * 2;
+        if (ip + need > end) break;
+        ip += need;
+        strips += 1;
+        continue;
+      }
+      // Unknown opcode — stop
+      break;
+    }
+  }
+
+  const flagBits = [];
+  if (clothEffect) flagBits.push('cloth');
+  if (useJointArray) flagBits.push('joint-array');
+  if (symmetric) flagBits.push('symmetric');
+  if (occludeType) flagBits.push(`occlude 0x${occludeType.toString(16)}`);
+
+  const summaryRows = [
+    { field: 'Joints (mesh map)', value: String(numJoints) },
+    { field: 'Verts (1-bone / 2-bone)', value: `${singleCount} / ${doubleCount} (Σ ${totalVerts})` },
+    { field: 'Flags', value: flagBits.length ? flagBits.join(', ') : '—' },
+    { field: 'Textures', value: textures.length ? textures.join(', ') : '—' },
+    { field: 'Draws (strip / list ops)', value: `${strips} / ${lists}` },
+    { field: 'Instr ops walked', value: String(instrOps) },
+    { field: 'Instr / joints / verts offs', value: `0x${instructionOffset.toString(16)} / 0x${jointArrayOffset.toString(16)} / 0x${vertexDataOffset.toString(16)}` },
+  ];
+
+  const rows = [
+    ...summaryRows,
+    ...(jointRows.length
+      ? [
+          { field: '— Joint map —', value: 'local → skeleton' },
+          ...jointRows.map((r) => ({ field: `  [${r.i}]`, value: r.joint })),
+        ]
+      : []),
+  ];
+
+  return {
+    kind: 'skeletonMesh',
+    id,
+    title: 'SkeletonMesh',
+    subtitle: `${numJoints} joints · ${totalVerts} verts${textures[0] ? ` · ${textures[0]}` : ''}`,
+    note: 'Skinned mesh (0x2A): vertices bind to skeleton joints via the local joint map. Drawn with the entity model — this view is structure only.',
+    textureName: textures[0] || null,
+    textureNames: textures,
+    offset: start,
+    columns: [
+      { key: 'field', label: 'Field' },
+      { key: 'value', label: 'Value' },
+    ],
+    rows,
+  };
 }
 
 function peekAnimation(bytes, dv, s) {
@@ -2102,6 +2281,7 @@ export function inspectDat(buffer, path = '') {
       let isParticleMesh = type === 0x1F;
       let isKeyFrame = type === 0x19;
       let isWeightedMesh = type === 0x25;
+      let isSkeletonMesh = type === 0x2a;
       const isParticleGenerator = type === 0x05;
       let soundId = null;
       const peek = PEEKS[type];
@@ -2122,6 +2302,7 @@ export function inspectDat(buffer, path = '') {
           if (r?.isParticleMesh) isParticleMesh = true;
           if (r?.isKeyFrame) isKeyFrame = true;
           if (r?.isWeightedMesh) isWeightedMesh = true;
+          if (r?.isSkeletonMesh) isSkeletonMesh = true;
           if (r?.soundId != null) soundId = r.soundId;
         } catch { /* malformed header — list it plain */ }
       }
@@ -2136,7 +2317,7 @@ export function inspectDat(buffer, path = '') {
         isSkeleton, skeletonKind: isSkeleton ? 'entity' : null,
         isSound, soundId, isZoneDef, isParticleGenerator, isRoute, isUiMenu,
         isUiElementGroup, isDataTable, isEffectRoutine, isSpriteSheet, isParticleMesh,
-        isKeyFrame, isWeightedMesh,
+        isKeyFrame, isWeightedMesh, isSkeletonMesh,
       });
       const agg = summary.get(type) ?? { count: 0, bytes: 0 };
       agg.count++; agg.bytes += size;

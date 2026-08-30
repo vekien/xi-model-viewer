@@ -93,9 +93,11 @@ function listGroups(items) {
  * + Artifact/Relic/…) gets the same type → item drill-down as weapons. "None"
  * stays ungrouped and pins above the type list.
  */
+// Fallback only: callers pass the name the list itself uses (characters.json
+// `gearSections.standardLabel`), so the wording lives with the data.
 const STANDARD_GROUP = 'Standard';
 
-function normalizeTypeItems(items) {
+function normalizeTypeItems(items, standardLabel = STANDARD_GROUP) {
   let needsStandard = false;
   for (const it of items) {
     if (it.label.toLowerCase() === 'none') continue;
@@ -104,7 +106,7 @@ function normalizeTypeItems(items) {
   if (!needsStandard) return items;
   return items.map((it) => {
     if (it.label.toLowerCase() === 'none') return it.group ? { ...it, group: null } : it;
-    if (!it.group || it.group.startsWith('---')) return { ...it, group: STANDARD_GROUP };
+    if (!it.group || it.group.startsWith('---')) return { ...it, group: standardLabel };
     return it;
   });
 }
@@ -220,8 +222,8 @@ function SearchCombo({ value, items, onChange, placeholder, className }) {
  * that type. Open lands on the selected item's type so sibling swaps are one
  * click; the back row returns to types. Typing on the type screen searches all.
  */
-function GroupedSearchCombo({ value, items: rawItems, onChange, placeholder, className }) {
-  const items = useMemo(() => normalizeTypeItems(rawItems), [rawItems]);
+function GroupedSearchCombo({ value, items: rawItems, onChange, placeholder, className, standardLabel }) {
+  const items = useMemo(() => normalizeTypeItems(rawItems, standardLabel), [rawItems, standardLabel]);
   const [query, setQuery] = useState('');
   // null = type list; string = that group's items.
   const [scope, setScope] = useState(null);
@@ -353,15 +355,15 @@ function OpenTracker({ open, onOpen }) {
   return null;
 }
 
-export function Combo({ value, items, onChange, placeholder = '—', className = '', searchable, groupByType = false }) {
+export function Combo({ value, items, onChange, placeholder = '—', className = '', searchable, groupByType = false, standardLabel = STANDARD_GROUP }) {
   const groups = useMemo(
-    () => (groupByType ? listGroups(normalizeTypeItems(items)) : []),
-    [groupByType, items],
+    () => (groupByType ? listGroups(normalizeTypeItems(items, standardLabel)) : []),
+    [groupByType, items, standardLabel],
   );
   if (groupByType && groups.length >= 2) {
     return (
       <GroupedSearchCombo value={value} items={items} onChange={onChange}
-        placeholder={placeholder} className={className} />
+        placeholder={placeholder} className={className} standardLabel={standardLabel} />
     );
   }
   const Impl = (searchable ?? items.length >= SEARCH_MIN) ? SearchCombo : PlainCombo;

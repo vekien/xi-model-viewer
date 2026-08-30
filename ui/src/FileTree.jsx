@@ -9,6 +9,14 @@ const LISTABLE = /\.(dat|bgw|spw|png|ttl|sys|msg)$/i;
 const MAX_SEARCH = 400;
 const PIN_KEY = 'pinnedFiles';
 
+/** Noise under the game root — never show in DAT Browser > FFXI. */
+const TREE_IGNORE = new Set([
+  'temp', 'sys', 'tools', 'toolseu', 'toolsus', 'config.sys',
+]);
+function isTreeIgnored(name) {
+  return TREE_IGNORE.has(String(name || '').toLowerCase());
+}
+
 /** Normalize for selection compares (case + slash direction). */
 function normPath(p) {
   return String(p || '').toLowerCase().replace(/\//g, '\\');
@@ -159,6 +167,11 @@ export function FileTree({
     return q ? q.split(/\s+/).filter(Boolean) : [];
   }, [query]);
 
+  // null pathIndex = still building; an empty array = built and came back with
+  // nothing, which means the tables could not be read. Those are different
+  // states and must not both render as "Building file index…".
+  const indexFailed = Array.isArray(pathIndex) && pathIndex.length === 0;
+
   const searchHits = useMemo(() => {
     if (!tokens.length || !pathIndex?.length || !primaryRoot) return null;
     const hits = [];
@@ -247,7 +260,11 @@ export function FileTree({
           </div>
         )}
         {searching && !searchHits && (
-          <div className="side-note">Building file index…</div>
+          <div className="side-note">
+            {indexFailed
+              ? 'No file index — could not read the game file tables. Check the game path in Settings.'
+              : 'Building file index…'}
+          </div>
         )}
         {!searching && (
           <>
@@ -427,9 +444,11 @@ function TreeNode({
     if (entries !== null) return;
     try {
       const list = await backend.listDir(path);
-      const dirs = list.filter((e) => e.isDir).sort((a, b) => naturalCompare(a.name, b.name));
+      const dirs = list
+        .filter((e) => e.isDir && !isTreeIgnored(e.name))
+        .sort((a, b) => naturalCompare(a.name, b.name));
       const files = list
-        .filter((e) => !e.isDir && LISTABLE.test(e.name))
+        .filter((e) => !e.isDir && LISTABLE.test(e.name) && !isTreeIgnored(e.name))
         .sort((a, b) => naturalCompare(a.name, b.name));
       setEntries([...dirs, ...files]);
     } catch (err) {

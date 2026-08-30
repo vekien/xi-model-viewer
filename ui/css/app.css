@@ -1919,34 +1919,69 @@ body:has(#placements) #animbar { right: 344px; }
 
 /* --- Skeleton panel (bone hierarchy) --------------------------------------- */
 
-/* Flush right, same as Details — the two overlap when both are open. */
+/* Readable width for deep trees + coords; sits left of Details when both open. */
 #skeleton {
   right: 12px; bottom: 52px;
-  width: 420px; /* slightly wider for bone rows */
-  max-height: 60vh;
+  width: 360px !important;
+  max-height: min(55vh, 520px);
   z-index: 30;
   overflow: hidden;
+  gap: 8px !important;
+  padding: 10px !important;
 }
-.skel-count { color: var(--gray-500); font-size: 11px; flex: 0 0 auto; }
+body:has(#details) #skeleton {
+  right: 344px; /* 12 + 320 Details + 12 gap */
+}
+.skel-count { color: var(--gray-500); font-size: 10px; flex: 0 0 auto; }
+#skeleton .skel-body {
+  gap: 0 !important;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
 .skel-row {
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; gap: 5px;
   padding: 2px 8px 2px 0;
-  font: 400 12px/1.5 var(--font-mono);
+  min-height: 20px;
+  font: 400 11px/1.3 var(--font-mono);
   color: var(--gray-300);
   white-space: nowrap;
+  cursor: pointer;
+  border-radius: 4px;
+  min-width: 0;
+  box-sizing: border-box;
+  width: 100%;
 }
+.skel-row:hover { background: rgba(255, 255, 255, 0.06); }
+.skel-row.on {
+  background: rgba(255, 140, 40, 0.18);
+  color: #ffb060;
+}
+.skel-row.on .skel-idx { color: #ffb060; }
+.skel-row.on .skel-pos { color: rgba(255, 176, 96, 0.85); }
 .skel-branch { cursor: pointer; }
-.skel-branch:hover { background: rgba(255, 255, 255, 0.06); }
-.skel-row .caret { font-size: 14px; width: 14px; color: var(--gray-500); flex: 0 0 auto; }
+.skel-row .caret {
+  font-size: 13px; width: 14px; height: 14px;
+  color: var(--gray-500); flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.skel-row .caret:hover { color: var(--text); }
 .skel-idx { color: var(--gray-100); flex: 0 0 auto; }
 .skel-kids {
-  font: 600 10px/1 var(--font-mono);
-  color: var(--gray-300);
-  background: rgba(255, 255, 255, 0.1);
+  font: 600 9px/1 var(--font-mono);
+  color: var(--gray-400);
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 999px;
-  padding: 2px 5px;
+  padding: 1px 5px;
+  flex: 0 0 auto;
 }
-.skel-pos { margin-left: auto; color: var(--gray-600); font-size: 10px; }
+.skel-pos {
+  margin-left: auto;
+  color: var(--gray-500);
+  font-size: 10px;
+  letter-spacing: 0;
+  padding-left: 10px;
+  flex: 0 0 auto;
+}
 /* Titles on weather / objects / details share panel-title metrics. */
 .details-title, .plc-title, .wx-title {
   flex: 1 1 auto;
@@ -3063,10 +3098,28 @@ input[type='color'] {
 .cseq-resize:hover::after { background: var(--accent); opacity: 0.9; }
 
 /* Cinematic playback: nothing on screen but the render. The panels live inside
-   #root; tooltips and menu dropdowns portal to <body>, so both levels go. */
-body.cinematic #root > *:not(#canvas),
-body.cinematic > *:not(#root) { display: none !important; }
+   #root; tooltips and menu dropdowns portal to <body>, so both levels go.
+   Keep a tiny Esc hint so a stuck class (HMR / crash) is recoverable. */
+body.cinematic #root > *:not(#canvas):not(#cinematic-hint),
+body.cinematic > *:not(#root):not(#cinematic-hint) { display: none !important; }
 body.cinematic #canvas { cursor: none; }
+#cinematic-hint {
+  display: none;
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 99999;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid var(--ring);
+  color: var(--gray-200);
+  font: 500 12px/1.3 var(--font-ui);
+  pointer-events: none;
+  letter-spacing: 0.02em;
+}
+body.cinematic #cinematic-hint { display: block; }
 
 /* --- Help / About ---------------------------------------------------------- */
 

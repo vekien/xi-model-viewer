@@ -60,7 +60,7 @@ import { ensureXiToolsOnBoot } from '../js/toolsBoot.js';
 import { WeatherAudio } from '../js/particle/audio.js';
 import { toAudioBuffer, parseAudioHeader, FMT_ATRAC3 } from '../js/audio.js';
 import { parseImageDat, textureForSet } from '../js/images.js';
-import { inspectDat, parseInspectSkeleton, parseInspectRoute, parseInspectUiMenu, parseInspectUiElementGroup, parseInspectDataTable, parseInspectEffectRoutine, parseInspectSpriteSheet, parseInspectParticleMesh, parseInspectKeyFrame, parseInspectWeightedMesh, inspectDmsg, attachDataTableNames } from '../js/dat/inspect.js';
+import { inspectDat, parseInspectSkeleton, parseInspectRoute, parseInspectUiMenu, parseInspectUiElementGroup, parseInspectDataTable, parseInspectEffectRoutine, parseInspectSpriteSheet, parseInspectParticleMesh, parseInspectKeyFrame, parseInspectWeightedMesh, parseInspectSkeletonMesh, inspectDmsg, attachDataTableNames } from '../js/dat/inspect.js';
 import { SkeletonModal } from './SkeletonModal.jsx';
 import { RouteModal } from './RouteModal.jsx';
 import { UiMenuModal } from './UiMenuModal.jsx';
@@ -266,6 +266,11 @@ function buildParticleTree(buffer, parsers, warnings) {
  * Merged file-id ↔ DAT-path maps across every FTABLE/VTABLE pair (base +
  * ROM2-10), the way the client resolves them: lowest table wins. Cached in
  * `cacheRef` — reads ~10 table pairs once per session.
+ *
+ * The per-ROM catch is for expansions that aren't installed, but it cannot tell
+ * those apart from "no game path yet" — and callers can run before settings
+ * land. So a run that resolved nothing at all is treated as a failure and left
+ * uncached, otherwise the empty result sticks for the rest of the session.
  */
 async function loadMergedTables(settings, cacheRef) {
   if (cacheRef.current) return cacheRef.current;
@@ -285,6 +290,10 @@ async function loadMergedTables(settings, cacheRef) {
         if (!byPath.has(key)) byPath.set(key, e.id);
       }
     } catch { /* expansion not installed */ }
+  }
+  // Not even the base FTABLE read: bad/absent game path, not an empty install.
+  if (byPath.size === 0) {
+    throw new Error('No file tables could be read — check the game path.');
   }
   cacheRef.current = { byFid, byPath };
   return cacheRef.current;
@@ -545,6 +554,7 @@ export default function App({ launch = null }) {
   const [modelInfo, setModelInfo] = useState(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [skeletonOpen, setSkeletonOpen] = useState(false);
+  const [selectedJoint, setSelectedJoint] = useState(-1);
   const [texWindows, setTexWindows] = useState([]); // [{ id, tex }] open texture viewers
   const texIdRef = useRef(0);
   const [skelWindows, setSkelWindows] = useState([]); // [{ id, joints, title, cascade }]
@@ -1214,6 +1224,12 @@ export default function App({ launch = null }) {
   useEffect(() => {
     if (rendererRef.current) rendererRef.current.showSkeleton = showSkeleton;
   }, [showSkeleton]);
+  useEffect(() => {
+    if (rendererRef.current) rendererRef.current.highlightJoint = selectedJoint;
+  }, [selectedJoint]);
+  useEffect(() => {
+    if (!skeletonOpen) setSelectedJoint(-1);
+  }, [skeletonOpen]);
 
   useEffect(() => {
     if (rendererRef.current) rendererRef.current.showAlpha = showAlpha;
@@ -3275,9 +3291,17 @@ export default function App({ launch = null }) {
 
   // Escape closes the topmost overlay (modals → skeleton/tex windows).
   // Data Struct is handled later (after its state is declared).
+  // Cinematic mode (Camera Sequencer) hides the whole UI — Esc must restore it
+  // first, including when HMR left body.cinematic stuck with no sequencer mounted.
   useEffect(() => {
+    const exitCinematicIfStuck = () => {
+      if (!document.body.classList.contains('cinematic')) return false;
+      document.body.classList.remove('cinematic');
+      return true;
+    };
     const onKey = (e) => {
       if (e.key !== 'Escape') return;
+      if (exitCinematicIfStuck()) { e.preventDefault(); return; }
       if (exportSpec) { setExportSpec(null); e.preventDefault(); return; }
       if (settingsOpen) { setSettingsOpen(false); e.preventDefault(); return; }
       if (helpOpen) { setHelpOpen(false); e.preventDefault(); return; }
@@ -3322,9 +3346,17 @@ export default function App({ launch = null }) {
         e.preventDefault();
       }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [exportSpec, settingsOpen, helpOpen, datNotesOpen, texWindows.length, skelWindows.length, zdefWindows.length, routeWindows.length, uiMenuWindows.length, uiEgWindows.length, dataTableWindows.length, fxPreview, closeFxPreview]);
+    window.addEventListener('keydown', onKey, true);
+    // Stuck cinematic after crash/HMR: any focus back to the window clears it.
+    const onVis = () => {
+      if (document.visibilityState === 'visible') exitCinematicIfStuck();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [exportSpec, settingsOpen, helpOpen, datNotesOpen, texWindows.length, skelWindows.length, zdefWindows.length, routeWindows.length, uiMenuWindows.length, uiEgWindows.length, dataTableWindows.length, fxPreview, closeFxPreview, explorerOpen]);
 
   // --- handlers ------------------------------------------------------------
 
@@ -4172,6 +4204,8 @@ export default function App({ launch = null }) {
         table = parseInspectKeyFrame(dataBufRef.current, res.offset);
       } else if (res?.isWeightedMesh || res?.type === 0x25 || res?.name === 'WeightedMesh') {
         table = parseInspectWeightedMesh(dataBufRef.current, res.offset);
+      } else if (res?.isSkeletonMesh || res?.type === 0x2a || res?.name === 'SkeletonMesh') {
+        table = parseInspectSkeletonMesh(dataBufRef.current, res.offset);
       }
       if (!table?.rows) table = parseInspectDataTable(dataBufRef.current, res.offset);
     } catch (e) {
@@ -4188,7 +4222,8 @@ export default function App({ launch = null }) {
     // Sprite / particle mesh + atlas: tile side-by-side so the texture isn't buried.
     let tablePos = null;
     let texPos = null;
-    const pairTex = table.kind === 'spriteSheet' || table.kind === 'particleMesh' || table.kind === 'weightedMesh';
+    const pairTex = table.kind === 'spriteSheet' || table.kind === 'particleMesh'
+      || table.kind === 'weightedMesh' || table.kind === 'skeletonMesh';
     if (pairTex) {
       const vw = window.innerWidth || 1200;
       const vh = window.innerHeight || 800;
@@ -4729,9 +4764,16 @@ export default function App({ launch = null }) {
     }
   }, []);
 
-  /** FTABLE path list for DAT Browser search (once per session / install). */
+  /** FTABLE path list for DAT Browser search (once per session / install).
+   *
+   * The view this runs for is the one the app opens on by default, so the first
+   * call can land before `settings` exists. Guard on a *non-empty* index and
+   * clear the ref on failure, so the retry the effect below already performs
+   * when `gamePath` arrives can actually rebuild — an empty array is truthy,
+   * and caching one here used to wedge search on "Building file index…" for the
+   * rest of the session. */
   const ensureFilePathIndex = useCallback(async () => {
-    if (fileIndexRef.current) return fileIndexRef.current;
+    if (fileIndexRef.current?.length) return fileIndexRef.current;
     try {
       const { byPath } = await loadMergedTables(settingsRef.current, dataTablesRef);
       const paths = [...byPath.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
@@ -4745,7 +4787,7 @@ export default function App({ launch = null }) {
       return paths;
     } catch (e) {
       console.warn('file path index failed', e);
-      fileIndexRef.current = [];
+      fileIndexRef.current = null;
       setFilePathIndex([]);
       return [];
     }
@@ -6197,6 +6239,7 @@ export default function App({ launch = null }) {
     return (
       <>
         {viewport}
+        <div id="cinematic-hint">Press Esc to show UI</div>
         {modelInfo?.zone && zonePanel}
         {launchError && (
           <div id="launchError" className="panel" role="alert">
@@ -6227,6 +6270,8 @@ export default function App({ launch = null }) {
   return (
     <>
       {viewport}
+      {/* Visible only while body.cinematic — Esc recovers stuck hide-UI mode. */}
+      <div id="cinematic-hint">Press Esc to show UI</div>
 
       <MenuBar
         onAction={handleMenuAction}
@@ -6700,7 +6745,9 @@ export default function App({ launch = null }) {
         && !(leftView === 'files' && browserKind && browserKind !== 'entity') && (
         <SkeletonPanel
           pose={rendererRef.current?.pose ?? null}
-          onClose={() => setSkeletonOpen(false)}
+          selectedJoint={selectedJoint}
+          onSelectJoint={setSelectedJoint}
+          onClose={() => { setSkeletonOpen(false); setSelectedJoint(-1); }}
         />
       )}
 

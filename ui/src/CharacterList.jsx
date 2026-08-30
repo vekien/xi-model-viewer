@@ -45,10 +45,18 @@ const modelIdOf = (item, useAlt) => {
 
 // ---------------------------------------------------------------------------
 
-// Gear families worth their own section in the armour dropdowns. Order here is
-// the order they appear under the plain run. Weapons and faces match none of
-// these and keep their own groups (weapon type).
-const GEAR_SECTIONS = ['Artifact', 'Relic', 'Empyrean', 'Ebur', 'Furia', 'Ebon'];
+// The three colour variants are one family with three dye jobs, and as separate
+// sections they were three near-identical eleven-item lists. Only used by the
+// label fallback below — the data spells the merged name out itself.
+const EBUR_SECTION = 'Ebur / Furia / Ebon';
+
+/**
+ * Sectioning comes from characters.json (`gearSections`, written by
+ * `xi mv update --only gear-sets`), so a new set needs no change here: add it to
+ * the generator and it appears. This is the shape, and the floor for an older
+ * list that predates the field — not a list to extend by hand.
+ */
+const DEFAULT_SECTIONS = { order: [], standardLabel: 'Standard', other: null };
 
 /** A-Z, but "None" stays pinned to the top of its group rather than sorting
  *  into the N's. Numeric collation keeps the id-style labels ("29/21",
@@ -75,14 +83,27 @@ function sortWithinGroups(items) {
   return order.flatMap((key) => groups.get(key).sort(byLabel));
 }
 
-/** "Fighter's Lorica (WAR Artifact)" -> Artifact; "Ebur Cuirass" -> Ebur. */
-function gearSection(label) {
+/**
+ * Which section an item belongs to, or null for plain gear.
+ *
+ * `set` is authoritative: `xi mv update --only gear-sets` writes it, and it
+ * covers families no label convention can express — Abjuration, Limbus and the
+ * Mythic/Aeonic/Prime weapons are matched by item name, not by a suffix.
+ *
+ * The label parse stays as the fallback for rows the set pass has not reached
+ * (newly-added model ids still labelled "NEW - mid N"). Note it only works on
+ * the older "Fighter's Lorica (WAR Artifact)" spelling; once labels are
+ * rewritten to "WAR - Fighter's Lorica" the tier lives solely in `set`.
+ */
+function gearSection(item) {
+  if (item?.set) return item.set;
+  const label = item?.label ?? '';
   // Reforged sets carry job + tier in a trailing parenthetical. One entry reads
   // "(RUN AF@)" — the same Artifact tier, mis-typed in the source list.
   const tier = label.match(/\(\w+ (Artifact|Relic|Empyrean|AF@)\)$/);
   if (tier) return tier[1] === 'AF@' ? 'Artifact' : tier[1];
   const family = label.match(/^(Ebur|Furia|Ebon)\b/);
-  return family ? family[1] : null;
+  return family ? EBUR_SECTION : null;
 }
 
 /**
@@ -94,19 +115,52 @@ function gearSection(label) {
  * Sorts a copy throughout — the source arrays live in raceData and are re-read
  * on every race switch.
  */
-function orderSlotItems(items) {
-  const found = new Map(GEAR_SECTIONS.map((name) => [name, []]));
+function orderSlotItems(items, slotKey, sections = DEFAULT_SECTIONS) {
+  const listed = sections.order ?? [];
+  const other = sections.other;
+  // On the slots `other.slots` names (the weapon ones), the leftovers — the
+  // odd "Unidentified"/missing-DAT groups plus everything ungrouped — collapse
+  // into one bucket that sorts last, instead of a big "Standard" run and two
+  // one-item curiosities. Armour slots aren't listed, so they keep theirs.
+  const otherHere = other?.slots?.includes(slotKey) ? other : null;
+  const otherGroups = new Set(otherHere?.groups ?? []);
+
+  const found = new Map();
   const plain = [];
+  const push = (name, it) => {
+    if (!found.has(name)) found.set(name, []);
+    found.get(name).push({ ...it, group: name });
+  };
+
   for (const it of items) {
-    const name = gearSection(it.label);
-    if (name) found.get(name).push({ ...it, group: name });
+    const name = gearSection(it);
+    if (name) { push(name, it); continue; }
+    // "None" is the unequip row and pins to the top; it never gets swept up.
+    const isNone = it.label?.toLowerCase() === 'none';
+    const ungrouped = !it.group || it.group.startsWith('---');
+    if (otherHere && !isNone && (otherGroups.has(it.group) || (ungrouped && otherHere.includeUngrouped))) {
+      push(otherHere.label, it);
+      continue;
+    }
     // The source splits each armour list in half with a rule of dashes. It has
     // no name to head a section with, so that run just reads as plain gear.
-    else plain.push(it.group?.startsWith('---') ? { ...it, group: null } : it);
+    plain.push(ungrouped && !isNone ? { ...it, group: null } : it);
   }
+
+  // Listed sections in their given order, then anything else the data carried,
+  // alphabetically — an unrecognised set surfaces instead of being dropped.
+  // The catch-all always sinks to the bottom.
+  const extras = [...found.keys()]
+    .filter((n) => !listed.includes(n) && n !== otherHere?.label)
+    .sort();
+  const order = [
+    ...listed.filter((n) => found.has(n)),
+    ...extras,
+    ...(otherHere && found.has(otherHere.label) ? [otherHere.label] : []),
+  ];
   return [
     ...sortWithinGroups(plain),
-    ...GEAR_SECTIONS.flatMap((name) => found.get(name).sort(byLabel)),
+    ...order.flatMap((name) => found.get(name).sort(byLabel)),
   ];
 }
 
@@ -210,6 +264,7 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
   const pendingGear = useRef(null);             // gear-set labels to apply after race/slots ready
   const prevSelRef = useRef(null);              // sel snapshot from the last onLoad (for displayPath)
   const raceData = useRef(new Map());           // race id -> full characters.json entry
+  const sectionCfg = useRef(DEFAULT_SECTIONS);  // characters.json `gearSections`
   const prevEnabled = useRef(false);
   const cbRef = useRef({});
   cbRef.current = { onLoad, onError };
@@ -246,6 +301,7 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
         if (!res.ok) throw new Error(`${res.status} characters.json`);
         const data = await res.json();
         raceData.current = new Map(data.races.map((r) => [r.id, r]));
+        sectionCfg.current = { ...DEFAULT_SECTIONS, ...(data.gearSections ?? {}) };
         const rs = data.races.map((r) => ({ id: r.id, label: r.label, base: r.base,
                                             lookRace: r.lookRace }));
         setRaces(rs);
@@ -281,7 +337,7 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
     const defaults = {};
     for (const s of SLOTS) {
       const raw = entry.slots?.[s.key] ?? null;
-      const items = raw?.length ? orderSlotItems(raw) : raw;
+      const items = raw?.length ? orderSlotItems(raw, s.key, sectionCfg.current) : raw;
       slotMap[s.key] = items;
       if (items?.length) {
         const none = items.find((it) => it.label.toLowerCase() === 'none');
@@ -481,6 +537,9 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
     actionGroups, actionGroup, setActionGroup, actionEntries, action, setAction,
     applyGearSet,
     isolated, toggleIsolate,
+    // Read from characters.json alongside the races; the list is already
+    // ordered by then, so this only names the fold-up of ungrouped rows.
+    standardLabel: sectionCfg.current.standardLabel,
   };
 }
 
@@ -489,7 +548,7 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
 export function CharacterList({ pc }) {
   const {
     races, race, setRace, slots, sel, setSel, applyGearSet,
-    isolated, toggleIsolate,
+    isolated, toggleIsolate, standardLabel,
   } = pc;
   const raceItems = (races ?? []).map((r) => ({ id: r.id, label: r.label }));
   const pick = (key) => (id) => setSel((s) => ({ ...s, [key]: id }));
@@ -549,7 +608,8 @@ export function CharacterList({ pc }) {
     return (
       <div className="pc-ctrl" key={s.key}>
         <span className="pc-ctrl-label">{s.label}</span>
-        <Combo value={sel[s.key]} items={items} onChange={pick(s.key)} groupByType={typed} />
+        <Combo value={sel[s.key]} items={items} onChange={pick(s.key)} groupByType={typed}
+          standardLabel={standardLabel} />
         {isoBtn(s.key, { disabled: isNone })}
       </div>
     );

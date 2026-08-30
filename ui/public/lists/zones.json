@@ -2,1482 +2,1778 @@
   {
     "id": 44,
     "name": "Abdhaljs Isle-Purgonorgo",
-    "path": "game/ROM3/5/7.DAT"
+    "path": "game/ROM3/5/7.DAT",
+    "fileId": 144
   },
   {
     "id": 218,
     "name": "Abyssea - Altepa",
-    "path": "game/ROM/258/110.DAT"
+    "path": "game/ROM/258/110.DAT",
+    "fileId": 318
   },
   {
     "id": 215,
     "name": "Abyssea - Attohwa",
-    "path": "game/ROM/254/7.DAT"
+    "path": "game/ROM/254/7.DAT",
+    "fileId": 315
   },
   {
     "id": 255,
     "name": "Abyssea - Empyreal Paradox",
-    "path": "game/ROM/258/113.DAT"
+    "path": "game/ROM/258/113.DAT",
+    "fileId": 355
   },
   {
     "id": 254,
     "name": "Abyssea - Grauberg",
-    "path": "game/ROM/258/112.DAT"
+    "path": "game/ROM/258/112.DAT",
+    "fileId": 354
   },
   {
     "id": 15,
     "name": "Abyssea - Konschtat",
-    "path": "game/ROM/240/106.DAT"
+    "path": "game/ROM/240/106.DAT",
+    "fileId": 115
   },
   {
     "id": 132,
     "name": "Abyssea - La Theine",
-    "path": "game/ROM/240/108.DAT"
+    "path": "game/ROM/240/108.DAT",
+    "fileId": 232
   },
   {
     "id": 216,
     "name": "Abyssea - Misareaux",
-    "path": "game/ROM/254/8.DAT"
+    "path": "game/ROM/254/8.DAT",
+    "fileId": 316
   },
   {
     "id": 45,
     "name": "Abyssea - Tahrongi",
-    "path": "game/ROM/240/107.DAT"
+    "path": "game/ROM/240/107.DAT",
+    "fileId": 145
   },
   {
     "id": 253,
     "name": "Abyssea - Uleguerand",
-    "path": "game/ROM/258/111.DAT"
+    "path": "game/ROM/258/111.DAT",
+    "fileId": 353
   },
   {
     "id": 217,
     "name": "Abyssea - Vunkerl",
-    "path": "game/ROM/254/9.DAT"
+    "path": "game/ROM/254/9.DAT",
+    "fileId": 317
   },
   {
     "id": 50,
     "name": "Aht Urhgan Whitegate",
-    "path": "game/ROM4/0/3.DAT"
+    "path": "game/ROM4/0/3.DAT",
+    "fileId": 150
   },
   {
     "id": 48,
     "name": "Al Zahbi",
-    "path": "game/ROM4/0/2.DAT"
+    "path": "game/ROM4/0/2.DAT",
+    "fileId": 148
   },
   {
     "id": 33,
     "name": "Al'Taieu",
-    "path": "game/ROM3/0/32.DAT"
+    "path": "game/ROM3/0/32.DAT",
+    "fileId": 133
   },
   {
     "id": 152,
     "name": "Altar Room",
-    "path": "game/ROM/0/64.DAT"
+    "path": "game/ROM/0/64.DAT",
+    "fileId": 252
   },
   {
     "id": 72,
     "name": "Alzadaal Undersea Ruins",
-    "path": "game/ROM4/0/25.DAT"
+    "path": "game/ROM4/0/25.DAT",
+    "fileId": 172
   },
   {
     "id": 38,
     "name": "Apollyon",
-    "path": "game/ROM3/5/1.DAT"
+    "path": "game/ROM3/5/1.DAT",
+    "fileId": 138
   },
   {
     "id": 54,
     "name": "Arrapago Reef",
-    "path": "game/ROM4/0/7.DAT"
+    "path": "game/ROM4/0/7.DAT",
+    "fileId": 154
   },
   {
     "id": 74,
     "name": "Arrapago Remnants",
-    "path": "game/ROM4/0/27.DAT"
+    "path": "game/ROM4/0/27.DAT",
+    "fileId": 174
   },
   {
     "id": 7,
     "name": "Attohwa Chasm",
-    "path": "game/ROM3/0/6.DAT"
+    "path": "game/ROM3/0/6.DAT",
+    "fileId": 107
   },
   {
     "id": 68,
     "name": "Aydeewa Subterrane",
-    "path": "game/ROM4/0/21.DAT"
+    "path": "game/ROM4/0/21.DAT",
+    "fileId": 168
   },
   {
     "id": 146,
     "name": "Balga's Dais",
-    "path": "game/ROM/0/105.DAT"
+    "path": "game/ROM/0/105.DAT",
+    "fileId": 246
   },
   {
     "id": 235,
     "name": "Bastok Markets",
-    "path": "game/ROM/1/35.DAT"
+    "path": "game/ROM/1/35.DAT",
+    "fileId": 335
   },
   {
     "id": 87,
     "name": "Bastok Markets [S]",
-    "path": "game/ROM5/0/7.DAT"
+    "path": "game/ROM5/0/7.DAT",
+    "fileId": 187
   },
   {
     "id": 234,
     "name": "Bastok Mines",
-    "path": "game/ROM/1/34.DAT"
+    "path": "game/ROM/1/34.DAT",
+    "fileId": 334
   },
   {
     "id": 224,
     "name": "Bastok-Jeuno Airship",
-    "path": "game/ROM/1/27.DAT"
+    "path": "game/ROM/1/27.DAT",
+    "fileId": 324
   },
   {
     "id": 105,
     "name": "Batallia Downs",
-    "path": "game/ROM/0/122.DAT"
+    "path": "game/ROM/0/122.DAT",
+    "fileId": 205
   },
   {
     "id": 84,
     "name": "Batallia Downs [S]",
-    "path": "game/ROM5/0/4.DAT"
+    "path": "game/ROM5/0/4.DAT",
+    "fileId": 184
   },
   {
     "id": 147,
     "name": "Beadeaux",
-    "path": "game/ROM/0/61.DAT"
+    "path": "game/ROM/0/61.DAT",
+    "fileId": 247
   },
   {
     "id": 92,
     "name": "Beadeaux [S]",
-    "path": "game/ROM5/0/12.DAT"
+    "path": "game/ROM5/0/12.DAT",
+    "fileId": 192
   },
   {
     "id": 6,
     "name": "Bearclaw Pinnacle",
-    "path": "game/ROM3/0/5.DAT"
+    "path": "game/ROM3/0/5.DAT",
+    "fileId": 106
   },
   {
     "id": 111,
     "name": "Beaucedine Glacier",
-    "path": "game/ROM/0/72.DAT"
+    "path": "game/ROM/0/72.DAT",
+    "fileId": 211
   },
   {
     "id": 136,
     "name": "Beaucedine Glacier [S]",
-    "path": "game/ROM5/0/21.DAT"
+    "path": "game/ROM5/0/21.DAT",
+    "fileId": 236
   },
   {
     "id": 127,
     "name": "Behemoth's Dominion",
-    "path": "game/ROM/1/3.DAT"
+    "path": "game/ROM/1/3.DAT",
+    "fileId": 227
   },
   {
     "id": 75,
     "name": "Bhaflau Remnants",
-    "path": "game/ROM4/0/28.DAT"
+    "path": "game/ROM4/0/28.DAT",
+    "fileId": 175
   },
   {
     "id": 52,
     "name": "Bhaflau Thickets",
-    "path": "game/ROM4/7/55.DAT"
+    "path": "game/ROM4/7/55.DAT",
+    "fileId": 152
   },
   {
     "id": 4,
     "name": "Bibiki Bay",
-    "path": "game/ROM3/0/3.DAT"
+    "path": "game/ROM3/0/3.DAT",
+    "fileId": 104
   },
   {
     "id": 8,
     "name": "Boneyard Gully",
-    "path": "game/ROM3/0/7.DAT"
+    "path": "game/ROM3/0/7.DAT",
+    "fileId": 108
   },
   {
     "id": 167,
     "name": "Bostaunieux Oubliette",
-    "path": "game/ROM/0/108.DAT"
+    "path": "game/ROM/0/108.DAT",
+    "fileId": 267
   },
   {
     "id": 118,
     "name": "Buburimu Peninsula",
-    "path": "game/ROM/0/71.DAT"
+    "path": "game/ROM/0/71.DAT",
+    "fileId": 218
   },
   {
     "id": 79,
     "name": "Caedarva Mire",
-    "path": "game/ROM4/0/32.DAT"
+    "path": "game/ROM4/0/32.DAT",
+    "fileId": 179
   },
   {
     "id": 113,
     "name": "Cape Teriggan",
-    "path": "game/ROM2/0/0.DAT"
+    "path": "game/ROM2/0/0.DAT",
+    "fileId": 213
   },
   {
     "id": 2,
     "name": "Carpenters' Landing",
-    "path": "game/ROM3/0/1.DAT"
+    "path": "game/ROM3/0/1.DAT",
+    "fileId": 102
   },
   {
     "id": 151,
     "name": "Castle Oztroja",
-    "path": "game/ROM/0/63.DAT"
+    "path": "game/ROM/0/63.DAT",
+    "fileId": 251
   },
   {
     "id": 99,
     "name": "Castle Oztroja [S]",
-    "path": "game/ROM5/0/19.DAT"
+    "path": "game/ROM5/0/19.DAT",
+    "fileId": 199
   },
   {
     "id": 161,
     "name": "Castle Zvahl Baileys",
-    "path": "game/ROM/0/60.DAT"
+    "path": "game/ROM/0/60.DAT",
+    "fileId": 261
   },
   {
     "id": 138,
     "name": "Castle Zvahl Baileys [S]",
-    "path": "game/ROM5/0/23.DAT"
+    "path": "game/ROM5/0/23.DAT",
+    "fileId": 238
   },
   {
     "id": 162,
     "name": "Castle Zvahl Keep",
-    "path": "game/ROM/0/73.DAT"
+    "path": "game/ROM/0/73.DAT",
+    "fileId": 262
   },
   {
     "id": 155,
     "name": "Castle Zvahl Keep [S]",
-    "path": "game/ROM5/0/24.DAT"
+    "path": "game/ROM5/0/24.DAT",
+    "fileId": 255
   },
   {
     "id": 261,
     "name": "Ceizak Battlegrounds",
-    "path": "game/ROM9/0/8.DAT"
+    "path": "game/ROM9/0/8.DAT",
+    "fileId": 83896
   },
   {
     "id": 284,
     "name": "Celennia Memorial Library",
-    "path": "game/ROM/303/26.DAT"
+    "path": "game/ROM/303/26.DAT",
+    "fileId": 83919
   },
   {
     "id": 168,
     "name": "Chamber of Oracles",
-    "path": "game/ROM2/0/11.DAT"
+    "path": "game/ROM2/0/11.DAT",
+    "fileId": 268
   },
   {
     "id": 233,
     "name": "Chateau d'Oraguille",
-    "path": "game/ROM/1/33.DAT"
+    "path": "game/ROM/1/33.DAT",
+    "fileId": 333
   },
   {
     "id": 70,
     "name": "Chocobo Circuit",
-    "path": "game/ROM4/5/106.DAT"
+    "path": "game/ROM4/5/106.DAT",
+    "fileId": 170
   },
   {
     "id": 270,
     "name": "Cirdas Caverns",
-    "path": "game/ROM9/0/17.DAT"
+    "path": "game/ROM9/0/17.DAT",
+    "fileId": 83905
   },
   {
     "id": 271,
     "name": "Cirdas Caverns [U]",
-    "path": "game/ROM9/0/18.DAT"
+    "path": "game/ROM9/0/18.DAT",
+    "fileId": 83906
   },
   {
     "id": 207,
     "name": "Cloister of Flames",
-    "path": "game/ROM2/0/21.DAT"
+    "path": "game/ROM2/0/21.DAT",
+    "fileId": 307
   },
   {
     "id": 203,
     "name": "Cloister of Frost",
-    "path": "game/ROM2/0/19.DAT"
+    "path": "game/ROM2/0/19.DAT",
+    "fileId": 303
   },
   {
     "id": 201,
     "name": "Cloister of Gales",
-    "path": "game/ROM2/0/17.DAT"
+    "path": "game/ROM2/0/17.DAT",
+    "fileId": 301
   },
   {
     "id": 202,
     "name": "Cloister of Storms",
-    "path": "game/ROM2/0/18.DAT"
+    "path": "game/ROM2/0/18.DAT",
+    "fileId": 302
   },
   {
     "id": 211,
     "name": "Cloister of Tides",
-    "path": "game/ROM2/0/23.DAT"
+    "path": "game/ROM2/0/23.DAT",
+    "fileId": 311
   },
   {
     "id": 209,
     "name": "Cloister of Tremors",
-    "path": "game/ROM2/0/22.DAT"
+    "path": "game/ROM2/0/22.DAT",
+    "fileId": 309
   },
   {
     "id": 197,
     "name": "Crawlers' Nest",
-    "path": "game/ROM/0/76.DAT"
+    "path": "game/ROM/0/76.DAT",
+    "fileId": 297
   },
   {
     "id": 171,
     "name": "Crawlers' Nest [S]",
-    "path": "game/ROM5/0/27.DAT"
+    "path": "game/ROM5/0/27.DAT",
+    "fileId": 271
   },
   {
     "id": 191,
     "name": "Dangruf Wadi",
-    "path": "game/ROM/0/52.DAT"
+    "path": "game/ROM/0/52.DAT",
+    "fileId": 291
   },
   {
     "id": 149,
     "name": "Davoi",
-    "path": "game/ROM/0/99.DAT"
+    "path": "game/ROM/0/99.DAT",
+    "fileId": 249
   },
   {
     "id": 160,
     "name": "Den of Rancor",
-    "path": "game/ROM2/12/110.DAT"
+    "path": "game/ROM2/12/110.DAT",
+    "fileId": 260
   },
   {
     "id": 290,
     "name": "Desuetia - Empyreal Paradox",
-    "path": "game/ROM/342/72.DAT"
+    "path": "game/ROM/342/72.DAT",
+    "fileId": 83925
   },
   {
     "id": 272,
     "name": "Dho Gates",
-    "path": "game/ROM9/0/19.DAT"
+    "path": "game/ROM9/0/19.DAT",
+    "fileId": 83907
   },
   {
     "id": 43,
     "name": "Diorama Abdhaljs-Ghelsba",
-    "path": "game/ROM3/5/6.DAT"
+    "path": "game/ROM3/5/6.DAT",
+    "fileId": 143
   },
   {
     "id": 154,
     "name": "Dragon's Aery",
-    "path": "game/ROM2/0/9.DAT"
+    "path": "game/ROM2/0/9.DAT",
+    "fileId": 254
   },
   {
     "id": 186,
     "name": "Dynamis - Bastok",
-    "path": "game/ROM2/12/117.DAT"
+    "path": "game/ROM2/12/117.DAT",
+    "fileId": 286
   },
   {
     "id": 295,
     "name": "Dynamis - Bastok [D]",
-    "path": "game/ROM/355/3.DAT"
+    "path": "game/ROM/355/3.DAT",
+    "fileId": 83930
   },
   {
     "id": 134,
     "name": "Dynamis - Beaucedine",
-    "path": "game/ROM2/12/108.DAT"
+    "path": "game/ROM2/12/108.DAT",
+    "fileId": 234
   },
   {
     "id": 40,
     "name": "Dynamis - Buburimu",
-    "path": "game/ROM3/5/3.DAT"
+    "path": "game/ROM3/5/3.DAT",
+    "fileId": 140
   },
   {
     "id": 188,
     "name": "Dynamis - Jeuno",
-    "path": "game/ROM2/12/119.DAT"
+    "path": "game/ROM2/12/119.DAT",
+    "fileId": 288
   },
   {
     "id": 297,
     "name": "Dynamis - Jeuno [D]",
-    "path": "game/ROM/355/47.DAT"
+    "path": "game/ROM/355/47.DAT",
+    "fileId": 83932
   },
   {
     "id": 41,
     "name": "Dynamis - Qufim",
-    "path": "game/ROM3/5/4.DAT"
+    "path": "game/ROM3/5/4.DAT",
+    "fileId": 141
   },
   {
     "id": 185,
     "name": "Dynamis - San d'Oria",
-    "path": "game/ROM2/12/116.DAT"
+    "path": "game/ROM2/12/116.DAT",
+    "fileId": 285
   },
   {
     "id": 294,
     "name": "Dynamis - San d'Oria [D]",
-    "path": "game/ROM/354/109.DAT"
+    "path": "game/ROM/354/109.DAT",
+    "fileId": 83929
   },
   {
     "id": 42,
     "name": "Dynamis - Tavnazia",
-    "path": "game/ROM3/5/5.DAT"
+    "path": "game/ROM3/5/5.DAT",
+    "fileId": 142
   },
   {
     "id": 39,
     "name": "Dynamis - Valkurm",
-    "path": "game/ROM3/5/2.DAT"
+    "path": "game/ROM3/5/2.DAT",
+    "fileId": 139
   },
   {
     "id": 187,
     "name": "Dynamis - Windurst",
-    "path": "game/ROM2/12/118.DAT"
+    "path": "game/ROM2/12/118.DAT",
+    "fileId": 287
   },
   {
     "id": 296,
     "name": "Dynamis - Windurst [D]",
-    "path": "game/ROM/355/32.DAT"
+    "path": "game/ROM/355/32.DAT",
+    "fileId": 83931
   },
   {
     "id": 135,
     "name": "Dynamis - Xarcabard",
-    "path": "game/ROM2/12/109.DAT"
+    "path": "game/ROM2/12/109.DAT",
+    "fileId": 235
   },
   {
     "id": 101,
     "name": "East Ronfaure",
-    "path": "game/ROM/0/121.DAT"
+    "path": "game/ROM/0/121.DAT",
+    "fileId": 201
   },
   {
     "id": 81,
     "name": "East Ronfaure [S]",
-    "path": "game/ROM5/0/1.DAT"
+    "path": "game/ROM5/0/1.DAT",
+    "fileId": 181
   },
   {
     "id": 116,
     "name": "East Sarutabaruta",
-    "path": "game/ROM/1/0.DAT"
+    "path": "game/ROM/1/0.DAT",
+    "fileId": 216
   },
   {
     "id": 257,
     "name": "Eastern Adoulin",
-    "path": "game/ROM9/0/4.DAT"
+    "path": "game/ROM9/0/4.DAT",
+    "fileId": 83892
   },
   {
     "id": 114,
     "name": "Eastern Altepa Desert",
-    "path": "game/ROM2/0/1.DAT"
+    "path": "game/ROM2/0/1.DAT",
+    "fileId": 214
   },
   {
     "id": 36,
     "name": "Empyreal Paradox",
-    "path": "game/ROM3/0/35.DAT"
+    "path": "game/ROM3/0/35.DAT",
+    "fileId": 136
   },
   {
     "id": 289,
     "name": "Escha - Ru'Aun",
-    "path": "game/ROM/337/59.DAT"
+    "path": "game/ROM/337/59.DAT",
+    "fileId": 83924
   },
   {
     "id": 288,
     "name": "Escha - Zi'Tah",
-    "path": "game/ROM/332/99.DAT"
+    "path": "game/ROM/332/99.DAT",
+    "fileId": 83923
   },
   {
     "id": 86,
     "name": "Everbloom Hollow",
-    "path": "game/ROM5/0/6.DAT"
+    "path": "game/ROM5/0/6.DAT",
+    "fileId": 186
   },
   {
     "id": 204,
     "name": "Fei'Yin",
-    "path": "game/ROM/1/18.DAT"
+    "path": "game/ROM/1/18.DAT",
+    "fileId": 304
   },
   {
     "id": 285,
     "name": "Feretory",
-    "path": "game/ROM/306/54.DAT"
+    "path": "game/ROM/306/54.DAT",
+    "fileId": 83920
   },
   {
     "id": 262,
     "name": "Foret de Hennetiel",
-    "path": "game/ROM9/0/9.DAT"
+    "path": "game/ROM9/0/9.DAT",
+    "fileId": 83897
   },
   {
     "id": 141,
     "name": "Fort Ghelsba",
-    "path": "game/ROM/1/7.DAT"
+    "path": "game/ROM/1/7.DAT",
+    "fileId": 241
   },
   {
     "id": 96,
     "name": "Fort Karugo-Narugo [S]",
-    "path": "game/ROM5/0/16.DAT"
+    "path": "game/ROM5/0/16.DAT",
+    "fileId": 196
   },
   {
     "id": 170,
     "name": "Full Moon Fountain",
-    "path": "game/ROM2/0/12.DAT"
+    "path": "game/ROM2/0/12.DAT",
+    "fileId": 270
   },
   {
     "id": 200,
     "name": "Garlaige Citadel",
-    "path": "game/ROM/1/17.DAT"
+    "path": "game/ROM/1/17.DAT",
+    "fileId": 300
   },
   {
     "id": 164,
     "name": "Garlaige Citadel [S]",
-    "path": "game/ROM5/0/26.DAT"
+    "path": "game/ROM5/0/26.DAT",
+    "fileId": 264
   },
   {
     "id": 140,
     "name": "Ghelsba Outpost",
-    "path": "game/ROM/0/95.DAT"
+    "path": "game/ROM/0/95.DAT",
+    "fileId": 240
   },
   {
     "id": 129,
     "name": "Ghoyu's Reverie",
-    "path": "game/ROM5/0/20.DAT"
+    "path": "game/ROM5/0/20.DAT",
+    "fileId": 229
   },
   {
     "id": 145,
     "name": "Giddeus",
-    "path": "game/ROM/0/104.DAT"
+    "path": "game/ROM/0/104.DAT",
+    "fileId": 245
   },
   {
     "id": 34,
     "name": "Grand Palace of Hu'Xzoi",
-    "path": "game/ROM3/0/33.DAT"
+    "path": "game/ROM3/0/33.DAT",
+    "fileId": 134
   },
   {
     "id": 89,
     "name": "Grauberg [S]",
-    "path": "game/ROM5/0/9.DAT"
+    "path": "game/ROM5/0/9.DAT",
+    "fileId": 189
   },
   {
     "id": 196,
     "name": "Gusgen Mines",
-    "path": "game/ROM/1/16.DAT"
+    "path": "game/ROM/1/16.DAT",
+    "fileId": 296
   },
   {
     "id": 212,
     "name": "Gustav Tunnel",
-    "path": "game/ROM2/12/121.DAT"
+    "path": "game/ROM2/12/121.DAT",
+    "fileId": 312
   },
   {
     "id": 278,
     "name": "Gwora - Corridor",
-    "path": "game/ROM/375/123.DAT"
+    "path": "game/ROM/375/123.DAT",
+    "fileId": 83913
   },
   {
     "id": 299,
     "name": "Gwora - Throne Room",
-    "path": "game/ROM/378/99.DAT"
+    "path": "game/ROM/378/99.DAT",
+    "fileId": 83934
   },
   {
     "id": 251,
     "name": "Hall of the Gods",
-    "path": "game/ROM2/21/114.DAT"
+    "path": "game/ROM2/21/114.DAT",
+    "fileId": 351
   },
   {
     "id": 14,
     "name": "Hall of Transference",
-    "path": "game/ROM3/0/13.DAT"
+    "path": "game/ROM3/0/13.DAT",
+    "fileId": 114
   },
   {
     "id": 62,
     "name": "Halvung",
-    "path": "game/ROM4/0/15.DAT"
+    "path": "game/ROM4/0/15.DAT",
+    "fileId": 162
   },
   {
     "id": 78,
     "name": "Hazhalm Testing Grounds",
-    "path": "game/ROM4/0/31.DAT"
+    "path": "game/ROM4/0/31.DAT",
+    "fileId": 178
   },
   {
     "id": 242,
     "name": "Heavens Tower",
-    "path": "game/ROM/1/38.DAT"
+    "path": "game/ROM/1/38.DAT",
+    "fileId": 342
   },
   {
     "id": 139,
     "name": "Horlais Peak",
-    "path": "game/ROM/1/6.DAT"
+    "path": "game/ROM/1/6.DAT",
+    "fileId": 239
   },
   {
     "id": 205,
     "name": "Ifrit's Cauldron",
-    "path": "game/ROM2/0/20.DAT"
+    "path": "game/ROM2/0/20.DAT",
+    "fileId": 305
   },
   {
     "id": 55,
     "name": "Ilrusi Atoll",
-    "path": "game/ROM4/0/8.DAT"
+    "path": "game/ROM4/0/8.DAT",
+    "fileId": 155
   },
   {
     "id": 192,
     "name": "Inner Horutoto Ruins",
-    "path": "game/ROM/0/112.DAT"
+    "path": "game/ROM/0/112.DAT",
+    "fileId": 292
   },
   {
     "id": 67,
     "name": "Jade Sepulcher",
-    "path": "game/ROM4/0/20.DAT"
+    "path": "game/ROM4/0/20.DAT",
+    "fileId": 167
   },
   {
     "id": 104,
     "name": "Jugner Forest",
-    "path": "game/ROM/0/114.DAT"
+    "path": "game/ROM/0/114.DAT",
+    "fileId": 204
   },
   {
     "id": 82,
     "name": "Jugner Forest [S]",
-    "path": "game/ROM5/0/2.DAT"
+    "path": "game/ROM5/0/2.DAT",
+    "fileId": 182
   },
   {
     "id": 267,
     "name": "Kamihr Drifts",
-    "path": "game/ROM9/0/14.DAT"
+    "path": "game/ROM9/0/14.DAT",
+    "fileId": 83902
   },
   {
     "id": 250,
     "name": "Kazham",
-    "path": "game/ROM2/0/25.DAT"
+    "path": "game/ROM2/0/25.DAT",
+    "fileId": 350
   },
   {
     "id": 226,
     "name": "Kazham-Jeuno Airship",
-    "path": "game/ROM2/0/24.DAT"
+    "path": "game/ROM2/0/24.DAT",
+    "fileId": 326
   },
   {
     "id": 190,
     "name": "King Ranperre's Tomb",
-    "path": "game/ROM/1/14.DAT"
+    "path": "game/ROM/1/14.DAT",
+    "fileId": 290
   },
   {
     "id": 108,
     "name": "Konschtat Highlands",
-    "path": "game/ROM/0/90.DAT"
+    "path": "game/ROM/0/90.DAT",
+    "fileId": 208
   },
   {
     "id": 173,
     "name": "Korroloka Tunnel",
-    "path": "game/ROM2/0/13.DAT"
+    "path": "game/ROM2/0/13.DAT",
+    "fileId": 273
   },
   {
     "id": 174,
     "name": "Kuftal Tunnel",
-    "path": "game/ROM2/0/14.DAT"
+    "path": "game/ROM2/0/14.DAT",
+    "fileId": 274
   },
   {
     "id": 102,
     "name": "La Theine Plateau",
-    "path": "game/ROM/0/115.DAT"
+    "path": "game/ROM/0/115.DAT",
+    "fileId": 202
   },
   {
     "id": 85,
     "name": "La Vaule [S]",
-    "path": "game/ROM5/0/5.DAT"
+    "path": "game/ROM5/0/5.DAT",
+    "fileId": 185
   },
   {
     "id": 180,
     "name": "La'Loff Amphitheater",
-    "path": "game/ROM2/12/114.DAT"
+    "path": "game/ROM2/12/114.DAT",
+    "fileId": 280
   },
   {
     "id": 213,
     "name": "Labyrinth of Onzozo",
-    "path": "game/ROM2/12/122.DAT"
+    "path": "game/ROM2/12/122.DAT",
+    "fileId": 313
   },
   {
     "id": 281,
     "name": "Leafallia",
-    "path": "game/ROM9/8/10.DAT"
+    "path": "game/ROM9/8/10.DAT",
+    "fileId": 83916
   },
   {
     "id": 63,
     "name": "Lebros Cavern",
-    "path": "game/ROM4/0/16.DAT"
+    "path": "game/ROM4/0/16.DAT",
+    "fileId": 163
   },
   {
     "id": 69,
     "name": "Leujaoam Sanctum",
-    "path": "game/ROM4/0/22.DAT"
+    "path": "game/ROM4/0/22.DAT",
+    "fileId": 169
   },
   {
     "id": 184,
     "name": "Lower Delkfutt's Tower",
-    "path": "game/ROM/1/13.DAT"
+    "path": "game/ROM/1/13.DAT",
+    "fileId": 284
   },
   {
     "id": 245,
     "name": "Lower Jeuno",
-    "path": "game/ROM/1/41.DAT"
+    "path": "game/ROM/1/41.DAT",
+    "fileId": 345
   },
   {
     "id": 24,
     "name": "Lufaise Meadows",
-    "path": "game/ROM3/0/23.DAT"
+    "path": "game/ROM3/0/23.DAT",
+    "fileId": 124
   },
   {
     "id": 65,
     "name": "Mamook",
-    "path": "game/ROM4/0/18.DAT"
+    "path": "game/ROM4/0/18.DAT",
+    "fileId": 165
   },
   {
     "id": 66,
     "name": "Mamool Ja Training Grounds",
-    "path": "game/ROM4/0/19.DAT"
+    "path": "game/ROM4/0/19.DAT",
+    "fileId": 166
   },
   {
     "id": 3,
     "name": "Manaclipper",
-    "path": "game/ROM3/0/2.DAT"
+    "path": "game/ROM3/0/2.DAT",
+    "fileId": 103
   },
   {
     "id": 183,
     "name": "Maquette Abdhaljs-LegionA",
-    "path": "game/ROM/1/12.DAT"
+    "path": "game/ROM/1/12.DAT",
+    "fileId": 283
   },
   {
     "id": 287,
     "name": "Maquette Abdhaljs-LegionB",
-    "path": "game/ROM/362/18.DAT"
+    "path": "game/ROM/362/18.DAT",
+    "fileId": 83922
   },
   {
     "id": 266,
     "name": "Marjami Ravine",
-    "path": "game/ROM9/0/13.DAT"
+    "path": "game/ROM9/0/13.DAT",
+    "fileId": 83901
   },
   {
     "id": 198,
     "name": "Maze of Shakhrami",
-    "path": "game/ROM/0/75.DAT"
+    "path": "game/ROM/0/75.DAT",
+    "fileId": 298
   },
   {
     "id": 119,
     "name": "Meriphataud Mountains",
-    "path": "game/ROM/0/101.DAT"
+    "path": "game/ROM/0/101.DAT",
+    "fileId": 219
   },
   {
     "id": 97,
     "name": "Meriphataud Mountains [S]",
-    "path": "game/ROM5/0/17.DAT"
+    "path": "game/ROM5/0/17.DAT",
+    "fileId": 197
   },
   {
     "id": 237,
     "name": "Metalworks",
-    "path": "game/ROM/1/37.DAT"
+    "path": "game/ROM/1/37.DAT",
+    "fileId": 337
   },
   {
     "id": 249,
     "name": "Mhaura",
-    "path": "game/ROM/1/44.DAT"
+    "path": "game/ROM/1/44.DAT",
+    "fileId": 349
   },
   {
     "id": 157,
     "name": "Middle Delkfutt's Tower",
-    "path": "game/ROM/0/56.DAT"
+    "path": "game/ROM/0/56.DAT",
+    "fileId": 257
   },
   {
     "id": 13,
     "name": "Mine Shaft #2716",
-    "path": "game/ROM3/0/12.DAT"
+    "path": "game/ROM3/0/12.DAT",
+    "fileId": 113
   },
   {
     "id": 25,
     "name": "Misareaux Coast",
-    "path": "game/ROM3/0/24.DAT"
+    "path": "game/ROM3/0/24.DAT",
+    "fileId": 125
   },
   {
     "id": 280,
     "name": "Mog Garden",
-    "path": "game/ROM/309/10.DAT"
+    "path": "game/ROM/309/10.DAT",
+    "fileId": 83791
   },
   {
     "id": 269,
     "name": "Moh Gates",
-    "path": "game/ROM9/0/16.DAT"
+    "path": "game/ROM9/0/16.DAT",
+    "fileId": 83904
   },
   {
     "id": 31,
     "name": "Monarch Linn",
-    "path": "game/ROM3/0/30.DAT"
+    "path": "game/ROM3/0/30.DAT",
+    "fileId": 131
   },
   {
     "id": 150,
     "name": "Monastic Cavern",
-    "path": "game/ROM/0/100.DAT"
+    "path": "game/ROM/0/100.DAT",
+    "fileId": 250
   },
   {
     "id": 131,
     "name": "Mordion Gaol",
-    "path": "game/ROM/1/4.DAT"
+    "path": "game/ROM/1/4.DAT",
+    "fileId": 231
   },
   {
     "id": 265,
     "name": "Morimar Basalt Fields",
-    "path": "game/ROM9/0/12.DAT"
+    "path": "game/ROM9/0/12.DAT",
+    "fileId": 83900
   },
   {
     "id": 282,
     "name": "Mount Kamihr",
-    "path": "game/ROM/315/102.DAT"
+    "path": "game/ROM/315/102.DAT",
+    "fileId": 83917
   },
   {
     "id": 61,
     "name": "Mount Zhayolm",
-    "path": "game/ROM4/0/14.DAT"
+    "path": "game/ROM4/0/14.DAT",
+    "fileId": 161
   },
   {
     "id": 53,
     "name": "Nashmau",
-    "path": "game/ROM4/0/6.DAT"
+    "path": "game/ROM4/0/6.DAT",
+    "fileId": 153
   },
   {
     "id": 64,
     "name": "Navukgo Execution Chamber",
-    "path": "game/ROM4/0/17.DAT"
+    "path": "game/ROM4/0/17.DAT",
+    "fileId": 164
   },
   {
     "id": 12,
     "name": "Newton Movalpolos",
-    "path": "game/ROM3/0/11.DAT"
+    "path": "game/ROM3/0/11.DAT",
+    "fileId": 112
   },
   {
     "id": 252,
     "name": "Norg",
-    "path": "game/ROM2/0/27.DAT"
+    "path": "game/ROM2/0/27.DAT",
+    "fileId": 352
   },
   {
     "id": 106,
     "name": "North Gustaberg",
-    "path": "game/ROM/0/123.DAT"
+    "path": "game/ROM/0/123.DAT",
+    "fileId": 206
   },
   {
     "id": 88,
     "name": "North Gustaberg [S]",
-    "path": "game/ROM5/0/8.DAT"
+    "path": "game/ROM5/0/8.DAT",
+    "fileId": 188
   },
   {
     "id": 231,
     "name": "Northern San d'Oria",
-    "path": "game/ROM/1/32.DAT"
+    "path": "game/ROM/1/32.DAT",
+    "fileId": 331
   },
   {
     "id": 77,
     "name": "Nyzul Isle",
-    "path": "game/ROM4/0/30.DAT"
+    "path": "game/ROM4/0/30.DAT",
+    "fileId": 177
   },
   {
     "id": 11,
     "name": "Oldton Movalpolos",
-    "path": "game/ROM3/0/10.DAT"
+    "path": "game/ROM3/0/10.DAT",
+    "fileId": 111
   },
   {
     "id": 46,
     "name": "Open sea route to Al Zahbi",
-    "path": "game/ROM4/0/0.DAT"
+    "path": "game/ROM4/0/0.DAT",
+    "fileId": 146
   },
   {
     "id": 47,
     "name": "Open sea route to Mhaura",
-    "path": "game/ROM4/0/1.DAT"
+    "path": "game/ROM4/0/1.DAT",
+    "fileId": 147
   },
   {
     "id": 193,
     "name": "Ordelle's Caves",
-    "path": "game/ROM/0/92.DAT"
+    "path": "game/ROM/0/92.DAT",
+    "fileId": 293
   },
   {
     "id": 194,
     "name": "Outer Horutoto Ruins",
-    "path": "game/ROM/1/15.DAT"
+    "path": "game/ROM/1/15.DAT",
+    "fileId": 294
   },
   {
     "id": 274,
     "name": "Outer Ra'Kaznar",
-    "path": "game/ROM9/0/21.DAT"
+    "path": "game/ROM9/0/21.DAT",
+    "fileId": 83909
   },
   {
     "id": 275,
     "name": "Outer Ra'Kaznar [U1]",
-    "path": "game/ROM9/0/22.DAT"
+    "path": "game/ROM9/0/22.DAT",
+    "fileId": 233
   },
   {
     "id": 133,
     "name": "Outer Ra'Kaznar [U2]",
-    "path": "game/ROM9/0/22.DAT"
+    "path": "game/ROM9/0/22.DAT",
+    "fileId": 233
   },
   {
     "id": 189,
     "name": "Outer Ra'Kaznar [U3]",
-    "path": "game/ROM9/0/22.DAT"
+    "path": "game/ROM9/0/22.DAT",
+    "fileId": 233
   },
   {
     "id": 143,
     "name": "Palborough Mines",
-    "path": "game/ROM/0/88.DAT"
+    "path": "game/ROM/0/88.DAT",
+    "fileId": 243
   },
   {
     "id": 109,
     "name": "Pashhow Marshlands",
-    "path": "game/ROM/0/125.DAT"
+    "path": "game/ROM/0/125.DAT",
+    "fileId": 209
   },
   {
     "id": 90,
     "name": "Pashhow Marshlands [S]",
-    "path": "game/ROM5/0/10.DAT"
+    "path": "game/ROM5/0/10.DAT",
+    "fileId": 190
   },
   {
     "id": 56,
     "name": "Periqia",
-    "path": "game/ROM4/0/9.DAT"
+    "path": "game/ROM4/0/9.DAT",
+    "fileId": 156
   },
   {
     "id": 1,
     "name": "Phanauet Channel",
-    "path": "game/ROM3/0/0.DAT"
+    "path": "game/ROM3/0/0.DAT",
+    "fileId": 101
   },
   {
     "id": 27,
     "name": "Phomiuna Aqueducts",
-    "path": "game/ROM3/0/26.DAT"
+    "path": "game/ROM3/0/26.DAT",
+    "fileId": 127
   },
   {
     "id": 236,
     "name": "Port Bastok",
-    "path": "game/ROM/1/36.DAT"
+    "path": "game/ROM/1/36.DAT",
+    "fileId": 336
   },
   {
     "id": 246,
     "name": "Port Jeuno",
-    "path": "game/ROM/1/42.DAT"
+    "path": "game/ROM/1/42.DAT",
+    "fileId": 346
   },
   {
     "id": 232,
     "name": "Port San d'Oria",
-    "path": "game/ROM/0/113.DAT"
+    "path": "game/ROM/0/113.DAT",
+    "fileId": 332
   },
   {
     "id": 240,
     "name": "Port Windurst",
-    "path": "game/ROM/0/80.DAT"
+    "path": "game/ROM/0/80.DAT",
+    "fileId": 340
   },
   {
     "id": 18,
     "name": "Promyvion - Dem",
-    "path": "game/ROM3/0/17.DAT"
+    "path": "game/ROM3/0/17.DAT",
+    "fileId": 118
   },
   {
     "id": 16,
     "name": "Promyvion - Holla",
-    "path": "game/ROM3/0/15.DAT"
+    "path": "game/ROM3/0/15.DAT",
+    "fileId": 116
   },
   {
     "id": 20,
     "name": "Promyvion - Mea",
-    "path": "game/ROM3/0/19.DAT"
+    "path": "game/ROM3/0/19.DAT",
+    "fileId": 120
   },
   {
     "id": 22,
     "name": "Promyvion - Vahzl",
-    "path": "game/ROM3/0/21.DAT"
+    "path": "game/ROM3/0/21.DAT",
+    "fileId": 122
   },
   {
     "id": 222,
     "name": "Provenance",
-    "path": "game/ROM/280/2.DAT"
+    "path": "game/ROM/280/2.DAT",
+    "fileId": 322
   },
   {
     "id": 9,
     "name": "Pso'Xja",
-    "path": "game/ROM3/0/8.DAT"
+    "path": "game/ROM3/0/8.DAT",
+    "fileId": 109
   },
   {
     "id": 206,
     "name": "Qu'Bia Arena",
-    "path": "game/ROM/1/19.DAT"
+    "path": "game/ROM/1/19.DAT",
+    "fileId": 306
   },
   {
     "id": 126,
     "name": "Qufim Island",
-    "path": "game/ROM/0/58.DAT"
+    "path": "game/ROM/0/58.DAT",
+    "fileId": 226
   },
   {
     "id": 208,
     "name": "Quicksand Caves",
-    "path": "game/ROM2/12/120.DAT"
+    "path": "game/ROM2/12/120.DAT",
+    "fileId": 308
   },
   {
     "id": 148,
     "name": "Qulun Dome",
-    "path": "game/ROM/0/62.DAT"
+    "path": "game/ROM/0/62.DAT",
+    "fileId": 248
   },
   {
     "id": 276,
     "name": "Ra'Kaznar Inner Court",
-    "path": "game/ROM9/0/23.DAT"
+    "path": "game/ROM9/0/23.DAT",
+    "fileId": 83911
   },
   {
     "id": 277,
     "name": "Ra'Kaznar Turris",
-    "path": "game/ROM9/0/24.DAT"
+    "path": "game/ROM9/0/24.DAT",
+    "fileId": 83912
   },
   {
     "id": 247,
     "name": "Rabao",
-    "path": "game/ROM2/12/123.DAT"
+    "path": "game/ROM2/12/123.DAT",
+    "fileId": 347
   },
   {
     "id": 258,
     "name": "Rala Waterways",
-    "path": "game/ROM9/0/5.DAT"
+    "path": "game/ROM9/0/5.DAT",
+    "fileId": 83893
   },
   {
     "id": 259,
     "name": "Rala Waterways [U]",
-    "path": "game/ROM9/0/6.DAT"
+    "path": "game/ROM9/0/6.DAT",
+    "fileId": 83894
   },
   {
     "id": 166,
     "name": "Ranguemont Pass",
-    "path": "game/ROM/1/10.DAT"
+    "path": "game/ROM/1/10.DAT",
+    "fileId": 266
   },
   {
     "id": 291,
     "name": "Reisenjima",
-    "path": "game/ROM/342/73.DAT"
+    "path": "game/ROM/342/73.DAT",
+    "fileId": 83926
   },
   {
     "id": 292,
     "name": "Reisenjima Henge",
-    "path": "game/ROM/351/58.DAT"
+    "path": "game/ROM/351/58.DAT",
+    "fileId": 83927
   },
   {
     "id": 293,
     "name": "Reisenjima Sanctorium",
-    "path": "game/ROM/342/74.DAT"
+    "path": "game/ROM/342/74.DAT",
+    "fileId": 83928
   },
   {
     "id": 30,
     "name": "Riverne - Site #A01",
-    "path": "game/ROM3/0/29.DAT"
+    "path": "game/ROM3/0/29.DAT",
+    "fileId": 130
   },
   {
     "id": 29,
     "name": "Riverne - Site #B01",
-    "path": "game/ROM3/0/28.DAT"
+    "path": "game/ROM3/0/28.DAT",
+    "fileId": 129
   },
   {
     "id": 122,
     "name": "Ro'Maeve",
-    "path": "game/ROM2/0/3.DAT"
+    "path": "game/ROM2/0/3.DAT",
+    "fileId": 222
   },
   {
     "id": 110,
     "name": "Rolanberry Fields",
-    "path": "game/ROM/0/126.DAT"
+    "path": "game/ROM/0/126.DAT",
+    "fileId": 210
   },
   {
     "id": 91,
     "name": "Rolanberry Fields [S]",
-    "path": "game/ROM5/0/11.DAT"
+    "path": "game/ROM5/0/11.DAT",
+    "fileId": 191
   },
   {
     "id": 130,
     "name": "Ru'Aun Gardens",
-    "path": "game/ROM2/12/107.DAT"
+    "path": "game/ROM2/12/107.DAT",
+    "fileId": 230
   },
   {
     "id": 243,
     "name": "Ru'Lude Gardens",
-    "path": "game/ROM/1/39.DAT"
+    "path": "game/ROM/1/39.DAT",
+    "fileId": 343
   },
   {
     "id": 93,
     "name": "Ruhotz Silvermines",
-    "path": "game/ROM5/0/13.DAT"
+    "path": "game/ROM5/0/13.DAT",
+    "fileId": 193
   },
   {
     "id": 28,
     "name": "Sacrarium",
-    "path": "game/ROM3/0/27.DAT"
+    "path": "game/ROM3/0/27.DAT",
+    "fileId": 128
   },
   {
     "id": 163,
     "name": "Sacrificial Chamber",
-    "path": "game/ROM2/12/111.DAT"
+    "path": "game/ROM2/12/111.DAT",
+    "fileId": 263
   },
   {
     "id": 223,
     "name": "San d'Oria-Jeuno Airship",
-    "path": "game/ROM/1/26.DAT"
+    "path": "game/ROM/1/26.DAT",
+    "fileId": 323
   },
   {
     "id": 120,
     "name": "Sauromugue Champaign",
-    "path": "game/ROM/1/2.DAT"
+    "path": "game/ROM/1/2.DAT",
+    "fileId": 220
   },
   {
     "id": 98,
     "name": "Sauromugue Champaign [S]",
-    "path": "game/ROM5/0/18.DAT"
+    "path": "game/ROM5/0/18.DAT",
+    "fileId": 198
   },
   {
     "id": 176,
     "name": "Sea Serpent Grotto",
-    "path": "game/ROM2/0/15.DAT"
+    "path": "game/ROM2/0/15.DAT",
+    "fileId": 276
   },
   {
     "id": 32,
     "name": "Sealion's Den",
-    "path": "game/ROM3/0/31.DAT"
+    "path": "game/ROM3/0/31.DAT",
+    "fileId": 132
   },
   {
     "id": 248,
     "name": "Selbina",
-    "path": "game/ROM/1/43.DAT"
+    "path": "game/ROM/1/43.DAT",
+    "fileId": 348
   },
   {
     "id": 221,
     "name": "Ship bound for Mhaura",
-    "path": "game/ROM/1/25.DAT"
+    "path": "game/ROM/1/25.DAT",
+    "fileId": 321
   },
   {
     "id": 228,
     "name": "Ship bound for Mhaura",
-    "path": "game/ROM/1/30.DAT"
+    "path": "game/ROM/1/30.DAT",
+    "fileId": 328
   },
   {
     "id": 220,
     "name": "Ship bound for Selbina",
-    "path": "game/ROM/1/24.DAT"
+    "path": "game/ROM/1/24.DAT",
+    "fileId": 320
   },
   {
     "id": 227,
     "name": "Ship bound for Selbina",
-    "path": "game/ROM/1/29.DAT"
+    "path": "game/ROM/1/29.DAT",
+    "fileId": 327
   },
   {
     "id": 268,
     "name": "Sih Gates",
-    "path": "game/ROM9/0/15.DAT"
+    "path": "game/ROM9/0/15.DAT",
+    "fileId": 83903
   },
   {
     "id": 283,
     "name": "Silver Knife",
-    "path": "game/ROM/374/94.DAT"
+    "path": "game/ROM/374/94.DAT",
+    "fileId": 83918
   },
   {
     "id": 76,
     "name": "Silver Sea Remnants",
-    "path": "game/ROM4/0/29.DAT"
+    "path": "game/ROM4/0/29.DAT",
+    "fileId": 176
   },
   {
     "id": 59,
     "name": "Silver Sea route to Al Zahbi",
-    "path": "game/ROM4/0/12.DAT"
+    "path": "game/ROM4/0/12.DAT",
+    "fileId": 159
   },
   {
     "id": 58,
     "name": "Silver Sea route to Nashmau",
-    "path": "game/ROM4/0/11.DAT"
+    "path": "game/ROM4/0/11.DAT",
+    "fileId": 158
   },
   {
     "id": 107,
     "name": "South Gustaberg",
-    "path": "game/ROM/0/124.DAT"
+    "path": "game/ROM/0/124.DAT",
+    "fileId": 207
   },
   {
     "id": 230,
     "name": "Southern San d'Oria",
-    "path": "game/ROM/1/31.DAT"
+    "path": "game/ROM/1/31.DAT",
+    "fileId": 330
   },
   {
     "id": 80,
     "name": "Southern San d'Oria [S]",
-    "path": "game/ROM5/0/0.DAT"
+    "path": "game/ROM5/0/0.DAT",
+    "fileId": 180
   },
   {
     "id": 19,
     "name": "Spire of Dem",
-    "path": "game/ROM3/0/18.DAT"
+    "path": "game/ROM3/0/18.DAT",
+    "fileId": 119
   },
   {
     "id": 17,
     "name": "Spire of Holla",
-    "path": "game/ROM3/0/16.DAT"
+    "path": "game/ROM3/0/16.DAT",
+    "fileId": 117
   },
   {
     "id": 21,
     "name": "Spire of Mea",
-    "path": "game/ROM3/0/20.DAT"
+    "path": "game/ROM3/0/20.DAT",
+    "fileId": 121
   },
   {
     "id": 23,
     "name": "Spire of Vahzl",
-    "path": "game/ROM3/0/22.DAT"
+    "path": "game/ROM3/0/22.DAT",
+    "fileId": 123
   },
   {
     "id": 179,
     "name": "Stellar Fulcrum",
-    "path": "game/ROM2/0/16.DAT"
+    "path": "game/ROM2/0/16.DAT",
+    "fileId": 279
   },
   {
     "id": 117,
     "name": "Tahrongi Canyon",
-    "path": "game/ROM/1/1.DAT"
+    "path": "game/ROM/1/1.DAT",
+    "fileId": 217
   },
   {
     "id": 57,
     "name": "Talacca Cove",
-    "path": "game/ROM4/0/10.DAT"
+    "path": "game/ROM4/0/10.DAT",
+    "fileId": 157
   },
   {
     "id": 26,
     "name": "Tavnazian Safehold",
-    "path": "game/ROM3/0/25.DAT"
+    "path": "game/ROM3/0/25.DAT",
+    "fileId": 126
   },
   {
     "id": 37,
     "name": "Temenos",
-    "path": "game/ROM3/3/82.DAT"
+    "path": "game/ROM3/3/82.DAT",
+    "fileId": 137
   },
   {
     "id": 159,
     "name": "Temple of Uggalepih",
-    "path": "game/ROM2/0/10.DAT"
+    "path": "game/ROM2/0/10.DAT",
+    "fileId": 259
   },
   {
     "id": 60,
     "name": "The Ashu Talif",
-    "path": "game/ROM4/0/13.DAT"
+    "path": "game/ROM4/0/13.DAT",
+    "fileId": 160
   },
   {
     "id": 153,
     "name": "The Boyahda Tree",
-    "path": "game/ROM2/0/8.DAT"
+    "path": "game/ROM2/0/8.DAT",
+    "fileId": 253
   },
   {
     "id": 181,
     "name": "The Celestial Nexus",
-    "path": "game/ROM2/12/115.DAT"
+    "path": "game/ROM2/12/115.DAT",
+    "fileId": 281
   },
   {
     "id": 71,
     "name": "The Colosseum",
-    "path": "game/ROM4/0/24.DAT"
+    "path": "game/ROM4/0/24.DAT",
+    "fileId": 171
   },
   {
     "id": 195,
     "name": "The Eldieme Necropolis",
-    "path": "game/ROM/0/77.DAT"
+    "path": "game/ROM/0/77.DAT",
+    "fileId": 295
   },
   {
     "id": 175,
     "name": "The Eldieme Necropolis [S]",
-    "path": "game/ROM5/0/28.DAT"
+    "path": "game/ROM5/0/28.DAT",
+    "fileId": 275
   },
   {
     "id": 35,
     "name": "The Garden of Ru'Hmet",
-    "path": "game/ROM3/0/34.DAT"
+    "path": "game/ROM3/0/34.DAT",
+    "fileId": 135
   },
   {
     "id": 121,
     "name": "The Sanctuary of Zi'Tah",
-    "path": "game/ROM2/0/2.DAT"
+    "path": "game/ROM2/0/2.DAT",
+    "fileId": 221
   },
   {
     "id": 178,
     "name": "The Shrine of Ru'Avitau",
-    "path": "game/ROM2/12/113.DAT"
+    "path": "game/ROM2/12/113.DAT",
+    "fileId": 278
   },
   {
     "id": 10,
     "name": "The Shrouded Maw",
-    "path": "game/ROM3/0/9.DAT"
+    "path": "game/ROM3/0/9.DAT",
+    "fileId": 110
   },
   {
     "id": 165,
     "name": "Throne Room",
-    "path": "game/ROM/0/74.DAT"
+    "path": "game/ROM/0/74.DAT",
+    "fileId": 265
   },
   {
     "id": 156,
     "name": "Throne Room [S]",
-    "path": "game/ROM5/0/25.DAT"
+    "path": "game/ROM5/0/25.DAT",
+    "fileId": 256
   },
   {
     "id": 229,
     "name": "Throne Room [V]",
-    "path": "game/ROM/373/34.DAT"
+    "path": "game/ROM/373/34.DAT",
+    "fileId": 329
   },
   {
     "id": 169,
     "name": "Toraimarai Canal",
-    "path": "game/ROM/0/65.DAT"
+    "path": "game/ROM/0/65.DAT",
+    "fileId": 269
   },
   {
     "id": 5,
     "name": "Uleguerand Range",
-    "path": "game/ROM3/0/4.DAT"
+    "path": "game/ROM3/0/4.DAT",
+    "fileId": 105
   },
   {
     "id": 0,
     "name": "unknown",
-    "path": "game/ROM/0/28.DAT"
+    "path": "game/ROM/0/28.DAT",
+    "fileId": 100
   },
   {
     "id": 158,
     "name": "Upper Delkfutt's Tower",
-    "path": "game/ROM/1/9.DAT"
+    "path": "game/ROM/1/9.DAT",
+    "fileId": 258
   },
   {
     "id": 244,
     "name": "Upper Jeuno",
-    "path": "game/ROM/1/40.DAT"
+    "path": "game/ROM/1/40.DAT",
+    "fileId": 344
   },
   {
     "id": 103,
     "name": "Valkurm Dunes",
-    "path": "game/ROM/0/102.DAT"
+    "path": "game/ROM/0/102.DAT",
+    "fileId": 203
   },
   {
     "id": 128,
     "name": "Valley of Sorrows",
-    "path": "game/ROM2/0/7.DAT"
+    "path": "game/ROM2/0/7.DAT",
+    "fileId": 228
   },
   {
     "id": 177,
     "name": "Ve'Lugannon Palace",
-    "path": "game/ROM2/12/112.DAT"
+    "path": "game/ROM2/12/112.DAT",
+    "fileId": 277
   },
   {
     "id": 83,
     "name": "Vunkerl Inlet [S]",
-    "path": "game/ROM5/0/3.DAT"
+    "path": "game/ROM5/0/3.DAT",
+    "fileId": 183
   },
   {
     "id": 51,
     "name": "Wajaom Woodlands",
-    "path": "game/ROM4/1/99.DAT"
+    "path": "game/ROM4/1/99.DAT",
+    "fileId": 151
   },
   {
     "id": 182,
     "name": "Walk of Echoes",
-    "path": "game/ROM5/0/29.DAT"
+    "path": "game/ROM5/0/29.DAT",
+    "fileId": 282
   },
   {
     "id": 298,
     "name": "Walk of Echoes [P1]",
-    "path": "game/ROM/361/85.DAT"
+    "path": "game/ROM/361/85.DAT",
+    "fileId": 83914
   },
   {
     "id": 279,
     "name": "Walk of Echoes [P2]",
-    "path": "game/ROM/361/85.DAT"
+    "path": "game/ROM/361/85.DAT",
+    "fileId": 83914
   },
   {
     "id": 144,
     "name": "Waughroon Shrine",
-    "path": "game/ROM/0/89.DAT"
+    "path": "game/ROM/0/89.DAT",
+    "fileId": 244
   },
   {
     "id": 100,
     "name": "West Ronfaure",
-    "path": "game/ROM/0/120.DAT"
+    "path": "game/ROM/0/120.DAT",
+    "fileId": 200
   },
   {
     "id": 115,
     "name": "West Sarutabaruta",
-    "path": "game/ROM/0/127.DAT"
+    "path": "game/ROM/0/127.DAT",
+    "fileId": 215
   },
   {
     "id": 95,
     "name": "West Sarutabaruta [S]",
-    "path": "game/ROM5/0/15.DAT"
+    "path": "game/ROM5/0/15.DAT",
+    "fileId": 195
   },
   {
     "id": 256,
     "name": "Western Adoulin",
-    "path": "game/ROM9/0/3.DAT"
+    "path": "game/ROM9/0/3.DAT",
+    "fileId": 83891
   },
   {
     "id": 125,
     "name": "Western Altepa Desert",
-    "path": "game/ROM2/0/6.DAT"
+    "path": "game/ROM2/0/6.DAT",
+    "fileId": 225
   },
   {
     "id": 239,
     "name": "Windurst Walls",
-    "path": "game/ROM/0/79.DAT"
+    "path": "game/ROM/0/79.DAT",
+    "fileId": 339
   },
   {
     "id": 238,
     "name": "Windurst Waters",
-    "path": "game/ROM/0/78.DAT"
+    "path": "game/ROM/0/78.DAT",
+    "fileId": 338
   },
   {
     "id": 94,
     "name": "Windurst Waters [S]",
-    "path": "game/ROM5/0/14.DAT"
+    "path": "game/ROM5/0/14.DAT",
+    "fileId": 194
   },
   {
     "id": 241,
     "name": "Windurst Woods",
-    "path": "game/ROM/0/81.DAT"
+    "path": "game/ROM/0/81.DAT",
+    "fileId": 341
   },
   {
     "id": 225,
     "name": "Windurst-Jeuno Airship",
-    "path": "game/ROM/1/28.DAT"
+    "path": "game/ROM/1/28.DAT",
+    "fileId": 325
   },
   {
     "id": 273,
     "name": "Woh Gates",
-    "path": "game/ROM9/0/20.DAT"
+    "path": "game/ROM9/0/20.DAT",
+    "fileId": 83908
   },
   {
     "id": 112,
     "name": "Xarcabard",
-    "path": "game/ROM/0/57.DAT"
+    "path": "game/ROM/0/57.DAT",
+    "fileId": 212
   },
   {
     "id": 137,
     "name": "Xarcabard [S]",
-    "path": "game/ROM5/0/22.DAT"
+    "path": "game/ROM5/0/22.DAT",
+    "fileId": 237
   },
   {
     "id": 260,
     "name": "Yahse Hunting Grounds",
-    "path": "game/ROM9/0/7.DAT"
+    "path": "game/ROM9/0/7.DAT",
+    "fileId": 83895
   },
   {
     "id": 124,
     "name": "Yhoator Jungle",
-    "path": "game/ROM2/0/5.DAT"
+    "path": "game/ROM2/0/5.DAT",
+    "fileId": 224
   },
   {
     "id": 263,
     "name": "Yorcia Weald",
-    "path": "game/ROM9/0/10.DAT"
+    "path": "game/ROM9/0/10.DAT",
+    "fileId": 83898
   },
   {
     "id": 264,
     "name": "Yorcia Weald [U]",
-    "path": "game/ROM9/0/11.DAT"
+    "path": "game/ROM9/0/11.DAT",
+    "fileId": 83899
   },
   {
     "id": 142,
     "name": "Yughott Grotto",
-    "path": "game/ROM/1/8.DAT"
+    "path": "game/ROM/1/8.DAT",
+    "fileId": 242
   },
   {
     "id": 123,
     "name": "Yuhtunga Jungle",
-    "path": "game/ROM2/0/4.DAT"
+    "path": "game/ROM2/0/4.DAT",
+    "fileId": 223
   },
   {
     "id": 172,
     "name": "Zeruhn Mines",
-    "path": "game/ROM/1/11.DAT"
+    "path": "game/ROM/1/11.DAT",
+    "fileId": 272
   },
   {
     "id": 73,
     "name": "Zhayolm Remnants",
-    "path": "game/ROM4/0/26.DAT"
+    "path": "game/ROM4/0/26.DAT",
+    "fileId": 173
   },
   {
     "name": "Character Creation",
     "path": "game/ROM/1/5.DAT",
-    "group": "Dev / Prototype"
+    "group": "Dev / Prototype",
+    "fileId": 83935
   },
   {
     "name": "Dev Town — windmill + bridge",
     "path": "game/ROM/0/28.DAT",
-    "group": "Dev / Prototype"
+    "group": "Dev / Prototype",
+    "fileId": 100
   },
   {
     "name": "Dev Snowfield",
@@ -1537,7 +1833,8 @@
   {
     "name": "Dev Test Plane",
     "path": "game/ROM/0/40.DAT",
-    "group": "Dev / Prototype"
+    "group": "Dev / Prototype",
+    "fileId": 149
   },
   {
     "name": "Castle prototype — very early?",
@@ -1582,1547 +1879,1852 @@
   {
     "name": "barrel_03",
     "path": "game/ROM/2/97.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 565
   },
   {
     "name": "book1",
     "path": "game/ROM/2/103.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 572
   },
   {
     "name": "bottle_05",
     "path": "game/ROM/2/100.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 569
   },
   {
     "name": "cheez",
     "path": "game/ROM/1/81.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 399
   },
   {
     "name": "danh",
     "path": "game/ROM/2/84.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 551
   },
   {
     "name": "danh",
     "path": "game/ROM/2/85.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 552
   },
   {
     "name": "danh",
     "path": "game/ROM/2/87.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 555
   },
   {
     "name": "desk01",
     "path": "game/ROM/2/101.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 570
   },
   {
     "name": "dn00",
     "path": "game/ROM/1/21.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 357
   },
   {
     "name": "dn00",
     "path": "game/ROM/1/22.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 358
   },
   {
     "name": "dn00",
     "path": "game/ROM/1/45.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 389
   },
   {
     "name": "dn00",
     "path": "game/ROM/1/115.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 439
   },
   {
     "name": "dn00",
     "path": "game/ROM/1/117.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 441
   },
   {
     "name": "dun01",
     "path": "game/ROM/2/74.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 540
   },
   {
     "name": "hasira03",
     "path": "game/ROM/2/99.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 568
   },
   {
     "name": "hikuryo_2",
     "path": "game/ROM/2/104.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 573
   },
   {
     "name": "hu00",
     "path": "game/ROM/1/84.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 402
   },
   {
     "name": "ku01",
     "path": "game/ROM/2/60.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 524
   },
   {
     "name": "ltcube",
     "path": "game/ROM2/0/35.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 612
   },
   {
     "name": "obn",
     "path": "game/ROM/2/19.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 480
   },
   {
     "name": "r3ju11_table1",
     "path": "game/ROM/2/96.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 564
   },
   {
     "name": "ran0",
     "path": "game/ROM/1/46.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 390
   },
   {
     "name": "ROM/1/100",
     "path": "game/ROM/1/100.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 421
   },
   {
     "name": "ROM/1/101",
     "path": "game/ROM/1/101.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 422
   },
   {
     "name": "ROM/1/102",
     "path": "game/ROM/1/102.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 423
   },
   {
     "name": "ROM/1/104",
     "path": "game/ROM/1/104.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 427
   },
   {
     "name": "ROM/1/105",
     "path": "game/ROM/1/105.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 428
   },
   {
     "name": "ROM/1/106",
     "path": "game/ROM/1/106.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 429
   },
   {
     "name": "ROM/1/107",
     "path": "game/ROM/1/107.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 430
   },
   {
     "name": "ROM/1/108",
     "path": "game/ROM/1/108.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 431
   },
   {
     "name": "ROM/1/109",
     "path": "game/ROM/1/109.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 432
   },
   {
     "name": "ROM/1/110",
     "path": "game/ROM/1/110.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 433
   },
   {
     "name": "ROM/1/111",
     "path": "game/ROM/1/111.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 435
   },
   {
     "name": "ROM/1/112",
     "path": "game/ROM/1/112.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 436
   },
   {
     "name": "ROM/1/113",
     "path": "game/ROM/1/113.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 437
   },
   {
     "name": "ROM/1/114",
     "path": "game/ROM/1/114.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 438
   },
   {
     "name": "ROM/1/116",
     "path": "game/ROM/1/116.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 440
   },
   {
     "name": "ROM/1/118",
     "path": "game/ROM/1/118.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 442
   },
   {
     "name": "ROM/1/119",
     "path": "game/ROM/1/119.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 443
   },
   {
     "name": "ROM/1/120",
     "path": "game/ROM/1/120.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 444
   },
   {
     "name": "ROM/1/121",
     "path": "game/ROM/1/121.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 449
   },
   {
     "name": "ROM/1/122",
     "path": "game/ROM/1/122.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 450
   },
   {
     "name": "ROM/1/123",
     "path": "game/ROM/1/123.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 451
   },
   {
     "name": "ROM/1/124",
     "path": "game/ROM/1/124.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 452
   },
   {
     "name": "ROM/1/125",
     "path": "game/ROM/1/125.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 453
   },
   {
     "name": "ROM/1/126",
     "path": "game/ROM/1/126.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 454
   },
   {
     "name": "ROM/1/127",
     "path": "game/ROM/1/127.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 455
   },
   {
     "name": "ROM/1/20",
     "path": "game/ROM/1/20.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 356
   },
   {
     "name": "ROM/1/47",
     "path": "game/ROM/1/47.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 391
   },
   {
     "name": "ROM/1/48",
     "path": "game/ROM/1/48.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 359
   },
   {
     "name": "ROM/1/49",
     "path": "game/ROM/1/49.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 360
   },
   {
     "name": "ROM/1/50",
     "path": "game/ROM/1/50.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 361
   },
   {
     "name": "ROM/1/51",
     "path": "game/ROM/1/51.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 362
   },
   {
     "name": "ROM/1/52",
     "path": "game/ROM/1/52.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 363
   },
   {
     "name": "ROM/1/56",
     "path": "game/ROM/1/56.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 367
   },
   {
     "name": "ROM/1/58",
     "path": "game/ROM/1/58.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 369
   },
   {
     "name": "ROM/1/59",
     "path": "game/ROM/1/59.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 370
   },
   {
     "name": "ROM/1/60",
     "path": "game/ROM/1/60.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 371
   },
   {
     "name": "ROM/1/61",
     "path": "game/ROM/1/61.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 374
   },
   {
     "name": "ROM/1/62",
     "path": "game/ROM/1/62.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 375
   },
   {
     "name": "ROM/1/63",
     "path": "game/ROM/1/63.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 376
   },
   {
     "name": "ROM/1/64",
     "path": "game/ROM/1/64.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 377
   },
   {
     "name": "ROM/1/65",
     "path": "game/ROM/1/65.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 378
   },
   {
     "name": "ROM/1/66",
     "path": "game/ROM/1/66.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 379
   },
   {
     "name": "ROM/1/67",
     "path": "game/ROM/1/67.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 380
   },
   {
     "name": "ROM/1/68",
     "path": "game/ROM/1/68.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 381
   },
   {
     "name": "ROM/1/69",
     "path": "game/ROM/1/69.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 382
   },
   {
     "name": "ROM/1/70",
     "path": "game/ROM/1/70.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 383
   },
   {
     "name": "ROM/1/71",
     "path": "game/ROM/1/71.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 384
   },
   {
     "name": "ROM/1/72",
     "path": "game/ROM/1/72.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 385
   },
   {
     "name": "ROM/1/73",
     "path": "game/ROM/1/73.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 386
   },
   {
     "name": "ROM/1/75",
     "path": "game/ROM/1/75.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 393
   },
   {
     "name": "ROM/1/76",
     "path": "game/ROM/1/76.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 394
   },
   {
     "name": "ROM/1/77",
     "path": "game/ROM/1/77.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 395
   },
   {
     "name": "ROM/1/78",
     "path": "game/ROM/1/78.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 396
   },
   {
     "name": "ROM/1/79",
     "path": "game/ROM/1/79.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 397
   },
   {
     "name": "ROM/1/80",
     "path": "game/ROM/1/80.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 398
   },
   {
     "name": "ROM/1/82",
     "path": "game/ROM/1/82.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 400
   },
   {
     "name": "ROM/1/85",
     "path": "game/ROM/1/85.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 403
   },
   {
     "name": "ROM/1/86",
     "path": "game/ROM/1/86.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 404
   },
   {
     "name": "ROM/1/87",
     "path": "game/ROM/1/87.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 405
   },
   {
     "name": "ROM/1/88",
     "path": "game/ROM/1/88.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 406
   },
   {
     "name": "ROM/1/89",
     "path": "game/ROM/1/89.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 407
   },
   {
     "name": "ROM/1/90",
     "path": "game/ROM/1/90.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 408
   },
   {
     "name": "ROM/1/91",
     "path": "game/ROM/1/91.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 409
   },
   {
     "name": "ROM/1/92",
     "path": "game/ROM/1/92.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 410
   },
   {
     "name": "ROM/1/93",
     "path": "game/ROM/1/93.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 411
   },
   {
     "name": "ROM/1/94",
     "path": "game/ROM/1/94.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 415
   },
   {
     "name": "ROM/1/95",
     "path": "game/ROM/1/95.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 416
   },
   {
     "name": "ROM/1/96",
     "path": "game/ROM/1/96.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 417
   },
   {
     "name": "ROM/1/97",
     "path": "game/ROM/1/97.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 418
   },
   {
     "name": "ROM/1/98",
     "path": "game/ROM/1/98.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 419
   },
   {
     "name": "ROM/1/99",
     "path": "game/ROM/1/99.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 420
   },
   {
     "name": "ROM/2/0",
     "path": "game/ROM/2/0.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 456
   },
   {
     "name": "ROM/2/1",
     "path": "game/ROM/2/1.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 457
   },
   {
     "name": "ROM/2/10",
     "path": "game/ROM/2/10.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 468
   },
   {
     "name": "ROM/2/102",
     "path": "game/ROM/2/102.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 571
   },
   {
     "name": "ROM/2/109",
     "path": "game/ROM/2/109.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 580
   },
   {
     "name": "ROM/2/11",
     "path": "game/ROM/2/11.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 469
   },
   {
     "name": "ROM/2/110",
     "path": "game/ROM/2/110.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 581
   },
   {
     "name": "ROM/2/111",
     "path": "game/ROM/2/111.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 582
   },
   {
     "name": "ROM/2/113",
     "path": "game/ROM/2/113.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 584
   },
   {
     "name": "ROM/2/114",
     "path": "game/ROM/2/114.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 585
   },
   {
     "name": "ROM/2/115",
     "path": "game/ROM/2/115.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 587
   },
   {
     "name": "ROM/2/116",
     "path": "game/ROM/2/116.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 588
   },
   {
     "name": "ROM/2/117",
     "path": "game/ROM/2/117.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 589
   },
   {
     "name": "ROM/2/118",
     "path": "game/ROM/2/118.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 590
   },
   {
     "name": "ROM/2/119",
     "path": "game/ROM/2/119.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 591
   },
   {
     "name": "ROM/2/12",
     "path": "game/ROM/2/12.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 471
   },
   {
     "name": "ROM/2/121",
     "path": "game/ROM/2/121.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 593
   },
   {
     "name": "ROM/2/122",
     "path": "game/ROM/2/122.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 595
   },
   {
     "name": "ROM/2/123",
     "path": "game/ROM/2/123.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 596
   },
   {
     "name": "ROM/2/124",
     "path": "game/ROM/2/124.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 597
   },
   {
     "name": "ROM/2/125",
     "path": "game/ROM/2/125.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 598
   },
   {
     "name": "ROM/2/13",
     "path": "game/ROM/2/13.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 472
   },
   {
     "name": "ROM/2/14",
     "path": "game/ROM/2/14.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 473
   },
   {
     "name": "ROM/2/15",
     "path": "game/ROM/2/15.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 474
   },
   {
     "name": "ROM/2/16",
     "path": "game/ROM/2/16.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 475
   },
   {
     "name": "ROM/2/17",
     "path": "game/ROM/2/17.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 476
   },
   {
     "name": "ROM/2/18",
     "path": "game/ROM/2/18.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 479
   },
   {
     "name": "ROM/2/2",
     "path": "game/ROM/2/2.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 458
   },
   {
     "name": "ROM/2/20",
     "path": "game/ROM/2/20.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 481
   },
   {
     "name": "ROM/2/21",
     "path": "game/ROM/2/21.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 482
   },
   {
     "name": "ROM/2/22",
     "path": "game/ROM/2/22.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 483
   },
   {
     "name": "ROM/2/23",
     "path": "game/ROM/2/23.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 484
   },
   {
     "name": "ROM/2/24",
     "path": "game/ROM/2/24.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 485
   },
   {
     "name": "ROM/2/25",
     "path": "game/ROM/2/25.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 486
   },
   {
     "name": "ROM/2/26",
     "path": "game/ROM/2/26.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 487
   },
   {
     "name": "ROM/2/27",
     "path": "game/ROM/2/27.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 488
   },
   {
     "name": "ROM/2/28",
     "path": "game/ROM/2/28.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 489
   },
   {
     "name": "ROM/2/29",
     "path": "game/ROM/2/29.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 490
   },
   {
     "name": "ROM/2/3",
     "path": "game/ROM/2/3.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 459
   },
   {
     "name": "ROM/2/30",
     "path": "game/ROM/2/30.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 491
   },
   {
     "name": "ROM/2/31",
     "path": "game/ROM/2/31.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 492
   },
   {
     "name": "ROM/2/32",
     "path": "game/ROM/2/32.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 493
   },
   {
     "name": "ROM/2/33",
     "path": "game/ROM/2/33.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 494
   },
   {
     "name": "ROM/2/34",
     "path": "game/ROM/2/34.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 495
   },
   {
     "name": "ROM/2/35",
     "path": "game/ROM/2/35.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 496
   },
   {
     "name": "ROM/2/36",
     "path": "game/ROM/2/36.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 497
   },
   {
     "name": "ROM/2/37",
     "path": "game/ROM/2/37.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 498
   },
   {
     "name": "ROM/2/38",
     "path": "game/ROM/2/38.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 499
   },
   {
     "name": "ROM/2/39",
     "path": "game/ROM/2/39.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 501
   },
   {
     "name": "ROM/2/4",
     "path": "game/ROM/2/4.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 460
   },
   {
     "name": "ROM/2/40",
     "path": "game/ROM/2/40.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 502
   },
   {
     "name": "ROM/2/41",
     "path": "game/ROM/2/41.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 503
   },
   {
     "name": "ROM/2/42",
     "path": "game/ROM/2/42.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 504
   },
   {
     "name": "ROM/2/43",
     "path": "game/ROM/2/43.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 505
   },
   {
     "name": "ROM/2/44",
     "path": "game/ROM/2/44.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 506
   },
   {
     "name": "ROM/2/46",
     "path": "game/ROM/2/46.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 508
   },
   {
     "name": "ROM/2/47",
     "path": "game/ROM/2/47.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 509
   },
   {
     "name": "ROM/2/48",
     "path": "game/ROM/2/48.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 510
   },
   {
     "name": "ROM/2/49",
     "path": "game/ROM/2/49.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 511
   },
   {
     "name": "ROM/2/5",
     "path": "game/ROM/2/5.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 461
   },
   {
     "name": "ROM/2/50",
     "path": "game/ROM/2/50.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 512
   },
   {
     "name": "ROM/2/51",
     "path": "game/ROM/2/51.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 513
   },
   {
     "name": "ROM/2/52",
     "path": "game/ROM/2/52.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 516
   },
   {
     "name": "ROM/2/53",
     "path": "game/ROM/2/53.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 517
   },
   {
     "name": "ROM/2/54",
     "path": "game/ROM/2/54.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 518
   },
   {
     "name": "ROM/2/55",
     "path": "game/ROM/2/55.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 519
   },
   {
     "name": "ROM/2/56",
     "path": "game/ROM/2/56.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 520
   },
   {
     "name": "ROM/2/57",
     "path": "game/ROM/2/57.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 521
   },
   {
     "name": "ROM/2/58",
     "path": "game/ROM/2/58.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 522
   },
   {
     "name": "ROM/2/59",
     "path": "game/ROM/2/59.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 523
   },
   {
     "name": "ROM/2/6",
     "path": "game/ROM/2/6.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 464
   },
   {
     "name": "ROM/2/61",
     "path": "game/ROM/2/61.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 525
   },
   {
     "name": "ROM/2/62",
     "path": "game/ROM/2/62.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 526
   },
   {
     "name": "ROM/2/63",
     "path": "game/ROM/2/63.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 527
   },
   {
     "name": "ROM/2/64",
     "path": "game/ROM/2/64.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 528
   },
   {
     "name": "ROM/2/65",
     "path": "game/ROM/2/65.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 531
   },
   {
     "name": "ROM/2/66",
     "path": "game/ROM/2/66.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 532
   },
   {
     "name": "ROM/2/67",
     "path": "game/ROM/2/67.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 533
   },
   {
     "name": "ROM/2/68",
     "path": "game/ROM/2/68.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 534
   },
   {
     "name": "ROM/2/69",
     "path": "game/ROM/2/69.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 535
   },
   {
     "name": "ROM/2/7",
     "path": "game/ROM/2/7.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 465
   },
   {
     "name": "ROM/2/70",
     "path": "game/ROM/2/70.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 536
   },
   {
     "name": "ROM/2/72",
     "path": "game/ROM/2/72.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 538
   },
   {
     "name": "ROM/2/73",
     "path": "game/ROM/2/73.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 539
   },
   {
     "name": "ROM/2/75",
     "path": "game/ROM/2/75.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 541
   },
   {
     "name": "ROM/2/76",
     "path": "game/ROM/2/76.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 543
   },
   {
     "name": "ROM/2/77",
     "path": "game/ROM/2/77.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 544
   },
   {
     "name": "ROM/2/78",
     "path": "game/ROM/2/78.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 545
   },
   {
     "name": "ROM/2/79",
     "path": "game/ROM/2/79.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 546
   },
   {
     "name": "ROM/2/8",
     "path": "game/ROM/2/8.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 466
   },
   {
     "name": "ROM/2/80",
     "path": "game/ROM/2/80.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 547
   },
   {
     "name": "ROM/2/81",
     "path": "game/ROM/2/81.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 548
   },
   {
     "name": "ROM/2/82",
     "path": "game/ROM/2/82.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 549
   },
   {
     "name": "ROM/2/83",
     "path": "game/ROM/2/83.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 550
   },
   {
     "name": "ROM/2/86",
     "path": "game/ROM/2/86.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 554
   },
   {
     "name": "ROM/2/88",
     "path": "game/ROM/2/88.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 556
   },
   {
     "name": "ROM/2/89",
     "path": "game/ROM/2/89.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 557
   },
   {
     "name": "ROM/2/9",
     "path": "game/ROM/2/9.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 467
   },
   {
     "name": "ROM/2/90",
     "path": "game/ROM/2/90.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 558
   },
   {
     "name": "ROM/2/91",
     "path": "game/ROM/2/91.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 559
   },
   {
     "name": "ROM/2/92",
     "path": "game/ROM/2/92.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 560
   },
   {
     "name": "ROM/2/93",
     "path": "game/ROM/2/93.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 561
   },
   {
     "name": "ROM/2/94",
     "path": "game/ROM/2/94.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 562
   },
   {
     "name": "ROM/2/95",
     "path": "game/ROM/2/95.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 563
   },
   {
     "name": "ROM2/0/28",
     "path": "game/ROM2/0/28.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 605
   },
   {
     "name": "ROM2/0/29",
     "path": "game/ROM2/0/29.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 606
   },
   {
     "name": "ROM2/0/30",
     "path": "game/ROM2/0/30.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 607
   },
   {
     "name": "ROM2/0/31",
     "path": "game/ROM2/0/31.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 608
   },
   {
     "name": "ROM2/0/32",
     "path": "game/ROM2/0/32.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 609
   },
   {
     "name": "ROM2/0/33",
     "path": "game/ROM2/0/33.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 610
   },
   {
     "name": "ROM2/0/34",
     "path": "game/ROM2/0/34.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 611
   },
   {
     "name": "ROM2/0/36",
     "path": "game/ROM2/0/36.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 614
   },
   {
     "name": "ROM2/0/37",
     "path": "game/ROM2/0/37.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 615
   },
   {
     "name": "ROM2/15/122",
     "path": "game/ROM2/15/122.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 616
   },
   {
     "name": "ROM2/15/123",
     "path": "game/ROM2/15/123.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 617
   },
   {
     "name": "ROM2/15/124",
     "path": "game/ROM2/15/124.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 618
   },
   {
     "name": "ROM2/16/2",
     "path": "game/ROM2/16/2.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 619
   },
   {
     "name": "ROM2/21/115",
     "path": "game/ROM2/21/115.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 622
   },
   {
     "name": "ROM2/21/116",
     "path": "game/ROM2/21/116.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 623
   },
   {
     "name": "ROM2/21/117",
     "path": "game/ROM2/21/117.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 624
   },
   {
     "name": "ROM2/21/118",
     "path": "game/ROM2/21/118.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 625
   },
   {
     "name": "ROM2/21/119",
     "path": "game/ROM2/21/119.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 626
   },
   {
     "name": "ROM2/21/120",
     "path": "game/ROM2/21/120.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 627
   },
   {
     "name": "ROM2/21/121",
     "path": "game/ROM2/21/121.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 628
   },
   {
     "name": "ROM2/21/122",
     "path": "game/ROM2/21/122.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 629
   },
   {
     "name": "ROM2/21/123",
     "path": "game/ROM2/21/123.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 630
   },
   {
     "name": "ROM2/21/124",
     "path": "game/ROM2/21/124.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 631
   },
   {
     "name": "ROM2/21/125",
     "path": "game/ROM2/21/125.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 632
   },
   {
     "name": "ROM2/21/126",
     "path": "game/ROM2/21/126.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 633
   },
   {
     "name": "ROM2/21/127",
     "path": "game/ROM2/21/127.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 634
   },
   {
     "name": "ROM2/22/0",
     "path": "game/ROM2/22/0.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 635
   },
   {
     "name": "ROM2/22/1",
     "path": "game/ROM2/22/1.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 636
   },
   {
     "name": "ROM2/22/2",
     "path": "game/ROM2/22/2.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 637
   },
   {
     "name": "ROM2/22/3",
     "path": "game/ROM2/22/3.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 638
   },
   {
     "name": "ROM2/22/4",
     "path": "game/ROM2/22/4.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 639
   },
   {
     "name": "ROM3/0/47",
     "path": "game/ROM3/0/47.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 640
   },
   {
     "name": "ROM3/0/48",
     "path": "game/ROM3/0/48.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 641
   },
   {
     "name": "ROM3/0/49",
     "path": "game/ROM3/0/49.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 642
   },
   {
     "name": "ROM3/0/50",
     "path": "game/ROM3/0/50.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 643
   },
   {
     "name": "ROM3/0/51",
     "path": "game/ROM3/0/51.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 644
   },
   {
     "name": "ROM3/0/52",
     "path": "game/ROM3/0/52.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 645
   },
   {
     "name": "ROM3/3/83",
     "path": "game/ROM3/3/83.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 646
   },
   {
     "name": "ROM3/7/49",
     "path": "game/ROM3/7/49.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 651
   },
   {
     "name": "ROM3/7/50",
     "path": "game/ROM3/7/50.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 652
   },
   {
     "name": "ROM3/7/51",
     "path": "game/ROM3/7/51.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 653
   },
   {
     "name": "ROM3/7/52",
     "path": "game/ROM3/7/52.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 654
   },
   {
     "name": "ROM4/0/39",
     "path": "game/ROM4/0/39.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 660
   },
   {
     "name": "ROM4/0/40",
     "path": "game/ROM4/0/40.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 661
   },
   {
     "name": "ROM4/0/41",
     "path": "game/ROM4/0/41.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 662
   },
   {
     "name": "ROM4/0/42",
     "path": "game/ROM4/0/42.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 663
   },
   {
     "name": "ROM4/0/43",
     "path": "game/ROM4/0/43.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 664
   },
   {
     "name": "ROM4/0/44",
     "path": "game/ROM4/0/44.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 665
   },
   {
     "name": "ROM4/0/45",
     "path": "game/ROM4/0/45.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 666
   },
   {
     "name": "ROM4/0/46",
     "path": "game/ROM4/0/46.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 667
   },
   {
     "name": "ROM4/0/47",
     "path": "game/ROM4/0/47.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 668
   },
   {
     "name": "ROM4/0/48",
     "path": "game/ROM4/0/48.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 669
   },
   {
     "name": "ROM4/0/49",
     "path": "game/ROM4/0/49.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 670
   },
   {
     "name": "ROM4/0/50",
     "path": "game/ROM4/0/50.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 671
   },
   {
     "name": "ROM4/4/123",
     "path": "game/ROM4/4/123.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 674
   },
   {
     "name": "ROM4/4/124",
     "path": "game/ROM4/4/124.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 675
   },
   {
     "name": "ROM4/4/125",
     "path": "game/ROM4/4/125.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 676
   },
   {
     "name": "ROM4/4/126",
     "path": "game/ROM4/4/126.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 677
   },
   {
     "name": "ROM4/4/127",
     "path": "game/ROM4/4/127.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 678
   },
   {
     "name": "ROM4/5/0",
     "path": "game/ROM4/5/0.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 679
   },
   {
     "name": "ROM4/5/1",
     "path": "game/ROM4/5/1.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 680
   },
   {
     "name": "ROM4/5/2",
     "path": "game/ROM4/5/2.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 681
   },
   {
     "name": "ROM4/5/3",
     "path": "game/ROM4/5/3.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 682
   },
   {
     "name": "ROM4/5/4",
     "path": "game/ROM4/5/4.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 683
   },
   {
     "name": "ROM4/5/7",
     "path": "game/ROM4/5/7.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 659
   },
   {
     "name": "ROM9/0/2",
     "path": "game/ROM9/0/2.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 392
   },
   {
     "name": "ROM9/3/84",
     "path": "game/ROM9/3/84.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 689
   },
   {
     "name": "ROM9/3/85",
     "path": "game/ROM9/3/85.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 690
   },
   {
     "name": "ROM9/5/48",
     "path": "game/ROM9/5/48.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 684
   },
   {
     "name": "ROM9/5/49",
     "path": "game/ROM9/5/49.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 685
   },
   {
     "name": "ROM9/5/50",
     "path": "game/ROM9/5/50.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 686
   },
   {
     "name": "ROM9/5/51",
     "path": "game/ROM9/5/51.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 687
   },
   {
     "name": "ROM9/5/52",
     "path": "game/ROM9/5/52.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 688
   },
   {
     "name": "ROM9/6/116",
     "path": "game/ROM9/6/116.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 693
   },
   {
     "name": "sh-u",
     "path": "game/ROM/1/23.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 388
   },
   {
     "name": "sroom_komono1",
     "path": "game/ROM/2/107.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 576
   },
   {
     "name": "sroom_komono1",
     "path": "game/ROM/2/108.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 577
   },
   {
     "name": "sroom_lamp1",
     "path": "game/ROM/2/106.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 575
   },
   {
     "name": "sroom_table",
     "path": "game/ROM/2/105.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 574
   },
   {
     "name": "sup0",
     "path": "game/ROM/1/53.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 364
   },
   {
     "name": "sup0",
     "path": "game/ROM/1/54.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 365
   },
   {
     "name": "sup0",
     "path": "game/ROM/1/55.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 366
   },
   {
     "name": "sup0",
     "path": "game/ROM/1/57.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 368
   },
   {
     "name": "sup0",
     "path": "game/ROM/1/74.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 387
   },
   {
     "name": "turi_himo01",
     "path": "game/ROM/1/103.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 426
   },
   {
     "name": "wall_08",
     "path": "game/ROM/2/98.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 566
   },
   {
     "name": "wi_al",
     "path": "game/ROM/2/45.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 507
   },
   {
     "name": "ya01",
     "path": "game/ROM/1/83.DAT",
-    "group": "Rooms"
+    "group": "Rooms",
+    "fileId": 401
   },
   {
     "id": 405,
     "name": "405 — Dev Test Plane",
     "path": "game/ROM10/100/0.DAT",
-    "group": "Dev / XI Modified"
+    "group": "Dev / XI Modified",
+    "fileId": 84040
   },
   {
     "id": 406,
     "name": "406 — Castle prototype — very early?",
     "path": "game/ROM10/100/4.DAT",
-    "group": "Dev / XI Modified"
+    "group": "Dev / XI Modified",
+    "fileId": 84041
   },
   {
     "id": 407,
     "name": "407 — Character Creation",
     "path": "game/ROM10/100/8.DAT",
-    "group": "Dev / XI Modified"
+    "group": "Dev / XI Modified",
+    "fileId": 84042
   },
   {
     "id": 409,
     "name": "409 — Dev Snowfield",
     "path": "game/ROM10/100/16.DAT",
-    "group": "Dev / XI Modified"
+    "group": "Dev / XI Modified",
+    "fileId": 84044
   },
   {
     "id": 410,
     "name": "410 — Dev Snowfield 2",
     "path": "game/ROM10/100/20.DAT",
-    "group": "Dev / XI Modified"
+    "group": "Dev / XI Modified",
+    "fileId": 84045
   },
   {
     "id": 411,
     "name": "411 — Dev Cave + Waterfall",
     "path": "game/ROM10/100/24.DAT",
-    "group": "Dev / XI Modified"
+    "group": "Dev / XI Modified",
+    "fileId": 84046
   },
   {
     "id": 412,
     "name": "412 — Dev Boss Test",
     "path": "game/ROM10/100/28.DAT",
-    "group": "Dev / XI Modified"
+    "group": "Dev / XI Modified",
+    "fileId": 84047
   },
   {
     "id": 414,
     "name": "414 — Dev Desert",
     "path": "game/ROM10/100/36.DAT",
-    "group": "Dev / XI Modified"
+    "group": "Dev / XI Modified",
+    "fileId": 84049
   },
   {
     "id": 415,
     "name": "415 — Dev Forest — moss test",
     "path": "game/ROM10/100/40.DAT",
-    "group": "Dev / XI Modified"
+    "group": "Dev / XI Modified",
+    "fileId": 84050
   },
   {
     "id": 416,
     "name": "416 — Dev Cliffs + Forest",
     "path": "game/ROM10/100/44.DAT",
-    "group": "Dev / XI Modified"
+    "group": "Dev / XI Modified",
+    "fileId": 84051
   },
   {
     "id": 417,
     "name": "417 — Dev World Map / diorama?",
     "path": "game/ROM10/100/48.DAT",
-    "group": "Dev / XI Modified"
+    "group": "Dev / XI Modified",
+    "fileId": 84052
   },
   {
     "id": 418,
     "name": "418 — Dev Mountain Terrain",
     "path": "game/ROM10/100/52.DAT",
-    "group": "Dev / XI Modified"
+    "group": "Dev / XI Modified",
+    "fileId": 84053
   },
   {
     "id": 419,
     "name": "419 — Fort Ghelsba prototype?",
     "path": "game/ROM10/100/56.DAT",
-    "group": "Dev / XI Modified"
+    "group": "Dev / XI Modified",
+    "fileId": 84054
   },
   {
     "id": 420,
     "name": "420 — Tower prototype?",
     "path": "game/ROM10/100/60.DAT",
-    "group": "Dev / XI Modified"
+    "group": "Dev / XI Modified",
+    "fileId": 84055
   },
   {
     "id": 421,
     "name": "421 — Northern San d'Oria prototype?",
     "path": "game/ROM10/100/64.DAT",
-    "group": "Dev / XI Modified"
+    "group": "Dev / XI Modified",
+    "fileId": 84056
   },
   {
     "id": 422,
     "name": "422 — Bastok interior prototype?",
     "path": "game/ROM10/100/68.DAT",
-    "group": "Dev / XI Modified"
+    "group": "Dev / XI Modified",
+    "fileId": 84057
   },
   {
     "id": 423,
     "name": "423 — Ru'Lude Gardens prototype (untextured)",
     "path": "game/ROM10/100/72.DAT",
-    "group": "Dev / XI Modified"
+    "group": "Dev / XI Modified",
+    "fileId": 84058
   },
   {
     "id": 424,
     "name": "424 — Chateau d'Oraguille prototype?",
     "path": "game/ROM10/100/76.DAT",
-    "group": "Dev / XI Modified"
+    "group": "Dev / XI Modified",
+    "fileId": 84059
   },
   {
     "id": 425,
     "name": "425 — Selbina prototype (untextured)",
     "path": "game/ROM10/100/80.DAT",
-    "group": "Dev / XI Modified"
+    "group": "Dev / XI Modified",
+    "fileId": 84060
   },
   {
     "id": 426,
     "name": "426 — Ship / airship room prototype?",
     "path": "game/ROM10/100/84.DAT",
-    "group": "Dev / XI Modified"
+    "group": "Dev / XI Modified",
+    "fileId": 84061
   },
   {
     "id": 403,

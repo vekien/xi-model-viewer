@@ -885,6 +885,7 @@ export class Renderer {
     this.showTextures = true;
     this.showWireframe = false;
     this.showSkeleton = false;
+    this.highlightJoint = -1;       // Skeleton panel selection — orange in viewport
     this.skeletonLines = null;      // lazily built, reused for the renderer's life
     this.showAlpha = true;
     this.poseDirty = true;
@@ -1659,6 +1660,10 @@ export class Renderer {
     if (lines.data.length < joints.length * 12) lines.data = new Float32Array(joints.length * 12);
 
     // Root end dim, child end bright: the taper shows which way each bone runs.
+    // Selected joint (Skeleton panel): parent→child edges + axis cross in orange.
+    const hi = this.highlightJoint | 0;
+    const needFloats = joints.length * 12 + 36; // +3 lines for highlight cross
+    if (lines.data.length < needFloats) lines.data = new Float32Array(needFloats);
     const d = lines.data;
     const trans = this.pose.trans;
     let v = 0;
@@ -1666,10 +1671,33 @@ export class Renderer {
       const parent = joints[i].parent;
       if (parent < 0 || !trans[parent] || !trans[i]) continue;
       const a = trans[parent], b = trans[i];
+      const sel = i === hi || parent === hi;
+      const r0 = sel ? 1.0 : 0.20, g0 = sel ? 0.45 : 0.55, b0 = sel ? 0.05 : 0.75;
+      const r1 = sel ? 1.0 : 0.65, g1 = sel ? 0.55 : 0.95, b1 = sel ? 0.08 : 1.0;
       d[v] = a[0]; d[v + 1] = a[1]; d[v + 2] = a[2];
-      d[v + 3] = 0.20; d[v + 4] = 0.55; d[v + 5] = 0.75;
+      d[v + 3] = r0; d[v + 4] = g0; d[v + 5] = b0;
       d[v + 6] = b[0]; d[v + 7] = b[1]; d[v + 8] = b[2];
-      d[v + 9] = 0.65; d[v + 10] = 0.95; d[v + 11] = 1.0;
+      d[v + 9] = r1; d[v + 10] = g1; d[v + 11] = b1;
+      v += 12;
+    }
+    if (hi >= 0 && hi < joints.length && trans[hi]) {
+      const p = trans[hi];
+      const s = 0.08;
+      const oR = 1.0, oG = 0.5, oB = 0.05;
+      d[v] = p[0] - s; d[v + 1] = p[1]; d[v + 2] = p[2];
+      d[v + 3] = oR; d[v + 4] = oG; d[v + 5] = oB;
+      d[v + 6] = p[0] + s; d[v + 7] = p[1]; d[v + 8] = p[2];
+      d[v + 9] = oR; d[v + 10] = oG; d[v + 11] = oB;
+      v += 12;
+      d[v] = p[0]; d[v + 1] = p[1] - s; d[v + 2] = p[2];
+      d[v + 3] = oR; d[v + 4] = oG; d[v + 5] = oB;
+      d[v + 6] = p[0]; d[v + 7] = p[1] + s; d[v + 8] = p[2];
+      d[v + 9] = oR; d[v + 10] = oG; d[v + 11] = oB;
+      v += 12;
+      d[v] = p[0]; d[v + 1] = p[1]; d[v + 2] = p[2] - s;
+      d[v + 3] = oR; d[v + 4] = oG; d[v + 5] = oB;
+      d[v + 6] = p[0]; d[v + 7] = p[1]; d[v + 8] = p[2] + s;
+      d[v + 9] = oR; d[v + 10] = oG; d[v + 11] = oB;
       v += 12;
     }
     const count = v / 6;
@@ -2521,6 +2549,10 @@ export class Renderer {
 
     // Spell/ability on this actor (attachEffectSystem) — same composite order as zones.
     this._drawParticles();
+
+    // Skeleton panel bone pick: draw rig overlay (orange highlight) without
+    // forcing "skeleton only" mode.
+    if (this.highlightJoint >= 0) this._drawSkeleton(datVP);
 
     // Debug overlays on top (collision terrain colours, UE-green navmesh).
     this._drawOverlay(viewProj, this.showCollision ? this.collisionOverlay : null, this.collisionOpacity);
