@@ -268230,5 +268230,12 @@
    ],
    "includeUngrouped": true
   }
+ },
+ "rangedDisplay": {
+  "slot": "range",
+  "showForActionGroups": [
+   "Archery",
+   "Marksmanship"
+  ]
  }
 }

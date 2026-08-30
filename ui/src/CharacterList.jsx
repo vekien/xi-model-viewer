@@ -301,7 +301,11 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
         if (!res.ok) throw new Error(`${res.status} characters.json`);
         const data = await res.json();
         raceData.current = new Map(data.races.map((r) => [r.id, r]));
-        sectionCfg.current = { ...DEFAULT_SECTIONS, ...(data.gearSections ?? {}) };
+        sectionCfg.current = {
+          ...DEFAULT_SECTIONS,
+          ...(data.gearSections ?? {}),
+          rangedDisplay: data.rangedDisplay ?? null,
+        };
         const rs = data.races.map((r) => ({ id: r.id, label: r.label, base: r.base,
                                             lookRace: r.lookRace }));
         setRaces(rs);
@@ -425,7 +429,9 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
       const item = items.find((it) => it.id === sel[s.key]);
       if (!item) return;
       paths.push(...item.paths);
-      if (s.key === 'main' || s.key === 'sub') weaponSlots[s.key] = item.paths;
+      // main/sub drive the hand re-parenting; range rides along so App can stow
+      // the bow when it isn't in use (it has no grip joint to re-parent).
+      if (s.key === 'main' || s.key === 'sub' || s.key === 'range') weaponSlots[s.key] = item.paths;
       // Always list every equipped slot in Details / Data Struct — including
       // None placeholders (they still have a DAT) and empty-path stubs.
       parts.push({
@@ -540,6 +546,10 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
     // Read from characters.json alongside the races; the list is already
     // ordered by then, so this only names the fold-up of ungrouped rows.
     standardLabel: sectionCfg.current.standardLabel,
+    // Ranged weapons are stowed (scaled to 0 in game) unless the current action
+    // is one of these groups. App gates the mesh on it.
+    rangedDisplay: sectionCfg.current.rangedDisplay ?? null,
+    rangedPaths: slots?.range?.find((it) => it.id === sel.range)?.paths ?? null,
   };
 }
 

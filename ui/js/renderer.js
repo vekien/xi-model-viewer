@@ -857,6 +857,8 @@ export class Renderer {
     this.textures = new Map();
     // PC gear isolation: null = show all; Set of lowercased source paths = only those.
     this.meshSourceFilter = null;
+    // Always-hidden sources (the stowed ranged weapon); null = nothing hidden.
+    this.hiddenSources = null;
 
     // Origin axis gizmo (View > Toggle Axes; on by default in the Effects view).
     this.showAxes = false;
@@ -1130,12 +1132,38 @@ export class Renderer {
     this.meshSourceFilter = set;
   }
 
-  _batchSourceVisible(batch) {
-    if (!this.meshSourceFilter) return true;
+  /**
+   * Sources hidden regardless of isolation. Separate from `meshSourceFilter`,
+   * which is an allow-list for gear isolation — this is a deny-list, and the
+   * ranged weapon uses it: the game keeps a bow scaled to 0 until it is in use.
+   */
+  setHiddenSources(paths) {
+    if (!paths || (typeof paths.size === 'number' ? paths.size === 0 : !paths.length)) {
+      this.hiddenSources = null;
+      return;
+    }
+    const set = new Set();
+    for (const p of paths) {
+      const n = String(p).replace(/\//g, '\\').toLowerCase();
+      set.add(n);
+      const m = n.match(/rom\d*[\\/][\w.\\/-]+\.dat$/i);
+      if (m) set.add(m[0]);
+    }
+    this.hiddenSources = set;
+  }
+
+  _sourceIn(set, batch) {
+    if (!set) return false;
     const p = (batch.sourcePath || '').toLowerCase().replace(/\//g, '\\');
-    if (this.meshSourceFilter.has(p)) return true;
+    if (set.has(p)) return true;
     const m = p.match(/rom\d*[\\/][\w.\\/-]+\.dat$/i);
-    return !!(m && this.meshSourceFilter.has(m[0]));
+    return !!(m && set.has(m[0]));
+  }
+
+  _batchSourceVisible(batch) {
+    if (this._sourceIn(this.hiddenSources, batch)) return false;
+    if (!this.meshSourceFilter) return true;
+    return this._sourceIn(this.meshSourceFilter, batch);
   }
 
   /** keepCamera: leave the orbit untouched (gear swap on the same actor). */

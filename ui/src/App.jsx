@@ -2760,6 +2760,31 @@ export default function App({ launch = null }) {
     onIsolationChange: applyPcIsolation,
   });
 
+  /**
+   * Stow the ranged weapon unless the current action uses it.
+   *
+   * Ranged weapons are the one slot with no grip joint to re-parent — their
+   * `info` reports standardJointIndex 255 (null), and the mesh binds straight
+   * to the back-mount bone (Bone0089 and its children on Hume Male). Nothing in
+   * the base, movement or battle motion DATs animates those joints, so the game
+   * hides the weapon by scaling it to 0 until it is drawn. Without this a bow
+   * hangs in view through every melee swing.
+   *
+   * Which actions count as "in use" comes from characters.json `rangedDisplay`.
+   */
+  useEffect(() => {
+    const r = rendererRef.current;
+    if (!r?.setHiddenSources) return;
+    const cfg = pc.rangedDisplay;
+    const paths = pc.rangedPaths;
+    if (!cfg || !paths?.length || leftView !== 'pc') {
+      r.setHiddenSources(null);
+      return;
+    }
+    const inUse = (cfg.showForActionGroups ?? []).includes(pc.actionGroup);
+    r.setHiddenSources(inUse ? null : paths);
+  }, [pc.rangedDisplay, pc.rangedPaths, pc.actionGroup, leftView]);
+
   // --- Character Creation (high-poly RT/SHAPE + SQLE models) ----------------
 
   const [crInfo, setCrInfo] = useState(null);
