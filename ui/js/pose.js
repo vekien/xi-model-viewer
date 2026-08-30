@@ -89,7 +89,6 @@ export class SkeletonPose {
     // joints they share with earlier ones.
     const active = [];
     let basePhase = 0;
-    const RELEASE_DEFAULT = 8;   // frames, when a command gives no transOut
     if (clip?.segments) {
       for (const seg of clip.segments) {
         if (frame < seg.delay) continue;
@@ -97,15 +96,26 @@ export class SkeletonPose {
         const local = frame - seg.delay;
         if (local <= len || len <= 0) {
           active.push({ clip: seg.clip, phase: len > 0 ? local / len : 0, release: 0 });
-        } else {
-          const rel = seg.transOut > 0 ? seg.transOut : RELEASE_DEFAULT;
-          const release = (local - len) / rel;   // 0 at end → 1 fully back to base
+        } else if (seg.transOut > 0) {
+          const release = (local - len) / seg.transOut;   // 0 at end → 1 fully back to base
           // `<= 1`, not `< 1`: dropping the segment at release == 1 cut the fade
           // one step short, so the last 1/rel of the travel happened in a single
           // frame — a visible snap back to idle on a short transOut. At exactly
           // 1 the blend already yields the base pose, so keeping it is a no-op
           // for the result and makes the hand-off continuous.
           if (release <= 1) active.push({ clip: seg.clip, phase: 1, release });
+        } else {
+          // transOut 0 means "hand straight over", not "blend out over some
+          // default". Every such segment in the PC set is followed by one
+          // starting exactly where it ends (cait mi0@0+14 -> mi1@14), so the
+          // successor claims the joints on the very next frame and nothing is
+          // held for long. Substituting a default release instead made the
+          // pose drift back toward the battle stance in any gap — Eagle Eye
+          // Shot's routine leaves two frames between yu0 ending at 58 and yu1
+          // starting at 60, which read as a jitter mid-weapon-skill. Holding
+          // the final pose is also what a trailing 0 wants: `dead` ends on
+          // cor@58+1/out0 and should stay down.
+          active.push({ clip: seg.clip, phase: 1, release: 0 });
         }
       }
       // Base idle underlay, looping on its own length so it stays continuous
