@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
-import { CameraSequence, driveCamera, poseFromCamera, sampleScene, sampleTod } from '../js/camseq.js';
+import { aimPoseAt, CameraSequence, driveCamera, poseFromCamera, sampleScene, sampleTod } from '../js/camseq.js';
 
 // Working draft is intentionally NOT restored on open — a leftover camSeq used
 // to auto-paint the last flythrough on the zone whenever the panel mounted.
@@ -10,6 +10,7 @@ const LIB_KEY = 'camSeqLibrary';    // { [name]: doc } — saved sequences
 const POS_KEY = 'camSeqPanelPos';
 const SIZE_KEY = 'camSeqPanelSize';
 const LEGACY_DOC_KEY = 'camSeq';     // old auto-restored draft — cleared once
+const DRAFT_KEY = 'camSeqDraft';    // the working document, across open/close
 const FPS_CHOICES = [24, 30, 60];
 const MIN_FRAMES = 2;
 const MAX_FRAMES = 36000;           // 20 minutes at 30fps — a sanity bound, not a target
@@ -21,6 +22,7 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 const EMPTY_DOC = {
   name: '', totalFrames: 300, fps: 30, curve: true, loop: false, cine: true, snap: false,
+  lockActor: false,
   camera: [], scene: [], tod: [],
 };
 const SNAP_FRAMES = 15;
@@ -58,6 +60,7 @@ function toDoc(raw) {
     ...EMPTY_DOC,
     ...raw,
     curve: !!curve,
+    lockActor: !!raw.lockActor,
     // `keys` is the pre-timeline field name — carry an old saved sequence over.
     camera: Array.isArray(raw.camera) ? raw.camera : (Array.isArray(raw.keys) ? raw.keys : []),
     scene,
@@ -98,9 +101,16 @@ function rulerTicks(totalFrames, fps, zoom = 1) {
 export function CameraSequencer({
   onClose, rendererRef, tickRef,
   weathers = [], weather = '', timeMinutes = 720, onScene, onStopClock,
+  /** Play the loaded NPC/PC clip once from frame 0 (no loop) with the sequence. */
+  onPlayActorOnce,
+  /** Restore normal loop prefs when the sequence stops. */
+  onStopActor,
 }) {
-  // Always start blank. Load a saved sequence from the library explicitly.
-  const [doc, setDoc] = useState(() => ({ ...EMPTY_DOC }));
+  // The panel unmounts when it is closed, so the working document is kept in
+  // storage rather than in component state alone: closing it to reach a control
+  // underneath should not throw away the keyframes and length just set. Named
+  // sequences in the library are still a separate, explicit save.
+  const [doc, setDoc] = useState(() => toDoc(readJson(DRAFT_KEY)));
   const [library, setLibrary] = useState(() => readJson(LIB_KEY) ?? {});
   const [pos, setPos] = useState(() => readJson(POS_KEY));
   const [width, setWidth] = useState(() => {
@@ -110,7 +120,7 @@ export function CameraSequencer({
   const [name, setName] = useState('');
   const [lengthText, setLengthText] = useState(() => String(EMPTY_DOC.totalFrames));
 
-  // Drop the legacy auto-restored draft so a refresh never resurrects it.
+  // Drop the pre-library draft key; the current one is DRAFT_KEY below.
   useEffect(() => {
     try { localStorage.removeItem(LEGACY_DOC_KEY); } catch { /* quota */ }
   }, []);
@@ -122,7 +132,22 @@ export function CameraSequencer({
   const [selected, setSelected] = useState([]);
   const [zoom, setZoom] = useState(1);
 
-  const { totalFrames, fps, curve, loop, cine, snap } = doc;
+  const { totalFrames, fps, curve, loop, cine, snap, lockActor } = doc;
+
+  /**
+   * World point "the actor" means in the current view — the orbit pivot, which
+   * is the loaded model's rest-pose centre (and the origin for a standalone
+   * effect). Null in a zone, where there is no single actor: Lock to Actor then
+   * has nothing to aim at and leaves the recorded rotation alone.
+   */
+  const actorTarget = () => rendererRef.current?.getOrbitPivot?.() ?? null;
+  // Read through a ref inside the rAF loop, which closes over its own scope.
+  const lockActorRef = useRef(lockActor);
+  lockActorRef.current = lockActor;
+  const onPlayActorOnceRef = useRef(onPlayActorOnce);
+  onPlayActorOnceRef.current = onPlayActorOnce;
+  const onStopActorRef = useRef(onStopActor);
+  onStopActorRef.current = onStopActor;
 
   const panelRef = useRef(null);
   const scrollRef = useRef(null);
@@ -144,6 +169,7 @@ export function CameraSequencer({
   // Pose to put the camera back to when playback is cancelled, plus whether the
   // camera is currently ours to put back.
   const restoreRef = useRef(null);
+  const goToRef = useRef(null);
   const drivenRef = useRef(false);
   const cineRef = useRef(null);
   const stopRef = useRef(null);
@@ -157,6 +183,7 @@ export function CameraSequencer({
   );
   seqRef.current = seq;
 
+  useEffect(() => { writeJson(DRAFT_KEY, doc); }, [doc]);
   useEffect(() => { writeJson(POS_KEY, pos); }, [pos]);
   useEffect(() => { writeJson(SIZE_KEY, { w: width }); }, [width]);
   useEffect(() => { setLengthText(String(totalFrames)); }, [totalFrames]);
@@ -245,7 +272,11 @@ export function CameraSequencer({
     const pose = seqRef.current?.sample(clamped);
     if (pose && !opts.timeOnly) {
       markRestore();
-      driveCamera(cam, pose);
+      const t = actorTarget();
+      // Scrubbing hands the viewport back as an orbit camera; only playback
+      // needs fly, which is the one mode that holds an arbitrary path.
+      driveCamera(cam, lockActor ? aimPoseAt(pose, t) : pose,
+        { orbit: true, orbitTarget: lockActor ? t : null });
     }
     sceneApplyRef.current(easedF, true);
   };
@@ -257,12 +288,20 @@ export function CameraSequencer({
     if (!cam || (!hasCam && !hasTod)) return;
     if (hasCam) markRestore();
     onStopClock?.();   // the zone day-clock would fight the scene/tod tracks
-    // Parked at the end from the last run — start over rather than sit still.
-    if (frameRef.current >= totalFrames) { frameRef.current = 0; setFrame(0); }
+    // Play always runs the shot from the top. The playhead is a scrubbing tool,
+    // not a resume point: leaving it where it sat gave a part-length take, and
+    // the actor clip below is rewound to match either way.
+    frameRef.current = 0;
+    setFrame(0);
     playingRef.current = true;
     setPlaying(true);
     if (hasCam) cam.sequenceLock = true;
     if (cine && hasCam) enterCinematic();
+    // NPC/PC clip: rewound and cut like Stop, then played through once (not
+    // looped). It enters at the same point of the shot as the camera, which is
+    // the top — the two run on different frame rates, so the handoff is in
+    // seconds rather than frames.
+    try { onPlayActorOnceRef.current?.(frameRef.current, fps); } catch { /* optional */ }
   };
 
   /** `restore` puts the camera back where it was before the sequence took it. */
@@ -273,10 +312,16 @@ export function CameraSequencer({
     setFrame(Math.round(frameRef.current));
     if (cam) cam.sequenceLock = false;
     if (cineRef.current) exitCinematic();
+    // Playback runs in fly mode. Restoring puts the whole snapshot back (mode
+    // included); ending where the sequence left off still has to hand orbit
+    // back, or the next drag flies away from the shot.
+    if (!restore && cam) cam.setMode('orbit');
     if (restore && cam && restoreRef.current) cam.restore(restoreRef.current);
     if (restore) { restoreRef.current = null; drivenRef.current = false; }
+    try { onStopActorRef.current?.(); } catch { /* optional */ }
   };
   stopRef.current = stop;
+  goToRef.current = goTo;
 
   // --- the per-frame tick, borrowed from App's render loop ------------------
 
@@ -293,13 +338,20 @@ export function CameraSequencer({
       let f = frameRef.current + dt * d.fps;
       let done = false;
       if (f >= d.totalFrames) {
-        if (d.loop) f %= d.totalFrames;
-        else { f = d.totalFrames; done = true; }
+        if (d.loop) {
+          f %= d.totalFrames;
+          // Sequence looped — fire the actor clip once from the top again.
+          try { onPlayActorOnceRef.current?.(0, d.fps); } catch { /* optional */ }
+        } else { f = d.totalFrames; done = true; }
       }
       frameRef.current = f;
       if (hasCam) {
         const pose = s.sample(f);
-        if (pose) driveCamera(cam, pose);
+        // Solved per frame, not interpolated: see aimPoseAt.
+        const aimed = (pose && lockActorRef.current)
+          ? aimPoseAt(pose, actorTarget())
+          : pose;
+        if (aimed) driveCamera(cam, aimed);
       }
       const easedF = hasCam ? s.easedFrame(f) : f;
       sceneApplyRef.current(easedF, false);
@@ -325,9 +377,13 @@ export function CameraSequencer({
       const now = performance.now();
       if (now - uiSyncRef.current > 200) { uiSyncRef.current = now; setFrame(Math.round(f)); }
 
-      // Ran to the end: stop, but leave the camera on the closing shot — you
-      // just watched it land there, so yanking it back would be the surprise.
-      if (done) stopRef.current(false);
+      // Ran to the end: stop, then rewind to the opening shot — Play always
+      // starts from the top, so the timeline and the viewport agree on where
+      // the next take begins.
+      if (done) {
+        stopRef.current(false);
+        goToRef.current?.(0);
+      }
     };
     return () => { tickRef.current = null; };
   }, [tickRef, rendererRef]);
@@ -393,7 +449,7 @@ export function CameraSequencer({
 
   const recordCamera = () => {
     const cam = camera();
-    if (cam) recordAt('camera', poseFromCamera(cam));
+    if (cam) recordAt('camera', poseFromCamera(cam, lockActor ? actorTarget() : null));
   };
 
   const recordScene = () => recordAt('scene', { weather });
@@ -627,7 +683,7 @@ export function CameraSequencer({
 
   const clearAll = () => {
     if (playing) stop(true);
-    setDoc({ ...EMPTY_DOC, fps, totalFrames, curve, loop, cine, snap });
+    setDoc({ ...EMPTY_DOC, fps, totalFrames, curve, loop, cine, snap, lockActor });
     setSelected([]);
     frameRef.current = 0;
     setFrame(0);
@@ -636,7 +692,7 @@ export function CameraSequencer({
   /** Blank sequence — clears keys + name; keeps fps / toggle prefs. */
   const newSequence = () => {
     if (playing) stop(true);
-    setDoc({ ...EMPTY_DOC, fps, curve, loop, cine, snap });
+    setDoc({ ...EMPTY_DOC, fps, curve, loop, cine, snap, lockActor });
     setName('');
     setSelected([]);
     setZoom(1);
@@ -996,6 +1052,17 @@ export function CameraSequencer({
                 <input type="checkbox" checked={!!curve} onChange={(e) => patch({ curve: e.target.checked })} />
                 <span className="track" />
                 <span className="cseq-switch-label">Curve</span>
+              </label>
+            </Tooltip>
+            <Tooltip content="Keep the camera pointed at the actor — keyframes record facing it, and playback re-aims every frame" placement="top">
+              <label className="switch cseq-switch">
+                <input
+                  type="checkbox"
+                  checked={!!lockActor}
+                  onChange={(e) => patch({ lockActor: e.target.checked })}
+                />
+                <span className="track" />
+                <span className="cseq-switch-label">Lock to Actor</span>
               </label>
             </Tooltip>
             <Tooltip content="Hide UI while playing (Esc restores)" placement="top">

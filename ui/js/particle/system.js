@@ -591,8 +591,17 @@ export class ParticleSystem {
    * `loop` re-arms the routine once it and its trailing particles have finished,
    * giving a continuous preview.
    */
-  playEffectRoutine(commands, { loop = true, sounds = [], anims = [], onAnim = null, onFinished = null } = {}) {
-    this.clearEffect();
+  /**
+   * `overlap` re-arms the routine WITHOUT tearing down what is already on
+   * screen. Re-triggering a looping weapon skill needs that: the routine's emit
+   * span ends well before its particles do, so clearing on every re-arm
+   * swallowed the impact the moment the next pass started. Existing particles
+   * and voices keep running under the same association and expire on their own
+   * lifespan, so consecutive passes overlap instead of cutting each other off.
+   */
+  playEffectRoutine(commands, { loop = true, sounds = [], anims = [], onAnim = null, onFinished = null, overlap = false } = {}) {
+    if (overlap) this._effect = null;   // drop the routine state, keep its particles
+    else this.clearEffect();
     const cmds = commands ?? [];
     const emitSpan = Math.max(1, ...cmds.map((c) => c.delay + Math.max(c.dur, 1)));
     this._effect = {

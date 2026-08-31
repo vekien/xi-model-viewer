@@ -16,6 +16,14 @@
 import { Vec3, Mat4, Color, PI_f, posRand, rand } from './math.js';
 import { AttachType, BillBoardType, LinkedDataType, RotationOrder, BlendFunc, PointLightParams, PositionTransform } from './types.js';
 
+// Attach types that read joint reference 1 (the target's); everything else
+// actor-attached reads reference 0. Mirrors xim's jointRefIdx selection.
+const TARGET_ATTACH = new Set([
+  AttachType.TargetActor,
+  AttachType.TargetActorSourceFacing,
+  AttachType.TargetToSourceBasis,
+]);
+
 /** Spell/ability gens authored against an actor (not sun/moon/zone). */
 function isActorAttach(attach) {
   return attach === AttachType.SourceActor
@@ -565,8 +573,15 @@ export class ParticleGenerator {
       // once at spawn so the FX does not ride the animation; authored
       // basePosition / ground projection still apply on top.
       if (this._actorAttachFrozen) return;
-      const j = (this.def.attachedJoint1 || this.def.attachedJoint0 || 0) | 0;
-      const pos = this.runtime.getActorAttachPosition?.(j);
+      // Which of the two references applies is decided by the attach type, not
+      // by which one happens to be non-zero (xim ParticleGeneratorAttachment):
+      // source-side gens read reference 0, target-side gens read reference 1.
+      // Preferring joint1 blindly sent a source gen to the target's reference
+      // whenever both were set.
+      const j = (TARGET_ATTACH.has(attach)
+        ? this.def.attachedJoint1
+        : this.def.attachedJoint0) | 0;
+      const pos = this.runtime.getActorAttachPosition?.(j, attach);
       if (pos) {
         this.genAssociatedPosition.copyFrom(pos);
         this._actorAttachFrozen = true;

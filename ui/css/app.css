@@ -186,6 +186,16 @@
   background-size: 16px 16px;
   background-position: 0 0, 0 8px, 8px -8px, -8px 0;
 }
+.img-viewer.solid-bg .img-stage {
+  border-radius: 8px;
+}
+.img-bar .tex-bg-swatch {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  pointer-events: auto;
+}
 .img-bar {
   flex: 0 0 auto;
   display: flex;
@@ -2077,8 +2087,64 @@ button.details-path-link.mono { font-family: var(--font-mono); font-size: 11px; 
   border: 1px solid var(--ring-strong);
   border-radius: 12px;
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
+  max-width: calc(640px + 28px + 4px);
+  overflow: hidden;
 }
-.tex-modal-body { padding: 14px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.tex-modal .modal-header { gap: 8px; }
+.tex-zoom-tools {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+.tex-bg-swatch {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 7px;
+  border: 1px solid var(--ring-strong);
+  box-sizing: border-box;
+  overflow: hidden;
+  cursor: pointer;
+  flex: 0 0 auto;
+  /* Default = mini checker (no solid). Use longhands only — never mix with style.background. */
+  background-color: #23262a;
+  background-image:
+    linear-gradient(45deg, #34383d 25%, transparent 25%, transparent 75%, #34383d 75%),
+    linear-gradient(45deg, #34383d 25%, transparent 25%, transparent 75%, #34383d 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 4px 4px;
+  background-repeat: repeat;
+}
+.tex-bg-swatch.solid {
+  background-color: var(--tex-bg, #23262a);
+  background-image: none;
+}
+.tex-bg-swatch input[type='color'] {
+  position: absolute;
+  inset: -4px;
+  width: calc(100% + 8px);
+  height: calc(100% + 8px);
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+}
+.tex-bg-swatch:hover { border-color: var(--accent); }
+.tex-zoom-pct {
+  min-width: 44px;
+  height: 26px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: 500 11px/1 var(--font-mono);
+  cursor: pointer;
+}
+.tex-zoom-pct:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
+.tex-modal-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
 .tex-checker {
   --checker-a: #34383d; --checker-b: #23262a;
   background-color: var(--checker-b);
@@ -2089,11 +2155,34 @@ button.details-path-link.mono { font-family: var(--font-mono); font-size: 11px; 
   background-position: 0 0, 8px 8px;
   border: 1px solid var(--ring);
   border-radius: 8px;
-  padding: 10px;
+  padding: 0;
   display: flex; align-items: center; justify-content: center;
-  max-width: 70vw; max-height: 60vh; overflow: auto;
+  width: 640px;
+  height: 640px;
+  max-width: 640px;
+  max-height: 640px;
+  overflow: hidden !important;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  box-sizing: border-box;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
-.tex-canvas { image-rendering: pixelated; display: block; }
+.tex-checker::-webkit-scrollbar { display: none; width: 0; height: 0; }
+.tex-checker.solid-bg {
+  background-color: var(--tex-bg, #23262a);
+  background-image: none;
+}
+.tex-checker.panning,
+.tex-checker:active { cursor: grabbing; }
+.tex-canvas {
+  image-rendering: pixelated;
+  display: block;
+  flex: 0 0 auto;
+  pointer-events: none;
+  will-change: transform;
+}
 .tex-modal-meta { color: var(--muted); font-size: 11px; }
 
 /* --- Now-playing music player --------------------------------------------- */
@@ -3099,27 +3188,12 @@ input[type='color'] {
 
 /* Cinematic playback: nothing on screen but the render. The panels live inside
    #root; tooltips and menu dropdowns portal to <body>, so both levels go.
-   Keep a tiny Esc hint so a stuck class (HMR / crash) is recoverable. */
-body.cinematic #root > *:not(#canvas):not(#cinematic-hint),
-body.cinematic > *:not(#root):not(#cinematic-hint) { display: none !important; }
+   No hint is drawn over the shot: Esc still exits, and a class left stuck by
+   HMR/crash is cleared on Esc or on the window regaining focus (see
+   exitCinematicIfStuck), so the recovery never depended on the label. */
+body.cinematic #root > *:not(#canvas),
+body.cinematic > *:not(#root) { display: none !important; }
 body.cinematic #canvas { cursor: none; }
-#cinematic-hint {
-  display: none;
-  position: fixed;
-  left: 50%;
-  bottom: 28px;
-  transform: translateX(-50%);
-  z-index: 99999;
-  padding: 8px 14px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.65);
-  border: 1px solid var(--ring);
-  color: var(--gray-200);
-  font: 500 12px/1.3 var(--font-ui);
-  pointer-events: none;
-  letter-spacing: 0.02em;
-}
-body.cinematic #cinematic-hint { display: block; }
 
 /* --- Help / About ---------------------------------------------------------- */
 
@@ -3438,14 +3512,14 @@ button.update-dl-btn .update-dl-meta {
 
 .data-viewer {
   position: fixed;
-  left: 372px; right: 12px;
+  left: 356px; right: 12px;
   top: 60px; bottom: 52px;
   display: flex; gap: 10px;
   z-index: 20;
 }
 
 .data-viewer .panel {
-  padding: 2px;;
+  padding: 2px;
 }
 
 /* Make room for the open-failure banner when present. */

@@ -372,7 +372,136 @@ export function parseInspectSkeletonMesh(buffer, offset) {
 function peekAnimation(bytes, dv, s) {
   const joints = dv.getUint16(s.dataStart + 2, true);
   const frames = dv.getUint16(s.dataStart + 4, true);
-  return { text: `${frames} frames · ${joints} joints` };
+  return {
+    text: `${frames} frames · ${joints} joints`,
+    isSkeletonAnimation: true,
+  };
+}
+
+/**
+ * 0x2B SkeletonAnimation — per-joint rot/trans/scale tracks (dat.js parseAnimation).
+ * Header: u16 unk, u16 numJoints, u16 numFrames, f32 keyFrameDuration, then tracks.
+ */
+export function parseInspectSkeletonAnimation(buffer, offset) {
+  const bytes = buffer instanceof Uint8Array
+    ? buffer
+    : new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const start = offset | 0;
+  if (start + 0x20 > bytes.length) return null;
+
+  let id = strAt(bytes, start, 4).replace(/\0/g, '').trim();
+  if (!id || !printable(id)) id = 'anim';
+
+  const meta = dv.getUint32(start + 4, true);
+  const type = meta & 0x7f;
+  const size = ((meta >>> 7) & 0x7ffff) * 0x10;
+  const bodyEnd = Math.min(start + (size > 0 ? size : bytes.length - start), bytes.length);
+  const ds = start + 0x10;
+  if (ds + 8 > bodyEnd) return null;
+
+  const unk0 = dv.getUint16(ds, true);
+  const numJoints = dv.getUint16(ds + 2, true);
+  const numFrames = dv.getUint16(ds + 4, true);
+  const keyFrameDuration = dv.getFloat32(ds + 6, true);
+  const keyFrameDataOffset = ds + 10; // after header fields — tracks start here
+
+  if (numJoints <= 0 || numJoints > 512 || numFrames <= 0 || numFrames > 10000) {
+    return null;
+  }
+
+  // Walk track headers: for each joint — i32 jointIndex, 4×(i32 off + f32 const) rot,
+  // 3×(off+const) trans, 3×(off+const) scale. Negative offset ⇒ joint not animated.
+  let pos = keyFrameDataOffset;
+  const jointRows = [];
+  let animated = 0;
+  let skipped = 0;
+
+  for (let j = 0; j < numJoints && pos + 4 <= bodyEnd; j++) {
+    const jointIndex = dv.getInt32(pos, true);
+    pos += 4;
+    const ch = []; // { name, mode: 'keyed'|'const'|'absent', detail }
+    const readGroup = (name, count) => {
+      if (pos + count * 8 > bodyEnd) return false;
+      const offs = [];
+      const consts = [];
+      for (let i = 0; i < count; i++) {
+        offs.push(dv.getInt32(pos, true));
+        pos += 4;
+      }
+      for (let i = 0; i < count; i++) {
+        consts.push(dv.getFloat32(pos, true));
+        pos += 4;
+      }
+      if (offs.some((o) => o < 0)) {
+        ch.push({ name, mode: 'absent' });
+        return true;
+      }
+      const keyed = offs.filter((o) => o > 0).length;
+      const constant = offs.filter((o) => o === 0).length;
+      if (keyed === 0) {
+        ch.push({
+          name,
+          mode: 'const',
+          detail: consts.map((v) => (Math.abs(v) < 1e-4 ? '0' : v.toFixed(3))).join(', '),
+        });
+      } else {
+        ch.push({
+          name,
+          mode: 'keyed',
+          detail: `${keyed} ch keyed · ${constant} const`,
+        });
+      }
+      return true;
+    };
+    if (!readGroup('rot', 4) || !readGroup('trans', 3) || !readGroup('scale', 3)) break;
+    const absent = ch.every((c) => c.mode === 'absent');
+    if (absent) {
+      skipped += 1;
+      continue;
+    }
+    animated += 1;
+    const parts = ch
+      .filter((c) => c.mode !== 'absent')
+      .map((c) => `${c.name}:${c.mode === 'const' ? c.detail : c.detail}`);
+    jointRows.push({
+      field: `Joint ${jointIndex}`,
+      value: parts.join(' · ') || '—',
+    });
+  }
+
+  const lengthInFrames = keyFrameDuration > 0
+    ? Math.max(numFrames - 1, 1) / keyFrameDuration
+    : numFrames;
+  const durSec = lengthInFrames / 30; // game clips are 30fps
+
+  const rows = [
+    { field: 'Id', value: id },
+    { field: 'Frames', value: String(numFrames) },
+    { field: 'Key duration', value: String(keyFrameDuration) },
+    { field: 'Length (clip frames)', value: lengthInFrames.toFixed(2) },
+    { field: 'Approx @ 30fps', value: `${durSec.toFixed(2)} s` },
+    { field: 'Track slots', value: String(numJoints) },
+    { field: 'Animated / empty', value: `${animated} / ${skipped}` },
+    { field: 'Header unk0', value: `0x${unk0.toString(16)}` },
+    ...(jointRows.length
+      ? [{ field: '— Joint tracks —', value: 'rot · trans · scale' }, ...jointRows]
+      : []),
+  ];
+
+  return {
+    kind: 'skeletonAnimation',
+    id,
+    title: 'SkeletonAnimation',
+    subtitle: `${numFrames} frames · ${animated} joints`,
+    note: 'Skeletal clip (0x2B): per-joint rotation / translation / scale. Body-region parts (…0/…1/…2) merge in the Anim list. Empty slots have negative channel offsets.',
+    offset: start,
+    columns: [
+      { key: 'field', label: 'Field' },
+      { key: 'value', label: 'Value' },
+    ],
+    rows,
+  };
 }
 
 /**
@@ -1211,10 +1340,125 @@ function peekWeightedMesh(bytes, dv, s) {
   return { text: null, isWeightedMesh: true };
 }
 
+/** weaponAnimationType labels (battle idle pack index) — bake-lists WEAPON_STYLE. */
+const WEAPON_ANIM_STYLE = {
+  0: 'Club / Staff', 1: 'Sword', 2: 'Hand-to-Hand', 3: 'Dagger', 4: 'Great Sword',
+  5: 'Axe / Scythe', 6: 'Katana', 7: 'Kunai', 8: 'Polearm',
+};
+const MOVEMENT_TYPE = {
+  0: 'Walking', 1: 'Sliding', 2: 'Large', 3: 'Flying', 0xff: 'Unset',
+};
+const RANGE_TYPE = {
+  0x00: 'None', 0x01: 'Wind', 0x02: 'String', 0x03: 'Marksmanship',
+  0x04: 'ThrowingWeapon', 0x05: 'ThrowingAmmo', 0x06: 'Archery',
+  0x0a: 'HandbellIndi', 0x0b: 'HandbellGeo', 0xff: 'Unset',
+};
+
+function base36Char(v) {
+  if (v === 0xff) return '0';
+  if (v >= 0 && v <= 9) return String(v);
+  if (v >= 10 && v <= 35) return String.fromCharCode(0x41 + (v - 10)); // A–Z
+  return `0x${v.toString(16)}`;
+}
+
 function peekInfo(bytes, dv, s) {
   const type = bytes[s.dataStart + 3];
   const sub = bytes[s.dataStart + 4];
-  return { text: `weapon anim ${type}/${sub}` };
+  const style = WEAPON_ANIM_STYLE[type];
+  const text = type === 0xff && sub === 0xff
+    ? 'no weapon anim'
+    : (style ? `weapon anim ${type}/${sub} · ${style}` : `weapon anim ${type}/${sub}`);
+  return { text, isInfo: true };
+}
+
+/**
+ * 0x45 Info (`info` / `mount`) — movement & weapon metadata (xim InfoSection).
+ * 16-byte body after the section header.
+ */
+export function parseInspectInfo(buffer, offset) {
+  const bytes = buffer instanceof Uint8Array
+    ? buffer
+    : new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const start = offset | 0;
+  if (start + 0x20 > bytes.length) return null;
+
+  let id = strAt(bytes, start, 4).replace(/\0/g, '').trim();
+  if (!id || !printable(id)) id = 'info';
+
+  const ds = start + 0x10;
+  const b = [];
+  for (let i = 0; i < 16; i++) b.push(bytes[ds + i] ?? 0);
+
+  const isMount = id === 'moun' || id === 'mount';
+  if (isMount) {
+    const rotation = b[2];
+    const poseType = b[10];
+    const rows = [
+      { field: 'Kind', value: 'Mount' },
+      { field: 'Rotation byte', value: `${rotation} (${((rotation / 255) * 360).toFixed(1)}°)` },
+      { field: 'Pose type', value: String(poseType) },
+      {
+        field: 'Raw (16 B)',
+        value: b.map((x) => x.toString(16).padStart(2, '0')).join(' '),
+      },
+    ];
+    return {
+      kind: 'info',
+      id,
+      title: 'Info (mount)',
+      subtitle: `pose ${poseType} · rot ${rotation}`,
+      note: 'Mount info block (xim InfoSection mount).',
+      offset: start,
+      columns: [{ key: 'field', label: 'Field' }, { key: 'value', label: 'Value' }],
+      rows,
+    };
+  }
+
+  const movementType = b[0];
+  const movementChar = b[1];
+  const shakeFactor = b[2];
+  const weaponType = b[3];
+  const weaponSub = b[4];
+  const weaponUnk = b[5];
+  const jointIdx = b[6];
+  const scale = b[10];
+  const staticNpcScale = b[11];
+  const rangeType = b[14];
+
+  const wStyle = WEAPON_ANIM_STYLE[weaponType];
+  const wLabel = weaponType === 0xff && weaponSub === 0xff
+    ? 'unset (0xFF/0xFF)'
+    : `${weaponType} / ${weaponSub}${wStyle ? ` · ${wStyle}` : ''}`;
+
+  const rows = [
+    { field: 'Movement type', value: MOVEMENT_TYPE[movementType] ?? `0x${movementType.toString(16)}` },
+    { field: 'Movement char', value: `'${base36Char(movementChar)}' (0x${movementChar.toString(16)})` },
+    { field: 'Shake factor', value: String(shakeFactor) },
+    { field: 'Weapon anim type / sub', value: wLabel },
+    { field: 'Weapon unk (+0x05)', value: `0x${weaponUnk.toString(16)}` },
+    {
+      field: 'Standard joint index',
+      value: jointIdx === 0xff ? 'none (0xFF)' : `${jointIdx} (grip / attach ref)`,
+    },
+    { field: 'Scale', value: scale === 0xff ? 'default (0xFF)' : String(scale) },
+    { field: 'Static NPC scale', value: staticNpcScale === 0xff ? 'default (0xFF)' : String(staticNpcScale) },
+    { field: 'Range type', value: RANGE_TYPE[rangeType] ?? `0x${rangeType.toString(16)}` },
+    {
+      field: 'Raw (16 B)',
+      value: b.map((x) => x.toString(16).padStart(2, '0')).join(' '),
+    },
+  ];
+
+  return {
+    kind: 'info',
+    id,
+    title: 'Info',
+    subtitle: wLabel,
+    note: 'Entity info (0x45): movement / weapon battle-anim index / grip joint. Used for battle idle pack pick and drawn-weapon hand attach (joint 126/127).',
+    offset: start,
+    columns: [{ key: 'field', label: 'Field' }, { key: 'value', label: 'Value' }],
+    rows,
+  };
 }
 
 /** 0x2E — the mesh name sits at +0x20 in plaintext even in encrypted zones. */
@@ -2282,6 +2526,8 @@ export function inspectDat(buffer, path = '') {
       let isKeyFrame = type === 0x19;
       let isWeightedMesh = type === 0x25;
       let isSkeletonMesh = type === 0x2a;
+      let isInfo = type === 0x45;
+      let isSkeletonAnimation = type === 0x2b;
       const isParticleGenerator = type === 0x05;
       let soundId = null;
       const peek = PEEKS[type];
@@ -2303,6 +2549,8 @@ export function inspectDat(buffer, path = '') {
           if (r?.isKeyFrame) isKeyFrame = true;
           if (r?.isWeightedMesh) isWeightedMesh = true;
           if (r?.isSkeletonMesh) isSkeletonMesh = true;
+          if (r?.isInfo) isInfo = true;
+          if (r?.isSkeletonAnimation) isSkeletonAnimation = true;
           if (r?.soundId != null) soundId = r.soundId;
         } catch { /* malformed header — list it plain */ }
       }
@@ -2317,7 +2565,7 @@ export function inspectDat(buffer, path = '') {
         isSkeleton, skeletonKind: isSkeleton ? 'entity' : null,
         isSound, soundId, isZoneDef, isParticleGenerator, isRoute, isUiMenu,
         isUiElementGroup, isDataTable, isEffectRoutine, isSpriteSheet, isParticleMesh,
-        isKeyFrame, isWeightedMesh, isSkeletonMesh,
+        isKeyFrame, isWeightedMesh, isSkeletonMesh, isInfo, isSkeletonAnimation,
       });
       const agg = summary.get(type) ?? { count: 0, bytes: 0 };
       agg.count++; agg.bytes += size;

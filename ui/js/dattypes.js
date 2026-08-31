@@ -30,27 +30,47 @@ export function datTypeKey(path) {
 const LISTS = [
   {
     url: 'lists/zones.json',
-    label: 'Zone',
-    paths: (j) => (Array.isArray(j) ? j.map((z) => z.path) : []),
+    // → [{ label, path }]
+    entries: (j) => (Array.isArray(j) ? j.map((z) => ({ label: 'Zone', path: z.path })) : []),
   },
   {
     url: 'lists/images.json',
-    label: 'Map',
-    paths: (j) => (Array.isArray(j) ? j.flatMap((g) => (g.entries ?? []).map((e) => e.path)) : []),
+    // Per-group labels: maps stay Map; UI/system/cutscene packs are not maps.
+    entries: (j) => {
+      if (!Array.isArray(j)) return [];
+      const out = [];
+      for (const g of j) {
+        const label = imageGroupLabel(g.name || g.id || '');
+        for (const e of g.entries ?? []) {
+          if (e?.path) out.push({ label, path: e.path });
+        }
+      }
+      return out;
+    },
   },
   {
     url: 'lists/effects.json',
-    label: 'Effect',
-    paths: (j) => (j?.categories ?? []).flatMap((c) => (c.entries ?? []).map((e) => e.path)),
+    entries: (j) => (j?.categories ?? []).flatMap((c) => (c.entries ?? []).map((e) => ({
+      label: 'Effect', path: e.path,
+    }))),
   },
   {
     url: 'lists/npcs.json',
-    label: 'NPC',
-    paths: (j) => (j?.categories ?? []).flatMap((c) => (c.entries ?? []).flatMap(
-      (e) => [...(e.variants ?? []), e.base].filter(Boolean),
-    )),
+    entries: (j) => (j?.categories ?? []).flatMap((c) => (c.entries ?? []).flatMap((e) => (
+      [...(e.variants ?? []), e.base].filter(Boolean).map((path) => ({ label: 'NPC', path }))
+    ))),
   },
 ];
+
+/** Map baked image-group titles → DAT Browser badge. */
+function imageGroupLabel(name) {
+  const n = String(name || '').toLowerCase();
+  if (/\bui\b|system image|menu|title|window|icon/.test(n)) return 'UI';
+  if (/cutscene|cs image|event image/.test(n)) return 'Cutscene';
+  if (/unsorted|misc image|miscellaneous image/.test(n)) return 'Image';
+  if (/map/.test(n)) return 'Map';
+  return 'Image';
+}
 
 let listIndexPromise = null;
 
@@ -67,16 +87,16 @@ export function loadDatTypeLists() {
       try {
         const res = await fetch(l.url);
         if (!res.ok) return null;
-        return { label: l.label, paths: l.paths(await res.json()) };
+        return l.entries(await res.json());
       } catch {
         return null;
       }
     }));
     // Reverse order so earlier (higher-priority) lists overwrite later ones.
-    for (const hit of loaded.filter(Boolean).reverse()) {
-      for (const p of hit.paths) {
-        const k = datTypeKey(p);
-        if (k) index.set(k, hit.label);
+    for (const entries of loaded.filter(Boolean).reverse()) {
+      for (const { label, path } of entries) {
+        const k = datTypeKey(path);
+        if (k) index.set(k, label);
       }
     }
     for (const rel of Object.values(RACE_SKELETON_RELS)) index.set(datTypeKey(rel), 'Race');

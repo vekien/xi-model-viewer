@@ -14,11 +14,43 @@
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-/** Capture the live camera as a keyframe pose. Works in orbit and in fly mode. */
-export function poseFromCamera(camera) {
+/**
+ * Unit vector from `eye` towards `target`. Null when the two coincide, which
+ * would otherwise produce a zero-length forward and a NaN yaw.
+ */
+export function forwardTo(eye, target) {
+  const d = [target[0] - eye[0], target[1] - eye[1], target[2] - eye[2]];
+  const len = Math.hypot(d[0], d[1], d[2]);
+  if (!(len > 1e-6)) return null;
+  return [d[0] / len, d[1] / len, d[2] / len];
+}
+
+/**
+ * Capture the live camera as a keyframe pose. Works in orbit and in fly mode.
+ *
+ * With `lockTarget` the recorded forward points at that world point instead of
+ * wherever the camera happened to be aimed, so a keyframe faces the actor even
+ * if the framing was nudged off-centre before recording.
+ */
+export function poseFromCamera(camera, lockTarget = null) {
   const e = camera.eye;
-  const f = camera.forward;
-  return { eye: [e[0], e[1], e[2]], forward: [f[0], f[1], f[2]] };
+  const eye = [e[0], e[1], e[2]];
+  const f = (lockTarget && forwardTo(eye, lockTarget)) ?? camera.forward;
+  return { eye, forward: [f[0], f[1], f[2]] };
+}
+
+/**
+ * Re-aim a sampled pose at a world point, keeping its eye position.
+ *
+ * Used for "Lock to Actor": the eye still follows the splined path, but the
+ * rotation is solved per frame rather than interpolated between keyframes, so
+ * the actor stays centred even where the path swings around it — which
+ * interpolated yaw/pitch cannot do (they cut the corner between two keys).
+ */
+export function aimPoseAt(pose, target) {
+  if (!pose || !target) return pose;
+  const forward = forwardTo(pose.eye, target);
+  return forward ? { eye: pose.eye, forward } : pose;
 }
 
 /**
@@ -27,13 +59,47 @@ export function poseFromCamera(camera) {
  * (orbit derives its eye from a target, so a path through the world would have
  * to fight it). Yaw/pitch follow the camera's current up convention.
  */
-export function driveCamera(camera, pose) {
+export function driveCamera(camera, pose, { orbit = false, orbitTarget = null } = {}) {
+  const e = pose.eye;
   const f = pose.forward;
-  camera.mode = 'fly';
-  camera.pos = [pose.eye[0], pose.eye[1], pose.eye[2]];
-  camera.yaw = Math.atan2(f[0], f[2]);
-  const horiz = Math.hypot(f[0], f[2]) || 1e-6;
-  camera.pitch = camera.yUp ? Math.atan2(f[1], horiz) : Math.atan2(-f[1], horiz);
+  if (!orbit) {
+    camera.mode = 'fly';
+    camera.pos = [e[0], e[1], e[2]];
+    camera.yaw = Math.atan2(f[0], f[2]);
+    const horiz = Math.hypot(f[0], f[2]) || 1e-6;
+    camera.pitch = camera.yUp ? Math.atan2(f[1], horiz) : Math.atan2(-f[1], horiz);
+    return;
+  }
+
+  // Same eye and look direction, expressed as an orbit pivot the user can
+  // tumble around. Scrubbing the timeline is not playback — leaving the camera
+  // in fly mode there means the next drag flies instead of orbiting, and the
+  // viewport reads as having switched into some other mode.
+  //
+  // Orbit derives its eye from (target, yaw, pitch, distance), and the offset
+  // from target to eye is the *reverse* of the look direction — so the angles
+  // are those of −forward, not forward.
+  let dist = null;
+  let target = null;
+  if (orbitTarget) {
+    const v = [orbitTarget[0] - e[0], orbitTarget[1] - e[1], orbitTarget[2] - e[2]];
+    const len = Math.hypot(v[0], v[1], v[2]);
+    // Only adopt it when it genuinely lies along the view ray (Lock to Actor
+    // puts it there); off-axis it would swing the framing rather than pivot it.
+    const along = len > 1e-6 ? (v[0] * f[0] + v[1] * f[1] + v[2] * f[2]) / len : 0;
+    if (along > 0.999) { dist = len; target = orbitTarget; }
+  }
+  if (dist == null) {
+    dist = Math.min(Math.max(camera.distance, camera.minDistance), camera.maxDistance);
+    target = [e[0] + f[0] * dist, e[1] + f[1] * dist, e[2] + f[2] * dist];
+  }
+  const u = [-f[0], -f[1], -f[2]];
+  const horiz = Math.hypot(u[0], u[2]) || 1e-6;
+  camera.mode = 'orbit';
+  camera.target = target;
+  camera.distance = dist;
+  camera.yaw = Math.atan2(u[0], u[2]);
+  camera.pitch = camera.yUp ? Math.atan2(u[1], horiz) : Math.atan2(-u[1], horiz);
 }
 
 /**

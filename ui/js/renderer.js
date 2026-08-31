@@ -3,11 +3,14 @@
 // quaternions (same math as the verified CPU path in pose.js).
 
 import { OrbitCamera, mat4Multiply, mat4LookAt, mat4Ortho } from './camera.js';
-import { SkeletonPose } from './pose.js';
+import { SkeletonPose, qRotate } from './pose.js';
 import { ParticleDrawer } from './particleDrawer.js';
 import { Vec3 } from './particle/math.js';
 import { buildSolidGizmoMeshes, gizmoSize } from './zoneGizmo.js';
 import { bakeSpinnerDraws } from './zoneModel.js';
+
+// References 49-51 stand for the eight-point ring (13..20) around an actor.
+const RING_REF_START = 13;
 
 const MAX_JOINTS = 160;
 
@@ -786,6 +789,12 @@ export class Renderer {
     gl.bindVertexArray(null);
 
     this.floor = null;      // { texture } when a floor is loaded
+    // Scene > Flat Floor: a plain untextured ground plane, drawn through the
+    // same shader with a 1x1 solid texture so it keeps the fade ring, the fog
+    // and — the point of it — the actor's shadow. Independent of `floor`, so
+    // ticking it does not discard a loaded ground texture.
+    this.flatFloor = { on: false, color: [0.5, 0.5, 0.55] };
+    this.flatFloorTex = null;
     this.floorY = 0;
     // `floorTile` is what the shader reads: the per-texture default times the
     // user's Scene > Floor Repeat multiplier. Kept apart so picking a different
@@ -855,10 +864,20 @@ export class Renderer {
     this.pose = null;
     this.batches = [];
     this.textures = new Map();
+    /** Texture names owned by the current model, so an effect overlaid on
+     *  the actor cannot replace the actor's own art (see
+     *  {@link Renderer#attachEffectSystem}). */
+    this.modelTextureNames = new Set();
     // PC gear isolation: null = show all; Set of lowercased source paths = only those.
     this.meshSourceFilter = null;
     // Always-hidden sources (the stowed ranged weapon); null = nothing hidden.
     this.hiddenSources = null;
+    // Fired when the playing clip wraps, so a paired effect can restart with it.
+    this.onAnimLoop = null;
+    // Character playback transport: false parks on the last frame instead of
+    // wrapping, and reports it through onAnimEnd.
+    this.animLoop = true;
+    this.onAnimEnd = null;
 
     // Origin axis gizmo (View > Toggle Axes; on by default in the Effects view).
     this.showAxes = false;
@@ -1001,6 +1020,37 @@ export class Renderer {
       this.floor = { texture };
       this.snapFloorToFeet();
     }
+  }
+
+  /**
+   * Scene > Flat Floor: `on` toggles the plain ground plane, `color` is
+   * '#rrggbb' (or an [r,g,b] 0..1 triple). Either may be omitted.
+   */
+  setFlatFloor({ on, color } = {}) {
+    const gl = this.gl;
+    if (on !== undefined) this.flatFloor.on = !!on;
+    if (color) {
+      const rgb = Array.isArray(color) ? color : hexToRgb(color);
+      if (rgb) this.flatFloor.color = rgb;
+    }
+    if (!this.flatFloor.on) return;
+    if (!this.flatFloorTex) {
+      this.flatFloorTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, this.flatFloorTex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    }
+    const [r, g, b] = this.flatFloor.color;
+    const px = new Uint8Array([
+      Math.round(r * 255), Math.round(g * 255), Math.round(b * 255), 255,
+    ]);
+    gl.bindTexture(gl.TEXTURE_2D, this.flatFloorTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    // Same placement rule as a loaded floor: sit at the model's feet.
+    this.snapFloorToFeet();
   }
 
   /**
@@ -1172,6 +1222,8 @@ export class Renderer {
     this.effectMode = false;   // any real model/zone load leaves effect mode
     // Always drop isolation — caller re-applies after PC gear swaps.
     this.meshSourceFilter = null;
+    // New geometry (including a gear swap) invalidates the cached rest bounds.
+    this._restBounds = undefined;
     for (const b of this.batches) {
       gl.deleteBuffer(b.vbo);
       if (b.wireEbo) gl.deleteBuffer(b.wireEbo);
@@ -1194,6 +1246,7 @@ export class Renderer {
     this.batches = [];
     this.zoneBatches = [];
     this.textures.clear();
+    this.modelTextureNames.clear();
     this._freeOverlay(this.collisionOverlay);
     this.collisionOverlay = null;
     // Navmesh is loaded async and keyed to the zone — clear on every model swap.
@@ -1223,6 +1276,18 @@ export class Renderer {
     for (const tex of model.textures.values()) {
       const t = this.createTexture(tex);
       if (t) this.textures.set(tex.name, t);
+    }
+    // Names the *geometry* draws from — not every texture in the model's DATs.
+    // An NPC animation pack is merged into the model for its clip but is mostly
+    // particle art, and guarding all of `model.textures` would have made the
+    // effect's own sheets unreachable (see attachEffectSystem).
+    for (const group of model.meshGroups ?? []) {
+      for (const piece of group.pieces ?? []) {
+        if (piece.textureName) this.modelTextureNames.add(piece.textureName);
+      }
+    }
+    for (const draw of model.zoneDraws ?? []) {
+      if (draw.textureName) this.modelTextureNames.add(draw.textureName);
     }
 
     // Zones: ordered per-submesh draws, no skinning (see zoneModel.js).
@@ -1299,6 +1364,14 @@ export class Renderer {
     this.particleDrawer?.disposeMeshes();
     const gl = this.gl;
     for (const tex of textures.values()) {
+      // Never overwrite art the geometry draws with. `this.textures` is a
+      // single registry shared by mesh draws and particles, and the old code
+      // deleted the incumbent GL texture on a name clash. An NPC's effect
+      // routines live in the model DAT itself, so the effect-side parse
+      // returns that NPC's *body* textures under the same names — every one of
+      // them got dropped and re-decoded by the particle path, repainting the
+      // model.
+      if (this.modelTextureNames.has(tex.name)) continue;
       const t = this.createTexture(tex);
       if (!t) continue;
       const prev = this.textures.get(tex.name);
@@ -1809,12 +1882,22 @@ export class Renderer {
 
   /** opts.frame — resume at this frame (gear swap); otherwise start at 0. */
   setAnimation(clip, opts = {}) {
+    const changed = clip !== this.currentAnimation;
     this.currentAnimation = clip;
     const len = clip?.lengthInFrames ?? 0;
     const frame = (opts.frame != null && len > 0) ? opts.frame % len : 0;
     this.animFrame = frame;
     if (this.pose) this.pose.evaluate(clip, frame);
     this.poseDirty = true;
+    // Ground the floor on the pose that is actually shown. The load-time snap
+    // runs in bind pose, whose straight legs hang lower than any animated one
+    // — measured 0.07 below the idle soles on Iroha, which reads as the model
+    // hovering. Clips start grounded, so frame 0 of the new clip is the
+    // contact pose; a leap mid-clip then genuinely leaves the plane.
+    if (changed && clip && this.model && this.model.kind !== 'zone'
+        && (this.floor || this.flatFloor.on)) {
+      this.snapFloorToFeet();
+    }
   }
 
   /** Scrub to a game-frame, clamped to the clip. Leaves play state alone, so
@@ -1829,7 +1912,7 @@ export class Renderer {
 
   fitCamera() {
     if (!this.pose || !this.model) return;
-    const bounds = this.computeBounds();
+    const bounds = this.restBounds() ?? this.computeBounds();
     if (!bounds) return;
     // Zones: zoneBounds are already display-space (−x,−y,z). Entities: mesh
     // bounds are DAT Y-down → map through ENTITY_ROT to match the draw pass.
@@ -1849,7 +1932,10 @@ export class Renderer {
       ? canvas.clientWidth / canvas.clientHeight
       : undefined;
     this.camera.fit(min, max, aspect ? { aspect } : undefined);
-    this.snapFloorToFeet(bounds);
+    // Framing wants the rest bounds (a pivot that moved with the animation made
+    // the model swim under the cursor), but the floor wants the pose actually
+    // on screen — the bind pose's straight legs hang below every animated one.
+    this.snapFloorToFeet(this.currentAnimation ? undefined : bounds);
   }
 
   /**
@@ -1860,7 +1946,9 @@ export class Renderer {
   getOrbitPivot() {
     if (this.effectMode) return [0, 0, 0];
     if (!this.model || this.model.kind === 'zone') return null;
-    const bounds = this.computeBounds();
+    // Rest bounds for the same reason as fitCamera: an orbit centre that drifts
+    // with the animation makes the model swim under the cursor while dragging.
+    const bounds = this.restBounds() ?? this.computeBounds();
     if (!bounds) return [0, 0, 0];
     const a = toEntityPt(bounds.min);
     const b = toEntityPt(bounds.max);
@@ -1872,45 +1960,48 @@ export class Renderer {
   }
 
   /**
-   * Particle-space origin for TargetActor/SourceActor gens on a character.
+   * Particle-space origin for an actor-attached generator.
    *
-   * `jointId` is attachedJoint1/0 from the 0x05 header. Those values are stable
-   * *slot IDs* across every spell DAT (0, 1, 21, 43, 48, 49…) — not raw skeleton
-   * indices (Stone V uses 48; treating that as bone 48 puts rocks on the torso).
-   * Map slots to a height along the actor: 0/48+ → feet, low IDs → waist, 21 →
-   * mid, 43 → upper. XZ always comes from the skeleton root (actor position).
+   * The 0x05 header's attach values index the skeleton's **joint-reference
+   * table**, not the joint array — `references[n]` gives a joint index plus a
+   * position offset, and the result is that offset carried through the joint's
+   * current world transform (xim SkeletonInstance.getStandardJointPosition:
+   * `getJoint(ref).currentTransform.transform(ref.positionOffset)`).
+   *
+   * This used to approximate: attach values were read as opaque slot IDs and
+   * mapped to a height fraction up the actor with XZ from the root. That is why
+   * a weapon skill's wind-up sat at the waist — Eagle Eye Shot's source gens
+   * ask for reference 11, which on Hume Male resolves to joint 80, the bow arm
+   * (0.022 from the left hand; the height guess was 0.89 away).
+   *
+   * References 49-51 are not single points: they stand for the ring of eight
+   * (13..20) around the actor, and the game picks the one nearest the incoming
+   * source (xim getStandardJointExtended). With a single actor on stage there is
+   * no incoming direction, so the front of the ring is used.
    *
    * DAT point D → particle P so DISPLAY_ROT(P) matches ENTITY_ROT(D) on screen:
    * P = (−Dx, Dy, −Dz). null → world origin (toggle off / no entity).
    */
-  getActorAttachPosition(jointId = 0) {
+  getActorAttachPosition(jointRef = 0, attach = null) {
     if (!this.attachFxToActor) return null;
     if (this.effectMode || !this.model || this.model.kind === 'zone' || !this.pose) {
       return null;
     }
-    const root = this.pose.trans?.[0];
-    if (!root) return null;
+    const refs = this.model.skeleton?.references ?? [];
+    let idx = jointRef | 0;
+    if (idx >= 49 && idx <= 51) idx = RING_REF_START;
+    const ref = refs[idx];
+    if (!ref) return null;
 
-    const slot = jointId | 0;
-    // Height fraction from feet (0) toward head (1). Y-down DAT: footY > headY.
-    let t = 0;
-    if (slot <= 0 || slot >= 48) t = 0;          // root / ground-target slots
-    else if (slot <= 12) t = 0.28;             // lower torso (Fire = 1)
-    else if (slot <= 30) t = 0.52;             // mid / hit (21)
-    else t = 0.82;                             // upper (Thunder/Blizzard = 43)
-
-    let x = root[0];
-    let y = root[1];
-    let z = root[2];
-    const b = this.computeBounds();
-    if (b && t > 0) {
-      const footY = b.footY ?? Math.max(b.min[1], b.max[1]);
-      const headY = Math.min(b.min[1], b.max[1]);
-      y = footY + (headY - footY) * t;
-    } else if (b && t === 0) {
-      y = b.footY ?? root[1];
-    }
-    return new Vec3(-x, y, -z);
+    const j = ref.index | 0;
+    const tr = this.pose.trans?.[j];
+    if (!tr) return null;
+    const off = ref.offset ?? [0, 0, 0];
+    const sc = this.pose.scale?.[j] ?? [1, 1, 1];
+    const q = this.pose.rot?.[j];
+    const local = [off[0] * sc[0], off[1] * sc[1], off[2] * sc[2]];
+    const rot = q ? qRotate(q, local) : local;
+    return new Vec3(-(tr[0] + rot[0]), tr[1] + rot[1], -(tr[2] + rot[2]));
   }
 
   /** Reset the camera to frame whatever is on screen — a model/zone or a
@@ -1944,6 +2035,31 @@ export class Renderer {
    * Dangling weapon tips can sit slightly below the soles; we clamp how far
    * past the near-foot cluster the plane may drop so bosses don't hover.
    */
+  /**
+   * Bounds in the model's REST pose, computed once per model.
+   *
+   * `computeBounds` skins every vertex through the *current* pose, so it moves
+   * with the animation — measured on Hume Male running Eagle Eye Shot the box
+   * width swings from 0.38 to 0.72 across the clip. Framing off that meant
+   * every press of F landed somewhere new. Framing and the orbit pivot use this
+   * instead; the floor plane still tracks the live pose, because feet do move.
+   */
+  restBounds() {
+    if (this._restBounds !== undefined) return this._restBounds;
+    if (!this.pose || !this.model) return null;
+    if (this.model.kind === 'zone') {
+      this._restBounds = this.computeBounds();
+      return this._restBounds;
+    }
+    const clip = this.currentAnimation;
+    const frame = this.animFrame;
+    this.pose.evaluate(null, 0);
+    this._restBounds = this.computeBounds();
+    this.pose.evaluate(clip ?? null, clip ? frame : 0);
+    this.poseDirty = true;
+    return this._restBounds;
+  }
+
   computeBounds() {
     if (!this.pose || !this.model) return null;
     // Zones precompute bounds from sane placements — scanning millions of
@@ -1995,7 +2111,7 @@ export class Renderer {
     this.modelMaxY = b.footY;
     this.modelMin = b.min;
     this.modelMax = b.max;
-    if (this.floor) this.floorY = b.footY;
+    if (this.floor || this.flatFloor.on) this.floorY = b.footY;
   }
 
   // -------------------------------------------------------------------------
@@ -2277,7 +2393,20 @@ export class Renderer {
       // (high-poly creation motions run at ~30 or ~61 depending on encoding).
       this.animFrame += dtSeconds * (this.currentAnimation.fps ?? 30) * this.playbackSpeed;
       const len = this.currentAnimation.lengthInFrames;
-      if (this.animFrame > len) this.animFrame %= len;
+      if (this.animFrame > len) {
+        if (this.animLoop === false) {
+          // Park on the last frame rather than wrapping, and hand the caller
+          // the transport change so its Play/Pause button agrees with reality.
+          this.animFrame = len;
+          this.playing = false;
+          this.onAnimEnd?.();
+        } else {
+          this.animFrame %= len;
+          // Loop point: whoever is pairing an effect with this clip re-fires it
+          // here, so the two stay locked instead of drifting on separate clocks.
+          this.onAnimLoop?.();
+        }
+      }
       this.pose.evaluate(this.currentAnimation, this.animFrame);
       this.poseDirty = true;
     }
@@ -2390,8 +2519,11 @@ export class Renderer {
     gl.disable(gl.CULL_FACE);
     gl.disable(gl.BLEND);
 
-    // Floor first (writes depth so the model occludes correctly).
-    if (this.floor) {
+    // Floor first (writes depth so the model occludes correctly). Flat Floor
+    // wins over a loaded ground texture while it is on, and stands in for one
+    // when none is loaded.
+    const flatOn = this.flatFloor.on && !!this.flatFloorTex;
+    if (this.floor || flatOn) {
       gl.useProgram(this.floorProgram);
       gl.uniformMatrix4fv(this.floorUniforms.viewProj, false, datVP);
       gl.uniform1f(this.floorUniforms.tile, this.floorTile);
@@ -2404,7 +2536,7 @@ export class Renderer {
       gl.uniform2f(this.floorUniforms.fadeRadius, this.floorFade.inner, this.floorFade.outer);
       this._bindShadowUniforms(this.floorUniforms);
       gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, this.floor.texture);
+      gl.bindTexture(gl.TEXTURE_2D, flatOn ? this.flatFloorTex : this.floor.texture);
       // The fade ring needs blending against the background drawn above it.
       // Depth writes stay on so the model still occludes correctly where the
       // floor is solid; the faded ring discards rather than writing depth.
@@ -3199,7 +3331,7 @@ export class Renderer {
 
     const toDat = (v) => new Vec3(-v.x, -v.y, v.z);
     const self = this;
-    system.getActorAttachPosition = (jointId) => self.getActorAttachPosition(jointId);
+    system.getActorAttachPosition = (jointRef, attach) => self.getActorAttachPosition(jointRef, attach);
     // GroundProjection (0x42) / decal: entity floor plane in particle DAT Y.
     // Zones keep null until real terrain queries exist; bare effect stage = y0.
     system.floorQuery = (pos) => {

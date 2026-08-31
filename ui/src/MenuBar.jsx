@@ -78,6 +78,7 @@ export function MenuBar({
   sequencerOpen = false,
   bgColor = '#1a1a24', onBgColor, bgImage = '', onBgImage,
   floorTileScale = 1, onFloorTileScale,
+  flatFloor = false, onFlatFloor, flatFloorColor = '#8a8a94', onFlatFloorColor,
   onFloor, onClearFloor, selectedFloor = '',
   shadowsOn = false, shadowDistance = 90, onShadowDistance,
   renderHeight = 0, onRenderHeight, bufferSize = null,
@@ -312,6 +313,10 @@ export function MenuBar({
               selectedFloor={selectedFloor}
               floorTileScale={floorTileScale}
               onFloorTileScale={onFloorTileScale}
+              flatFloor={flatFloor}
+              onFlatFloor={onFlatFloor}
+              flatFloorColor={flatFloorColor}
+              onFlatFloorColor={onFlatFloorColor}
             />
           </div>,
           document.body,

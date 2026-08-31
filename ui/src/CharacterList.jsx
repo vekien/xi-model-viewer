@@ -488,6 +488,10 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
       skirtByType: raceData.current.get(race)?.skirtByType ?? null,
       raceId: race,
       parts,
+      // Drawn vs stowed: a ranged action holds the weapon, so App re-parents its
+      // back-mount bone onto the bow hand. Same source as the stowing rule.
+      rangedInUse: (sectionCfg.current.rangedDisplay?.showForActionGroups ?? []).includes(actionGroup),
+      rangedHandRef: sectionCfg.current.rangedDisplay?.handRef ?? null,
       keepCamera: isGearSwap,
     });
     lastRace.current = race;

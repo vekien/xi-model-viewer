@@ -37,6 +37,10 @@ export function ScenePanel({
   selectedFloor = '',
   floorTileScale = 1,
   onFloorTileScale,
+  flatFloor = false,
+  onFlatFloor,
+  flatFloorColor = '#8a8a94',
+  onFlatFloorColor,
 }) {
   const [groups, setGroups] = useState(null);
   const [openZone, setOpenZone] = useState('');
@@ -83,6 +87,33 @@ export function ScenePanel({
               onBgImage?.(id === 'none' ? 'none' : id);
             }}
           />
+        </div>
+      </div>
+
+      <hr />
+
+      <div className="gfx-line">
+        <span className="gfx-lab">Flat Floor</span>
+        <div className="gfx-ctrl gfx-ctrl-end">
+          <Tooltip content="Plain untextured ground plane — still catches the model's shadow">
+            <label className="switch cseq-switch">
+              <input
+                type="checkbox"
+                checked={!!flatFloor}
+                onChange={(e) => onFlatFloor?.(e.target.checked)}
+              />
+              <span className="track" />
+            </label>
+          </Tooltip>
+          <Tooltip content="Flat floor colour">
+            <input
+              type="color"
+              className="tool-pop-color"
+              value={flatFloorColor}
+              disabled={!flatFloor}
+              onChange={(e) => onFlatFloorColor?.(e.target.value)}
+            />
+          </Tooltip>
         </div>
       </div>
 

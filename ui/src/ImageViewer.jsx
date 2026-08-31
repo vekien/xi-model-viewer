@@ -48,6 +48,13 @@ export function ImageViewer({ doc, set, sprites = [], highlightSprite = null }) 
   const canvasRef = useRef(null);
   const [zoom, setZoom] = useState(1);
   const [checker, setChecker] = useState(true);
+  const [bg, setBg] = useState(() => {
+    try {
+      const v = localStorage.getItem('texViewerBg');
+      if (v && /^#[0-9a-fA-F]{6}$/.test(v)) return v;
+    } catch { /* */ }
+    return '';
+  });
   // Off by default — title packs can have hundreds of glyph rects per atlas.
   const [showRects, setShowRects] = useState(false);
 
@@ -112,9 +119,19 @@ export function ImageViewer({ doc, set, sprites = [], highlightSprite = null }) 
       : 'This set draws from a texture stored in another DAT.')
     : 'Select an image set.';
 
+  const solidBg = !!bg && !checker;
+  const setBgPersist = (hex) => {
+    setBg(hex);
+    if (hex) setChecker(false);
+    try {
+      if (hex) localStorage.setItem('texViewerBg', hex);
+      else localStorage.removeItem('texViewerBg');
+    } catch { /* */ }
+  };
+
   return (
-    <div className={`img-viewer${checker ? ' checker' : ''}`}>
-      <div className="img-stage">
+    <div className={`img-viewer${checker ? ' checker' : ''}${solidBg ? ' solid-bg' : ''}`}>
+      <div className="img-stage" style={solidBg ? { backgroundColor: bg } : undefined}>
         {doc.kind === 'png' && pngUrl && (
           <img src={pngUrl} alt="" style={{ transform: `scale(${zoom})` }} />
         )}
@@ -151,6 +168,22 @@ export function ImageViewer({ doc, set, sprites = [], highlightSprite = null }) 
             >
               <span className="icon">grid_on</span>
             </button>
+          </span>
+        </Tooltip>
+        <Tooltip content="Background colour (right-click = clear)" placement="top" appendTo={tippyRoot}>
+          <span className="img-tip-wrap">
+            <label
+              className={`tex-bg-swatch${bg && !checker ? ' solid' : ''}`}
+              style={bg && !checker ? { '--tex-bg': bg } : undefined}
+            >
+              <input
+                type="color"
+                value={bg || '#23262a'}
+                aria-label="Background colour"
+                onChange={(e) => setBgPersist(e.target.value)}
+                onContextMenu={(e) => { e.preventDefault(); setBgPersist(''); setChecker(true); }}
+              />
+            </label>
           </span>
         </Tooltip>
         <input

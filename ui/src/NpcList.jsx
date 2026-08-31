@@ -3,7 +3,8 @@ import { Tooltip } from './Tooltip.jsx';
 
 // NPC data comes fully resolved from lists/npcs.json (baked by
 // dev/bake-lists.mjs): categories in display order, each with its entries —
-// { name, variants: [DAT paths], base?: companion DAT } or { separator }.
+// { name, variants: [DAT paths], base?: companion DAT,
+//   anims?: [{ path, clips }] borrowed animation packs } or { separator }.
 
 // Survive Effects ↔ NPC unmount: open folders + entry expands stay put.
 const npcListUi = {
@@ -202,6 +203,11 @@ function NpcEntry({ entry, open, onToggleOpen, onSelectEntry, selectedPath }) {
     onSelectEntry({
       name: entry.name,
       paths: entry.base ? [entry.base, variant] : [variant],
+      // Borrowed clip packs: a trust's player-style move set lives in DATs
+      // rooted at the content families its model declares, not in the model
+      // itself. Passed through whole — App picks one at a time, because a set
+      // reuses clip ids and merging them would shadow the duplicates.
+      animPacks: entry.anims ?? null,
       key: variant.toLowerCase(),
     });
 

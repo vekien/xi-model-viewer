@@ -55,7 +55,23 @@ export function GraphicsPanel({
       />
       
 
-      <hr/>
+      <hr />
+
+      <div className="gfx-line">
+        <span className="gfx-lab">Field of view &nbsp; • &nbsp; <strong>{fov}°</strong></span>
+      </div>
+      <input
+        type="range"
+        min="20"
+        max="120"
+        step="1"
+        value={fov}
+        onChange={(e) => onFov?.(+e.target.value)}
+        className="vol-slider gfx-slider"
+        style={{ '--fill': `${fovPct}%` }}
+      />
+
+      <hr />
 
       <div className="gfx-line">
         <span className="gfx-lab">Render Resolution</span>
@@ -78,22 +94,6 @@ export function GraphicsPanel({
           />
         </div>
       </div>
-
-      <hr />
-
-      <div className="gfx-line">
-        <span className="gfx-lab">Field of view &nbsp; • &nbsp; <strong>{fov}°</strong></span>
-      </div>
-      <input
-        type="range"
-        min="20"
-        max="120"
-        step="1"
-        value={fov}
-        onChange={(e) => onFov?.(+e.target.value)}
-        className="vol-slider gfx-slider"
-        style={{ '--fill': `${fovPct}%` }}
-      />
     </div>
   );
 }

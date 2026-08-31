@@ -92,6 +92,9 @@ export function AnimationPanel({ pc, anim }) {
           loop = true, onLoop,
           charAnim = false, onCharAnim, charAnimEnabled = true,
           attachFx = true, onAttachFx, attachFxEnabled = true,
+          fxMode = 'mesh', onFxMode, onReset,
+          fxRoutines, fxRoutine = '', onFxRoutine,
+          animPacks, animPack = '', onAnimPack,
           speed = 1, onSpeed, volume, onVolume } = anim ?? {};
 
   if (actionGroups.length === 0 && anims.length === 0 && schedules.length === 0) return null;
@@ -100,8 +103,39 @@ export function AnimationPanel({ pc, anim }) {
     <div id="animbar" className="panel">
       <div className="panel-title">
         <span className="icon">animation</span>
-        Options
+        Animation
       </div>
+      {onFxMode && (
+        <Row label="Show">
+          <div className="seg-tabs" role="tablist" aria-label="Mesh and VFX">
+            {[['both', 'Both'], ['mesh', 'Mesh'], ['vfx', 'VFX']].map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={fxMode === id}
+                className={`seg-tab${fxMode === id ? ' on' : ''}`}
+                onClick={() => onFxMode(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </Row>
+      )}
+      {onFxMode && fxMode !== 'mesh' && fxRoutines?.length > 0 && (
+        <Row label="Effect">
+          <Combo
+            value={fxRoutine}
+            items={[
+              { id: '', label: '— none —' },
+              ...fxRoutines.map((id) => ({ id, label: id })),
+            ]}
+            onChange={onFxRoutine}
+            placeholder="— none —"
+          />
+        </Row>
+      )}
       {actionGroups.length > 0 && (
         <>
           <Row label="Category">
@@ -153,6 +187,25 @@ export function AnimationPanel({ pc, anim }) {
           />
         </Row>
       )}
+      {animPacks?.length > 0 && (
+        <Row label="Skill">
+          <Combo
+            value={animPack}
+            items={[
+              { id: '', label: '— none —' },
+              ...animPacks.map((p) => ({
+                // The clip ids are the only names these carry; a set repeats
+                // them (Iroha's six packs use four between them), so the DAT
+                // has to be shown too for the rows to be tellable apart.
+                id: p.path,
+                label: `${(p.clips ?? []).join(', ') || '?'} — ${p.path.replace(/\.DAT$/i, '')}`,
+              })),
+            ]}
+            onChange={onAnimPack}
+            placeholder="— none —"
+          />
+        </Row>
+      )}
       {/* Effects: Play/Pause + bare stop / rewind / loop glyphs. */}
       {onPlay && (
         <Row label="Playback">
@@ -181,7 +234,10 @@ export function AnimationPanel({ pc, anim }) {
               <Button
                 className="pc-tbtn"
                 aria-label="Reset"
-                onClick={() => { onSeek?.(0); onSpeed?.(1); }}
+                // onReset owns the whole restart when the caller has more to do
+                // than rewind — a character-paired effect has to be cut off the
+                // stage and re-fired, not left running over a rewound clip.
+                onClick={() => { if (onReset) onReset(); else { onSeek?.(0); onSpeed?.(1); } }}
               >
                 <span className="icon">replay</span>
               </Button>
