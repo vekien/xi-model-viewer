@@ -4,15 +4,15 @@ Serves ui/ statically plus the /fs endpoints the browser fallback in
 backend.js uses (list/read restricted to the FFXI game directory), so the
 viewer can be developed in a normal browser without the Tauri shell.
 
-Usage: python dev/serve.py [port]
+Usage: python scripts/serve.py [port]
 
 Env overrides — read from the environment, else the repo-root `.env`
 (see `.env.example`; `XI_ENV_FILE` points elsewhere), else the default shown:
     XI_GAME_DIR   FFXI install dir  (C:\\Program Files (x86)\\PlayOnline\\SquareEnix\\FINAL FANTASY XI)
-    XI_VGMSTREAM  vgmstream-cli     (PATH lookup, then the AltanaListener install)
+    XI_VGMSTREAM  vgmstream-cli     (PATH lookup)
     XI_CLI        xi-tools folder or xi.exe  (needs Python 3.14 + .venv)
     XI_DEV_HOST   bind address      (127.0.0.1)
-    XI_DEV_PORT   port when no argv port is given (8765)
+    XI_DEV_PORT   port when no argv port is given (8766, matching vite.config.js)
 """
 import json
 import os
@@ -54,11 +54,9 @@ load_dotenv(Path(os.environ.get("XI_ENV_FILE") or ROOT_DIR / ".env"))
 UI_DIR = ROOT_DIR / "ui"
 # XI_GAME_DIR overrides the install path (non-Windows dev boxes, alt clients).
 GAME_DIR = Path(os.environ.get("XI_GAME_DIR") or r"C:\Program Files (x86)\PlayOnline\SquareEnix\FINAL FANTASY XI")
-VGMSTREAM = (
-    os.environ.get("XI_VGMSTREAM")
-    or shutil.which("vgmstream-cli")
-    or r"D:\xidata\AltanaListener_Windows\Dependencies\vgmstream-cli.exe"
-)
+# The Tauri build carries an embedded copy; the dev server has no bundle, so it
+# is XI_VGMSTREAM or whatever is on PATH. None means "audio decode unavailable".
+VGMSTREAM = os.environ.get("XI_VGMSTREAM") or shutil.which("vgmstream-cli")
 def _resolve_xi(configured: str | None) -> str | None:
     """xi.exe path, or xi-tools folder (.venv/Scripts|bin), or PATH."""
     names = ("xi.exe", "xi.cmd", "xi.bat", "xi")
@@ -88,8 +86,13 @@ def _resolve_xi(configured: str | None) -> str | None:
     which = shutil.which("xi")
     if which:
         return which
-    shim = Path(r"C:\Users\Josh\.local\bin\xi.exe")
-    return str(shim) if shim.is_file() else None
+    # Same last resort as the Rust find_xi: the ~/.local/bin install shim.
+    home = Path(os.environ.get("USERPROFILE") or os.environ.get("HOME") or "")
+    for n in names:
+        shim = home / ".local" / "bin" / n
+        if shim.is_file():
+            return str(shim)
+    return None
 
 
 XI_CLI = _resolve_xi(os.environ.get("XI_CLI"))
@@ -253,7 +256,7 @@ class Handler(SimpleHTTPRequestHandler):
         if url.path == "/fs/default":
             return self._text(str(GAME_DIR))
         if url.path == "/fs/user-data":
-            d = ROOT_DIR / "dev" / ".user-data"
+            d = ROOT_DIR / ".user-data"
             d.mkdir(parents=True, exist_ok=True)
             return self._text(str(d))
         if url.path == "/fs/list":
@@ -338,7 +341,7 @@ class Handler(SimpleHTTPRequestHandler):
         """Dev-mode stand-in for the Tauri reveal_path command."""
         import subprocess
         try:
-            target = self._resolve(raw)          # keeps the game-dir sandbox
+            target = self._resolve(raw)
             if not target.exists():
                 raise FileNotFoundError(f"not found: {target}")
             if sys.platform == "win32":
@@ -360,9 +363,16 @@ class Handler(SimpleHTTPRequestHandler):
     def _vgmstream(self, raw):
         import subprocess, tempfile, os
         vgm = VGMSTREAM
+        if not vgm:
+            return self._error(RuntimeError(
+                "vgmstream-cli not found — put it on PATH or set XI_VGMSTREAM "
+                "(the embedded copy only ships in the Tauri build)"))
         try:
             src = self._resolve(raw)
-            out = os.path.join(tempfile.gettempdir(), "xi_vgm_dev.wav")
+            # Named per request: the server is threaded and a zone load fires
+            # several decodes at once, which a shared filename would interleave.
+            fd, out = tempfile.mkstemp(prefix="xi_vgm_dev_", suffix=".wav")
+            os.close(fd)
             subprocess.run([vgm, "-i", "-o", out, str(src)], check=True, capture_output=True)
             body = open(out, "rb").read()
             os.remove(out)
@@ -397,9 +407,20 @@ class Handler(SimpleHTTPRequestHandler):
                         cwd = str(p)
                     elif p.parent.is_dir():
                         cwd = str(p.parent)
+                env = os.environ.copy()
+                extra = body.get("env") or {}
+                if isinstance(extra, dict):
+                    for k, v in extra.items():
+                        if not k:
+                            continue
+                        vs = (v or "").strip() if isinstance(v, str) else str(v or "")
+                        if vs:
+                            env[str(k)] = vs
+                        elif str(k) in env:
+                            del env[str(k)]
                 r = subprocess.run(
                     [xi, *args], cwd=cwd, capture_output=True, text=True,
-                    encoding="utf-8", errors="replace",
+                    encoding="utf-8", errors="replace", env=env,
                 )
                 out = ((r.stdout or "") + (r.stderr or "")).strip()
                 if r.returncode != 0:
@@ -441,7 +462,26 @@ class Handler(SimpleHTTPRequestHandler):
                         "(Python 3.14 + uv sync)"
                     )
                 cmd = [xi, "mesh", "export", body["datPath"], "--output", body["outputDir"], *body.get("args", [])]
-                r = subprocess.run(cmd, capture_output=True, text=True)
+                env = os.environ.copy()
+                extra = body.get("env") or {}
+                if isinstance(extra, dict):
+                    for k, v in extra.items():
+                        if not k:
+                            continue
+                        vs = (v or "").strip() if isinstance(v, str) else str(v or "")
+                        if vs:
+                            env[str(k)] = vs
+                        elif str(k) in env:
+                            del env[str(k)]
+                cwd = None
+                cfg = (body.get("xiPath") or "").strip()
+                if cfg:
+                    p = Path(cfg)
+                    if p.is_dir():
+                        cwd = str(p)
+                    elif p.parent.is_dir():
+                        cwd = str(p.parent)
+                r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, env=env)
                 out = (r.stdout or "") + (r.stderr or "")
                 if r.returncode != 0:
                     self.send_response(500)
@@ -478,16 +518,19 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def _resolve(self, raw):
+        """Normalise a client path. NOT a sandbox — see _resolve_any.
+
+        There used to be a GAME_DIR containment check here whose two branches
+        returned the same value, so it read as a guarantee it never gave. The
+        server genuinely cannot sandbox to the game dir: HD packs, pivot packs,
+        navmesh folders and export destinations are all user roots outside it.
+        What actually bounds this is the 127.0.0.1 bind, so widening XI_DEV_HOST
+        turns /fs/read into an unrestricted file read. Don't.
+        """
         # The frontend joins paths Windows-style; accept those on POSIX dev boxes.
         if os.sep != "\\":
             raw = raw.replace("\\", "/")
-        p = Path(raw).resolve()
-        # Game install is the default sandbox; HD packs (and other user roots)
-        # live outside it. Dev server is localhost-only.
-        game = GAME_DIR.resolve()
-        if p == game or p.is_relative_to(game):
-            return p
-        return p
+        return Path(raw).resolve()
 
     def _exists(self, raw):
         try:
@@ -503,6 +546,8 @@ class Handler(SimpleHTTPRequestHandler):
     def _list(self, raw):
         try:
             p = self._resolve(raw)
+            if not p.is_dir():
+                return self._not_found(p)
             entries = [{"name": e.name, "isDir": e.is_dir()} for e in p.iterdir()]
             body = json.dumps(entries).encode()
             self.send_response(200)
@@ -515,7 +560,10 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _read(self, raw):
         try:
-            body = self._resolve(raw).read_bytes()
+            p = self._resolve(raw)
+            if not p.is_file():
+                return self._not_found(p)
+            body = p.read_bytes()
             self.send_response(200)
             self.send_header("Content-Type", "application/octet-stream")
             self.send_header("Content-Length", str(len(body)))
@@ -523,6 +571,14 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.write(body)
         except Exception as e:
             self._error(e)
+
+    def _not_found(self, path):
+        body = f"not found: {path}".encode()
+        self.send_response(404)
+        self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def _text(self, text):
         body = text.encode()
@@ -544,7 +600,9 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get("XI_DEV_PORT") or 8765)
+    # 8766, because that is what ui/vite.config.js proxies /fs to. Anything else
+    # here and a browser dev session 500s on every /fs request.
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get("XI_DEV_PORT") or 8766)
     host = os.environ.get("XI_DEV_HOST") or "127.0.0.1"
     print(f"serving {UI_DIR} + game dir {GAME_DIR} on http://{host}:{port}")
     # Threaded: a zone load fires many overlapping reads, and listing the game

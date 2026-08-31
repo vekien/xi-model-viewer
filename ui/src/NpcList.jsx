@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Tooltip } from './Tooltip.jsx';
 
 // NPC data comes fully resolved from lists/npcs.json (baked by
-// dev/bake-lists.mjs): categories in display order, each with its entries —
+// `xi mv update --only npcs`): categories in display order, each with its entries —
 // { name, variants: [DAT paths], base?: companion DAT,
 //   anims?: [{ path, clips }] borrowed animation packs } or { separator }.
 

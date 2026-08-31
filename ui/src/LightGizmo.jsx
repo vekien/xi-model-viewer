@@ -27,16 +27,28 @@ function hitDir(nx, ny) {
   return [nx, ny, Math.sqrt(1 - d2)];
 }
 
+const GAIN_MIN = 0.25;
+const GAIN_MAX = 2;
+
 /**
  * Compact trackball for the custom shadow sun. Bottom-right, only while
- * View → Shadows is on. Drag the handle around the sphere; double-click resets.
+ * View → Shadows is on. Drag the handle around the sphere; Reset (or
+ * double-click) clears the override so the sun follows the time-of-day
+ * scroller again. Brightness slider above (25%–200%).
  */
-export function LightGizmo({ dir, onChange, onReset, detailsOpen = false }) {
+export function LightGizmo({
+  dir, onChange, onReset, detailsOpen = false,
+  brightness = 1, onBrightness,
+  followingTime = false,
+}) {
   const canvasRef = useRef(null);
   const dirRef = useRef(dir || DEFAULT_DIR);
   const dragRef = useRef(false);
   // Set for the duration of a right-drag: the pointer is moving the antipode.
   const backRef = useRef(false);
+  const gain = Math.min(GAIN_MAX, Math.max(GAIN_MIN, Number(brightness) || 1));
+  const pct = Math.round(gain * 100);
+  const canReset = !followingTime || Math.abs(gain - 1) > 0.001;
 
   useEffect(() => {
     dirRef.current = dir && Math.hypot(...dir) > 1e-6 ? norm(dir) : DEFAULT_DIR;
@@ -175,34 +187,73 @@ export function LightGizmo({ dir, onChange, onReset, detailsOpen = false }) {
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* */ }
   };
 
+  const doReset = (e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    onReset?.();
+  };
+
   const onDblClick = (e) => {
     e.preventDefault();
-    dirRef.current = DEFAULT_DIR;
-    onReset?.();
-    draw();
+    doReset(e);
   };
 
   return (
     <div
       id="light-gizmo"
-      className={`light-gizmo${detailsOpen ? ' details-open' : ''}`}
+      className={`light-gizmo${detailsOpen ? ' details-open' : ''}${followingTime ? ' following' : ''}`}
     >
-      {/* Help sits on its own target: hovering it explains the widget, while
-          hovering (or dragging) the sphere itself no longer pops a tip. */}
-      <Tooltip content="Drag the filled handle to aim the light · right-drag the hollow one to put it behind · double-click to reset">
-        <span className="light-gizmo-help">?</span>
-      </Tooltip>
-      <canvas
-        ref={canvasRef}
-        width={SIZE}
-        height={SIZE}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onDoubleClick={onDblClick}
-        onContextMenu={(e) => e.preventDefault()}
-      />
+      <div className="light-gizmo-bright">
+        <span className="light-gizmo-bright-lab">
+          Brightness
+          <strong>{pct}%</strong>
+        </span>
+        <Tooltip content="Light brightness (25%–200%)">
+          <input
+            type="range"
+            className="vol-slider light-gizmo-slider"
+            min={GAIN_MIN}
+            max={GAIN_MAX}
+            step="0.05"
+            value={gain}
+            onChange={(e) => onBrightness?.(+e.target.value)}
+            style={{ '--fill': `${((gain - GAIN_MIN) / (GAIN_MAX - GAIN_MIN)) * 100}%` }}
+          />
+        </Tooltip>
+      </div>
+      <div className="light-gizmo-ball">
+        {/* Help sits on its own target: hovering it explains the widget, while
+            hovering (or dragging) the sphere itself no longer pops a tip. */}
+        <Tooltip content="Drag the filled handle to aim the light · right-drag the hollow one to put it behind · double-click or Reset to follow time of day">
+          <span className="light-gizmo-help">?</span>
+        </Tooltip>
+        <canvas
+          ref={canvasRef}
+          width={SIZE}
+          height={SIZE}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onDoubleClick={onDblClick}
+          onContextMenu={(e) => e.preventDefault()}
+        />
+      </div>
+      <div className="light-gizmo-foot">
+        <Tooltip content={followingTime
+          ? 'Sun follows the time-of-day scroller'
+          : 'Clear override — sun follows time of day again'}>
+          <button
+            type="button"
+            className="light-gizmo-reset"
+            disabled={!canReset}
+            onClick={doReset}
+          >
+            <span className="icon">restart_alt</span>
+            Reset
+          </button>
+        </Tooltip>
+      </div>
     </div>
   );
 }

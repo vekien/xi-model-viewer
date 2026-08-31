@@ -15,9 +15,11 @@
 /dist/
 
 # ---- Dev / runtime artifacts ---------------------------------------------
-/dev/capture.jpg
-/dev/server.log
-/dev/vite.log
+# Browser-dev stand-in for %LOCALAPPDATA%\XiModelViewer (notes.json etc).
+/.user-data/
+/scripts/capture.jpg
+/scripts/server.log
+/scripts/vite.log
 
 # ---- Logs & debug ---------------------------------------------------------
 *.log

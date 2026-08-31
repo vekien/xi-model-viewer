@@ -262,6 +262,7 @@ uniform vec3 uSunColor;
 uniform vec3 uMoonDir;
 uniform vec3 uMoonColor;
 uniform float uSunLit;     // 1 = swap the camera key light for the shadow sun
+uniform float uLightGain;  // viewer brightness (1 = 100%, up to ~2)
 ${FOG_UNIFORMS}
 ${SHADOW_UNIFORMS}
 
@@ -298,6 +299,7 @@ void main() {
   }
 
   vec3 litRgb;
+  float gain = max(uLightGain, 0.0);
   if (uTerrainLit > 0.5) {
     // XimShader terrain path: lit = vColor*ambient + Σ vColor*N·L*lightColor
     // then modulate2x with texture. No camera key-light.
@@ -308,7 +310,7 @@ void main() {
     vec3 amb = vColor.rgb * uAmbient;
     vec3 df0 = vColor.rgb * clamp(ndl, 0.0, 1.0) * uSunColor;
     vec3 df1 = vColor.rgb * clamp(dot(n, uMoonDir), 0.0, 1.0) * uMoonColor;
-    litRgb = clamp(amb + df0 + df1, 0.0, 1.0) * sunShadow(vWorld, n, ndl);
+    litRgb = clamp(amb + df0 + df1, 0.0, 1.0) * sunShadow(vWorld, n, ndl) * gain;
   } else if (uSunLit > 0.5) {
     // Shadows on: one directional key from the sun's angle. The camera light
     // below can't be used here — its shading would disagree with where the
@@ -318,14 +320,14 @@ void main() {
     float ndl = dot(n, uSunDir);
     // Same 0.5..1.15 range as the camera key below, so toggling shadows changes
     // where the light comes from without changing how bright the model reads.
-    float lit = 0.5 + 0.65 * clamp(ndl, 0.0, 1.0);
+    float lit = (0.5 + 0.65 * clamp(ndl, 0.0, 1.0)) * gain;
     litRgb = vColor.rgb * lit * sunShadow(vWorld, n, ndl);
   } else {
     // Entity: camera-relative key light (legacy).
     float nl = length(vNormal);
     float intensity = nl < 1e-3 ? 1.0
       : 0.55 + 0.6 * max(0.0, dot(vNormal / nl, -uLightDir));
-    litRgb = vColor.rgb * intensity;
+    litRgb = vColor.rgb * intensity * gain;
   }
 
   // modulate2x: 2 * lit * tex (0x80 diffuse neutral)
@@ -386,6 +388,7 @@ uniform vec3 uSunDir;
 uniform vec3 uSunColor;
 uniform vec3 uMoonDir;
 uniform vec3 uMoonColor;
+uniform float uLightGain;
 ${FOG_UNIFORMS}
 ${SHADOW_UNIFORMS}
 
@@ -402,7 +405,7 @@ void main() {
   vec3 amb = vColor.rgb * uAmbient;
   vec3 df0 = vColor.rgb * clamp(ndl, 0.0, 1.0) * uSunColor;
   vec3 df1 = vColor.rgb * clamp(dot(n, uMoonDir), 0.0, 1.0) * uMoonColor;
-  vec3 lit = clamp(amb + df0 + df1, 0.0, 1.0) * sunShadow(vWorld, n, ndl);
+  vec3 lit = clamp(amb + df0 + df1, 0.0, 1.0) * sunShadow(vWorld, n, ndl) * max(uLightGain, 0.0);
 
   float alpha = 4.0 * vColor.a * tex.a;
   if (alpha < uDiscard) discard;
@@ -623,6 +626,36 @@ function buildWireIndices(vertCount, isStrip) {
   return edges.length ? new Uint32Array(edges) : null;
 }
 
+/**
+ * Canonical form for source-path matching: backslashes, lowercase. Both the
+ * filter sets and the per-batch keys go through here, so they cannot drift.
+ */
+function normSourcePath(p) {
+  return String(p ?? '').replace(/\//g, '\\').toLowerCase();
+}
+
+/** The trailing `rom2\dir\file.dat`, so an absolute path also matches a ROM-relative one. */
+function romTail(normalised) {
+  const m = normalised.match(/rom\d*[\\/][\w.\\/-]+\.dat$/i);
+  return m ? m[0] : null;
+}
+
+/**
+ * Path list -> lookup set holding both the full path and its ROM tail.
+ * Null for an empty list, which every caller reads as "no filter".
+ */
+function sourceKeySet(paths) {
+  if (!paths || (typeof paths.size === 'number' ? paths.size === 0 : !paths.length)) return null;
+  const set = new Set();
+  for (const p of paths) {
+    const n = normSourcePath(p);
+    set.add(n);
+    const tail = romTail(n);
+    if (tail) set.add(tail);
+  }
+  return set;
+}
+
 export class Renderer {
   constructor(canvas) {
     this.canvas = canvas;
@@ -653,6 +686,7 @@ export class Renderer {
       moonDir: gl.getUniformLocation(this.program, 'uMoonDir'),
       moonColor: gl.getUniformLocation(this.program, 'uMoonColor'),
       sunLit: gl.getUniformLocation(this.program, 'uSunLit'),
+      lightGain: gl.getUniformLocation(this.program, 'uLightGain'),
       shadowMap0: gl.getUniformLocation(this.program, 'uShadowMap0'),
       shadowMap1: gl.getUniformLocation(this.program, 'uShadowMap1'),
       lightViewProj0: gl.getUniformLocation(this.program, 'uLightViewProj0'),
@@ -677,6 +711,8 @@ export class Renderer {
     // View > Unlit forces full unlit; lightBrightness (0..1) blends default → unlit.
     this.unlit = false;
     this.lightBrightness = 0;
+    // Light gizmo brightness (1 = 100%, 2 = 200%). Scales lit RGB after shading.
+    this.lightGain = 1;
     this.polygonMode = gl.getExtension('WEBGL_polygon_mode');
 
     // Zone terrain program (xim ximProgram equivalent).
@@ -693,6 +729,7 @@ export class Renderer {
       sunColor: gl.getUniformLocation(this.zoneProgram, 'uSunColor'),
       moonDir: gl.getUniformLocation(this.zoneProgram, 'uMoonDir'),
       moonColor: gl.getUniformLocation(this.zoneProgram, 'uMoonColor'),
+      lightGain: gl.getUniformLocation(this.zoneProgram, 'uLightGain'),
       cameraPos: gl.getUniformLocation(this.zoneProgram, 'uCameraPos'),
       fogColor: gl.getUniformLocation(this.zoneProgram, 'uFogColor'),
       fogRange: gl.getUniformLocation(this.zoneProgram, 'uFogRange'),
@@ -1186,6 +1223,12 @@ export class Renderer {
     this.customSunDir = [dir[0] / n, dir[1] / n, dir[2] / n];
   }
 
+  /** Light gizmo brightness. 1 = 100%, 2 = 200%. */
+  setLightGain(gain) {
+    const g = Number(gain);
+    this.lightGain = Math.min(2, Math.max(0.25, Number.isFinite(g) ? g : 1));
+  }
+
   /** Display → entity DAT sun (same map as ENTITY_SUN_DISPLAY → ENTITY_SUN_DAT). */
   _displaySunToDat(d) {
     return [-d[0], -d[1], d[2]];
@@ -1217,18 +1260,7 @@ export class Renderer {
    * batches whose sourcePath matches one of the given DAT paths (abs or ROM/…).
    */
   setMeshSourceFilter(paths) {
-    if (!paths || (typeof paths.size === 'number' ? paths.size === 0 : !paths.length)) {
-      this.meshSourceFilter = null;
-      return;
-    }
-    const set = new Set();
-    for (const p of paths) {
-      const n = String(p).replace(/\//g, '\\').toLowerCase();
-      set.add(n);
-      const m = n.match(/rom\d*[\\/][\w.\\/-]+\.dat$/i);
-      if (m) set.add(m[0]);
-    }
-    this.meshSourceFilter = set;
+    this.meshSourceFilter = sourceKeySet(paths);
   }
 
   /**
@@ -1237,26 +1269,26 @@ export class Renderer {
    * ranged weapon uses it: the game keeps a bow scaled to 0 until it is in use.
    */
   setHiddenSources(paths) {
-    if (!paths || (typeof paths.size === 'number' ? paths.size === 0 : !paths.length)) {
-      this.hiddenSources = null;
-      return;
-    }
-    const set = new Set();
-    for (const p of paths) {
-      const n = String(p).replace(/\//g, '\\').toLowerCase();
-      set.add(n);
-      const m = n.match(/rom\d*[\\/][\w.\\/-]+\.dat$/i);
-      if (m) set.add(m[0]);
-    }
-    this.hiddenSources = set;
+    this.hiddenSources = sourceKeySet(paths);
   }
 
   _sourceIn(set, batch) {
     if (!set) return false;
-    const p = (batch.sourcePath || '').toLowerCase().replace(/\//g, '\\');
-    if (set.has(p)) return true;
-    const m = p.match(/rom\d*[\\/][\w.\\/-]+\.dat$/i);
-    return !!(m && set.has(m[0]));
+    // Normalise once per batch, not once per batch per draw pass. This ran for
+    // every batch in every pass (solid, alpha, each shadow cascade) whenever a
+    // filter was set — tens of thousands of regex matches a frame on a zone,
+    // all returning the same answer.
+    //
+    // Cached lazily rather than stamped at build time on purpose: batches are
+    // pushed from several places (model, zone, spinner proxy) and the proxy
+    // arrays get swapped into `zoneBatches`, so a missed construction site
+    // would silently mis-filter. sourcePath never changes once a batch exists.
+    if (batch._srcKey === undefined) {
+      batch._srcKey = normSourcePath(batch.sourcePath);
+      batch._srcRomKey = romTail(batch._srcKey);
+    }
+    if (set.has(batch._srcKey)) return true;
+    return batch._srcRomKey !== null && set.has(batch._srcRomKey);
   }
 
   _batchSourceVisible(batch) {
@@ -1807,7 +1839,6 @@ export class Renderer {
       this.skeletonLines = { vao, vbo, data: new Float32Array(0) };
     }
     const lines = this.skeletonLines;
-    if (lines.data.length < joints.length * 12) lines.data = new Float32Array(joints.length * 12);
 
     // Root end dim, child end bright: the taper shows which way each bone runs.
     // Selected joint (Skeleton panel): parent→child edges + axis cross in orange.
@@ -2456,7 +2487,13 @@ export class Renderer {
       // (high-poly creation motions run at ~30 or ~61 depending on encoding).
       this.animFrame += dtSeconds * (this.currentAnimation.fps ?? 30) * this.playbackSpeed;
       const len = this.currentAnimation.lengthInFrames;
-      if (this.animFrame > len) {
+      // Guard the same way setAnimation and seekTo do. A clip can legitimately
+      // arrive with length 0 (mergeAnimationParts over all-zero-length parts),
+      // and `animFrame %= 0` is NaN — which then feeds evaluate() every frame
+      // from here on, so the model freezes or vanishes with nothing logged.
+      if (!(len > 0)) {
+        this.animFrame = 0;
+      } else if (this.animFrame > len) {
         if (this.animLoop === false) {
           // Park on the last frame rather than wrapping, and hand the caller
           // the transport change so its Play/Pause button agrees with reality.
@@ -2713,6 +2750,7 @@ export class Renderer {
       gl.uniform3fv(this.uniforms.moonColor, [0, 0, 0]);
     }
     gl.uniform1f(this.uniforms.sunLit, !isZone && this.shadowActive ? 1 : 0);
+    gl.uniform1f(this.uniforms.lightGain, this.lightGain ?? 1);
     this._bindShadowUniforms(this.uniforms);
 
     const usePolyMode = this.showWireframe && this.polygonMode;
@@ -3285,6 +3323,7 @@ export class Renderer {
     gl.uniform3fv(this.zoneUniforms.sunColor, L.sunColor);
     gl.uniform3fv(this.zoneUniforms.moonDir, L.moonDir);
     gl.uniform3fv(this.zoneUniforms.moonColor, L.moonColor);
+    gl.uniform1f(this.zoneUniforms.lightGain, this.lightGain ?? 1);
     this._bindShadowUniforms(this.zoneUniforms);
 
     const alphaOn = !!this.showAlpha;
@@ -3798,6 +3837,103 @@ export class Renderer {
     gl.drawArrays(gl.POINTS, 0, n);
     gl.enable(gl.DEPTH_TEST);
     gl.bindVertexArray(null);
+  }
+
+  /**
+   * Release every GL object this renderer owns, then drop the context.
+   *
+   * Nothing called this before, so each teardown leaked its buffers, VAOs,
+   * textures and FBOs. The shipped app mounts once and exits, but React
+   * StrictMode double-mounts in dev and HMR remounts on every edit, so a long
+   * dev session accumulated a full set per cycle until the driver started
+   * refusing allocations.
+   *
+   * Safe to call twice: every field is nulled and the guard returns early.
+   */
+  dispose() {
+    if (this._disposed) return;
+    this._disposed = true;
+    const gl = this.gl;
+
+    // Geometry: the batch arrays, including the two that get swapped into
+    // zoneBatches during a drag (setZoneMoveProxy frees its own).
+    const freeBatches = (arr) => {
+      for (const b of arr || []) {
+        if (b.vbo) gl.deleteBuffer(b.vbo);
+        if (b.wireEbo) gl.deleteBuffer(b.wireEbo);
+        if (b.vao) gl.deleteVertexArray(b.vao);
+      }
+    };
+    this.setZoneMoveProxy(null);
+    freeBatches(this.batches);
+    freeBatches(this.zoneBatches);
+    freeBatches(this.zoneSpinnerBatches);
+    this.batches = [];
+    this.zoneBatches = [];
+    this.zoneSpinnerBatches = [];
+
+    // Lazily-built overlay meshes — all { vao, vbo }.
+    for (const key of [
+      'axesLines', 'gridLines', 'pathLines', 'skeletonLines',
+      'collisionOverlay', 'navmeshOverlay', 'zonePickOverlay', 'skyDome',
+    ]) {
+      this._freeOverlay(this[key]);
+      this[key] = null;
+    }
+    for (const part of Object.values(this.gizmoParts || {})) this._freeOverlay(part);
+    this.gizmoParts = null;
+
+    // Fixed meshes built in the constructor.
+    for (const [vao, vbo] of [
+      ['floorVao', 'floorVbo'], ['markerVao', 'markerVbo'], ['bgVao', 'bgVbo'],
+    ]) {
+      if (this[vao]) gl.deleteVertexArray(this[vao]);
+      if (this[vbo]) gl.deleteBuffer(this[vbo]);
+      this[vao] = null;
+      this[vbo] = null;
+    }
+
+    // Textures: the model cache plus the standalone ones.
+    for (const t of this.textures.values()) gl.deleteTexture(t);
+    this.textures.clear();
+    this.modelTextureNames.clear();
+    for (const key of ['whiteTexture', 'flatFloorTex', 'shadowDummyTex']) {
+      if (this[key]) gl.deleteTexture(this[key]);
+      this[key] = null;
+    }
+    if (this.bgImage?.texture) gl.deleteTexture(this.bgImage.texture);
+    this.bgImage = null;
+    if (this.floor?.texture) gl.deleteTexture(this.floor.texture);
+    this.floor = null;
+
+    // Shadow cascade render targets.
+    for (const t of this.shadowTargets || []) {
+      if (t.tex) gl.deleteTexture(t.tex);
+      if (t.fbo) gl.deleteFramebuffer(t.fbo);
+    }
+    this.shadowTargets = [];
+
+    this.particleDrawer?.dispose();
+    this.particleDrawer = null;
+    this.particleSystem = null;
+
+    for (const key of [
+      'program', 'zoneProgram', 'shadowZoneProgram', 'shadowEntityProgram',
+      'floorProgram', 'overlayProgram', 'markerProgram', 'skyProgram', 'bgProgram',
+    ]) {
+      if (this[key]) gl.deleteProgram(this[key]);
+      this[key] = null;
+    }
+
+    this.model = null;
+    this.pose = null;
+    this.currentAnimation = null;
+
+    // Deliberately NOT calling WEBGL_lose_context.loseContext(): the canvas
+    // element outlives the renderer (same canvasRef across a remount), and a
+    // lost context stays lost for that canvas — the next Renderer() then fails
+    // in buildProgram with a null shader. Releasing the objects above is the
+    // cleanup; the context belongs to the canvas, not to us.
   }
 }
 

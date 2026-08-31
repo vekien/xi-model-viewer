@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { listArrowHandler, useScrollIntoView } from './useListArrows.js';
 import { Tooltip } from './Tooltip.jsx';
 
-// images.json (from dev/bake-images.mjs): [{ id, name, entries: [{ name, path }] }]
+// images.json (from `xi mv update --only images`): [{ id, name, entries: [{ name, path }] }]
 // path is backslash `ROM…\N.DAT`, relative to the game directory.
 
 async function loadImages() {

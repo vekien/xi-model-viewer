@@ -13,17 +13,18 @@ const FADE_MAX = 200;
 
 // floors.json rows: { zone, spec: "rom/dir/file", fourcc }
 async function loadFloors() {
-  const groups = new Map();
   try {
     const res = await fetch('lists/floors.json');
-    if (res.ok) {
-      for (const { zone, spec, fourcc } of await res.json()) {
-        if (!groups.has(zone)) groups.set(zone, []);
-        groups.get(zone).push({ spec, fourcc });
-      }
-    }
-  } catch { /* list optional */ }
-  return [...groups.entries()].map(([zone, floors]) => ({ zone, floors }));
+    if (!res.ok) return [];
+    const list = await res.json();
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter((f) => f?.spec && f?.fourcc)
+      .slice()
+      .sort((a, b) => String(a.zone || a.fourcc).localeCompare(String(b.zone || b.fourcc), undefined, { sensitivity: 'base' }));
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -49,11 +50,10 @@ export function ScenePanel({
   flatFloorColor = '#8a8a94',
   onFlatFloorColor,
 }) {
-  const [groups, setGroups] = useState(null);
-  const [openZone, setOpenZone] = useState('');
+  const [floors, setFloors] = useState(null);
 
   useEffect(() => {
-    loadFloors().then(setGroups).catch(() => setGroups([]));
+    loadFloors().then(setFloors).catch(() => setFloors([]));
   }, []);
 
   const bgItems = useMemo(
@@ -198,47 +198,23 @@ export function ScenePanel({
 
       <div className="tool-pop-section">Floor texture</div>
       <div className="tool-pop-list">
-        {groups === null && <div className="tool-pop-note">Loading…</div>}
-        {groups?.length === 0 && <div className="tool-pop-note">No floors listed.</div>}
-        {groups?.map(({ zone, floors }) => {
-          const single = floors.length === 1;
-          const open = openZone === zone || single;
+        {floors === null && <div className="tool-pop-note">Loading…</div>}
+        {floors?.length === 0 && <div className="tool-pop-note">No floors listed.</div>}
+        {floors?.map((f) => {
+          const key = keyOf(f);
+          const on = selectedFloor === key;
           return (
-            <div key={zone} className="tool-pop-group">
-              {!single ? (
-                <button
-                  type="button"
-                  className={`tool-pop-group-btn${open ? ' open' : ''}`}
-                  onClick={() => setOpenZone((z) => (z === zone ? '' : zone))}
-                >
-                  <span className={`icon tool-pop-caret${open ? ' open' : ''}`}>chevron_right</span>
-                  <span className="icon">grass</span>
-                  <span className="tool-pop-group-name">{zone}</span>
-                  <span className="tool-pop-badge">{floors.length}</span>
-                </button>
-              ) : null}
-              {(open || single) && floors.map((f) => {
-                const key = keyOf(f);
-                const on = selectedFloor === key;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    className={`tool-pop-item${on ? ' on' : ''}${single ? ' alone' : ''}`}
-                    onClick={() => onFloor?.(f.spec, f.fourcc)}
-                  >
-                    <span className="icon">{single ? 'grass' : 'texture'}</span>
-                    <span className="tool-pop-item-label">
-                      {single ? zone : f.fourcc}
-                    </span>
-                    {single ? (
-                      <span className="mono tool-pop-item-meta">{f.fourcc}</span>
-                    ) : null}
-                    {on ? <span className="icon tool-pop-check">check</span> : null}
-                  </button>
-                );
-              })}
-            </div>
+            <button
+              key={key}
+              type="button"
+              className={`tool-pop-item alone${on ? ' on' : ''}`}
+              onClick={() => onFloor?.(f.spec, f.fourcc)}
+            >
+              <span className="icon">grass</span>
+              <span className="tool-pop-item-label">{f.zone || f.fourcc}</span>
+              <span className="mono tool-pop-item-meta">{f.fourcc}</span>
+              {on ? <span className="icon tool-pop-check">check</span> : null}
+            </button>
           );
         })}
       </div>

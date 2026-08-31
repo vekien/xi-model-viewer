@@ -796,7 +796,7 @@ function friendlyLocalErr(raw, path) {
   const msg = String(raw || '').trim();
   if (!msg) return 'That folder could not be used.';
   if (/^Not a folder:/i.test(msg)) {
-    return `Folder not found:\n${path || msg.replace(/^Not a folder:\s*/i, '')}\nBrowse to your xi-tools clone (must contain src\\xi).`;
+    return `Folder not found:\n${path || msg.replace(/^Not a folder:\s*/i, '')}\nBrowse to your xi-tools clone (must contain src/xi).`;
   }
   if (/doesn't look like an xi-tools/i.test(msg) || /Expected:/i.test(msg)) {
     return msg;

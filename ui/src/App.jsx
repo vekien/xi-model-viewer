@@ -48,7 +48,7 @@ import {
 import { pickZoneAt } from '../js/zonePick.js';
 import { loadDatTypeLists, makeDatTypeLookup } from '../js/dattypes.js';
 import { pickGizmoAxis, axisDragDelta } from '../js/zoneGizmo.js';
-import { parseEnvironments, parseEnvironmentsByRoot, resolveEnvironment, defaultWeather, listWeathers, terrainLightingFromEnv, skyDomeFromEnv, EnvironmentManager } from '../js/environment.js';
+import { parseEnvironments, parseEnvironmentsByRoot, resolveEnvironment, defaultWeather, listWeathers, terrainLightingFromEnv, skyDomeFromEnv, EnvironmentManager, sunDirDisplay } from '../js/environment.js';
 import { parseSections } from '../js/zone.js';
 import { buildDatTree, SEC } from '../js/dat/tree.js';
 import { makeParsers } from '../js/dat/sections.js';
@@ -561,6 +561,12 @@ export default function App({ launch = null }) {
   // and it already filters out versions the user has dismissed.
   useEffect(() => {
     if (minimal) return undefined;   // a zone-preview window is not the place for it
+    // Dev builds always report the version committed in the manifests (1.0.1),
+    // because release.yml stamps the real one at build time and never commits
+    // it back. So every Start.bat run saw "1.0.8 > 1.0.1" and raised an update
+    // banner for a release you already have. File > Check for Updates still
+    // works — this only skips the automatic boot nag.
+    if (import.meta.env.DEV) return undefined;
     let alive = true;
     checkForUpdate().then((info) => {
       if (alive && info) setUpdate(info);
@@ -776,6 +782,10 @@ export default function App({ launch = null }) {
   const [showUnlit, setShowUnlit] = useState(false);
   // Cast shadows from a single sun. Not a retail feature — a viewer toggle.
   const [showShadows, setShowShadows] = useState(() => localStorage.getItem('shadows') === '1');
+  // Light trackball widget (status-bar sun icon). Only meaningful while shadows are on.
+  const [lightGizmoOpen, setLightGizmoOpen] = useState(
+    () => localStorage.getItem('lightGizmo') !== '0',
+  );
   // Display-space sun aim from the light gizmo (null = default / zone env).
   const [customSunDir, setCustomSunDir] = useState(() => {
     try {
@@ -786,6 +796,17 @@ export default function App({ launch = null }) {
     } catch { /* */ }
     return null;
   });
+  // Light gizmo brightness (1 = 100%, up to 2 = 200%).
+  const [lightGain, setLightGainState] = useState(() => {
+    const v = parseFloat(localStorage.getItem('lightGain'));
+    return Number.isFinite(v) ? Math.min(2, Math.max(0.25, v)) : 1;
+  });
+  const setLightGain = useCallback((g) => {
+    const next = Math.min(2, Math.max(0.25, Number(g) || 1));
+    setLightGainState(next);
+    try { localStorage.setItem('lightGain', String(next)); } catch { /* quota */ }
+    rendererRef.current?.setLightGain?.(next);
+  }, []);
   // Graphics Settings (toolbar icon): shadow draw distance + render resolution.
   const [graphicsOpen, setGraphicsOpen] = useState(false);
   const [sequencerOpen, setSequencerOpen] = useState(false);
@@ -1234,6 +1255,7 @@ export default function App({ launch = null }) {
     renderer.showShadows = showShadows;
     renderer.shadowRange = shadowDistance;
     renderer.setCustomSunDir(customSunDir);
+    renderer.setLightGain(lightGain);
     renderer.camera.fovDegrees = fov;
     {
       const id = normalizeBgId(localStorage.getItem('bgImage') || 'none');
@@ -1384,6 +1406,13 @@ export default function App({ launch = null }) {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
+      // Free the GL objects. StrictMode mounts this effect twice and HMR
+      // remounts it on every edit, so without this each cycle leaked a full
+      // set of buffers, VAOs, textures and FBOs.
+      renderer.dispose();
+      // Only clear the ref if it still points at *this* renderer: under
+      // StrictMode the replacement is constructed before this cleanup runs.
+      if (rendererRef.current === renderer) rendererRef.current = null;
     };
   }, []);
 
@@ -2673,7 +2702,7 @@ export default function App({ launch = null }) {
   }, [ensureGlobalEffects, raiseModal]);
 
   /**
-   * Zone BGM from the server's zone_settings (see dev/bake-zone-music.mjs).
+   * Zone BGM from the server's zone_settings (baked by `xi mv update --only zone-music`).
    * Each zone names a day and a night track; id 0 means genuine silence, which
    * is why Valkurm Dunes and Qufim Island have no daytime music.
    *
@@ -5854,26 +5883,32 @@ export default function App({ launch = null }) {
       }
     }
 
-    localStorage.setItem('gamePath', gamePath);
-    localStorage.setItem('hdPath', hdPath);
-    localStorage.setItem('pivotPath', pivotPath);
-    localStorage.setItem('navmeshPath', navmeshPath);
-    localStorage.setItem('bgColor', draft.bgColor);
-    localStorage.setItem('autoPlay', draft.autoPlay ? '1' : '0');
-    localStorage.setItem('autoWasdZones', draft.autoWasdZones === false ? '0' : '1');
-    localStorage.setItem('autoFocusZoneObject', draft.autoFocusZoneObject === false ? '0' : '1');
-    localStorage.setItem('closeDatNotesOnSave', draft.closeDatNotesOnSave ? '1' : '0');
-    localStorage.setItem('dayLength', String(clampDayLength(draft.dayLength)));
-    localStorage.setItem('reframeOnSelect', draft.reframeOnSelect ? '1' : '0');
-    localStorage.setItem('showXiConsole', draft.showXiConsole === false ? '0' : '1');
-    localStorage.setItem('autoCloseXiConsole', draft.autoCloseXiConsole ? '1' : '0');
-    localStorage.setItem('xiPath', xiPath);
-    // Grid/axes live on the toolbar only — don't clobber them from Settings save.
-    // Clearing a root forces its toggle off.
+    // One try around the whole block, not seventeen bare calls: on a quota
+    // error (or a private window) the first throw used to abort the rest, so
+    // gamePath persisted and xiPath did not — settings torn in half. The
+    // in-memory state below is applied either way, so the session still works.
+    try {
+      localStorage.setItem('gamePath', gamePath);
+      localStorage.setItem('hdPath', hdPath);
+      localStorage.setItem('pivotPath', pivotPath);
+      localStorage.setItem('navmeshPath', navmeshPath);
+      localStorage.setItem('bgColor', draft.bgColor);
+      localStorage.setItem('autoPlay', draft.autoPlay ? '1' : '0');
+      localStorage.setItem('autoWasdZones', draft.autoWasdZones === false ? '0' : '1');
+      localStorage.setItem('autoFocusZoneObject', draft.autoFocusZoneObject === false ? '0' : '1');
+      localStorage.setItem('closeDatNotesOnSave', draft.closeDatNotesOnSave ? '1' : '0');
+      localStorage.setItem('dayLength', String(clampDayLength(draft.dayLength)));
+      localStorage.setItem('reframeOnSelect', draft.reframeOnSelect ? '1' : '0');
+      localStorage.setItem('showXiConsole', draft.showXiConsole === false ? '0' : '1');
+      localStorage.setItem('autoCloseXiConsole', draft.autoCloseXiConsole ? '1' : '0');
+      localStorage.setItem('xiPath', xiPath);
+      // Grid/axes live on the toolbar only — don't clobber them from Settings save.
+      // Clearing a root forces its toggle off.
+      if (!hdPath) localStorage.setItem('hdEnabled', '0');
+      if (!pivotPath) localStorage.setItem('pivotEnabled', '0');
+    } catch { /* quota */ }
     const hdEnabled = hdPath ? !!draft.hdEnabled : false;
     const pivotEnabled = pivotPath ? !!draft.pivotEnabled : false;
-    if (!hdPath) localStorage.setItem('hdEnabled', '0');
-    if (!pivotPath) localStorage.setItem('pivotEnabled', '0');
     const next = {
       ...draft,
       gamePath,
@@ -5968,6 +6003,26 @@ export default function App({ launch = null }) {
       const info = modelInfo;
       const src = sourcePathRef.current || '';
       const datStem = (src.split(/[\\/]/).pop() || 'model').replace(/\.dat$/i, '');
+      const s = settingsRef.current;
+      const isZone = modelRef.current.kind === 'zone' || !!info?.zone;
+      if (isZone) {
+        const z = info?.zone;
+        return {
+          type: 'zone',
+          typeLabel: 'Zone',
+          icon: 'map',
+          title: info?.name || modelPath || 'zone',
+          details: z
+            ? `${z.placementCount ?? '—'} placements · ${info.verts ?? 0} verts · ${info.tris ?? 0} tris`
+            : (info ? `${info.verts} verts · ${info.tris} tris` : null),
+          datStem,
+          sourcePath: src,
+          xiPath: s?.xiPath || '',
+          gamePath: s?.gamePath || '',
+          pivotPath: s?.pivotPath || '',
+          hdPath: s?.hdPath || '',
+        };
+      }
       return {
         type: 'model',
         typeLabel: 'Model',
@@ -5977,7 +6032,10 @@ export default function App({ launch = null }) {
         datStem,
         sourcePath: src,
         animations: animsRef.current.map((g) => ({ id: g.id, frames: g.clip.numFrames })),
-        xiPath: settingsRef.current?.xiPath || '',
+        xiPath: s?.xiPath || '',
+        gamePath: s?.gamePath || '',
+        pivotPath: s?.pivotPath || '',
+        hdPath: s?.hdPath || '',
       };
     }
     return null;
@@ -7491,6 +7549,28 @@ export default function App({ launch = null }) {
               )}
             </>
           ) : ''}
+          {showShadows && (
+            <>
+              {(statusText || modelInfo || player.current) && <span className="status-sep">·</span>}
+              <Tooltip content={lightGizmoOpen ? 'Hide light control' : 'Show light control'} placement="top">
+                <button
+                  type="button"
+                  className={`status-link status-light-btn${lightGizmoOpen ? ' on' : ''}`}
+                  aria-label={lightGizmoOpen ? 'Hide light control' : 'Show light control'}
+                  aria-pressed={lightGizmoOpen}
+                  onClick={() => {
+                    setLightGizmoOpen((v) => {
+                      const next = !v;
+                      try { localStorage.setItem('lightGizmo', next ? '1' : '0'); } catch { /* quota */ }
+                      return next;
+                    });
+                  }}
+                >
+                  <span className="icon">light_mode</span>
+                </button>
+              </Tooltip>
+            </>
+          )}
         </span>
       </div>
 
@@ -7504,12 +7584,18 @@ export default function App({ launch = null }) {
         />
       )}
 
-      {showShadows && (
+      {showShadows && lightGizmoOpen && (
         <LightGizmo
-          dir={customSunDir || DEFAULT_LIGHT_DIR}
+          dir={customSunDir || (modelInfo?.zone ? sunDirDisplay(timeMinutes) : DEFAULT_LIGHT_DIR)}
+          followingTime={!customSunDir && !!modelInfo?.zone}
           detailsOpen={detailsOpen && !!modelInfo}
+          brightness={lightGain}
+          onBrightness={setLightGain}
           onChange={(d) => setCustomSunDir(d)}
-          onReset={() => setCustomSunDir(null)}
+          onReset={() => {
+            setCustomSunDir(null);
+            setLightGain(1);
+          }}
         />
       )}
 
@@ -7613,6 +7699,12 @@ export default function App({ launch = null }) {
           autoClose={!!settings?.autoCloseXiConsole}
           autoCloseMs={10000}
           onClose={() => setCliOutput(null)}
+          onCancel={async () => {
+            try { await backend.xiRunCancel(); } catch { /* */ }
+            setCliOutput((prev) => (prev
+              ? { ...prev, title: `${prev.title || 'xi'} · cancelled`, text: `${prev.text || ''}\n# cancelled` }
+              : prev));
+          }}
         />
       )}
 
@@ -7682,6 +7774,10 @@ export default function App({ launch = null }) {
         spec={exportSpec}
         onClose={() => setExportSpec(null)}
         onStatus={(msg) => setStatusText(msg)}
+        onCliLog={(log) => {
+          if (settingsRef.current?.showXiConsole === false) return;
+          setCliOutput(log);
+        }}
       />
 
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />

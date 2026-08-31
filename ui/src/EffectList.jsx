@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Tooltip } from './Tooltip.jsx';
 
 // Effect categories/entries baked from AltanaViewer's List/Effect CSVs (see
-// dev/bake-effects.mjs). Each entry: { name, path: "ROM/d/f.DAT" }.
+// `xi mv update --only effects`). Each entry: { name, path: "ROM/d/f.DAT" }.
 
 const MAX_RESULTS = 400;   // cap the flat search list so a broad query stays snappy
 

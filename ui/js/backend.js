@@ -1,5 +1,5 @@
 // File access backend. In the Tauri app this uses IPC commands; when opened in
-// a plain browser it falls back to the dev server's /fs endpoints (dev/serve.py).
+// a plain browser it falls back to the dev server's /fs endpoints (scripts/serve.py).
 
 const isTauri = () => !!window.__TAURI__;
 
@@ -88,31 +88,81 @@ export const backend = {
     return res.arrayBuffer();
   },
 
-  /** Runs `xi mesh export DAT --output DIR [args]`. Returns the CLI output text. */
-  async xiMeshExport(datPath, outputDir, args, xiPath) {
-    if (isTauri()) return tauriInvoke('xi_mesh_export', { datPath, outputDir, args, xiPath: xiPath || null });
+  /**
+   * Runs `xi mesh export DAT --output DIR [args]`.
+   * `env` e.g. `{ FFXI_DIR: gamePath }` so xi can find FFXiMain.dll.
+   */
+  async xiMeshExport(datPath, outputDir, args, xiPath, env) {
+    if (isTauri()) {
+      return tauriInvoke('xi_mesh_export', {
+        datPath, outputDir, args, xiPath: xiPath || null, env: env || null,
+      });
+    }
     const res = await fetch('/fs/mesh-export', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ datPath, outputDir, args, xiPath }),
+      body: JSON.stringify({ datPath, outputDir, args, xiPath, env }),
     });
     const text = await res.text();
     if (!res.ok) throw new Error(text);
     return text;
   },
 
-  /** Runs `xi <args…>` with the configured xi-tools. Returns stdout/stderr text. */
-  async xiRun(args, xiPath) {
+  /**
+   * Runs `xi <args…>` with the configured xi-tools. Returns stdout/stderr text.
+   * `env` optional string map (FFXI_DIR, FFXI_PIVOT_DIR, …).
+   * Prefer `xiRunStream` for long jobs (zone export) so the UI stays responsive.
+   */
+  async xiRun(args, xiPath, env) {
     if (isTauri()) {
-      return tauriInvoke('xi_run', { args: args || [], xiPath: xiPath || null });
+      return tauriInvoke('xi_run', {
+        args: args || [], xiPath: xiPath || null, env: env || null,
+      });
     }
     const res = await fetch('/fs/xi-run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ args, xiPath }),
+      body: JSON.stringify({ args, xiPath, env }),
     });
     const text = await res.text();
     if (!res.ok) throw new Error(text);
     return text;
+  },
+
+  /**
+   * Background `xi` with live line events (`xi-log`). Does not freeze the UI.
+   * @param {(line: string) => void} [onLine]
+   * @returns {Promise<number>} exit code (0 ok)
+   */
+  async xiRunStream(args, xiPath, env, onLine) {
+    if (isTauri()) {
+      const listen = window.__TAURI__?.event?.listen;
+      let unlisten = () => {};
+      if (typeof listen === 'function' && onLine) {
+        unlisten = await listen('xi-log', (ev) => {
+          const line = typeof ev?.payload === 'string' ? ev.payload : String(ev?.payload ?? '');
+          if (line) onLine(line);
+        });
+      }
+      try {
+        return await tauriInvoke('xi_run_stream', {
+          args: args || [], xiPath: xiPath || null, env: env || null,
+        });
+      } finally {
+        try { unlisten(); } catch { /* */ }
+      }
+    }
+    // Browser: no true stream — fall back to blocking xi-run, then dump.
+    const text = await this.xiRun(args, xiPath, env);
+    if (onLine && text) {
+      for (const line of String(text).split(/\r?\n/)) onLine(line);
+    }
+    return 0;
+  },
+
+  /** Kill the in-flight streamed xi process (Tauri only). */
+  async xiRunCancel() {
+    if (!isTauri()) return;
+    return tauriInvoke('xi_run_cancel');
   },
 
   /** True if a runnable xi is resolvable from the configured path (or PATH). */
@@ -229,7 +279,7 @@ export const backend = {
 
   /**
    * Persistent user data folder (`%LOCALAPPDATA%\\XiModelViewer`).
-   * Browser dev: `dev/.user-data` under the repo.
+   * Browser dev: `.user-data` at the repo root.
    */
   async userDataDir() {
     if (isTauri()) return tauriInvoke('user_data_dir');

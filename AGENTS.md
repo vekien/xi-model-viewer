@@ -8,14 +8,14 @@ click controls, take screenshots, poke at live state — start the two pieces th
 Tauri shell would otherwise provide:
 
 ```bash
-XI_GAME_DIR="D:\path\to\FINAL FANTASY XI" python dev/serve.py 8766
+XI_GAME_DIR="D:\path\to\FINAL FANTASY XI" python scripts/serve.py 8766
 ```
 
 ```bash
 cd ui && npm run dev
 ```
 
-`vite.config.js` proxies `/fs` to `127.0.0.1:8766`, which is where `dev/serve.py`
+`vite.config.js` proxies `/fs` to `127.0.0.1:8766`, which is where `scripts/serve.py`
 serves the filesystem API that `js/backend.js` falls back to outside Tauri. With
 both running, `http://localhost:5173` is the real app with real game data.
 

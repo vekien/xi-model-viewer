@@ -3,7 +3,7 @@ import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
 
 // All character data comes fully resolved from lists/characters.json (baked by
-// dev/bake-lists.mjs): races with base skeleton + per-weapon-type battle-idle
+// `xi mv update`): races with base skeleton + per-weapon-type battle-idle
 // DATs, per-race gear/face items, and actions (Basic + Battle styles + weapon
 // skills) with every motion DAT already attached. No CSV/spec parsing here.
 
@@ -31,7 +31,7 @@ const LOOK_SLOT_OFFSET = { head: 0x04, body: 0x06, hands: 0x08, legs: 0x0A, feet
 // An item's `id` is "<rowIndex>:<spec>" (e.g. "12:137/11"), so parseInt(id) yields the
 // ROW INDEX, not the model id — those only coincide for faces, whose rows happen to be
 // sequential. Every item carries its real equipment model id as `mid` (baked in by
-// dev/bake-lists.mjs from dev/gear-models.json); use it.
+// `xi mv update --only gear`); use it.
 //
 // `useAlt` selects the alternate equipment table: Tarutaru is one viewer race spanning two
 // look races (5 male / 6 female — its "gender" is only the face), and the two tables assign
@@ -415,7 +415,7 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
     const r = races.find((x) => x.id === race);
     if (!r) return;
     // The base DAT holds only the lower-body motion slot; motionExtra adds the
-    // upper-body + waist companion packs (baked in dev/bake-lists.mjs) so
+    // upper-body + waist companion packs (baked by `xi mv update`) so
     // locomotion animates the whole body, not just the legs. They stay out of
     // focusPaths so they feed playback without flooding the Animation lists.
     const motionExtra = raceData.current.get(race)?.motionExtra ?? [];

@@ -129,7 +129,7 @@ export function WeatherPanel({
                   aria-label={todPlaying ? 'Stop time of day' : 'Play time of day'}
                   onClick={() => onToggleTod?.(!todPlaying)}
                 >
-                  <span className="icon">{todPlaying ? 'stop' : 'play_arrow'}</span>
+                  <span className="icon">{todPlaying ? 'stop_circle' : 'play_arrow'}</span>
                 </button>
               </Tooltip>
               <input

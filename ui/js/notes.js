@@ -1,6 +1,6 @@
 // User notes for Data Struct inspect windows (UiMenu rows, etc.).
 // Stored at %LOCALAPPDATA%\XiModelViewer\notes.json (Tauri) — editable, portable.
-// Browser dev falls back to the same shape under dev/.user-data/notes.json,
+// Browser dev falls back to the same shape under .user-data/notes.json,
 // with a localStorage mirror so notes still work if the file is unavailable.
 
 import { backend } from './backend.js';

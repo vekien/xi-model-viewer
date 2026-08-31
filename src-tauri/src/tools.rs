@@ -8,8 +8,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 
-const GH_OWNER: &str = "vekien";
-const GH_REPO: &str = "xi-tools";
+use crate::github::{self, OWNER as GH_OWNER, TOOLS_REPO as GH_REPO};
 
 fn env_path(name: &str) -> Option<PathBuf> {
     let v = std::env::var(name).ok()?;
@@ -17,8 +16,12 @@ fn env_path(name: &str) -> Option<PathBuf> {
     (!v.is_empty()).then(|| PathBuf::from(v))
 }
 
+/// Must agree with main.rs user_data_dir_path: XI_DATA_DIR names the *parent*,
+/// and `XiModelViewer` is appended. Reading the var bare here meant a set
+/// XI_DATA_DIR put notes.json and the xi-tools install in two different trees.
 fn app_data_dir() -> PathBuf {
     env_path("XI_DATA_DIR")
+        .map(|p| p.join("XiModelViewer"))
         .or_else(|| {
             std::env::var("LOCALAPPDATA")
                 .ok()
@@ -57,9 +60,11 @@ fn validate_tools_dir(dir: &Path) -> Result<(), String> {
         return Err(format!("Not a folder: {}", dir.display()));
     }
     if !dir.join("src").join("xi").is_dir() {
+        // Let Path render the separator: this string is shown verbatim in the
+        // Settings dialog, and a literal "\" is wrong on macOS/Linux.
         return Err(format!(
-            "That folder doesn't look like an xi-tools checkout.\nExpected: {}\\src\\xi\\",
-            dir.display()
+            "That folder doesn't look like an xi-tools checkout.\nExpected: {}",
+            dir.join("src").join("xi").display()
         ));
     }
     Ok(())
@@ -155,15 +160,8 @@ fn emit_log(app: &AppHandle, line: impl AsRef<str>) {
 }
 
 fn gh_client() -> reqwest::blocking::Client {
-    reqwest::blocking::Client::builder()
-        // GitHub asks for a descriptive UA; bare short names sometimes get 403s.
-        .user_agent(format!(
-            "xi-model-viewer/{} (+https://github.com/{GH_OWNER}/xi-model-viewer)",
-            env!("CARGO_PKG_VERSION")
-        ))
-        .timeout(Duration::from_secs(120))
-        .build()
-        .expect("http client")
+    // Long timeout: this client also pulls the release zip, not just metadata.
+    github::client(Duration::from_secs(120), true).expect("http client")
 }
 
 /// Prefer the JSON API; on 403 rate-limit (common for unauthenticated 60/hr),
@@ -226,43 +224,12 @@ fn fetch_latest_release_api() -> Result<serde_json::Value, String> {
 /// No API quota: follow /releases/latest → tag page, build the zip asset URL
 /// (`xi-tools-vX.Y.Z.zip` as published on the repo).
 fn fetch_latest_release_html_fallback() -> Result<serde_json::Value, String> {
-    let client = reqwest::blocking::Client::builder()
-        .user_agent(format!(
-            "xi-model-viewer/{} (+https://github.com/{GH_OWNER}/xi-model-viewer)",
-            env!("CARGO_PKG_VERSION")
-        ))
-        .timeout(Duration::from_secs(60))
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    let latest = format!("https://github.com/{GH_OWNER}/{GH_REPO}/releases/latest");
-    let resp = client
-        .get(&latest)
-        .send()
-        .map_err(|e| format!("releases/latest: {e}"))?;
-    let loc = resp
-        .headers()
-        .get(reqwest::header::LOCATION)
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string())
-        .ok_or_else(|| {
-            format!(
-                "no redirect from releases/latest (HTTP {})",
-                resp.status()
-            )
-        })?;
-
-    // .../releases/tag/v1.5.12
-    let tag = loc
-        .rsplit('/')
-        .next()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| format!("could not parse tag from {loc}"))?;
+    // Redirects unfollowed: the tag only exists in the Location header.
+    let client = github::client(Duration::from_secs(60), false)?;
+    let tag = github::latest_tag(&client, GH_OWNER, GH_REPO)?;
 
     let name = format!("xi-tools-{tag}.zip");
-    let url = format!("https://github.com/{GH_OWNER}/{GH_REPO}/releases/download/{tag}/{name}");
+    let url = github::asset_url(GH_OWNER, GH_REPO, &tag, &name);
 
     // Same shape pick_zip_asset expects from the API payload.
     Ok(serde_json::json!({

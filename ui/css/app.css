@@ -1327,7 +1327,7 @@ button.seg-tab.active .icon { color: var(--accent); }
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 8px 7px 12px;
+  padding: 5px 10px;
   border-bottom: 1px solid var(--ring);
   color: var(--muted);
   font-size: 12px;
@@ -1343,7 +1343,27 @@ button.seg-tab.active .icon { color: var(--accent); }
   color: var(--gray-200);
   font-weight: 600;
 }
+button.cli-output-stop {
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  margin-right: 2px;
+  padding: 4px 6px;
+  border: 1px solid rgba(255, 120, 100, 0.35);
+  border-radius: 6px;
+  background: rgba(255, 80, 60, 0.12);
+  box-shadow: none;
+  color: #f0a090;
+  font: 600 11px/1 var(--font-ui);
+}
+button.cli-output-stop:hover {
+  background: rgba(255, 80, 60, 0.22);
+  color: #ffc8b8;
+  border-color: rgba(255, 140, 120, 0.5);
+}
 .cli-output-close {
+  flex: 0 0 auto;
   width: 24px;
   height: 24px;
   min-height: 0;
@@ -1510,6 +1530,25 @@ button.seg-tab.active .icon { color: var(--accent); }
   flex: 0 0 auto;
 }
 .status-link:hover { text-decoration: underline; background: none; }
+/* Sun / light-gizmo toggle (right of Details while Shadows is on). */
+.status-light-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  color: var(--gray-500);
+  text-decoration: none !important;
+}
+.status-light-btn .icon { font-size: 16px; line-height: 1; }
+.status-light-btn:hover {
+  color: var(--accent);
+  background: none;
+  text-decoration: none !important;
+}
+.status-light-btn.on { color: #f0c060; }
+.status-light-btn.on:hover { color: #ffd78a; }
 .status-path-link {
   background: none; border: none; box-shadow: none; min-height: 0; padding: 0;
   font: inherit; text-align: left; cursor: pointer;
@@ -1886,8 +1925,7 @@ body.plc-resizing { cursor: ns-resize !important; user-select: none; }
   right: 12px;
   bottom: 56px;
   z-index: 28;
-  width: 88px;
-  height: 88px;
+  width: 96px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background:
@@ -1896,11 +1934,85 @@ body.plc-resizing { cursor: ns-resize !important; user-select: none; }
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(8px);
   overflow: hidden;
-  cursor: grab;
   user-select: none;
   touch-action: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
 }
-.light-gizmo:active { cursor: grabbing; }
+.light-gizmo-bright {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 8px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: default;
+}
+.light-gizmo-bright-lab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  color: var(--gray-400);
+  font: 600 9px/1 var(--font-ui);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.light-gizmo-bright-lab strong {
+  color: #f0c060;
+  font: 600 10px/1 var(--font-mono);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.light-gizmo-slider {
+  width: 100%;
+  margin: 0;
+  height: 14px;
+}
+.light-gizmo-foot {
+  flex: 0 0 auto;
+  padding: 4px 8px 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: default;
+}
+.light-gizmo-reset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 100%;
+  margin: 0;
+  padding: 3px 4px;
+  min-height: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: none;
+  color: var(--gray-300);
+  font: 600 10px/1 var(--font-ui);
+  cursor: pointer;
+}
+.light-gizmo-reset .icon { font-size: 13px; }
+.light-gizmo-reset:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--gray-100);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.light-gizmo-reset:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.light-gizmo-ball {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  margin: 0 auto;
+  cursor: grab;
+  touch-action: none;
+}
+.light-gizmo-ball:active { cursor: grabbing; }
 .light-gizmo canvas { display: block; width: 88px; height: 88px; }
 /* Corner help glyph. Hover-only affordance, so a span — the gizmo is
    position:fixed and already the containing block. */

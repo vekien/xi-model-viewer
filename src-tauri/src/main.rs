@@ -3,10 +3,17 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod github;
 mod tools;
 
 use serde::Serialize;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
+use std::sync::Mutex;
+use tauri::{AppHandle, Emitter};
+
+/// PID of the in-flight `xi_run_stream` child (for cancel).
+static XI_STREAM_PID: Mutex<Option<u32>> = Mutex::new(None);
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,7 +23,7 @@ struct DirEntry {
 }
 
 /// The frontend joins paths Windows-style (`gamePath\ROM\1\58.DAT`); accept those
-/// on POSIX boxes, matching what dev/serve.py does. Backslash is a legal filename
+/// on POSIX boxes, matching what scripts/serve.py does. Backslash is a legal filename
 /// character on unix, but no FFXI DAT uses one.
 fn norm(path: &str) -> std::path::PathBuf {
     if cfg!(windows) {
@@ -101,12 +108,11 @@ fn pick_folder(initial: Option<String>) -> Option<String> {
 // Machine-specific paths. Each default below is what shipped hardcoded; set the
 // matching env var to point the app elsewhere (non-Windows boxes, alt installs).
 //   XI_GAME_DIR   FFXI install directory
-//   XI_VGMSTREAM  vgmstream-cli executable
+//   XI_VGMSTREAM  vgmstream-cli executable (macOS/Linux: the bundle is win32)
 //   XI_CLI        xi-tools folder (or xi.exe); Python 3.14 + .venv
 //   XI_CACHE_DIR  where the embedded vgmstream is unpacked
 // ---------------------------------------------------------------------------
 const DEFAULT_GAME_DIR: &str = r"C:\Program Files (x86)\PlayOnline\SquareEnix\FINAL FANTASY XI";
-const DEFAULT_VGMSTREAM: &str = r"D:\xidata\AltanaListener_Windows\Dependencies\vgmstream-cli.exe";
 
 /// Loads `.env` so the overrides work when the app is launched directly (Finder,
 /// `cargo run`, a shortcut) and not just through start.sh / build.sh. Real
@@ -184,7 +190,12 @@ fn extract_vgmstream() -> Option<std::path::PathBuf> {
         }
         for (name, bytes) in VGM_FILES {
             let p = dir.join(name);
-            let needs = std::fs::metadata(&p).map(|m| m.len() != bytes.len() as u64).unwrap_or(true);
+            // A version bump rewrites unconditionally. Length alone is only the
+            // cheap skip for an unchanged version: a replacement binary of the
+            // same size is invisible to it, and the .version marker below is
+            // stamped either way, so the stale file would be trusted forever.
+            let needs = !up_to_date
+                || std::fs::metadata(&p).map(|m| m.len() != bytes.len() as u64).unwrap_or(true);
             if needs && std::fs::write(&p, bytes).is_err() {
                 return None;
             }
@@ -196,7 +207,7 @@ fn extract_vgmstream() -> Option<std::path::PathBuf> {
 
 /// Locate vgmstream-cli. Order: XI_VGMSTREAM, a co-located `vgmstream` folder
 /// (dev), the embedded copy extracted to the user cache (Windows — the bundled
-/// build is win32), a `vgmstream-cli` on PATH, then the AltanaListener install.
+/// build is win32), then a `vgmstream-cli` on PATH — how macOS/Linux get one.
 fn find_vgmstream() -> Option<std::path::PathBuf> {
     if let Some(p) = env_path("XI_VGMSTREAM") {
         if p.is_file() {
@@ -223,8 +234,7 @@ fn find_vgmstream() -> Option<std::path::PathBuf> {
             return Some(p);
         }
     }
-    let altana = std::path::PathBuf::from(DEFAULT_VGMSTREAM);
-    altana.is_file().then_some(altana)
+    None
 }
 
 /// Decodes any .bgw/.spw (including ATRAC3) to WAV bytes via vgmstream-cli.
@@ -232,7 +242,13 @@ fn find_vgmstream() -> Option<std::path::PathBuf> {
 #[tauri::command]
 fn decode_vgmstream(path: String) -> Result<tauri::ipc::Response, String> {
     let vgm = find_vgmstream().ok_or("vgmstream-cli not found")?;
-    let out = std::env::temp_dir().join(format!("xi_vgm_{}.wav", std::process::id()));
+    // Unique per *call*, not per process: Tauri runs sync commands on a thread
+    // pool and a zone load fires several decodes at once (ambient beds + BGM).
+    // One shared path meant two runs clobbering each other's WAV, then racing to
+    // delete it — intermittent silence or noise, worse on faster machines.
+    static VGM_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let seq = VGM_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let out = std::env::temp_dir().join(format!("xi_vgm_{}_{}.wav", std::process::id(), seq));
 
     let status = std::process::Command::new(&vgm)
         .arg("-i")
@@ -637,6 +653,27 @@ fn pick_file(initial: Option<String>) -> Option<String> {
     dialog.pick_file().map(|p| p.to_string_lossy().into_owned())
 }
 
+/// Apply optional env overrides (e.g. FFXI_DIR from Settings → Game path).
+fn apply_xi_env(
+    cmd: &mut std::process::Command,
+    env: &Option<std::collections::HashMap<String, String>>,
+) {
+    if let Some(map) = env {
+        for (k, v) in map {
+            let key = k.trim();
+            if key.is_empty() {
+                continue;
+            }
+            let val = v.trim();
+            if val.is_empty() {
+                cmd.env_remove(key);
+            } else {
+                cmd.env(key, val);
+            }
+        }
+    }
+}
+
 /// Runs `xi mesh export DAT [args…]`. Returns the CLI's combined stdout/stderr.
 #[tauri::command]
 fn xi_mesh_export(
@@ -644,6 +681,7 @@ fn xi_mesh_export(
     output_dir: String,
     args: Vec<String>,
     xi_path: Option<String>,
+    env: Option<std::collections::HashMap<String, String>>,
 ) -> Result<String, String> {
     let xi = resolve_xi(&xi_path)
         .ok_or("xi CLI not found — set the xi-tools path in Settings")?;
@@ -656,27 +694,7 @@ fn xi_mesh_export(
     for a in &args {
         cmd.arg(a);
     }
-    let out = run_quiet(&mut cmd).map_err(|e| format!("failed to run xi: {e}"))?;
-    let text = cmd_text(&out);
-    if out.status.success() {
-        Ok(text)
-    } else {
-        Err(format!("xi export failed:\n{text}"))
-    }
-}
-
-/// Run an arbitrary `xi <args…>` (cwd = xi-tools folder when configured as a dir).
-#[tauri::command]
-fn xi_run(args: Vec<String>, xi_path: Option<String>) -> Result<String, String> {
-    if args.is_empty() {
-        return Err("xi_run: no arguments".into());
-    }
-    let xi = resolve_xi(&xi_path)
-        .ok_or("xi CLI not found — set the xi-tools folder in Settings")?;
-    let mut cmd = std::process::Command::new(&xi);
-    for a in &args {
-        cmd.arg(a);
-    }
+    apply_xi_env(&mut cmd, &env);
     // Prefer running inside the checkout so relative paths / .env resolve.
     if let Some(cfg) = xi_path.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
         let p = norm(cfg);
@@ -693,8 +711,184 @@ fn xi_run(args: Vec<String>, xi_path: Option<String>) -> Result<String, String> 
     if out.status.success() {
         Ok(text)
     } else {
+        Err(format!("xi export failed:\n{text}"))
+    }
+}
+
+fn prepare_xi_cmd(
+    args: &[String],
+    xi_path: &Option<String>,
+    env: &Option<std::collections::HashMap<String, String>>,
+) -> Result<std::process::Command, String> {
+    if args.is_empty() {
+        return Err("xi_run: no arguments".into());
+    }
+    let xi = resolve_xi(xi_path)
+        .ok_or("xi CLI not found — set the xi-tools folder in Settings")?;
+    let mut cmd = std::process::Command::new(&xi);
+    for a in args {
+        cmd.arg(a);
+    }
+    apply_xi_env(&mut cmd, env);
+    // Unbuffered Python so Click/print lines stream instead of batching.
+    cmd.env("PYTHONUNBUFFERED", "1");
+    cmd.env("PYTHONIOENCODING", "utf-8");
+    // Prefer running inside the checkout so relative paths / .env resolve.
+    if let Some(cfg) = xi_path.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        let p = norm(cfg);
+        if p.is_dir() {
+            cmd.current_dir(&p);
+        } else if let Some(parent) = p.parent() {
+            if parent.is_dir() {
+                cmd.current_dir(parent);
+            }
+        }
+    }
+    Ok(cmd)
+}
+
+/// Run an arbitrary `xi <args…>` (cwd = xi-tools folder when configured as a dir).
+/// Blocking — prefer `xi_run_stream` for long jobs (zone export).
+#[tauri::command]
+fn xi_run(
+    args: Vec<String>,
+    xi_path: Option<String>,
+    env: Option<std::collections::HashMap<String, String>>,
+) -> Result<String, String> {
+    let mut cmd = prepare_xi_cmd(&args, &xi_path, &env)?;
+    let out = run_quiet(&mut cmd).map_err(|e| format!("failed to run xi: {e}"))?;
+    let text = cmd_text(&out);
+    if out.status.success() {
+        Ok(text)
+    } else {
         Err(format!("xi failed ({args:?}):\n{text}"))
     }
+}
+
+/// Background `xi` with live stdout/stderr → `xi-log` events. UI stays responsive.
+/// Returns process exit code (0 = ok). Only one streamed job at a time.
+#[tauri::command]
+async fn xi_run_stream(
+    app: AppHandle,
+    args: Vec<String>,
+    xi_path: Option<String>,
+    env: Option<std::collections::HashMap<String, String>>,
+) -> Result<i32, String> {
+    tauri::async_runtime::spawn_blocking(move || xi_run_stream_sync(&app, args, xi_path, env))
+        .await
+        .map_err(|e| format!("xi stream task failed: {e}"))?
+}
+
+fn xi_run_stream_sync(
+    app: &AppHandle,
+    args: Vec<String>,
+    xi_path: Option<String>,
+    env: Option<std::collections::HashMap<String, String>>,
+) -> Result<i32, String> {
+    let mut cmd = prepare_xi_cmd(&args, &xi_path, &env)?;
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    {
+        let slot = XI_STREAM_PID.lock().map_err(|e| e.to_string())?;
+        if slot.is_some() {
+            return Err("another xi command is already running — Stop it first".into());
+        }
+    }
+    let mut child = cmd.spawn().map_err(|e| format!("failed to spawn xi: {e}"))?;
+    let pid = child.id();
+    {
+        let mut slot = XI_STREAM_PID.lock().map_err(|e| e.to_string())?;
+        *slot = Some(pid);
+    }
+
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+    let app_out = app.clone();
+    let app_err = app.clone();
+    let t_out = std::thread::spawn(move || {
+        if let Some(pipe) = stdout {
+            for line in BufReader::new(pipe).lines() {
+                match line {
+                    Ok(l) => {
+                        let _ = app_out.emit("xi-log", l);
+                    }
+                    Err(_) => break,
+                }
+            }
+        }
+    });
+    let t_err = std::thread::spawn(move || {
+        if let Some(pipe) = stderr {
+            for line in BufReader::new(pipe).lines() {
+                match line {
+                    Ok(l) => {
+                        let _ = app_err.emit("xi-log", l);
+                    }
+                    Err(_) => break,
+                }
+            }
+        }
+    });
+
+    let status = child.wait().map_err(|e| {
+        let _ = XI_STREAM_PID.lock().map(|mut s| s.take());
+        format!("xi wait failed: {e}")
+    })?;
+    let _ = t_out.join();
+    let _ = t_err.join();
+    if let Ok(mut slot) = XI_STREAM_PID.lock() {
+        slot.take();
+    }
+
+    let code = status.code().unwrap_or(if status.success() { 0 } else { 1 });
+    let _ = app.emit(
+        "xi-log",
+        if code == 0 {
+            format!("# exit {code}")
+        } else {
+            format!("# exit {code} (failed)")
+        },
+    );
+    if code == 0 {
+        Ok(code)
+    } else {
+        Err(format!("xi exited with code {code}"))
+    }
+}
+
+/// Kill the in-flight streamed xi process (if any).
+#[tauri::command]
+fn xi_run_cancel() -> Result<(), String> {
+    let pid = {
+        let mut slot = XI_STREAM_PID.lock().map_err(|e| e.to_string())?;
+        slot.take()
+    };
+    let Some(pid) = pid else {
+        return Ok(());
+    };
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+    }
+    #[cfg(unix)]
+    {
+        let _ = std::process::Command::new("kill")
+            .args(["-TERM", &pid.to_string()])
+            .output();
+    }
+    Ok(())
 }
 
 /// Command-line arguments the app was launched with (argv[0] dropped).
@@ -752,81 +946,27 @@ struct AppReleaseInfo {
 /// Newest app release via github.com HTML (no api.github.com, no browser CORS).
 #[tauri::command]
 fn app_latest_release() -> Result<AppReleaseInfo, String> {
-    const OWNER: &str = "vekien";
-    const REPO: &str = "xi-model-viewer";
+    use github::{APP_REPO as REPO, OWNER};
 
-    let client = reqwest::blocking::Client::builder()
-        .user_agent(format!(
-            "xi-model-viewer/{} (+https://github.com/{OWNER}/{REPO})",
-            env!("CARGO_PKG_VERSION")
-        ))
-        .timeout(std::time::Duration::from_secs(12))
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = github::client(std::time::Duration::from_secs(12), false)?;
+    let tag = github::latest_tag(&client, OWNER, REPO)?;
 
-    let latest = format!("https://github.com/{OWNER}/{REPO}/releases/latest");
-    let resp = client
-        .get(&latest)
-        .send()
-        .map_err(|e| format!("releases/latest: {e}"))?;
-    let loc = resp
-        .headers()
-        .get(reqwest::header::LOCATION)
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string())
-        .ok_or_else(|| {
-            format!(
-                "no redirect from releases/latest (HTTP {})",
-                resp.status()
+    // The published name is the usual case; the scrape below corrects it when a
+    // release names its exe differently.
+    let fallback_name = format!("xi-model-viewer-{tag}.exe");
+    let (download_url, download_name) = github::find_asset(&client, OWNER, REPO, &tag, ".exe")
+        .unwrap_or_else(|| {
+            (
+                github::asset_url(OWNER, REPO, &tag, &fallback_name),
+                fallback_name.clone(),
             )
-        })?;
-
-    let tag = loc
-        .rsplit('/')
-        .next()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| format!("could not parse tag from {loc}"))?;
-    let version = tag.trim_start_matches(['v', 'V']).to_string();
-
-    let mut download_name = format!("xi-model-viewer-{tag}.exe");
-    let mut download_url =
-        format!("https://github.com/{OWNER}/{REPO}/releases/download/{tag}/{download_name}");
-
-    // Optional: scrape expanded_assets for the real .exe name.
-    let assets_url = format!(
-        "https://github.com/{OWNER}/{REPO}/releases/expanded_assets/{tag}"
-    );
-    if let Ok(assets_resp) = client.get(&assets_url).send() {
-        if assets_resp.status().is_success() {
-            if let Ok(html) = assets_resp.text() {
-                if let Some(cap) = html
-                    .split("href=\"")
-                    .filter_map(|s| s.split('"').next())
-                    .find(|h| h.to_ascii_lowercase().ends_with(".exe"))
-                {
-                    let href = if cap.starts_with("http") {
-                        cap.to_string()
-                    } else {
-                        format!("https://github.com{cap}")
-                    };
-                    download_url = href.clone();
-                    if let Some(name) = href.rsplit('/').next() {
-                        if !name.is_empty() {
-                            download_name = name.to_string();
-                        }
-                    }
-                }
-            }
-        }
-    }
+        });
 
     Ok(AppReleaseInfo {
-        version,
+        version: github::version_of(&tag),
         tag: tag.clone(),
         name: tag.clone(),
-        url: format!("https://github.com/{OWNER}/{REPO}/releases/tag/{tag}"),
+        url: github::tag_url(OWNER, REPO, &tag),
         download_url,
         download_name,
         download_bytes: 0,
@@ -837,12 +977,33 @@ fn app_latest_release() -> Result<AppReleaseInfo, String> {
 
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
-    // Empty title arg so `start` treats the URL as the target, not a window title.
-    std::process::Command::new("cmd")
-        .args(["/C", "start", "", &url])
-        .spawn()
-        .map_err(|e| format!("failed to open url: {e}"))?;
-    Ok(())
+    #[cfg(target_os = "windows")]
+    {
+        // Empty title arg so `start` treats the URL as the target, not a window title.
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", &url])
+            .spawn()
+            .map_err(|e| format!("failed to open url: {e}"))?;
+        return Ok(());
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("failed to open url: {e}"))?;
+        return Ok(());
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("failed to open url: {e}"))?;
+        return Ok(());
+    }
+    #[allow(unreachable_code)]
+    Err("opening links is not supported on this platform".into())
 }
 
 /// Opens the system file manager with `path` selected.
@@ -1000,6 +1161,8 @@ fn main() {
             decode_vgmstream,
             xi_mesh_export,
             xi_run,
+            xi_run_stream,
+            xi_run_cancel,
             xi_available,
             xi_setup,
             tools::tools_status,

@@ -77,8 +77,13 @@ export function PlacementPanel({
     });
   }, [groups, showEnv]);
 
-  const vfxGroups = useMemo(() => effectGroups ?? [], [effectGroups, vfxHiddenTick]);
-  const sfxGroups = useMemo(() => soundGroups ?? [], [soundGroups, sfxListTick]);
+  // The *Tick props are re-render triggers, not data: rows read visibility
+  // state inline, so a bumped tick has to reach them as a plain prop change.
+  // They used to sit in these dep arrays, which did nothing — the memo
+  // recomputed and handed back the identical array reference, so every
+  // downstream memo keyed on it saw no change and the tick died here.
+  const vfxGroups = useMemo(() => effectGroups ?? [], [effectGroups]);
+  const sfxGroups = useMemo(() => soundGroups ?? [], [soundGroups]);
 
   const activeGroups = tab === 'vfx' ? vfxGroups : tab === 'sfx' ? sfxGroups : meshGroups;
 
@@ -197,10 +202,6 @@ export function PlacementPanel({
     document.body.classList.add('plc-resizing');
     e.currentTarget.setPointerCapture?.(e.pointerId);
   };
-
-  void hiddenTick;
-  void vfxHiddenTick;
-  void sfxListTick;
 
   return (
     <div

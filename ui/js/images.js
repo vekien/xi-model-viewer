@@ -247,17 +247,6 @@ function uniqueTextures(textures) {
   return new Set(textures.values());
 }
 
-/** Textures with no image set claiming them — shown so nothing is hidden. */
-export function unclaimedTextures(sets, textures) {
-  const claimed = new Set();
-  for (const s of sets) {
-    if (s.kind === 'texture') continue;
-    const tex = textureForSet(s, textures);
-    if (tex) claimed.add(tex);
-  }
-  return [...uniqueTextures(textures)].filter((t) => !claimed.has(t));
-}
-
 /**
  * Parse sprite records inside one 0x31 section body.
  *

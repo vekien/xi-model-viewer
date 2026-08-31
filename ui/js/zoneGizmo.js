@@ -1,6 +1,5 @@
 // Solid XYZ transform gizmo (shaft + cone + center) and axis drag math.
 
-import { clientToNdc, cameraScreenRay } from './zonePick.js';
 import { mat4Multiply } from './camera.js';
 
 const BASE = {
@@ -119,18 +118,6 @@ export function buildSolidGizmoMeshes() {
     yHot: buildAxisMesh(1, HOT.y),
     zHot: buildAxisMesh(2, HOT.z),
   };
-}
-
-/** @deprecated use buildSolidGizmoMeshes */
-export function buildSolidGizmoMesh() {
-  const m = buildSolidGizmoMeshes();
-  // Concat for any leftover single-mesh callers.
-  const parts = [m.x, m.y, m.z, m.center];
-  const n = parts.reduce((s, p) => s + p.length, 0);
-  const out = new Float32Array(n);
-  let o = 0;
-  for (const p of parts) { out.set(p, o); o += p.length; }
-  return out;
 }
 
 export function gizmoSize(renderer, gizmo) {
@@ -252,25 +239,4 @@ export function axisDragDelta(renderer, gizmo, axis, prevX, prevY, clientX, clie
     dy: dir[1] * world,
     dz: dir[2] * world,
   };
-}
-
-export function projectRayOnAxis(renderer, gizmo, axis, clientX, clientY) {
-  if (!renderer || !gizmo?.pos) return null;
-  const ndc = clientToNdc(renderer, clientX, clientY);
-  if (!ndc) return null;
-  const ray = cameraScreenRay(renderer.camera, ndc.ndcX, ndc.ndcY, ndc.aspect);
-  if (!ray) return null;
-  const o = gizmo.pos;
-  const axisDir = axis === 'x' ? [1, 0, 0] : axis === 'y' ? [0, 1, 0] : [0, 0, 1];
-  const d1 = ray.dir;
-  const d2 = axisDir;
-  const r = [o[0] - ray.origin[0], o[1] - ray.origin[1], o[2] - ray.origin[2]];
-  const a = d1[0] * d1[0] + d1[1] * d1[1] + d1[2] * d1[2];
-  const b = d1[0] * d2[0] + d1[1] * d2[1] + d1[2] * d2[2];
-  const c = d2[0] * d2[0] + d2[1] * d2[1] + d2[2] * d2[2];
-  const d = d1[0] * r[0] + d1[1] * r[1] + d1[2] * r[2];
-  const e = d2[0] * r[0] + d2[1] * r[1] + d2[2] * r[2];
-  const denom = a * c - b * b;
-  if (Math.abs(denom) < 1e-12) return e / (c || 1);
-  return (a * e - b * d) / denom;
 }
