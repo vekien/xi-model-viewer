@@ -35,7 +35,10 @@ export function WeatherPanel({
   sfxOn = true, onToggleSfx,
   zoneTrack = null, zoneTrackPlaying = false, onToggleZoneMusic,
 }) {
-  const showSkyControls = hasSkybox && weathers.length > 0;
+  // Weather and time are always offered when the zone declares any weather.
+  // Gating on hasSkybox hid them for zones whose sky is not a 0x2F dome,
+  // which have weather all the same.
+  const showSkyControls = weathers.length > 0;
   const brightPct = Math.round((brightness ?? 0) * 100);
   const musicPct = Math.round((musicVolume ?? 0) * 100);
   const sfxPct = Math.round((sfxVolume ?? 0) * 100);
@@ -119,7 +122,7 @@ export function WeatherPanel({
                 minute. Step 1 rather than 15 so the thumb tracks the sweep — a
                 range input snaps its value to the step grid. */}
             <div className="wx-row wx-time-row">
-              <Tooltip content={todPlaying ? 'Stop the clock' : 'Run a day in a minute'} placement="top">
+              <Tooltip content={todPlaying ? 'Stop the clock' : 'Auto Play Day/Night cycle'} placement="top">
                 <button
                   className={`wx-audio-btn${todPlaying ? ' playing' : ''}`}
                   aria-pressed={todPlaying}

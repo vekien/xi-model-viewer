@@ -125,6 +125,19 @@ function readZoneCamera(key) {
 const VIEWS = ['files', 'npc', 'pc', 'creation', 'music', 'sfx', 'zones', 'images', 'effects'];
 /** Views that browse individual models, where fly controls are a hindrance. */
 const ORBIT_VIEWS = new Set(['files', 'npc', 'pc', 'creation']);
+// Seconds of real time one in-game day takes when the day/night cycle is
+// playing. 60 is what the button did before it was configurable.
+const DAY_LENGTH_DEFAULT = 60;
+const DAY_LENGTH_MIN = 5;
+const DAY_LENGTH_MAX = 1800;
+function clampDayLength(v) {
+  // Number(null) and Number('') are 0, not NaN — an unset value has to be
+  // caught before the clamp or it lands on the minimum instead of the default.
+  if (v == null || v === '') return DAY_LENGTH_DEFAULT;
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return DAY_LENGTH_DEFAULT;
+  return Math.min(DAY_LENGTH_MAX, Math.max(DAY_LENGTH_MIN, n));
+}
 // Views whose actor can carry particle VFX alongside its mesh, and so get the
 // Both / Mesh / VFX control and the effect volume slider.
 const FX_VIEWS = new Set(['pc', 'npc']);
@@ -207,6 +220,80 @@ function withBaseIdle(model, clip) {
   return { ...clip, baseClip: base };
 }
 
+/**
+ * Base Anim: a resting clip that always plays, with the selection laid over it
+ * as a montage — blend in, play through, blend back, rest again. The same shape
+ * as an Unreal montage over a state machine's default state.
+ *
+ * Built on the schedule machinery rather than a second system: a schedule clip
+ * is already "segments over a baseClip, blending back out", which is exactly
+ * this. `transIn` (see pose.js) is the piece that was missing.
+ */
+const BASE_ANIM_BLEND = 6;   // frames of cross-fade at each end
+
+/** Resting clip for a Base Anim mode. Falls back down the list if it's absent. */
+function pickBaseAnim(model, mode) {
+  if (!model || !mode || mode === 'none') return null;
+  const grouped = groupAnimations(model.animations);
+  for (const id of (mode === 'btl' ? ['btl', 'idl', 'std'] : ['idl', 'std'])) {
+    const g = grouped.find((x) => x.id === id);
+    if (g && g.clip.jointTracks.size > 0) return g.clip;
+  }
+  return null;
+}
+
+/**
+ * Lay `clip` over the resting clip as a montage. Returns `clip` unchanged when
+ * Base Anim is off, when the model has no resting clip, or when the selection
+ * IS the resting clip (which just loops on its own).
+ */
+function asMontage(model, clip, mode) {
+  const base = pickBaseAnim(model, mode);
+  // Compare ids as well as identity: the selection arrives wrapped by
+  // withBaseIdle, so picking the resting clip itself is not the same object.
+  if (!clip || !base) return clip;
+  if (clip === base || clip.baseClip === base || clip.id === base.id) return clip;
+  const blend = BASE_ANIM_BLEND;
+  // A tail of one base cycle, so a looping preview reads as
+  // "rest, do the thing, rest, do the thing" rather than back-to-back takes.
+  const tail = base.lengthInFrames || 30;
+
+  if (clip.segments) {
+    // A schedule sequences its own commands, and their per-segment transOut is
+    // tuned to hand joints between them. Only the command that finishes last
+    // hands back to the base — the rest hold, so the routine reads as one
+    // action instead of sagging toward the resting pose between commands.
+    let lastEnd = -Infinity;
+    for (const seg of clip.segments) {
+      lastEnd = Math.max(lastEnd, seg.delay + seg.clip.lengthInFrames);
+    }
+    const segments = clip.segments.map((seg) => ({
+      ...seg,
+      transOut: (seg.delay + seg.clip.lengthInFrames) >= lastEnd ? blend : 0,
+    }));
+    return {
+      ...clip,
+      segments,
+      baseClip: base,
+      lengthInFrames: lastEnd + blend + tail,
+    };
+  }
+
+  return {
+    id: clip.id,
+    parts: clip.parts ?? [clip.id],
+    // delay 0 with transIn: the first frames ARE the base, eased across into
+    // the clip, so nothing snaps at the hand-off.
+    segments: [{ clip, delay: 0, transIn: blend, transOut: blend }],
+    jointTracks: clip.jointTracks,
+    baseClip: base,
+    lengthInFrames: clip.lengthInFrames + blend + tail,
+    numFrames: clip.numFrames,
+    keyFrameDuration: clip.keyFrameDuration ?? 1,
+    fps: clip.fps,
+  };
+}
+
 function scheduleClip(model, sched) {
   const clip = resolveScheduleClip(model, sched);
   return withBaseIdle(model, clip);
@@ -230,17 +317,21 @@ const yieldToPaint = () => new Promise((resolve) => {
 const loadSettings = (gamePath) => {
   const hdPath = localStorage.getItem('hdPath') || '';
   const pivotPath = localStorage.getItem('pivotPath') || '';
+  const navmeshPath = localStorage.getItem('navmeshPath') || '';
   return {
     gamePath,
     hdPath,
     hdEnabled: !!hdPath && localStorage.getItem('hdEnabled') === '1',
     pivotPath,
     pivotEnabled: !!pivotPath && localStorage.getItem('pivotEnabled') === '1',
+    navmeshPath,
     bgColor: localStorage.getItem('bgColor') || DEFAULT_BG,
     autoPlay: localStorage.getItem('autoPlay') === '1',
     autoWasdZones: localStorage.getItem('autoWasdZones') !== '0',
     autoFocusZoneObject: localStorage.getItem('autoFocusZoneObject') !== '0',
     closeDatNotesOnSave: localStorage.getItem('closeDatNotesOnSave') === '1',
+    dayLength: clampDayLength(localStorage.getItem('dayLength')),
+    reframeOnSelect: localStorage.getItem('reframeOnSelect') === '1',
     showXiConsole: localStorage.getItem('showXiConsole') !== '0',
     autoCloseXiConsole: localStorage.getItem('autoCloseXiConsole') === '1',
     xiPath: localStorage.getItem('xiPath') || '',
@@ -612,6 +703,15 @@ export default function App({ launch = null }) {
     const v = parseFloat(localStorage.getItem('floorTileScale'));
     return Number.isFinite(v) ? Math.min(4, Math.max(0.25, v)) : 1;
   });
+  // Scene > Floor Radius / Fade Radius — disc size and soft-edge width.
+  const [floorRadius, setFloorRadiusState] = useState(() => {
+    const v = parseFloat(localStorage.getItem('floorRadius'));
+    return Number.isFinite(v) ? Math.min(200, Math.max(2, v)) : 42;
+  });
+  const [floorFadeRadius, setFloorFadeRadiusState] = useState(() => {
+    const v = parseFloat(localStorage.getItem('floorFadeRadius'));
+    return Number.isFinite(v) ? Math.min(200, Math.max(0, v)) : 30;
+  });
   // Scene > Flat Floor: a plain untextured ground plane, and its colour. Both
   // persisted; the renderer re-applies them on boot and on every model load.
   const [flatFloor, setFlatFloorState] = useState(
@@ -620,6 +720,17 @@ export default function App({ launch = null }) {
   const [flatFloorColor, setFlatFloorColorState] = useState(
     () => localStorage.getItem('flatFloorColor') || '#8a8a94',
   );
+  // Settings > Reframe camera on Actor Selection. The very first actor of the
+  // session is still framed — there is no view to preserve then, and the
+  // default camera may not even have the model on screen.
+  const hasFramedRef = useRef(false);
+
+  // Base Anim: 'none' | 'idl' | 'btl'. See asMontage.
+  const [baseAnim, setBaseAnimState] = useState(
+    () => localStorage.getItem('baseAnim') || 'none',
+  );
+  const baseAnimRef = useRef(baseAnim);
+  baseAnimRef.current = baseAnim;
   const [playing, setPlayingState] = useState(false);
   // Stop vs Pause: both leave `playing` false, so the difference is held here.
   const [pcStopped, setPcStopped] = useState(false);
@@ -1130,6 +1241,8 @@ export default function App({ launch = null }) {
       if (url) renderer.setBackgroundImage(url);
     }
     renderer.setFloorTileScale(floorTileScale);
+    renderer.setFloorRadius(floorRadius);
+    renderer.setFloorFadeRadius(floorFadeRadius);
     renderer.setFlatFloor({
       on: localStorage.getItem('flatFloor') === '1',
       color: localStorage.getItem('flatFloorColor') || '#8a8a94',
@@ -1214,9 +1327,16 @@ export default function App({ launch = null }) {
       if (wasdRef.current) {
         // Speed still shows live in the camera-settings readout; no status-bar spam.
         renderer.camera.adjustFlySpeed(e.deltaY < 0 ? 1 : -1);
-      } else {
-        // Anchored at the cursor: zooming dives toward what you point at.
+      } else if (renderer.model?.kind === 'zone') {
+        // Anchored at the cursor: zooming dives toward what you point at. A
+        // zone is a place you navigate, and the thing you want a closer look at
+        // is wherever you are pointing.
         renderer.zoomAt(e.clientX, e.clientY, -Math.sign(e.deltaY) * 120);
+      } else {
+        // Everything else is one subject already centred in frame, so pull
+        // straight in on it — anchoring there drags the model off centre and
+        // costs a re-frame to undo.
+        renderer.camera.zoom(-Math.sign(e.deltaY) * 120);
       }
     };
     canvas.addEventListener('wheel', onWheel, { passive: false });
@@ -1537,7 +1657,12 @@ export default function App({ launch = null }) {
       const wasPlaying = renderer.playing;
       const prevPlay = appliedPlayRef.current;
       modelRef.current = model;
-      renderer.setModel(model, keepCamera);
+      // setModel frames the camera itself unless told to keep it, so the
+      // decision has to be made here — not just at the re-fit below, which
+      // would leave the first framing already done.
+      const holdCamera = keepCamera
+        || (hasFramedRef.current && !settingsRef.current?.reframeOnSelect);
+      renderer.setModel(model, holdCamera);
       setBrowserKind('entity');
       const primaryPath = displayPath ?? paths[paths.length - 1];
       setSelectedDat(primaryPath.toLowerCase());
@@ -1653,7 +1778,7 @@ export default function App({ launch = null }) {
         // Battle btl lacks waist tracks — withBaseIdle underlays idl2 so skirts
         // don't freeze in bind pose.
         renderer.setAnimation(
-          withBaseIdle(model, chosen.anim.clip),
+          asMontage(model, withBaseIdle(model, chosen.anim.clip), baseAnimRef.current),
           same ? { frame: resumeFrame } : undefined,
         );
         renderer.playing = same ? wasPlaying : !!autoPlay;
@@ -1663,7 +1788,10 @@ export default function App({ launch = null }) {
         setPlayingState(renderer.playing);
       } else if (chosen?.schedule) {
         const same = keepCamera && prevPlay.kind === 'schedule' && prevPlay.id === chosen.schedule.id;
-        renderer.setAnimation(scheduleClip(model, chosen.schedule), same ? { frame: resumeFrame } : undefined);
+        renderer.setAnimation(
+          asMontage(model, scheduleClip(model, chosen.schedule), baseAnimRef.current),
+          same ? { frame: resumeFrame } : undefined,
+        );
         renderer.playing = same ? wasPlaying : !!autoPlay;
         appliedPlayRef.current = { kind: 'schedule', id: chosen.schedule.id };
         setCurrentSchedule(chosen.schedule.id);
@@ -1680,8 +1808,11 @@ export default function App({ launch = null }) {
       // Re-fit after the idle pose is applied so the floor snaps to feet (not bind-pose /
       // dangling weapon tips that made some actors hover). Gear swaps on the
       // same actor keep the user's camera.
-      if (keepCamera) renderer.snapFloorToFeet();
-      else renderer.fitCamera();
+      if (holdCamera) renderer.snapFloorToFeet();
+      else {
+        renderer.fitCamera();
+        hasFramedRef.current = true;
+      }
       if (forceViewReset) renderer.resetCamera();
 
       const statsOf = (models) => ({
@@ -2860,9 +2991,9 @@ export default function App({ launch = null }) {
         rebuildZoneDraws(model);
         renderer.reloadZoneBatches(model);
       }
-      // Navmesh from public/navmesh/<ZoneName>.nav (async; doesn't block load).
+      // Navmesh: Settings → Navmesh Folder, else public/navmesh/<ZoneName>.nav.
       setHasNavmesh(false);
-      loadZoneNavmesh(displayName).then((nav) => {
+      loadZoneNavmesh(displayName, { folder: settingsRef.current?.navmeshPath }).then((nav) => {
         if (modelRef.current !== model) return; // zone changed
         if (nav) {
           renderer.setNavmesh(nav);
@@ -3019,6 +3150,20 @@ export default function App({ launch = null }) {
     return () => { live = false; };
   }, [leftView, modelPath]);
 
+  /**
+   * Is the loaded pack the motion actually selected?
+   *
+   * A Special loads its pack AND selects the pack's clip, but the pack's other
+   * clips stay in the model afterwards — so picking a plain animation must not
+   * leave the pack's routine armed. It did: Play re-fired the Special's VFX and
+   * sound over an unrelated clip.
+   */
+  const npcPackActive = (() => {
+    if (leftView !== 'npc' || !npcPack || currentSchedule) return false;
+    const p = npcPacks.find((x) => x.path === npcPack);
+    return !!p && (p.clips ?? []).some((c) => animDisplayName(c) === currentAnim);
+  })();
+
   // An NPC keeps its effect routines inside the model DAT itself - a trust like
   // Iroha carries dozens - so the actor's own path is the effect source. A PC
   // keeps its routines in a separate DAT per action.
@@ -3026,7 +3171,7 @@ export default function App({ launch = null }) {
     // A pack ships its skill's whole VFX bundle under a `main` routine, so it
     // is the effect source whenever one is loaded — the same shape as a PC
     // action DAT. Otherwise fall back to a routine picked out of the model.
-    ? (npcPack || (npcFxRoutine && modelPath) || null)
+    ? ((npcPackActive ? npcPack : null) || (npcFxRoutine && modelPath) || null)
     : ((!pc.action || String(pc.action).startsWith('syn:'))
       ? null
       : (fxEntry?.paths?.[0] ?? null));
@@ -3045,17 +3190,21 @@ export default function App({ launch = null }) {
     loadEffect({ path: fxPath, name: fxName },
       {
         keepActorAnim: true,
-        routineId: leftView === 'npc' && !npcPack ? npcFxRoutine : null,
+        routineId: leftView === 'npc' && !npcPackActive ? npcFxRoutine : null,
       });
     return () => {
       const rr = rendererRef.current;
       if (rr) rr.onAnimLoop = null;
+      // Take the routine off the stage as well as disarming it. Leaving it
+      // running meant a Special's VFX carried on over whatever was selected
+      // next, and Play re-fired it.
+      rr?.particleSystem?.stopEffect?.();
       pcFxReplayRef.current = null;
     };
     // fxName is only a label; leaving it out keeps a relabel from re-reading.
     // actorLoadTick is the ordering dependency — see setActorLoadTick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pcFxMode, fxPath, leftView, npcFxRoutine, npcPack, loadEffect, actorLoadTick]);
+  }, [pcFxMode, fxPath, leftView, npcFxRoutine, npcPackActive, loadEffect, actorLoadTick]);
 
   /**
    * Stow the ranged weapon unless the current action uses it.
@@ -3686,6 +3835,35 @@ export default function App({ launch = null }) {
 
   // --- handlers ------------------------------------------------------------
 
+  /** Base Anim mode. Re-lays the current selection over the new resting clip. */
+  const setBaseAnim = (mode) => {
+    setBaseAnimState(mode);
+    baseAnimRef.current = mode;
+    try { localStorage.setItem('baseAnim', mode); } catch { /* quota */ }
+    const r = rendererRef.current;
+    const model = modelRef.current;
+    if (!r || !model) return;
+    const applied = appliedPlayRef.current;
+    const frame = r.animFrame;
+    if (applied?.kind === 'schedule') {
+      const sched = model.schedules?.find((sc) => sc.id === applied.id);
+      if (sched?.clipIds?.length) {
+        r.setAnimation(asMontage(model, scheduleClip(model, sched), mode), { frame });
+      }
+      return;
+    }
+    // Nothing selected yet: with a base on, the resting clip is what plays.
+    const entry = animsRef.current.find((g) => g.id === applied?.id)
+      ?? (mode === 'none' ? null : animsRef.current.find((g) => g.id === (mode === 'btl' ? 'btl' : 'idl')));
+    if (!entry) return;
+    r.setAnimation(asMontage(model, withBaseIdle(model, entry.clip), mode), { frame });
+    if (!applied?.id) {
+      setCurrentAnim(entry.id);
+      setCurrentSchedule('');
+      appliedPlayRef.current = { kind: 'anim', id: entry.id };
+    }
+  };
+
   const handleAnimChange = (id) => {
     setCurrentAnim(id);
     setCurrentSchedule('');
@@ -3693,7 +3871,9 @@ export default function App({ launch = null }) {
     appliedPlayRef.current = { kind: 'anim', id };
     const entry = animsRef.current.find((g) => g.id === id);
     const model = modelRef.current;
-    rendererRef.current.setAnimation(entry ? withBaseIdle(model, entry.clip) : null);
+    rendererRef.current.setAnimation(
+      entry ? asMontage(model, withBaseIdle(model, entry.clip), baseAnimRef.current) : null,
+    );
   };
 
   const handleScheduleChange = (id) => {
@@ -3703,7 +3883,9 @@ export default function App({ launch = null }) {
     appliedPlayRef.current = { kind: 'schedule', id };
     const model = modelRef.current;
     const sched = model?.schedules.find((s) => s.id === id);
-    const clip = sched?.clipIds?.length ? scheduleClip(model, sched) : null;
+    const clip = sched?.clipIds?.length
+      ? asMontage(model, scheduleClip(model, sched), baseAnimRef.current)
+      : null;
     rendererRef.current.setAnimation(clip);
     if (clip) {
       rendererRef.current.playing = true;
@@ -3842,9 +4024,12 @@ export default function App({ launch = null }) {
     // that ships both, so the control is hidden elsewhere.
     fxMode: pcFxMode,
     onFxMode: FX_VIEWS.has(leftView) ? setPcFxMode : null,
+    // Resting clip the selection is laid over, montage-style.
+    baseAnim,
+    onBaseAnim: anims.length > 0 ? setBaseAnim : null,
     // NPC effect routines are event-keyed and server-fired, so the user picks
     // one rather than the view guessing from the current clip.
-    fxRoutines: leftView === 'npc' && !npcPack ? npcFxRoutines : null,
+    fxRoutines: leftView === 'npc' && !npcPackActive ? npcFxRoutines : null,
     fxRoutine: npcFxRoutine,
     onFxRoutine: setNpcFxRoutine,
     // Borrowed skill packs — a trust's weapon skills, each its own DAT.
@@ -4010,6 +4195,20 @@ export default function App({ launch = null }) {
     setFloorTileScaleState(s);
     try { localStorage.setItem('floorTileScale', String(s)); } catch { /* quota */ }
     rendererRef.current?.setFloorTileScale(s);
+  }, []);
+
+  const changeFloorRadius = useCallback((v) => {
+    const r = Math.min(200, Math.max(2, Number(v) || 42));
+    setFloorRadiusState(r);
+    try { localStorage.setItem('floorRadius', String(r)); } catch { /* quota */ }
+    rendererRef.current?.setFloorRadius(r);
+  }, []);
+
+  const changeFloorFadeRadius = useCallback((v) => {
+    const f = Math.min(200, Math.max(0, Number(v) || 0));
+    setFloorFadeRadiusState(f);
+    try { localStorage.setItem('floorFadeRadius', String(f)); } catch { /* quota */ }
+    rendererRef.current?.setFloorFadeRadius(f);
   }, []);
 
   const setBg = useCallback((hex) => {
@@ -5613,10 +5812,12 @@ export default function App({ launch = null }) {
     const gamePath = draft.gamePath.trim();
     const hdPath = (draft.hdPath || '').trim();
     const pivotPath = (draft.pivotPath || '').trim();
+    const navmeshPath = (draft.navmeshPath || '').trim();
     const xiPath = (draft.xiPath || '').trim();
     const prevPath = settingsRef.current?.gamePath ?? '';
     const prevHd = settingsRef.current?.hdPath ?? '';
     const prevPivot = settingsRef.current?.pivotPath ?? '';
+    const prevNavmesh = settingsRef.current?.navmeshPath ?? '';
 
     if (!gamePath) {
       setSettingsError('Game path is required. Browse to your FINAL FANTASY XI install folder.');
@@ -5644,15 +5845,26 @@ export default function App({ launch = null }) {
         return;
       }
     }
+    if (navmeshPath) {
+      try {
+        await backend.listDir(navmeshPath);
+      } catch {
+        setSettingsError(`Navmesh folder not found:\n${navmeshPath}`);
+        return;
+      }
+    }
 
     localStorage.setItem('gamePath', gamePath);
     localStorage.setItem('hdPath', hdPath);
     localStorage.setItem('pivotPath', pivotPath);
+    localStorage.setItem('navmeshPath', navmeshPath);
     localStorage.setItem('bgColor', draft.bgColor);
     localStorage.setItem('autoPlay', draft.autoPlay ? '1' : '0');
     localStorage.setItem('autoWasdZones', draft.autoWasdZones === false ? '0' : '1');
     localStorage.setItem('autoFocusZoneObject', draft.autoFocusZoneObject === false ? '0' : '1');
     localStorage.setItem('closeDatNotesOnSave', draft.closeDatNotesOnSave ? '1' : '0');
+    localStorage.setItem('dayLength', String(clampDayLength(draft.dayLength)));
+    localStorage.setItem('reframeOnSelect', draft.reframeOnSelect ? '1' : '0');
     localStorage.setItem('showXiConsole', draft.showXiConsole === false ? '0' : '1');
     localStorage.setItem('autoCloseXiConsole', draft.autoCloseXiConsole ? '1' : '0');
     localStorage.setItem('xiPath', xiPath);
@@ -5669,10 +5881,13 @@ export default function App({ launch = null }) {
       hdEnabled,
       pivotPath,
       pivotEnabled,
+      navmeshPath,
       xiPath,
       autoWasdZones: draft.autoWasdZones !== false,
       autoFocusZoneObject: draft.autoFocusZoneObject !== false,
       closeDatNotesOnSave: !!draft.closeDatNotesOnSave,
+      dayLength: clampDayLength(draft.dayLength),
+      reframeOnSelect: !!draft.reframeOnSelect,
       showXiConsole: draft.showXiConsole !== false,
       autoCloseXiConsole: !!draft.autoCloseXiConsole,
     };
@@ -5701,6 +5916,29 @@ export default function App({ launch = null }) {
       // Override roots changed while a model is up — drop cached shared tables.
       globalEffectsRef.current = null;
       dataTablesRef.current = null;
+    }
+
+    // Navmesh folder changed while a zone is open — reload overlay only.
+    if (
+      navmeshPath.toLowerCase() !== prevNavmesh.toLowerCase()
+      && modelRef.current?.zone
+    ) {
+      const model = modelRef.current;
+      const zoneName = model.name || '';
+      loadZoneNavmesh(zoneName, { folder: navmeshPath }).then((nav) => {
+        if (modelRef.current !== model) return;
+        const r = rendererRef.current;
+        if (!r) return;
+        if (nav) {
+          r.setNavmesh(nav);
+          setHasNavmesh(true);
+        } else {
+          r.setNavmesh(null);
+          setHasNavmesh(false);
+          setShowNavmesh(false);
+          r.showNavmesh = false;
+        }
+      }).catch(() => { /* keep previous */ });
     }
   };
 
@@ -6258,8 +6496,9 @@ export default function App({ launch = null }) {
    */
   useEffect(() => {
     if (!todPlaying) return undefined;
-    const TOD_DAY_MS = 60000;
-    const perSec = 1440 / (TOD_DAY_MS / 1000);
+    // Seconds of real time for one full in-game day — Settings > Day Length.
+    const daySecs = clampDayLength(settingsRef.current?.dayLength);
+    const perSec = 1440 / daySecs;
     let last = performance.now();
     let raf = 0;
     const tick = (now) => {
@@ -6271,7 +6510,7 @@ export default function App({ launch = null }) {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [todPlaying, applyWeatherTime]);
+  }, [todPlaying, applyWeatherTime, settings?.dayLength]);
 
   /**
    * Apply `--weather` / `--time` / `--clock` from the launch line. Deferred to
@@ -6729,7 +6968,7 @@ export default function App({ launch = null }) {
         <SettingsModal
           open={settingsOpen}
           initial={{
-            ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, autoFocusZoneObject: true, closeDatNotesOnSave: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
+            ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, navmeshPath: '', bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, autoFocusZoneObject: true, closeDatNotesOnSave: false, dayLength: DAY_LENGTH_DEFAULT, reframeOnSelect: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
             showGrid,
             showAxes,
           }}
@@ -6792,6 +7031,10 @@ export default function App({ launch = null }) {
         selectedFloor={selectedFloor}
         floorTileScale={floorTileScale}
         onFloorTileScale={changeFloorTileScale}
+        floorRadius={floorRadius}
+        onFloorRadius={changeFloorRadius}
+        floorFadeRadius={floorFadeRadius}
+        onFloorFadeRadius={changeFloorFadeRadius}
         flatFloor={flatFloor}
         onFlatFloor={changeFlatFloor}
         flatFloorColor={flatFloorColor}
@@ -6819,6 +7062,7 @@ export default function App({ launch = null }) {
           timeMinutes={timeMinutes}
           onScene={applyWeatherTime}
           onStopClock={() => setTodPlaying(false)}
+          restingMode={wasd ? 'fly' : 'orbit'}
           onPlayActorOnce={(seqFrame = 0, seqFps = 30) => {
             const r = rendererRef.current;
             // Only when a skinned actor clip is loaded (NPC / PC / creation).
@@ -7424,7 +7668,7 @@ export default function App({ launch = null }) {
       <SettingsModal
         open={settingsOpen}
         initial={{
-          ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, autoFocusZoneObject: true, closeDatNotesOnSave: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
+          ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, navmeshPath: '', bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, autoFocusZoneObject: true, closeDatNotesOnSave: false, dayLength: DAY_LENGTH_DEFAULT, reframeOnSelect: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
           showGrid,
           showAxes,
         }}

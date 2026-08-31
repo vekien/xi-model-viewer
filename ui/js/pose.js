@@ -95,7 +95,12 @@ export class SkeletonPose {
         const len = seg.clip.lengthInFrames;
         const local = frame - seg.delay;
         if (local <= len || len <= 0) {
-          active.push({ clip: seg.clip, phase: len > 0 ? local / len : 0, release: 0 });
+          // `ease` is the mirror of `release` below: blend IN from the base over
+          // transIn frames, so a montage laid over a resting clip starts from
+          // the pose already on screen instead of snapping to its first frame.
+          // Retail schedules leave transIn unset, so they are unaffected.
+          const ease = seg.transIn > 0 ? Math.min(1, local / seg.transIn) : 1;
+          active.push({ clip: seg.clip, phase: len > 0 ? local / len : 0, release: 0, ease });
         } else if (seg.transOut > 0) {
           const release = (local - len) / seg.transOut;   // 0 at end → 1 fully back to base
           // `<= 1`, not `< 1`: dropping the segment at release == 1 cut the fade
@@ -103,7 +108,7 @@ export class SkeletonPose {
           // frame — a visible snap back to idle on a short transOut. At exactly
           // 1 the blend already yields the base pose, so keeping it is a no-op
           // for the result and makes the hand-off continuous.
-          if (release <= 1) active.push({ clip: seg.clip, phase: 1, release });
+          if (release <= 1) active.push({ clip: seg.clip, phase: 1, release, ease: 1 });
         } else {
           // transOut 0 means "hand straight over", not "blend out over some
           // default". Every such segment in the PC set is followed by one
@@ -115,7 +120,7 @@ export class SkeletonPose {
           // starting at 60, which read as a jitter mid-weapon-skill. Holding
           // the final pose is also what a trailing 0 wants: `dead` ends on
           // cor@58+1/out0 and should stay down.
-          active.push({ clip: seg.clip, phase: 1, release: 0 });
+          active.push({ clip: seg.clip, phase: 1, release: 0, ease: 1 });
         }
       }
       // Base idle underlay, looping on its own length so it stays continuous
@@ -162,7 +167,9 @@ export class SkeletonPose {
             for (const seg of active) if (seg.clip.jointTracks.has(i)) win = seg;   // last wins
             if (win) {
               s = sampleTrack(win.clip.jointTracks.get(i), win.phase);
-              // Blend a releasing segment back toward the base idle (or bind).
+              // Blend a starting segment in from the base idle (or bind)...
+              if (win.ease < 1) s = blendSample(baseS ?? IDENTITY_SAMPLE, s, win.ease);
+              // ...and a releasing one back out to it.
               if (win.release > 0) s = blendSample(s, baseS ?? IDENTITY_SAMPLE, win.release);
             } else if (baseS) {
               s = baseS;   // no segment here — rest in idle, not bind pose

@@ -25,6 +25,10 @@ const EMPTY_DOC = {
   lockActor: false,
   camera: [], scene: [], tod: [],
 };
+// Joint Lock to Actor aims at. FFXI skeletons carry no names — a joint is an
+// index — and index 2 is `bone0002` in the Skeleton panel's numbering: the
+// pelvis, which is the actor's centre of mass through a jump or a lunge.
+const LOCK_JOINT = 2;
 const SNAP_FRAMES = 15;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 8;
@@ -103,6 +107,10 @@ export function CameraSequencer({
   weathers = [], weather = '', timeMinutes = 720, onScene, onStopClock,
   /** Play the loaded NPC/PC clip once from frame 0 (no loop) with the sequence. */
   onPlayActorOnce,
+  // 'fly' when the user has WASD on, 'orbit' otherwise. Playback always takes
+  // fly — it is the only mode that holds an arbitrary path — so this is the
+  // mode to hand back afterwards, and to scrub in.
+  restingMode = 'orbit',
   /** Restore normal loop prefs when the sequence stops. */
   onStopActor,
 }) {
@@ -140,7 +148,13 @@ export function CameraSequencer({
    * effect). Null in a zone, where there is no single actor: Lock to Actor then
    * has nothing to aim at and leaves the recorded rotation alone.
    */
-  const actorTarget = () => rendererRef.current?.getOrbitPivot?.() ?? null;
+  const actorTarget = () => {
+    const r = rendererRef.current;
+    // bone0002 travels with the actor, so a leap or a step stays framed; the
+    // bounds centre is rest-pose and would let them walk out of shot. Falls
+    // back to that centre for anything without a skeleton (a bare effect).
+    return r?.getJointPosition?.(LOCK_JOINT) ?? r?.getOrbitPivot?.() ?? null;
+  };
   // Read through a ref inside the rAF loop, which closes over its own scope.
   const lockActorRef = useRef(lockActor);
   lockActorRef.current = lockActor;
@@ -170,6 +184,8 @@ export function CameraSequencer({
   // camera is currently ours to put back.
   const restoreRef = useRef(null);
   const goToRef = useRef(null);
+  const restingModeRef = useRef(restingMode);
+  restingModeRef.current = restingMode;
   const drivenRef = useRef(false);
   const cineRef = useRef(null);
   const stopRef = useRef(null);
@@ -273,10 +289,11 @@ export function CameraSequencer({
     if (pose && !opts.timeOnly) {
       markRestore();
       const t = actorTarget();
-      // Scrubbing hands the viewport back as an orbit camera; only playback
-      // needs fly, which is the one mode that holds an arbitrary path.
+      // Scrubbing leaves the viewport in the mode the user drives in, rather
+      // than stranding it in the fly mode playback needs.
+      const asOrbit = restingMode !== 'fly';
       driveCamera(cam, lockActor ? aimPoseAt(pose, t) : pose,
-        { orbit: true, orbitTarget: lockActor ? t : null });
+        { orbit: asOrbit, orbitTarget: (asOrbit && lockActor) ? t : null });
     }
     sceneApplyRef.current(easedF, true);
   };
@@ -313,9 +330,10 @@ export function CameraSequencer({
     if (cam) cam.sequenceLock = false;
     if (cineRef.current) exitCinematic();
     // Playback runs in fly mode. Restoring puts the whole snapshot back (mode
-    // included); ending where the sequence left off still has to hand orbit
-    // back, or the next drag flies away from the shot.
-    if (!restore && cam) cam.setMode('orbit');
+    // included); ending where the sequence left off still has to hand the
+    // camera back in the mode the user drives in, or the next drag behaves as
+    // the sequence left it rather than as they set it.
+    if (!restore && cam) cam.setMode(restingModeRef.current);
     if (restore && cam && restoreRef.current) cam.restore(restoreRef.current);
     if (restore) { restoreRef.current = null; drivenRef.current = false; }
     try { onStopActorRef.current?.(); } catch { /* optional */ }

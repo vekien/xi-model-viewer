@@ -73,6 +73,7 @@ export function GraphicsPanel({
 
       <hr />
 
+
       <div className="gfx-line">
         <span className="gfx-lab">Render Resolution</span>
         <div className="gfx-ctrl">

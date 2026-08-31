@@ -1,6 +1,8 @@
 // Detour NAVMESHSET (.nav) parser — port of xi zone xi_navmesh.navmesh_triangles.
 // Returns walkable polygon triangles as flat Float32Array in FFXI world space.
 
+import { backend } from './backend.js';
+
 const NAVMESHSET_MAGIC = 0x4d534554; // 'MSET' as little-endian u32... actually on disk TESM
 // File stores 'MSET' little-endian → bytes T E S M → magic read as u32 LE = 0x4D534554? 
 // Python: b"TESM"  # 'MSET' little-endian on disk
@@ -100,41 +102,63 @@ export function parseNavmeshTriangles(buffer) {
   };
 }
 
+/** Display-space positions from a parsed world-space navmesh buffer. */
+function toDisplay(parsed, file) {
+  if (!parsed) return null;
+  // Display space same as zones: (−x, −y, z)
+  const src = parsed.positions;
+  const positions = new Float32Array(src.length);
+  for (let i = 0; i < src.length; i += 3) {
+    positions[i] = -src[i];
+    positions[i + 1] = -src[i + 1];
+    positions[i + 2] = src[i + 2];
+  }
+  return { positions, triCount: parsed.triCount, file };
+}
+
 /**
- * Try to fetch navmesh for a zone name from lists/../navmesh/ (public/navmesh).
+ * Load navmesh for a zone name.
+ * Prefers Settings → Navmesh Folder (`folder`), then bundled `public/navmesh/`.
  * Returns { positions (display-space), triCount, file } or null.
  */
-export async function loadZoneNavmesh(zoneName) {
+export async function loadZoneNavmesh(zoneName, opts = {}) {
   const file = navmeshFileName(zoneName);
   if (!file || file === '.nav') return null;
+
+  const folder = String(opts.folder || '').trim().replace(/[\\/]+$/, '');
+  if (folder) {
+    try {
+      const buf = await backend.readFile(`${folder}\\${file}`);
+      const out = toDisplay(parseNavmeshTriangles(buf), file);
+      if (out) return out;
+    } catch { /* try bundled next */ }
+  }
+
   try {
     const res = await fetch(`navmesh/${encodeURIComponent(file)}`);
     if (!res.ok) return null;
     const buf = await res.arrayBuffer();
-    const parsed = parseNavmeshTriangles(buf);
-    if (!parsed) return null;
-    // Display space same as zones: (−x, −y, z)
-    const src = parsed.positions;
-    const positions = new Float32Array(src.length);
-    for (let i = 0; i < src.length; i += 3) {
-      positions[i] = -src[i];
-      positions[i + 1] = -src[i + 1];
-      positions[i + 2] = src[i + 2];
-    }
-    return { positions, triCount: parsed.triCount, file };
+    return toDisplay(parseNavmeshTriangles(buf), file);
   } catch {
     return null;
   }
 }
 
-/** HEAD/GET probe — true if a .nav exists for this zone name. */
-export async function navmeshAvailable(zoneName) {
+/** True if a .nav exists for this zone (folder first, then bundled). */
+export async function navmeshAvailable(zoneName, opts = {}) {
   const file = navmeshFileName(zoneName);
   if (!file || file === '.nav') return false;
+
+  const folder = String(opts.folder || '').trim().replace(/[\\/]+$/, '');
+  if (folder) {
+    try {
+      if (await backend.fileExists(`${folder}\\${file}`)) return true;
+    } catch { /* fall through */ }
+  }
+
   try {
     const res = await fetch(`navmesh/${encodeURIComponent(file)}`, { method: 'HEAD' });
     if (res.ok) return true;
-    // Some servers don't support HEAD — fall back to range GET
     const res2 = await fetch(`navmesh/${encodeURIComponent(file)}`);
     return res2.ok;
   } catch {

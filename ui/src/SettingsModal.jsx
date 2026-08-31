@@ -211,6 +211,12 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
     const picked = await backend.pickFolder(draft.pivotPath || draft.hdPath || draft.gamePath);
     if (picked) setDraft({ ...draft, pivotPath: picked });
   };
+  const browseNavmesh = async () => {
+    const picked = await backend.pickFolder(
+      draft.navmeshPath || draft.pivotPath || draft.hdPath || draft.gamePath,
+    );
+    if (picked) setDraft({ ...draft, navmeshPath: picked });
+  };
 
   const doInstallOrUpdate = async () => {
     setToolsBusy(true);
@@ -446,6 +452,26 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
                   </div>
 
                   <div className="form-row">
+                    <label className="form-label">Navmesh Folder</label>
+                    <div className="form-inline">
+                      <input
+                        type="text"
+                        value={draft.navmeshPath ?? ''}
+                        spellCheck={false}
+                        placeholder="Folder of zone .nav files (e.g. server navmeshes)"
+                        onChange={(e) => setDraft({ ...draft, navmeshPath: e.target.value })}
+                      />
+                      <Button onClick={browseNavmesh}>
+                        <span className="icon">folder_open</span>
+                        Browse
+                      </Button>
+                    </div>
+                    <div className="form-hint">
+                      Optional. Zone overlay reads <span className="mono">ZoneName.nav</span> from here first.
+                    </div>
+                  </div>
+
+                  <div className="form-row">
                     <label className="form-label">Notes file</label>
                     <div className="form-inline">
                       <input
@@ -520,6 +546,39 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
                       <Label className="check-label">Auto Focus Zone Object</Label>
                     </Field>
                     <div className="form-hint">Clicking a row in the Objects list frames the camera on it. Off = select only, camera stays put.</div>
+                  </div>
+
+                  <div className="form-row">
+                    <Field className="check-field">
+                      <Checkbox
+                        checked={!!draft.reframeOnSelect}
+                        onChange={(v) => setDraft({ ...draft, reframeOnSelect: v })}
+                        className="checkbox"
+                      >
+                        <span className="icon check-icon">check</span>
+                      </Checkbox>
+                      <Label className="check-label">Reframe camera on Actor Selection</Label>
+                    </Field>
+                    <div className="form-hint">Off: picking another actor keeps your view. F reframes.</div>
+                  </div>
+
+                  <div className="form-row">
+                    <label className="form-label">Day Length</label>
+                    {/* A few digits at most; form-inline stretches otherwise. */}
+                    <div className="form-inline">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        spellCheck={false}
+                        style={{ flex: '0 0 auto', width: 100 }}
+                        value={draft.dayLength ?? ''}
+                        onChange={(e) => setDraft({ ...draft, dayLength: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-hint">
+                      Seconds of real time for one in-game day when the day/night
+                      cycle is playing (Zone panel). Default 60.
+                    </div>
                   </div>
 
                   <div className="form-row">

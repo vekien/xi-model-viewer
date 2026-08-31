@@ -92,15 +92,25 @@ export function DetailsPanel({ info, animClip, animId, schedule, onClose, onOpen
 
         {(shown.textures?.length ?? 0) > 0 && (
           <Section title={`Textures (${shown.textures.length})`} icon="texture">
-            {shown.textures.map((t, i) => (
-              <Tooltip key={`${t.name}:${i}`} content="View texture">
-                <button className="details-tex details-tex-btn" onClick={() => onOpenTexture?.(t)}>
-                  <span className="icon">image</span>
-                  <span className="details-tex-name mono">{t.name || '(unnamed)'}</span>
-                  <span className="details-tex-meta mono">{t.width}×{t.height} {t.format.toUpperCase()}</span>
-                </button>
-              </Tooltip>
-            ))}
+            <div className="details-tex-shell">
+              <div className="details-tex-list">
+                {shown.textures.map((t, i) => (
+                  <Tooltip key={`${t.name}:${i}`} content="View texture">
+                    <button
+                      type="button"
+                      className="details-tex-row"
+                      onClick={() => onOpenTexture?.(t)}
+                    >
+                      <span className="icon kind">image</span>
+                      <span className="details-tex-name mono">{t.name || '(unnamed)'}</span>
+                      <span className="details-tex-meta mono">
+                        {t.width}×{t.height} {String(t.format || '').toUpperCase()}
+                      </span>
+                    </button>
+                  </Tooltip>
+                ))}
+              </div>
+            </div>
           </Section>
         )}
 

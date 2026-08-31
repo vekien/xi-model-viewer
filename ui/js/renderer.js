@@ -781,9 +781,8 @@ export class Renderer {
     this.floorVbo = gl.createBuffer();
     gl.bindVertexArray(this.floorVao);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.floorVbo);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-      -half, -half, half, -half, half, half, -half, -half, half, half, -half, half,
-    ]), gl.STATIC_DRAW);
+    // Filled by _uploadFloorQuad — half-extent tracks Floor Radius.
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(12), gl.DYNAMIC_DRAW);
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     gl.bindVertexArray(null);
@@ -795,6 +794,10 @@ export class Renderer {
     // ticking it does not discard a loaded ground texture.
     this.flatFloor = { on: false, color: [0.5, 0.5, 0.55] };
     this.flatFloorTex = null;
+    // The ground plane is at Y = 0 and never moves. Placing it at the
+    // model's feet meant it jumped whenever the pose changed — frame-0 sole
+    // height varies by up to 0.14 between clips on one model — which read
+    // as the camera dropping through the floor. A floor is scenery.
     this.floorY = 0;
     // `floorTile` is what the shader reads: the per-texture default times the
     // user's Scene > Floor Repeat multiplier. Kept apart so picking a different
@@ -802,10 +805,14 @@ export class Renderer {
     this.floorTileBase = 0.5;
     this.floorTileScale = 1;
     this.floorTile = 0.5;
+    // Scene > Floor Radius / Fade Radius. `outer` is fully transparent beyond;
+    // `inner` is fully opaque within. Fade band width = outer − inner.
+    // Defaults match the old fixed half=60 plane (outer 42, fade 30 → inner 12).
+    this.floorRadius = 42;
+    this.floorFadeRadius = 30;
     this.floorHalf = half;
-    // Edge fade, in world units from the origin. The outer edge stops well
-    // inside the quad's own half-extent so its border is never what you see.
-    this.floorFade = { inner: half * 0.2, outer: half * 0.7 };
+    this.floorFade = { inner: 12, outer: 42 };
+    this._syncFloorExtent();
     // `_fogBase` is the authored fog (zone environment or manual); `fog` is what
     // the shaders read after the user's toggle and distance scale are applied.
     this._fogBase = { enabled: false, color: [0x30 / 255, 0x34 / 255, 0x38 / 255], near: 6, far: 40 };
@@ -1049,8 +1056,7 @@ export class Renderer {
     gl.bindTexture(gl.TEXTURE_2D, this.flatFloorTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, px);
     gl.bindTexture(gl.TEXTURE_2D, null);
-    // Same placement rule as a loaded floor: sit at the model's feet.
-    this.snapFloorToFeet();
+    // Nothing to place: the plane is fixed at Y = 0.
   }
 
   /**
@@ -1061,6 +1067,49 @@ export class Renderer {
     const s = Math.min(4, Math.max(0.25, Number(scale) || 1));
     this.floorTileScale = s;
     this.floorTile = this.floorTileBase * s;
+  }
+
+  /**
+   * Scene > Floor Radius — world-unit radius of the ground disc (fully gone
+   * beyond this). Rebuilds the backing quad when the extent grows/shrinks.
+   */
+  setFloorRadius(radius) {
+    const r = Math.min(200, Math.max(2, Number(radius) || 42));
+    this.floorRadius = r;
+    this._syncFloorExtent();
+  }
+
+  /**
+   * Scene > Floor Fade Radius — soft edge width in world units. Opaque inside
+   * (outer − fade), transparent at outer. Clamped so it cannot exceed radius.
+   */
+  setFloorFadeRadius(fade) {
+    const f = Math.min(200, Math.max(0, Number(fade) || 0));
+    this.floorFadeRadius = f;
+    this._syncFloorExtent();
+  }
+
+  /** Derive fade inner/outer + upload a quad large enough to cover the disc. */
+  _syncFloorExtent() {
+    const outer = this.floorRadius;
+    const fade = Math.min(this.floorFadeRadius, outer);
+    const inner = Math.max(0, outer - fade);
+    this.floorFade = { inner, outer };
+    // Square half-extent ≥ outer so the circular fade never hits the quad edge.
+    const half = Math.max(outer, 2);
+    if (half !== this.floorHalf) {
+      this.floorHalf = half;
+      this._uploadFloorQuad(half);
+    }
+  }
+
+  _uploadFloorQuad(half) {
+    const gl = this.gl;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.floorVbo);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+      -half, -half, half, -half, half, half, -half, -half, half, half, -half, half,
+    ]), gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
   }
 
   /**
@@ -1894,10 +1943,6 @@ export class Renderer {
     // — measured 0.07 below the idle soles on Iroha, which reads as the model
     // hovering. Clips start grounded, so frame 0 of the new clip is the
     // contact pose; a leap mid-clip then genuinely leaves the plane.
-    if (changed && clip && this.model && this.model.kind !== 'zone'
-        && (this.floor || this.flatFloor.on)) {
-      this.snapFloorToFeet();
-    }
   }
 
   /** Scrub to a game-frame, clamped to the clip. Leaves play state alone, so
@@ -1932,10 +1977,24 @@ export class Renderer {
       ? canvas.clientWidth / canvas.clientHeight
       : undefined;
     this.camera.fit(min, max, aspect ? { aspect } : undefined);
-    // Framing wants the rest bounds (a pivot that moved with the animation made
-    // the model swim under the cursor), but the floor wants the pose actually
-    // on screen — the bind pose's straight legs hang below every animated one.
-    this.snapFloorToFeet(this.currentAnimation ? undefined : bounds);
+    // Model extents for the shadow cascade. The floor is not involved — it is
+    // fixed at Y = 0.
+    this.snapFloorToFeet(bounds);
+  }
+
+  /**
+   * Display-space world position of one skeleton joint in the current pose.
+   * Null when there is no pose or the index is past the end of the skeleton.
+   *
+   * `pose.trans[j]` is the joint's world translation in DAT space, the same
+   * space `computeBounds` works in — so the display conversion is the one
+   * `getOrbitPivot` uses, NOT the particle-space one `getActorAttachPosition`
+   * applies (that negates X and Z; this negates Y and Z).
+   */
+  getJointPosition(index) {
+    const tr = this.pose?.trans?.[index | 0];
+    if (!tr) return null;
+    return toEntityPt(tr);
   }
 
   /**
@@ -2105,13 +2164,17 @@ export class Renderer {
   }
 
   /** Place the ground plane under the actor's feet (Y-down floor line). */
+  /**
+   * Model extents for the shadow cascade and the orbit/fit maths. Named for
+   * what it used to do: the ground plane is fixed at Y = 0 now and this no
+   * longer touches it.
+   */
   snapFloorToFeet(bounds) {
     const b = bounds ?? this.computeBounds();
     if (!b) return;
     this.modelMaxY = b.footY;
     this.modelMin = b.min;
     this.modelMax = b.max;
-    if (this.floor || this.flatFloor.on) this.floorY = b.footY;
   }
 
   // -------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Checkbox, Field, Label } from '@headlessui/react';
 import { Combo } from './Combo.jsx';
+import { animDisplayName } from '../js/dat.js';
 import { Tooltip } from './Tooltip.jsx';
 
 /** Combo on a labelled panel row, matching the gear slots in the Characters panel. */
@@ -95,9 +96,62 @@ export function AnimationPanel({ pc, anim }) {
           fxMode = 'mesh', onFxMode, onReset,
           fxRoutines, fxRoutine = '', onFxRoutine,
           animPacks, animPack = '', onAnimPack,
+          baseAnim = 'none', onBaseAnim,
           speed = 1, onSpeed, volume, onVolume } = anim ?? {};
 
   if (actionGroups.length === 0 && anims.length === 0 && schedules.length === 0) return null;
+
+  // One list for everything that can be played, so it is obvious which is
+  // running. Ids are prefixed because a schedule and a clip can share a name.
+  const motionItems = [
+    { id: '', label: '— bind pose —' },
+    ...anims.map((g) => ({
+      id: `anim:${g.id}`,
+      group: 'Animations',
+      // btl is the battle-stance clip (not a Schedule). Schedules are
+      // ati0/atb0/… attack routines that *reference* anim layers.
+      label: g.label
+        ?? (g.id === 'btl' ? 'btl — battle stance'
+          : g.id === 'idl' ? 'idl — idle'
+            : g.id === 'std' ? 'std — stand'
+              : g.id),
+      badge: g.clip.parts?.length,
+    })),
+    ...schedules.map((s2) => ({
+      id: `sched:${s2.id}`,
+      group: 'Schedules',
+      label: s2.id,
+      badge: s2.clipIds.length > 1 ? s2.clipIds.length : undefined,
+    })),
+    ...(animPacks ?? []).map((p) => ({
+      id: `pack:${p.path}`,
+      group: 'Specials',
+      // The clip ids are the only names these carry; a set repeats them
+      // (Iroha's six packs use four between them), so the DAT has to be shown
+      // too for the rows to be tellable apart.
+      label: `${(p.clips ?? []).join(', ') || '?'} — ${p.path.replace(/\.DAT$/i, '')}`,
+    })),
+  ];
+
+  // A Special loads its pack AND selects the pack's clip, so while that clip is
+  // the one playing it is the Special that is really selected — show that row
+  // rather than the clip it happens to have put in the Animations group.
+  const packEntry = animPack ? (animPacks ?? []).find((p) => p.path === animPack) : null;
+  const packIsPlaying = !!packEntry && !currentSchedule
+    && (packEntry.clips ?? []).some((c) => animDisplayName(c) === currentAnim);
+  const motionValue = packIsPlaying ? `pack:${animPack}`
+    : currentSchedule ? `sched:${currentSchedule}`
+      : currentAnim ? `anim:${currentAnim}`
+        : '';
+
+  const onMotion = (id) => {
+    if (!id) { onAnimChange?.(''); return; }
+    const [kind, ...rest] = String(id).split(':');
+    const key = rest.join(':');
+    if (kind === 'sched') onScheduleChange?.(key);
+    else if (kind === 'pack') onAnimPack?.(key);
+    else onAnimChange?.(key);
+  };
 
   return (
     <div id="animbar" className="panel">
@@ -123,19 +177,6 @@ export function AnimationPanel({ pc, anim }) {
           </div>
         </Row>
       )}
-      {onFxMode && fxMode !== 'mesh' && fxRoutines?.length > 0 && (
-        <Row label="Effect">
-          <Combo
-            value={fxRoutine}
-            items={[
-              { id: '', label: '— none —' },
-              ...fxRoutines.map((id) => ({ id, label: id })),
-            ]}
-            onChange={onFxRoutine}
-            placeholder="— none —"
-          />
-        </Row>
-      )}
       {actionGroups.length > 0 && (
         <>
           <Row label="Category">
@@ -150,58 +191,24 @@ export function AnimationPanel({ pc, anim }) {
           </Row>
         </>
       )}
-      {onAnimChange && (
-        <Row label="Anim">
+      {(onAnimChange || schedules.length > 0 || animPacks?.length > 0) && (
+        <Row label="Motion">
           <Combo
-            value={currentAnim}
-            items={[
-              { id: '', label: '— bind pose —' },
-              ...anims.map((g) => {
-                // btl is the battle-stance clip (not a Schedule). Schedules are
-                // ati0/atb0/… attack routines that *reference* anim layers.
-                const label = g.label
-                  ?? (g.id === 'btl' ? 'btl — battle stance'
-                    : g.id === 'idl' ? 'idl — idle'
-                      : g.id === 'std' ? 'std — stand'
-                        : g.id);
-                return { id: g.id, label, badge: g.clip.parts?.length };
-              }),
-            ]}
-            onChange={onAnimChange}
+            value={motionValue}
+            items={motionItems}
+            onChange={onMotion}
           />
         </Row>
       )}
-      {schedules.length > 0 && (
-        <Row label="Schedule">
+      {onFxMode && fxMode !== 'mesh' && fxRoutines?.length > 0 && (
+        <Row label="Effect">
           <Combo
-            value={currentSchedule}
+            value={fxRoutine}
             items={[
               { id: '', label: '— none —' },
-              ...schedules.map((s) => ({
-                id: s.id,
-                label: s.id,
-                badge: s.clipIds.length > 1 ? s.clipIds.length : undefined,
-              })),
+              ...fxRoutines.map((id) => ({ id, label: id })),
             ]}
-            onChange={onScheduleChange}
-          />
-        </Row>
-      )}
-      {animPacks?.length > 0 && (
-        <Row label="Skill">
-          <Combo
-            value={animPack}
-            items={[
-              { id: '', label: '— none —' },
-              ...animPacks.map((p) => ({
-                // The clip ids are the only names these carry; a set repeats
-                // them (Iroha's six packs use four between them), so the DAT
-                // has to be shown too for the rows to be tellable apart.
-                id: p.path,
-                label: `${(p.clips ?? []).join(', ') || '?'} — ${p.path.replace(/\.DAT$/i, '')}`,
-              })),
-            ]}
-            onChange={onAnimPack}
+            onChange={onFxRoutine}
             placeholder="— none —"
           />
         </Row>
@@ -301,6 +308,24 @@ export function AnimationPanel({ pc, anim }) {
           <span className="mono pc-frame-num">
             {volume > 0 ? `${Math.round(volume * 100)}%` : 'muted'}
           </span>
+        </Row>
+      )}
+      {onBaseAnim && (
+        <Row label="Base">
+          <div className="seg-tabs" role="tablist" aria-label="Base animation">
+            {[['none', 'None'], ['idl', 'Idle'], ['btl', 'Battle']].map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={baseAnim === id}
+                className={`seg-tab${baseAnim === id ? ' on' : ''}`}
+                onClick={() => onBaseAnim(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </Row>
       )}
 

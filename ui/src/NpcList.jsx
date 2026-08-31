@@ -14,9 +14,29 @@ const npcListUi = {
   query: '',
 };
 
+const PIN_KEY = 'pinnedNpcs';
+
 function entryKey(catName, entry, index) {
   const v0 = entry.variants?.[0] || entry.name || index;
   return `${catName}::${v0}`;
+}
+
+/** Stable pin id — category + first variant path (or name). */
+function pinKey(catName, entry, index) {
+  return String(entryKey(catName, entry, index)).toLowerCase();
+}
+
+function loadPins() {
+  try {
+    const v = JSON.parse(localStorage.getItem(PIN_KEY) || '[]');
+    return Array.isArray(v) ? v.map((k) => String(k).toLowerCase()) : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePins(keys) {
+  try { localStorage.setItem(PIN_KEY, JSON.stringify(keys)); } catch { /* quota */ }
 }
 
 function entryMatches(entry, q) {
@@ -30,6 +50,7 @@ export function NpcList({ onSelectEntry, selectedPath, onError }) {
   const [openCats, setOpenCats] = useState(() => new Set(npcListUi.openCats));
   const [openEntries, setOpenEntries] = useState(() => new Set(npcListUi.openEntries));
   const [query, setQuery] = useState(() => npcListUi.query);
+  const [pinned, setPinned] = useState(loadPins);
 
   useEffect(() => { npcListUi.openCats = openCats; }, [openCats]);
   useEffect(() => { npcListUi.openEntries = openEntries; }, [openEntries]);
@@ -91,20 +112,86 @@ export function NpcList({ onSelectEntry, selectedPath, onError }) {
     }
   }, [categories, selectedPath]);
 
+  const pinSet = useMemo(() => new Set(pinned), [pinned]);
+
+  const togglePin = (catName, entry, index) => {
+    const k = pinKey(catName, entry, index);
+    setPinned((prev) => {
+      const next = prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k];
+      savePins(next);
+      return next;
+    });
+  };
+
   const q = query.trim().toLowerCase();
-  const filtered = useMemo(() => {
-    if (!categories) return null;
-    if (!q) return categories;
+
+  // Flat catalog of real entries (for pin lookup + counts).
+  const allEntries = useMemo(() => {
+    if (!categories) return [];
     const out = [];
     for (const cat of categories) {
-      const catHit = (cat.name || '').toLowerCase().includes(q);
-      const entries = (cat.entries ?? []).filter(
-        (e) => e.separator === undefined && (catHit || entryMatches(e, q)),
-      );
-      if (entries.length) out.push({ ...cat, entries });
+      (cat.entries ?? []).forEach((entry, i) => {
+        if (entry.separator !== undefined) return;
+        out.push({ catName: cat.name, entry, index: i, key: pinKey(cat.name, entry, i) });
+      });
     }
     return out;
-  }, [categories, q]);
+  }, [categories]);
+
+  const filtered = useMemo(() => {
+    if (!categories) return null;
+    const cats = !q
+      ? categories
+      : (() => {
+        const out = [];
+        for (const cat of categories) {
+          const catHit = (cat.name || '').toLowerCase().includes(q);
+          const entries = (cat.entries ?? []).filter(
+            (e) => e.separator === undefined && (catHit || entryMatches(e, q)),
+          );
+          if (entries.length) out.push({ ...cat, entries });
+        }
+        return out;
+      })();
+
+    const byName = (a, b) =>
+      (a.entry.name || '').localeCompare(b.entry.name || '', undefined, { sensitivity: 'base' });
+
+    // Pinned folder first — only keys that still exist, matching current filter.
+    const pinnedRows = allEntries
+      .filter((row) => pinSet.has(row.key))
+      .filter((row) => !q || entryMatches(row.entry, q) || row.catName.toLowerCase().includes(q))
+      .slice()
+      .sort(byName);
+
+    const rest = cats.map((cat) => ({
+      name: cat.name,
+      entries: cat.entries ?? [],
+      pinnedFolder: false,
+    }));
+
+    if (!pinnedRows.length) return rest;
+    return [
+      {
+        name: 'Pinned',
+        pinnedFolder: true,
+        entries: pinnedRows.map((r) => ({
+          ...r.entry,
+          __pinCat: r.catName,
+          __pinIndex: r.index,
+        })),
+      },
+      ...rest,
+    ];
+  }, [categories, q, pinSet, allEntries]);
+
+  const total = allEntries.length;
+  const shownUnique = useMemo(() => {
+    if (!q) return total;
+    return allEntries.filter(
+      (r) => entryMatches(r.entry, q) || r.catName.toLowerCase().includes(q),
+    ).length;
+  }, [allEntries, q, total]);
 
   const toggleCat = (name) => setOpenCats((s) => {
     const n = new Set(s);
@@ -142,61 +229,98 @@ export function NpcList({ onSelectEntry, selectedPath, onError }) {
         {filtered && filtered.length === 0 && (
           <div className="side-note">No NPCs match “{query.trim()}”.</div>
         )}
-        {filtered?.map((cat) => (
-          <NpcCategory
-            key={cat.name}
-            category={cat}
-            open={q ? true : openCats.has(cat.name)}
-            onToggle={() => toggleCat(cat.name)}
-            searching={!!q}
-            openEntries={openEntries}
-            onToggleEntry={toggleEntry}
-            onSelectEntry={onSelectEntry}
-            selectedPath={selectedPath}
-          />
-        ))}
+        {filtered?.map((cat) => {
+          const catKey = cat.pinnedFolder ? '__pinned__' : cat.name;
+          const defaultPinnedOpen = cat.pinnedFolder && !openCats.has('__pinned_closed__');
+          return (
+            <NpcCategory
+              key={catKey}
+              category={cat}
+              open={q ? true : (cat.pinnedFolder ? defaultPinnedOpen : openCats.has(cat.name))}
+              onToggle={() => {
+                if (cat.pinnedFolder) {
+                  setOpenCats((s) => {
+                    const n = new Set(s);
+                    if (n.has('__pinned_closed__')) n.delete('__pinned_closed__');
+                    else n.add('__pinned_closed__');
+                    return n;
+                  });
+                } else {
+                  toggleCat(cat.name);
+                }
+              }}
+              searching={!!q}
+              openEntries={openEntries}
+              onToggleEntry={toggleEntry}
+              onSelectEntry={onSelectEntry}
+              selectedPath={selectedPath}
+              pinSet={pinSet}
+              onTogglePin={togglePin}
+            />
+          );
+        })}
       </div>
-    </div>
-  );
-}
-
-function NpcCategory({
-  category, open, onToggle, searching, openEntries, onToggleEntry, onSelectEntry, selectedPath,
-}) {
-  const entries = category.entries;
-
-  return (
-    <div className={`node${open ? ' open' : ''}`}>
-      <div className="row" onClick={searching ? undefined : onToggle}>
-        <span className="caret icon">chevron_right</span>
-        <span className="kind icon">folder</span>
-        <span>{category.name}</span>
-      </div>
-      {open && entries && (
-        <div className="children">
-          {entries.map((entry, i) =>
-            entry.separator !== undefined ? (
-              <div key={i} className="side-separator">{entry.separator}</div>
-            ) : (
-              <NpcEntry
-                key={i}
-                catName={category.name}
-                index={i}
-                entry={entry}
-                open={openEntries.has(entryKey(category.name, entry, i))}
-                onToggleOpen={() => onToggleEntry(entryKey(category.name, entry, i))}
-                onSelectEntry={onSelectEntry}
-                selectedPath={selectedPath}
-              />
-            ),
-          )}
+      {categories && total > 0 && (
+        <div className="side-note zone-count">
+          {q ? `${shownUnique} / ${total}` : `${total}`} NPCs
+          {pinned.length > 0 && !q ? ` · ${pinned.length} pinned` : ''}
         </div>
       )}
     </div>
   );
 }
 
-function NpcEntry({ entry, open, onToggleOpen, onSelectEntry, selectedPath }) {
+function NpcCategory({
+  category, open, onToggle, searching, openEntries, onToggleEntry, onSelectEntry,
+  selectedPath, pinSet, onTogglePin,
+}) {
+  const entries = category.entries;
+  const pinnedFolder = !!category.pinnedFolder;
+
+  return (
+    <div className={`node${open ? ' open' : ''}${pinnedFolder ? ' zone-pinned-group' : ''}`}>
+      <div className="row" onClick={searching ? undefined : onToggle}>
+        <span className="caret icon">{searching ? '' : 'chevron_right'}</span>
+        <span className={`kind icon${pinnedFolder ? ' zone-pin-folder-icon' : ''}`}>
+          {pinnedFolder ? 'keep' : 'folder'}
+        </span>
+        <span>{category.name}</span>
+        {pinnedFolder && <span className="badge">{entries.length}</span>}
+      </div>
+      {open && entries && (
+        <div className="children">
+          {entries.map((entry, i) => {
+            if (entry.separator !== undefined) {
+              return <div key={i} className="side-separator">{entry.separator}</div>;
+            }
+            const catName = entry.__pinCat ?? category.name;
+            const index = entry.__pinIndex ?? i;
+            const ek = entryKey(catName, entry, index);
+            const pk = pinKey(catName, entry, index);
+            return (
+              <NpcEntry
+                key={pinnedFolder ? `pin:${pk}` : ek}
+                catName={catName}
+                index={index}
+                entry={entry}
+                open={openEntries.has(ek)}
+                onToggleOpen={() => onToggleEntry(ek)}
+                onSelectEntry={onSelectEntry}
+                selectedPath={selectedPath}
+                pinned={pinSet.has(pk)}
+                onTogglePin={onTogglePin}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NpcEntry({
+  catName, index, entry, open, onToggleOpen, onSelectEntry, selectedPath, pinned, onTogglePin,
+}) {
   const multi = entry.variants.length > 1;
 
   const load = (variant) =>
@@ -214,7 +338,9 @@ function NpcEntry({ entry, open, onToggleOpen, onSelectEntry, selectedPath }) {
   const isSelected = (variant) => selectedPath === variant.toLowerCase();
 
   return (
-    <div className={`node${open ? ' open' : ''}${!multi && isSelected(entry.variants[0]) ? ' selected' : ''}`}>
+    <div
+      className={`node zone-row${open ? ' open' : ''}${!multi && isSelected(entry.variants[0]) ? ' selected' : ''}${pinned ? ' zone-is-pinned' : ''}`}
+    >
       <div className="row" onClick={() => load(entry.variants[0])}>
         <span
           className="caret icon"
@@ -223,8 +349,22 @@ function NpcEntry({ entry, open, onToggleOpen, onSelectEntry, selectedPath }) {
           {multi ? 'chevron_right' : ''}
         </span>
         <span className="kind icon">deployed_code</span>
-        <span>{entry.name}</span>
+        <span className="tree-file-name">{entry.name}</span>
         {multi && <span className="badge">{entry.variants.length}</span>}
+        <Tooltip content={pinned ? 'Unpin NPC' : 'Pin NPC'} placement="right">
+          <button
+            type="button"
+            className={`zone-pin-btn${pinned ? ' on' : ''}`}
+            aria-label={pinned ? 'Unpin NPC' : 'Pin NPC'}
+            aria-pressed={pinned}
+            onClick={(e) => {
+              e.stopPropagation();
+              onTogglePin?.(catName, entry, index);
+            }}
+          >
+            <span className={`icon${pinned ? ' fill' : ''}`}>keep</span>
+          </button>
+        </Tooltip>
       </div>
       {multi && open && (
         <div className="children">

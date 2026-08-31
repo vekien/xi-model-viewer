@@ -63,7 +63,7 @@ const MENUS = [
 ];
 
 /** Quick-toggle strip next to the menus — View checks minus a few menu-only items. */
-const TOOLBAR_SKIP = new Set(['toggle-blend-lequal']);
+const TOOLBAR_SKIP = new Set(['toggle-blend-lequal', 'toggle-region-cull']);
 const VIEW_TOOLBAR = MENUS.find((m) => m.label === 'View').items
   .filter((i) => i.toolbarSep || (i.check && !TOOLBAR_SKIP.has(i.id)));
 
@@ -78,6 +78,8 @@ export function MenuBar({
   sequencerOpen = false,
   bgColor = '#1a1a24', onBgColor, bgImage = '', onBgImage,
   floorTileScale = 1, onFloorTileScale,
+  floorRadius = 42, onFloorRadius,
+  floorFadeRadius = 30, onFloorFadeRadius,
   flatFloor = false, onFlatFloor, flatFloorColor = '#8a8a94', onFlatFloorColor,
   onFloor, onClearFloor, selectedFloor = '',
   shadowsOn = false, shadowDistance = 90, onShadowDistance,
@@ -313,6 +315,10 @@ export function MenuBar({
               selectedFloor={selectedFloor}
               floorTileScale={floorTileScale}
               onFloorTileScale={onFloorTileScale}
+              floorRadius={floorRadius}
+              onFloorRadius={onFloorRadius}
+              floorFadeRadius={floorFadeRadius}
+              onFloorFadeRadius={onFloorFadeRadius}
               flatFloor={flatFloor}
               onFlatFloor={onFlatFloor}
               flatFloorColor={flatFloorColor}

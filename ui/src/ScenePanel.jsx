@@ -3,10 +3,13 @@ import { Tooltip } from './Tooltip.jsx';
 import { Combo } from './Combo.jsx';
 import { BG_IMAGES, resolveBgUrl } from './bgs.js';
 
-// Floor Repeat multiplier bounds — mirrored by Renderer.setFloorTileScale,
-// which clamps to the same range.
+// Floor slider bounds — mirrored by Renderer.setFloor* clamps.
 const TILE_MIN = 0.25;
 const TILE_MAX = 4;
+const RADIUS_MIN = 2;
+const RADIUS_MAX = 200;
+const FADE_MIN = 0;
+const FADE_MAX = 200;
 
 // floors.json rows: { zone, spec: "rom/dir/file", fourcc }
 async function loadFloors() {
@@ -37,6 +40,10 @@ export function ScenePanel({
   selectedFloor = '',
   floorTileScale = 1,
   onFloorTileScale,
+  floorRadius = 42,
+  onFloorRadius,
+  floorFadeRadius = 30,
+  onFloorFadeRadius,
   flatFloor = false,
   onFlatFloor,
   flatFloorColor = '#8a8a94',
@@ -56,6 +63,7 @@ export function ScenePanel({
 
   const keyOf = (f) => `${f.spec}:${f.fourcc}`;
   const hasFloor = !!selectedFloor;
+  const floorLive = hasFloor || !!flatFloor;
 
   return (
     <div className="tool-pop-body">
@@ -92,33 +100,6 @@ export function ScenePanel({
 
       <hr />
 
-      <div className="gfx-line">
-        <span className="gfx-lab">Flat Floor</span>
-        <div className="gfx-ctrl gfx-ctrl-end">
-          <Tooltip content="Plain untextured ground plane — still catches the model's shadow">
-            <label className="switch cseq-switch">
-              <input
-                type="checkbox"
-                checked={!!flatFloor}
-                onChange={(e) => onFlatFloor?.(e.target.checked)}
-              />
-              <span className="track" />
-            </label>
-          </Tooltip>
-          <Tooltip content="Flat floor colour">
-            <input
-              type="color"
-              className="tool-pop-color"
-              value={flatFloorColor}
-              disabled={!flatFloor}
-              onChange={(e) => onFlatFloorColor?.(e.target.value)}
-            />
-          </Tooltip>
-        </div>
-      </div>
-
-      <hr />
-
       <div className="tool-pop-actions">
         <Tooltip content={hasFloor ? 'Remove the ground plane' : 'No floor loaded'}>
           <button
@@ -132,6 +113,71 @@ export function ScenePanel({
           </button>
         </Tooltip>
       </div>
+
+      <div className="gfx-line">
+        <span className="gfx-lab">Flat Floor</span>
+        <div className="gfx-ctrl gfx-ctrl-end">
+          <Tooltip content="Plain untextured ground plane — still catches the model's shadow">
+            <label className="switch cseq-switch">
+              <input
+                type="checkbox"
+                checked={!!flatFloor}
+                onChange={(e) => onFlatFloor?.(e.target.checked)}
+              />
+              <span className="track" />
+            </label>
+          </Tooltip>
+        </div>
+      </div>
+
+      <div className={`gfx-line${flatFloor ? '' : ' dim'}`}>
+        <span className="gfx-lab">Flat Floor Color</span>
+        <div className="gfx-ctrl gfx-ctrl-end">
+          <Tooltip content="Flat floor colour">
+            <input
+              type="color"
+              className="tool-pop-color"
+              value={flatFloorColor}
+              disabled={!flatFloor}
+              onChange={(e) => onFlatFloorColor?.(e.target.value)}
+            />
+          </Tooltip>
+        </div>
+      </div>
+
+      <div className={`gfx-line${floorLive ? '' : ' dim'}`}>
+        <span className="gfx-lab">
+          Floor Radius &nbsp; • &nbsp; <strong>{Number(floorRadius).toFixed(0)}</strong>
+        </span>
+      </div>
+      <input
+        type="range"
+        min={RADIUS_MIN}
+        max={RADIUS_MAX}
+        step="1"
+        value={floorRadius}
+        disabled={!floorLive}
+        onChange={(e) => onFloorRadius?.(+e.target.value)}
+        className="vol-slider gfx-slider"
+        style={{ '--fill': `${((floorRadius - RADIUS_MIN) / (RADIUS_MAX - RADIUS_MIN)) * 100}%` }}
+      />
+
+      <div className={`gfx-line${floorLive ? '' : ' dim'}`}>
+        <span className="gfx-lab">
+          Floor Fade Radius &nbsp; • &nbsp; <strong>{Number(floorFadeRadius).toFixed(0)}</strong>
+        </span>
+      </div>
+      <input
+        type="range"
+        min={FADE_MIN}
+        max={FADE_MAX}
+        step="1"
+        value={floorFadeRadius}
+        disabled={!floorLive}
+        onChange={(e) => onFloorFadeRadius?.(+e.target.value)}
+        className="vol-slider gfx-slider"
+        style={{ '--fill': `${((floorFadeRadius - FADE_MIN) / (FADE_MAX - FADE_MIN)) * 100}%` }}
+      />
 
       <div className={`gfx-line${hasFloor ? '' : ' dim'}`}>
         <span className="gfx-lab">
@@ -175,22 +221,21 @@ export function ScenePanel({
                 const key = keyOf(f);
                 const on = selectedFloor === key;
                 return (
-                  <Tooltip key={key} content={`${f.spec} · ${f.fourcc}`}>
-                    <button
-                      type="button"
-                      className={`tool-pop-item${on ? ' on' : ''}${single ? ' alone' : ''}`}
-                      onClick={() => onFloor?.(f.spec, f.fourcc)}
-                    >
-                      <span className="icon">{single ? 'grass' : 'texture'}</span>
-                      <span className="tool-pop-item-label">
-                        {single ? zone : f.fourcc}
-                      </span>
-                      {single ? (
-                        <span className="mono tool-pop-item-meta">{f.fourcc}</span>
-                      ) : null}
-                      {on ? <span className="icon tool-pop-check">check</span> : null}
-                    </button>
-                  </Tooltip>
+                  <button
+                    key={key}
+                    type="button"
+                    className={`tool-pop-item${on ? ' on' : ''}${single ? ' alone' : ''}`}
+                    onClick={() => onFloor?.(f.spec, f.fourcc)}
+                  >
+                    <span className="icon">{single ? 'grass' : 'texture'}</span>
+                    <span className="tool-pop-item-label">
+                      {single ? zone : f.fourcc}
+                    </span>
+                    {single ? (
+                      <span className="mono tool-pop-item-meta">{f.fourcc}</span>
+                    ) : null}
+                    {on ? <span className="icon tool-pop-check">check</span> : null}
+                  </button>
                 );
               })}
             </div>
