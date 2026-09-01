@@ -140,8 +140,12 @@ export class SkeletonPose {
         // override would double-transform the swing. When it applies, the joint
         // adopts the hand transform wholesale: bind local dropped, scale reset
         // (xim updateCurrentJointTransformWithParentOverride).
+        // A reset track (negative offsets in the DAT) pins the joint to bind,
+        // which for a re-parented grip is "hang off the hand" — so it does not
+        // count as the clip driving the joint.
         const override = this.parentOverrides?.get(i);
-        if (override !== undefined && !clip?.jointTracks.has(i)) {
+        const driven = clip?.jointTracks.get(i);
+        if (override !== undefined && !(driven && !driven.reset)) {
           if (!computed[override]) { missing = true; continue; }
           this.rot[i] = this.rot[override];
           this.trans[i] = this.trans[override];

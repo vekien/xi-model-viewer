@@ -166,6 +166,12 @@ function parseRoutine(r, sec) {
   // see the clock note below. Chained clips (ssit: sit-down then sitting
   // idle) depend on this.
   const commands = [];
+  // Routine calls (0x03 and kin). A routine's motion often lives one hop away:
+  // Tachi: Shoha's `main` plays no 0x05 itself and calls `cas0`, which does;
+  // every race's `sh*` cast routine calls its `ss*` twin the same way. The
+  // callee's commands are inlined by inlineRoutineCalls once the whole DAT is
+  // parsed, so `main` lists (and plays) what it actually runs.
+  const calls = [];
   let dur = 0;
   let maxLoops = 0;
   let transIn = 0;
@@ -207,13 +213,63 @@ function parseRoutine(r, sec) {
         maxLoops = u16(p + 30);  // 0 = loop forever, N = play N then hold
       }
     }
+    if (ROUTINE_CALL_OPS.has(op) && p + 12 <= end) {
+      const ref = String.fromCharCode(r.bytes[p + 8], r.bytes[p + 9], r.bytes[p + 10], r.bytes[p + 11]).replace(/\0+$/, '');
+      if (/^[\x20-\x7e]{1,4}$/.test(ref)) calls.push({ routineId: ref.trimEnd(), delay: at });
+    }
     if (op === 0x00) break;
     p += entryLen;
   }
 
   // Keep routines even with no clip refs (SFX/VFX-only) so the schedule list
   // matches the full 0x07 set AltanaViewer shows.
-  return { id: sec.id, refs, commands, dur, maxLoops, transIn, transOut };
+  return { id: sec.id, refs, commands, calls, dur, maxLoops, transIn, transOut };
+}
+
+// Ops that invoke another routine by id (same set as effect.js CALL_OPS).
+const ROUTINE_CALL_OPS = new Set([0x03, 0x09, 0x3b, 0x3c, 0x57]);
+
+/**
+ * Folds each routine's same-DAT calls into its own command list, offset by the
+ * call's delay (nested delays add, as in effect.js flattenRoutine). Calls that
+ * leave the DAT — `mdam`, `proc`, `eis1` in the shared effects file, or a
+ * schedule on the actor — are left to the effect scheduler.
+ *
+ * Without this, ROM/268/76 (Tachi: Shoha) lists only `cas0`: its `main` is a
+ * wrapper — VFX ops plus `0x03 cas0` — while the older ROM/101/76 (Tachi:
+ * Enpi) puts the 0x05 commands straight in `main`. The picker then had no
+ * `main` to lead with, and the base race's `sh*` cast routines (which only
+ * call `ss*`) stayed empty.
+ */
+function inlineRoutineCalls(schedules) {
+  const byId = new Map();
+  for (const s of schedules) if (!byId.has(s.id)) byId.set(s.id, s);
+  return schedules.map((s) => {
+    if (!s.calls?.length) return s;
+    const commands = [...s.commands];
+    const seen = new Set([s]);
+    const walk = (r, offset, depth) => {
+      if (depth > 8) return;
+      for (const call of r.calls ?? []) {
+        const next = byId.get(call.routineId);
+        if (!next || seen.has(next)) continue;
+        seen.add(next);
+        const at = offset + call.delay;
+        for (const c of next.commands) commands.push({ ...c, delay: c.delay + at });
+        walk(next, at, depth + 1);
+      }
+    };
+    walk(s, 0, 0);
+    if (commands.length === s.commands.length) return s;
+    commands.sort((a, b) => a.delay - b.delay);
+    const refs = [...new Set(commands.map((c) => c.ref))];
+    // Header-style fields come from the first command when the routine had none.
+    const first = s.commands.length ? s : commands[0];
+    return {
+      ...s, refs, commands,
+      dur: first.dur ?? first.duration, maxLoops: first.maxLoops, transIn: first.transIn, transOut: first.transOut,
+    };
+  });
 }
 
 /**
@@ -260,7 +316,7 @@ export function resolveScheduleRefs(schedules, animations) {
 }
 
 function resolveSchedules(model) {
-  model.schedules = resolveScheduleRefs(model.schedules, model.animations);
+  model.schedules = resolveScheduleRefs(inlineRoutineCalls(model.schedules), model.animations);
 }
 
 /**
@@ -832,7 +888,20 @@ function parseAnimation(r, sec) {
     const rot = readChannelGroup(r, 4, numFrames, keyFrameDataOffset);
     const trans = readChannelGroup(r, 3, numFrames, keyFrameDataOffset);
     const scale = readChannelGroup(r, 3, numFrames, keyFrameDataOffset);
-    if (!rot || !trans || !scale) continue;   // negative offset => joint not animated
+    if (!rot || !trans || !scale) {
+      // A negative offset is not "joint not animated" — it is a RESET. The
+      // client (XiClient MotionResource::ApplyBaseAnimation) sees the sign bit
+      // on a non-base layer and writes identity rotation / zero translation /
+      // unit scale to the bone, i.e. pins it to the bind pose. Clips lean on
+      // this: Tachi: Shoha keys the hip offset on joint 2 and flags joint 1,
+      // where Tachi: Enpi keys joint 1 and flags joint 2. Skipping the joint
+      // instead let the battle-stance underlay drive joint 1 as well, and the
+      // two offsets stacked — the body sank and the feet went through the
+      // floor. Across 1,536 PC motion DATs the masked index is always 0 and no
+      // sibling body-region part ever keys a joint another part flags.
+      jointTracks.set(jointIndex, resetTrack());
+      continue;
+    }
 
     const rotations = new Float32Array(numFrames * 4);
     const translations = new Float32Array(numFrames * 3);
@@ -856,7 +925,19 @@ function parseAnimation(r, sec) {
   };
 }
 
-// Offset semantics: 0 = constant, >0 = per-frame floats at base + offset*4, <0 = absent.
+/** One-frame identity track: the joint holds its bind pose for the clip. */
+function resetTrack() {
+  return {
+    rotations: new Float32Array([0, 0, 0, 1]),
+    translations: new Float32Array(3),
+    scales: new Float32Array([1, 1, 1]),
+    frames: 1,
+    reset: true,
+  };
+}
+
+// Offset semantics: 0 = constant, >0 = per-frame floats at base + offset*4,
+// <0 = reset to bind (see parseAnimation).
 function readChannelGroup(r, count, numFrames, base) {
   const offsets = [];
   for (let i = 0; i < count; i++) offsets.push(r.i32());
