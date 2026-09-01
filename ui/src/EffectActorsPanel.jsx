@@ -4,7 +4,8 @@ import { NpcList } from './NpcList.jsx';
 import { Tooltip } from './Tooltip.jsx';
 
 /**
- * Effects-only actor picker under Options: Character (full gear) or NPC list.
+ * Effects-only actor picker under Options: None (bare effect), Character
+ * (full gear) or NPC list.
  */
 export function EffectActorsPanel({
   tab, onTab,
@@ -31,6 +32,15 @@ export function EffectActorsPanel({
         <button
           type="button"
           role="tab"
+          className={`seg-tab${tab === 'none' ? ' on' : ''}`}
+          aria-selected={tab === 'none'}
+          onClick={() => onTab('none')}
+        >
+          None
+        </button>
+        <button
+          type="button"
+          role="tab"
           className={`seg-tab${tab === 'pc' ? ' on' : ''}`}
           aria-selected={tab === 'pc'}
           onClick={() => onTab('pc')}
@@ -49,6 +59,7 @@ export function EffectActorsPanel({
       </div>
 
       <div className="fx-actor-body">
+        {tab === 'none' && <div className="side-note">Effect plays on the empty stage.</div>}
         {tab === 'pc' && <EffectPcStrip pc={pc} />}
         {tab === 'npc' && (
           <div className="fx-actor-npc plc-list-shell">

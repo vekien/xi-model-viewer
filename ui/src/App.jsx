@@ -889,6 +889,8 @@ export default function App({ launch = null }) {
 
   // ── Assets > Effects (standalone spell/ability VFX) ────────────────────────
   const [effectEntry, setEffectEntry] = useState(null);     // { name, dir, file, path } | null
+  const effectEntryRef = useRef(null);                      // mirror for post-actor-load re-arm
+  effectEntryRef.current = effectEntry;
   const [effectRoutines, setEffectRoutines] = useState([]); // 0x07 routines in the effect DAT
   const [effectSchedule, setEffectSchedule] = useState(''); // active routine id (AltanaViewer "Schedule")
   // 'playing' | 'paused' | 'stopped'. Pause freezes the stage as it is; Stop
@@ -2439,7 +2441,9 @@ export default function App({ launch = null }) {
       // user's WASD mode and camera must survive picking one.
       if (!onActor) setWasd(false);
 
-      const forceViewReset = forceCamResetOnViewRef.current;
+      // opts.keepCamera: the actor was just swapped out under a framed shot
+      // (ACTORS → None) — leave the orbit exactly where it is.
+      const forceViewReset = !opts.keepCamera && forceCamResetOnViewRef.current;
       if (forceViewReset) forceCamResetOnViewRef.current = false;
 
       if (onActor) {
@@ -2450,7 +2454,7 @@ export default function App({ launch = null }) {
       } else {
         // Empty stage: wipe any prior model and frame the origin once.
         // Assets view switch: full F framing (not keepView of the prior camera).
-        const keepCamera = !forceViewReset && renderer.effectMode;
+        const keepCamera = !!opts.keepCamera || (!forceViewReset && renderer.effectMode);
         renderer.setEffectScene(system, textures, keepCamera);
         if (forceViewReset) renderer.frameEffect();
         modelRef.current = null;
@@ -3186,28 +3190,45 @@ export default function App({ launch = null }) {
     r.setMeshSourceFilter(paths);
   }, []);
   // Effects ACTORS panel can drive the same PC composer as Assets > Characters.
-  const [effectActorTab, setEffectActorTab] = useState('pc'); // 'pc' | 'npc'
+  const [effectActorTab, setEffectActorTab] = useState('pc'); // 'none' | 'pc' | 'npc'
   const effectActorTabRef = useRef(effectActorTab);
   effectActorTabRef.current = effectActorTab;
+  // Set by the ACTORS tabs: the next character load is a swap under the
+  // user's shot, not a cold boot, so it holds the camera even from an empty stage.
+  const effectActorSwapRef = useRef(false);
+  // setModel clears particles — re-arm the Effects-list pick on the new actor
+  // without touching the orbit (user lined the shot up already).
+  const rearmEffectOnActor = useCallback(() => {
+    const fx = effectEntryRef.current;
+    if (!fx || leftViewRef.current !== 'effects') return;
+    loadEffect(fx, { keepCamera: true });
+  }, [loadEffect]);
   const loadEffectNpc = useCallback((entry) => {
     setEffectActorTab('npc');
     effectActorTabRef.current = 'npc';
-    loadNpcEntry({ ...entry, keepCamera: true });
-  }, [loadNpcEntry]);
+    forceCamResetOnViewRef.current = false;   // a pending view-switch fit would override keepCamera
+    Promise.resolve(loadNpcEntry({ ...entry, keepCamera: true })).then(rearmEffectOnActor);
+  }, [loadNpcEntry, rearmEffectOnActor]);
   const loadEffectPc = useCallback((entry) => {
     setEffectActorTab('pc');
     effectActorTabRef.current = 'pc';
     // Hold the camera when swapping the actor under an already-framed shot, but
     // not on a cold boot into Effects: there is nothing to preserve then, and
     // keeping the default camera left the actor off-centre until F was pressed.
-    const keepCamera = leftViewRef.current === 'effects' && !!modelRef.current;
-    loadNpcEntry({ ...entry, keepCamera });
-  }, [loadNpcEntry]);
+    const keepCamera = leftViewRef.current === 'effects'
+      && (!!modelRef.current || effectActorSwapRef.current);
+    effectActorSwapRef.current = false;
+    if (keepCamera) forceCamResetOnViewRef.current = false;
+    Promise.resolve(loadNpcEntry({ ...entry, keepCamera })).then(rearmEffectOnActor);
+  }, [loadNpcEntry, rearmEffectOnActor]);
   const pc = useCharacter({
     enabled: (leftView === 'pc' || leftView === 'effects') && !!settings?.gamePath,
     onLoad: (entry) => {
-      if (leftViewRef.current === 'effects') loadEffectPc(entry);
-      else loadNpcEntry(entry);
+      // In Effects the composer only drives the stage while its tab is up —
+      // an NPC or an empty stage must not be replaced by a gear tweak.
+      if (leftViewRef.current === 'effects') {
+        if (effectActorTabRef.current === 'pc') loadEffectPc(entry);
+      } else loadNpcEntry(entry);
     },
     onError: (msg) => setStatusText(msg),
     onIsolationChange: applyPcIsolation,
@@ -5379,6 +5400,27 @@ export default function App({ launch = null }) {
     setStatusText('');
   }, [persistCurrentZoneCamera]);
 
+  // Effects ACTORS tabs. Character puts the composer's current look on stage
+  // at once; NPC shows the list to pick from; None clears the stage and plays
+  // the effect on its own. Camera never moves between these — the shot is the user's.
+  const pcReload = pc.reload;
+  const pickEffectActorTab = useCallback((tab) => {
+    setEffectActorTab(tab);
+    effectActorTabRef.current = tab;
+    const actor = modelRef.current;
+    const isEntity = !!(actor && actor.kind !== 'zone' && actor.isRenderable);
+    forceCamResetOnViewRef.current = false;
+    if (tab === 'pc') {
+      if (isEntity && lastEntityRef.current?.view === 'pc') return;   // already up
+      effectActorSwapRef.current = true;
+      pcReload();
+    } else if (tab === 'none') {
+      if (isEntity) unloadModel();
+      const fx = effectEntryRef.current;
+      if (fx) loadEffect(fx, { keepCamera: true });
+    }
+  }, [pcReload, unloadModel, loadEffect]);
+
   // One view on screen at a time, each arriving clean. Without this a model
   // keeps rendering (and animating) behind the Images page, music plays on under
   // a 3D view, and the GPU carries a scene nobody can see.
@@ -5402,7 +5444,8 @@ export default function App({ launch = null }) {
     // Effects keeps that same actor (no reload) and restores path UI.
     const actor = modelRef.current;
     const isEntity = !!(actor && actor.kind !== 'zone' && actor.isRenderable);
-    const keepActorForEffects = leftView === 'effects' && isEntity;
+    const keepActorForEffects = leftView === 'effects' && isEntity
+      && effectActorTabRef.current !== 'none';
     const keepActorFromEffects = isEntity
       && prev === 'effects'
       && (leftView === 'npc' || leftView === 'pc');
@@ -7505,7 +7548,7 @@ export default function App({ launch = null }) {
           {actorsOpen && (
             <EffectActorsPanel
               tab={effectActorTab}
-              onTab={setEffectActorTab}
+              onTab={pickEffectActorTab}
               pc={pc}
               selectedPath={selectedDat}
               onSelectNpc={loadEffectNpc}

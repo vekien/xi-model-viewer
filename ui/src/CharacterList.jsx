@@ -268,6 +268,8 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
   const prevEnabled = useRef(false);
   const cbRef = useRef({});
   cbRef.current = { onLoad, onError };
+  // Bumped by reload(): re-runs the assemble even when nothing changed.
+  const [reloadTick, setReloadTick] = useState(0);
 
   /** UI race pick: invalidate slot ownership in the same event so the load
    *  effect cannot run one frame with the new race + old face/gear paths. */
@@ -511,7 +513,13 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
     lastRace.current = race;
     // Re-apply current isolation against the new part paths (gear/race swap).
     isoCbRef.current?.(isolatedRef.current, parts);
-  }, [enabled, races, race, slots, slotsRace, sel, actions, action]);
+  }, [enabled, races, race, slots, slotsRace, sel, actions, action, reloadTick]);
+
+  /** Load the current look again — for a caller that replaced the model. */
+  const reload = useCallback(() => {
+    lastKey.current = '';
+    setReloadTick((t) => t + 1);
+  }, []);
 
   const toggleIsolate = useCallback((key) => {
     setIsolated((prev) => {
@@ -559,7 +567,7 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
   return {
     races, race, setRace, slots, sel, setSel,
     actionGroups, actionGroup, setActionGroup, actionEntries, action, setAction,
-    applyGearSet,
+    applyGearSet, reload,
     isolated, toggleIsolate,
     // Read from characters.json alongside the races; the list is already
     // ordered by then, so this only names the fold-up of ungrouped rows.
