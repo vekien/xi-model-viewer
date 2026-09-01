@@ -31,9 +31,6 @@ export const EXPORT_COMMANDS = {
   sfx: ['audio', 'sfx', 'export'],
 };
 
-/** Dialog `spec.type` → catalog key. */
-export const TYPE_TO_CATALOG = { model: 'mesh', zone: 'zone', music: 'music', sfx: 'sfx' };
-
 const OUTPUT_DIR = {
   flag: '--output', kind: 'value', group: 'Output', managed: true,
   label: 'Output directory', hint: 'Set by the Export folder field below.',

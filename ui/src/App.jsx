@@ -27,6 +27,7 @@ import { PlacementPanel } from './PlacementPanel.jsx';
 import { LoadingOverlay } from './LoadingOverlay.jsx';
 import { SettingsModal } from './SettingsModal.jsx';
 import { ExportModal } from './ExportModal.jsx';
+import { BatchExportModal } from './BatchExportModal.jsx';
 import { DetailsPanel } from './DetailsPanel.jsx';
 import { SkeletonPanel } from './SkeletonPanel.jsx';
 import { TextureModal } from './TextureModal.jsx';
@@ -605,6 +606,8 @@ export default function App({ launch = null }) {
     return () => { alive = false; };
   }, [minimal]);
   const [exportSpec, setExportSpec] = useState(null);
+  const [batchOpen, setBatchOpen] = useState(false);
+  const batchRunningRef = useRef(false);
   const [leftView, setLeftViewState] = useState(() => {
     // A launch zone arrives on the Zones page. Set as the *initial* view, not a
     // switch: switching runs the view-change cleanup, which would unload the
@@ -3806,6 +3809,11 @@ export default function App({ launch = null }) {
     const onKey = (e) => {
       if (e.key !== 'Escape') return;
       if (exitCinematicIfStuck()) { e.preventDefault(); return; }
+      if (batchOpen) {
+        if (!batchRunningRef.current) setBatchOpen(false);
+        e.preventDefault();
+        return;
+      }
       if (exportSpec) { setExportSpec(null); e.preventDefault(); return; }
       if (settingsOpen) { setSettingsOpen(false); e.preventDefault(); return; }
       if (helpOpen) { setHelpOpen(false); e.preventDefault(); return; }
@@ -3860,7 +3868,7 @@ export default function App({ launch = null }) {
       window.removeEventListener('keydown', onKey, true);
       document.removeEventListener('visibilitychange', onVis);
     };
-  }, [exportSpec, settingsOpen, helpOpen, datNotesOpen, texWindows.length, skelWindows.length, zdefWindows.length, routeWindows.length, uiMenuWindows.length, uiEgWindows.length, dataTableWindows.length, fxPreview, closeFxPreview, explorerOpen]);
+  }, [exportSpec, batchOpen, settingsOpen, helpOpen, datNotesOpen, texWindows.length, skelWindows.length, zdefWindows.length, routeWindows.length, uiMenuWindows.length, uiEgWindows.length, dataTableWindows.length, fxPreview, closeFxPreview, explorerOpen]);
 
   // --- handlers ------------------------------------------------------------
 
@@ -4019,7 +4027,7 @@ export default function App({ launch = null }) {
       const t = e.target;
       const tag = t?.tagName;
       if (t?.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      if (settingsOpen || helpOpen || datNotesOpen || exportSpec || fxPreview) return;
+      if (settingsOpen || helpOpen || datNotesOpen || exportSpec || batchOpen || fxPreview) return;
 
       if (leftView === 'effects') {
         if (!effectRoutinesRef.current?.length) return;
@@ -6011,6 +6019,7 @@ export default function App({ launch = null }) {
           type: 'zone',
           typeLabel: 'Zone',
           icon: 'map',
+          name: info?.name || modelPath || datStem,
           title: info?.name || modelPath || 'zone',
           details: z
             ? `${z.placementCount ?? '—'} placements · ${info.verts ?? 0} verts · ${info.tris ?? 0} tris`
@@ -6025,12 +6034,17 @@ export default function App({ launch = null }) {
       }
       return {
         type: 'model',
-        typeLabel: 'Model',
+        typeLabel: 'Mesh',
         icon: 'deployed_code',
+        name: info?.name || modelPath || datStem,
         title: modelPath || 'model',
         details: info ? `${info.joints} joints · ${info.verts} verts · ${info.tris} tris` : null,
         datStem,
         sourcePath: src,
+        // Characters and NPCs load several DATs at once (race skeleton, one per
+        // gear slot, borrowed anim packs). Same list the Data Struct switches
+        // on, so the dialog can export any one of them.
+        sources: (dataSourcesRef.current || []).map((d) => ({ id: d.id, label: d.label, path: d.path })),
         animations: animsRef.current.map((g) => ({ id: g.id, frames: g.clip.numFrames })),
         xiPath: s?.xiPath || '',
         gamePath: s?.gamePath || '',
@@ -6077,6 +6091,9 @@ export default function App({ launch = null }) {
         else setStatusText('Nothing to export — load a model or play a track first.');
         break;
       }
+      case 'batch-export':
+        setBatchOpen(true);
+        break;
       case 'reset-camera':
         focusOrResetCamera();
         break;
@@ -7778,6 +7795,14 @@ export default function App({ launch = null }) {
           if (settingsRef.current?.showXiConsole === false) return;
           setCliOutput(log);
         }}
+      />
+
+      <BatchExportModal
+        open={batchOpen}
+        settings={settings}
+        onClose={() => setBatchOpen(false)}
+        onStatus={(msg) => setStatusText(msg)}
+        onRunning={(v) => { batchRunningRef.current = v; }}
       />
 
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />

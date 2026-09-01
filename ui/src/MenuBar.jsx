@@ -11,6 +11,7 @@ const MENUS = [
       { id: 'open-dat', label: 'Open DAT…', icon: 'file_open' },
       { id: 'reload-dat', label: 'Reload DAT', icon: 'refresh' },
       { id: 'export', label: 'Export', icon: 'download' },
+      { id: 'batch-export', label: 'Batch Export…', icon: 'library_add_check' },
       { id: 'settings', label: 'Settings', icon: 'settings' },
       { sep: true },
       { id: 'check-updates', label: 'Check for Updates…', icon: 'system_update_alt' },

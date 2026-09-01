@@ -6,43 +6,65 @@ import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
 import { parseAudioHeader, toWav, FMT_ATRAC3 } from '../js/audio.js';
 import {
-  EXPORT_COMMANDS, TYPE_TO_CATALOG, addToken, removeFlag, tokenValue, tokensToArgv,
+  EXPORT_COMMANDS, addToken, removeFlag, tokenValue, tokensToArgv,
 } from './exportArgs.js';
 
 const sanitize = (name) => name.replace(/[<>:"/\\|?*]+/g, '_').trim() || 'export';
 
-/** Per-type export folders / formats / args persist independently. */
+/** Per-kind export folders / formats / args persist independently. */
 const folderKey = (type) => `exportFolder_${type}`;
-const optsKey = (type) => `exportOpts_${type}`;
-const argsKey = (type) => `exportArgs_${type}`;
+const optsKey = (key) => `exportOpts_${key}`;
+const argsKey = (key) => `exportArgs_${key}`;
 
-/** Only the output container still lives outside the args box. */
+/**
+ * What each export kind runs and how its output is named. `store` is the
+ * localStorage suffix — mesh keeps the historical `model` so an existing
+ * folder/format/args setup carries over.
+ */
+export const EXPORT_KINDS = {
+  mesh: {
+    catalog: 'mesh', store: 'model', label: 'Mesh', icon: 'deployed_code',
+    tabIcon: 'deployed_code', ext: (fbx) => (fbx ? 'fbx' : 'glb'),
+  },
+  anim: {
+    catalog: 'anim', store: 'anim', label: 'Animation', icon: 'directions_run',
+    tabIcon: 'directions_run', ext: (fbx) => (fbx ? 'fbx' : 'gltf'),
+  },
+  zone: {
+    catalog: 'zone', store: 'zone', label: 'Zone', icon: 'map',
+    tabIcon: 'map', ext: (fbx) => (fbx ? 'fbx' : 'glb'),
+  },
+};
+
+/** xi's own default when `anim export` isn't given a clip. */
+const DEFAULT_ANIM = 'idl';
+
 const DEFAULT_FORMAT = 'glb';
-const DEFAULT_ARGS = { model: ['--all-parts'], zone: [] };
+const DEFAULT_ARGS = { model: ['--all-parts'], anim: [], zone: [] };
 
-function loadFormat(type) {
+function loadFormat(key) {
   try {
-    const saved = JSON.parse(localStorage.getItem(optsKey(type)) || 'null');
+    const saved = JSON.parse(localStorage.getItem(optsKey(key)) || 'null');
     return saved?.format === 'fbx' ? 'fbx' : DEFAULT_FORMAT;
   } catch {
     return DEFAULT_FORMAT;
   }
 }
 
-function saveFormat(type, format) {
-  try { localStorage.setItem(optsKey(type), JSON.stringify({ format })); } catch { /* quota */ }
+function saveFormat(key, format) {
+  try { localStorage.setItem(optsKey(key), JSON.stringify({ format })); } catch { /* quota */ }
 }
 
 /**
  * Args the dialog used to spell as checkboxes, recovered once from the old
  * `exportOpts_*` blob so an existing setup survives the switch to the args box.
  */
-function migrateArgs(type) {
+function migrateArgs(key) {
   let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(optsKey(type)) || 'null'); } catch { /* corrupt */ }
-  if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return [...(DEFAULT_ARGS[type] ?? [])];
+  try { saved = JSON.parse(localStorage.getItem(optsKey(key)) || 'null'); } catch { /* corrupt */ }
+  if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return [...(DEFAULT_ARGS[key] ?? [])];
   const out = [];
-  if (type === 'model') {
+  if (key === 'model') {
     if (saved.allParts) out.push('--all-parts');
     if (saved.weld === false) out.push('--no-weld');
     if (saved.splitTex) out.push('--split-tex');
@@ -50,7 +72,7 @@ function migrateArgs(type) {
       out.push(`--anim ${saved.anim}`);
       out.push(`--frame ${Number(saved.frame) || 0}`);
     }
-  } else {
+  } else if (key === 'zone') {
     if (saved.noSky) out.push('--no-sky');
     if (saved.noVfx) out.push('--no-vfx');
     if (saved.objects) out.push('--objects');
@@ -60,30 +82,30 @@ function migrateArgs(type) {
   return out;
 }
 
-function loadArgs(type) {
+export function loadArgs(key) {
   try {
-    const raw = localStorage.getItem(argsKey(type));
-    if (raw == null) return migrateArgs(type);
+    const raw = localStorage.getItem(argsKey(key));
+    if (raw == null) return migrateArgs(key);
     const saved = JSON.parse(raw);
-    if (!Array.isArray(saved)) return [...(DEFAULT_ARGS[type] ?? [])];
+    if (!Array.isArray(saved)) return [...(DEFAULT_ARGS[key] ?? [])];
     return saved.map((t) => String(t).trim()).filter(Boolean);
   } catch {
-    return [...(DEFAULT_ARGS[type] ?? [])];
+    return [...(DEFAULT_ARGS[key] ?? [])];
   }
 }
 
-function saveArgs(type, args) {
-  try { localStorage.setItem(argsKey(type), JSON.stringify(args)); } catch { /* quota */ }
+export function saveArgs(key, args) {
+  try { localStorage.setItem(argsKey(key), JSON.stringify(args)); } catch { /* quota */ }
 }
 
-function shellQuote(s) {
+export function shellQuote(s) {
   const t = String(s ?? '');
   if (!/[ \t"&|<>^%!()]/.test(t)) return t;
   return `"${t.replace(/"/g, '\\"')}"`;
 }
 
 /** Env map xi needs so FFXI_DIR / pivot / HD resolve (Settings paths). */
-function xiEnvFromSpec(spec) {
+export function xiEnvFromSpec(spec) {
   const env = {};
   if (spec?.gamePath) env.FFXI_DIR = spec.gamePath;
   if (spec?.pivotPath) env.FFXI_PIVOT_DIR = spec.pivotPath;
@@ -92,13 +114,30 @@ function xiEnvFromSpec(spec) {
 }
 
 /**
+ * `xi <cmd> <dat> --output <dir> [--fbx] <user args…>`. Anything the user typed
+ * for a flag the dialog owns wins, so a hand-written `--output` isn't doubled.
+ */
+export function buildXiArgs(catalog, datPath, folder, format, userArgs) {
+  const argv = tokensToArgv(userArgs);
+  const has = (flag) => argv.includes(flag);
+  const args = [...EXPORT_COMMANDS[catalog], datPath];
+  if (!has('--output')) args.push('--output', folder);
+  if (format === 'fbx' && !has('--fbx')) args.push('--fbx');
+  return [...args, ...argv];
+}
+
+const stemOf = (path) => (String(path || '').split(/[\\/]/).pop() || 'export').replace(/\.dat$/i, '');
+
+/**
  * File > Export dialog. Music/SFX export to WAV in-app; models/zones shell out
- * to `xi mesh|zone export` and dump the CLI log into the bottom console (same
- * path as DAT edits). Draggable and screen-clamped like SettingsModal.
+ * to `xi mesh|anim|zone export` and dump the CLI log into the bottom console
+ * (same path as DAT edits). Draggable and screen-clamped like SettingsModal.
  */
 export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
   const [folder, setFolder] = useState('');
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState('mesh');
+  const [sourcePath, setSourcePath] = useState('');
   const [format, setFormat] = useState(DEFAULT_FORMAT);
   const [args, setArgs] = useState([]);
   const [pos, setPos] = useState(null);
@@ -107,6 +146,29 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
   // Only hydrate from disk when the dialog *opens* — not on every parent re-render
   // with a fresh `spec` object identity (that was wiping in-session ticks).
   const wasOpen = useRef(false);
+
+  const isXi = spec?.type === 'model' || spec?.type === 'zone';
+  const kindId = spec?.type === 'zone' ? 'zone' : mode;
+  const kind = EXPORT_KINDS[kindId];
+
+  /** Read a kind's saved folder + format + args, dropping an --anim this model lacks. */
+  const hydrate = (id) => {
+    const k = EXPORT_KINDS[id];
+    setFolder(localStorage.getItem(folderKey(k.store)) || '');
+    setFormat(loadFormat(k.store));
+    let next = loadArgs(k.store);
+    const anim = tokenValue(next, '--anim');
+    if (anim != null && !(spec?.animations ?? []).some((a) => a.id === anim)) {
+      next = removeFlag(removeFlag(next, '--anim'), '--frame');
+    }
+    // `anim export` is about one clip, so it always names one.
+    if (id === 'anim' && tokenValue(next, '--anim') == null) {
+      const first = spec?.animations?.[0]?.id;
+      if (first) next = addToken('anim', next, `--anim ${first}`);
+    }
+    setArgs(next);
+    saveArgs(k.store, next);
+  };
 
   useEffect(() => {
     if (!open || !spec) {
@@ -117,36 +179,31 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
     wasOpen.current = true;
     if (!justOpened) return;
 
-    setFolder(localStorage.getItem(folderKey(spec.type)) || '');
-    if (spec.type === 'model' || spec.type === 'zone') {
-      setFormat(loadFormat(spec.type));
-      // A saved --anim naming a clip this model doesn't have would fail the
-      // export, so it (and the frame it indexes) is dropped on open.
-      let next = loadArgs(spec.type);
-      const anim = tokenValue(next, '--anim');
-      if (anim != null && !(spec.animations ?? []).some((a) => a.id === anim)) {
-        next = removeFlag(removeFlag(next, '--anim'), '--frame');
-      }
-      setArgs(next);
-      // Pin the result now: the first format change rewrites exportOpts_*, and
-      // with it the old checkbox blob the migration reads from.
-      saveArgs(spec.type, next);
-    }
+    setSourcePath(spec.sourcePath || '');
+    setMode('mesh');
+    if (spec.type === 'model' || spec.type === 'zone') hydrate(spec.type === 'zone' ? 'zone' : 'mesh');
+    else setFolder(localStorage.getItem(folderKey(spec.type)) || '');
     setPos(null);
     setBusy(false);
   }, [open, spec]);
 
   if (!open || !spec) return null;
 
-  const isModel = spec.type === 'model';
-  const isZone = spec.type === 'zone';
-  const isXi = isModel || isZone;
   const needsXi = isXi && !spec.xiPath;
   const needsGame = isXi && !spec.gamePath;
-  const catalog = TYPE_TO_CATALOG[spec.type];
+  const catalog = kind?.catalog;
+  const store = kind?.store;
 
-  const setFmt = (v) => { setFormat(v); saveFormat(spec.type, v); };
-  const setArgList = (next) => { setArgs(next); saveArgs(spec.type, next); };
+  // Character / NPC composites load several DATs; each is separately exportable.
+  const sources = (spec.type === 'model' && spec.sources?.length > 1) ? spec.sources : null;
+  const activePath = sources
+    ? (sources.find((s) => s.path.toLowerCase() === sourcePath.toLowerCase())?.path ?? sources[0].path)
+    : (spec.sourcePath || '');
+  const datStem = stemOf(activePath);
+
+  const switchMode = (id) => { setMode(id); hydrate(id); };
+  const setFmt = (v) => { setFormat(v); saveFormat(store, v); };
+  const setArgList = (next) => { setArgs(next); saveArgs(store, next); };
 
   const animId = tokenValue(args, '--anim');
   const animFrames = spec.animations?.find((a) => a.id === animId)?.frames ?? 1;
@@ -165,14 +222,20 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
   };
   const endDrag = () => { dragState.current = null; };
 
+  const fkey = isXi ? store : spec.type;
   const browse = async () => {
     const picked = await backend.pickFolder(folder);
-    if (picked) { setFolder(picked); localStorage.setItem(folderKey(spec.type), picked); }
+    if (picked) { setFolder(picked); localStorage.setItem(folderKey(fkey), picked); }
   };
 
-  const outExt = isXi ? (format === 'fbx' ? 'fbx' : 'glb') : 'wav';
-  const outStem = isXi ? spec.datStem : sanitize(spec.outStem);
-  const previewArgs = isXi ? buildXiArgs(catalog, spec.sourcePath, folder || '…', format, args) : null;
+  const outExt = isXi ? kind.ext(format === 'fbx') : 'wav';
+  const outStem = !isXi
+    ? sanitize(spec.outStem)
+    : (kindId === 'anim' ? `${datStem}_${animId || DEFAULT_ANIM}` : datStem);
+  const headTitle = isXi
+    ? `Export ${kind.label}: ${spec.name || datStem}`
+    : `Export ${spec.typeLabel}: ${spec.title}`;
+  const previewArgs = isXi ? buildXiArgs(catalog, activePath, folder || '…', format, args) : null;
 
   const doExport = async () => {
     if (!folder) { onStatus?.('Choose an export folder first.'); return; }
@@ -181,19 +244,12 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
     setBusy(true);
     const env = xiEnvFromSpec(spec);
     // Snapshot before onClose unmounts this modal (xi path closes early).
-    const snap = {
-      xiPath: spec.xiPath,
-      datStem: spec.datStem,
-      sourcePath: spec.sourcePath,
-      outExt,
-      isZone,
-    };
+    const snap = { xiPath: spec.xiPath, datStem, outExt, outStem };
     try {
       if (isXi) {
-        const xiArgs = buildXiArgs(catalog, snap.sourcePath, folder, format, args);
+        const xiArgs = buildXiArgs(catalog, activePath, folder, format, args);
         const cmd = `xi ${xiArgs.map(shellQuote).join(' ')}`;
-        const kind = snap.isZone ? 'zone' : 'mesh';
-        const title = `xi ${kind} export · ${snap.datStem}`;
+        const title = `xi ${EXPORT_COMMANDS[catalog].join(' ')} · ${snap.datStem}`;
         const head = [];
         if (env?.FFXI_DIR) head.push(`# FFXI_DIR=${env.FFXI_DIR}`);
         head.push(`$ ${cmd}`);
@@ -217,7 +273,7 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
           });
           push('# done');
           onCliLog?.({ title: `${title} · ok`, text: lines.join('\n') });
-          onStatus?.(`Exported ${snap.datStem}.${snap.outExt} → ${folder}`);
+          onStatus?.(`Exported ${snap.outStem}.${snap.outExt} → ${folder}`);
         } catch (e) {
           const msg = e?.message || String(e);
           push(msg);
@@ -252,7 +308,9 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
       <div className="modal" ref={panelRef} style={style}>
         <div className="modal-header" onPointerDown={startDrag} onPointerMove={onDrag} onPointerUp={endDrag}>
           <span className="icon">download</span>
-          <span className="modal-title">Export {spec.typeLabel}</span>
+          <Tooltip content={headTitle}>
+            <span className="modal-title export-title">{headTitle}</span>
+          </Tooltip>
           <Tooltip content="Close">
             <Button className="icon-btn modal-close" onClick={onClose}>
               <span className="icon">close</span>
@@ -260,17 +318,48 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
           </Tooltip>
         </div>
 
+        {spec.type === 'model' && (
+          <div className="settings-tabs" role="tablist">
+            {['mesh', 'anim'].map((id) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                className={`settings-tab${mode === id ? ' on' : ''}`}
+                aria-selected={mode === id}
+                onClick={() => switchMode(id)}
+              >
+                <span className="icon">{EXPORT_KINDS[id].tabIcon}</span>
+                {EXPORT_KINDS[id].label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="modal-body">
           <div className="export-summary">
-            <span className="icon export-glyph">{spec.icon}</span>
+            <span className="icon export-glyph">{isXi ? kind.icon : spec.icon}</span>
             <div>
               <div className="export-name">{spec.title}</div>
               {spec.details && <div className="export-details mono">{spec.details}</div>}
             </div>
           </div>
 
+          {sources && (
+            <div className="form-row">
+              <label className="form-label">Part</label>
+              <Combo
+                value={activePath}
+                items={sources.map((s) => ({ id: s.path, label: s.label }))}
+                onChange={setSourcePath}
+                className="export-select"
+              />
+              <div className="form-hint mono export-srcpath">{activePath}</div>
+            </div>
+          )}
+
           <div className="export-outrow">
-            <span className="icon">{isXi ? (isZone ? 'map' : 'view_in_ar') : 'audio_file'}</span>
+            <span className="icon">{isXi ? kind.icon : 'audio_file'}</span>
             <span>Exports to <strong>{outStem}.{outExt}</strong></span>
           </div>
 
@@ -296,7 +385,7 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
                 <Combo
                   value={format}
                   items={[
-                    { id: 'glb', label: 'glTF (.glb)' },
+                    { id: 'glb', label: kindId === 'anim' ? 'glTF (.gltf + .bin)' : 'glTF (.glb)' },
                     { id: 'fbx', label: 'FBX (needs Blender)' },
                   ]}
                   onChange={setFmt}
@@ -309,13 +398,13 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
                   Arguments <span className="form-label-dim">· xi {EXPORT_COMMANDS[catalog].join(' ')}</span>
                 </label>
                 <ArgsInput type={catalog} tokens={args} onChange={setArgList}
-                  dynamicValues={isModel ? { '--anim': (spec.animations ?? []).map((a) => ({ value: a.id })) } : undefined} />
+                  dynamicValues={{ '--anim': (spec.animations ?? []).map((a) => ({ value: a.id })) }} />
                 <div className="args-preview mono">
                   {previewArgs.map(shellQuote).join(' ')}
                 </div>
               </div>
 
-              {isModel && animId && (
+              {kindId === 'mesh' && animId && (
                 <div className="export-frame-row">
                   <span className="export-frame-label mono">--frame</span>
                   <input type="range" min="0" max={Math.max(animFrames - 1, 0)} value={frame}
@@ -328,10 +417,13 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
           )}
 
           <div className="form-row">
-            <label className="form-label">Export folder ({spec.typeLabel})</label>
+            <label className="form-label">Export folder ({isXi ? kind.label : spec.typeLabel})</label>
             <div className="form-inline">
               <input type="text" value={folder} spellCheck={false} placeholder="Choose a destination…"
-                onChange={(e) => setFolder(e.target.value)} />
+                onChange={(e) => {
+                  setFolder(e.target.value);
+                  try { localStorage.setItem(folderKey(fkey), e.target.value); } catch { /* quota */ }
+                }} />
               <Button onClick={browse}><span className="icon">folder_open</span>Browse</Button>
             </div>
           </div>
@@ -352,19 +444,6 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
       </div>
     </div>
   );
-}
-
-/**
- * `xi <cmd> <dat> --output <dir> [--fbx] <user args…>`. Anything the user typed
- * for a flag the dialog owns wins, so a hand-written `--output` isn't doubled.
- */
-function buildXiArgs(catalog, datPath, folder, format, userArgs) {
-  const argv = tokensToArgv(userArgs);
-  const has = (flag) => argv.includes(flag);
-  const args = [...EXPORT_COMMANDS[catalog], datPath];
-  if (!has('--output')) args.push('--output', folder);
-  if (format === 'fbx' && !has('--fbx')) args.push('--fbx');
-  return [...args, ...argv];
 }
 
 function clamp(p, panel) {

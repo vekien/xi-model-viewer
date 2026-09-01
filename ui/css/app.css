@@ -3664,6 +3664,14 @@ button.update-dl-btn .update-dl-meta {
 .export-select { width: 100%; }
 .form-label-dim { color: var(--gray-500); font-family: var(--font-mono); font-size: 11px; }
 
+/* Header names what's going out: "Export Mesh: Melee Cyclas". */
+.export-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.export-srcpath { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+
+/* Mesh / Animation switch sits flush under the header, not floating like
+   Settings' — the dialog has no tab strip gutter. */
+.modal .settings-tabs { margin: 10px 14px 0; }
+
 /* The --frame slider, shown only while the args carry an --anim to index. */
 .export-frame-row {
   display: flex; align-items: center; gap: 10px;
@@ -3784,6 +3792,133 @@ button.update-dl-btn .update-dl-meta {
   color: var(--gray-500);
   font-size: 11px; line-height: 1.5;
   word-break: break-all;
+}
+
+/* --- Radio row (Export type) ---------------------------------------------- */
+
+.radio-row { display: flex; gap: 4px; flex-wrap: wrap; }
+button.radio-opt {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 28px;
+  padding: 0 10px 0 7px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  box-shadow: none;
+  color: var(--gray-300);
+  font: 500 12px/1 var(--font-ui);
+  cursor: pointer;
+}
+button.radio-opt .icon { font-size: 17px; color: var(--gray-500); }
+button.radio-opt:hover { background: rgba(255, 255, 255, 0.05); border-color: transparent; box-shadow: none; }
+button.radio-opt.on { color: var(--gray-100); }
+button.radio-opt.on .icon { color: var(--accent); }
+button.radio-opt:disabled { opacity: 0.45; cursor: default; }
+
+/* --- File > Batch Export --------------------------------------------------- */
+
+.modal.batch-modal {
+  width: min(880px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+}
+.batch-body { overflow: auto; flex: 1 1 auto; min-height: 0; }
+.batch-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px 18px;
+  align-items: start;
+}
+.batch-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+/* Mid-run the loop is working from the values it started with. */
+.batch-cols.locked { pointer-events: none; opacity: 0.55; }
+@media (max-width: 780px) { .batch-cols { grid-template-columns: minmax(0, 1fr); } }
+
+/* theme.css only dresses input[type=text]; a bare textarea would come up
+   white-on-white inside the dialog. */
+.batch-text {
+  width: 100%;
+  min-height: 108px;
+  resize: vertical;
+  font: 400 12px/1.5 var(--font-mono);
+  color: var(--text);
+  background: linear-gradient(180deg, var(--gray-900), var(--gray-850));
+  border: 1px solid var(--ring);
+  border-radius: 7px;
+  padding: 7px 9px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: border-color 0.12s ease;
+}
+.batch-text:focus { outline: none; border-color: var(--accent); }
+.batch-text::placeholder { color: var(--muted); opacity: 1; }
+.batch-text:disabled { opacity: 0.6; }
+
+.batch-queue {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--ring);
+}
+.batch-queue-head { display: flex; align-items: center; gap: 8px; }
+.batch-queue-head > .icon { color: var(--muted); font-size: 18px; }
+.batch-counts { color: var(--gray-200); font-size: 12px; }
+.batch-ok { color: var(--accent); }
+.batch-fail { color: #f0a8a2; }
+.batch-spin { margin-left: auto; color: var(--accent); font-size: 18px; }
+
+.batch-warn { padding: 8px 10px; }
+
+.batch-bar {
+  height: 4px; border-radius: 999px; overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+}
+.batch-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-deep), var(--accent));
+  transition: width 0.15s linear;
+}
+
+.batch-current { display: flex; flex-direction: column; gap: 4px; }
+.batch-current-name {
+  color: var(--gray-200); font-size: 11.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.batch-tail {
+  white-space: pre-wrap;
+  color: var(--gray-500); font-size: 11px; line-height: 1.45;
+  max-height: 88px; overflow: hidden;
+}
+
+.batch-feed {
+  max-height: 220px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.batch-row {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.batch-row.fail { background: rgba(220, 80, 70, 0.1); }
+.batch-row-icon { font-size: 14px; flex: 0 0 auto; align-self: center; }
+.batch-row.ok .batch-row-icon { color: var(--accent); }
+.batch-row.fail .batch-row-icon { color: #e07068; }
+.batch-row-label {
+  color: var(--gray-200);
+  overflow: hidden; text-overflow: ellipsis;
+  flex: 0 1 auto; min-width: 0;
+}
+.batch-row-path { color: var(--gray-500); font-size: 11px; flex: 0 0 auto; }
+.batch-row-note {
+  color: #f0a8a2; font-size: 11px;
+  margin-left: auto; padding-left: 12px;
+  overflow: hidden; text-overflow: ellipsis;
+  flex: 0 1 auto; min-width: 0;
 }
 
 /* Banner when DAT Browser opens a DAT that can't be rendered (no mesh, etc.). */
