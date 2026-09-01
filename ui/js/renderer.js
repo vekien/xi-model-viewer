@@ -5,7 +5,7 @@
 import { OrbitCamera, mat4Multiply, mat4LookAt, mat4Ortho } from './camera.js';
 import { SkeletonPose, qRotate } from './pose.js';
 import { ParticleDrawer } from './particleDrawer.js';
-import { Vec3 } from './particle/math.js';
+import { Vec3, Mat4 } from './particle/math.js';
 import { buildSolidGizmoMeshes, gizmoSize } from './zoneGizmo.js';
 import { bakeSpinnerDraws } from './zoneModel.js';
 
@@ -2008,9 +2008,10 @@ export class Renderer {
       ? canvas.clientWidth / canvas.clientHeight
       : undefined;
     this.camera.fit(min, max, aspect ? { aspect } : undefined);
-    // Model extents for the shadow cascade. The floor is not involved — it is
-    // fixed at Y = 0.
-    this.snapFloorToFeet(bounds);
+    // Model extents for the shadow cascade — the full model, weapons included,
+    // so a raised blade still casts. The floor is not involved — it is fixed
+    // at Y = 0.
+    this.snapFloorToFeet();
   }
 
   /**
@@ -2094,6 +2095,34 @@ export class Renderer {
     return new Vec3(-(tr[0] + rot[0]), tr[1] + rot[1], -(tr[2] + rot[2]));
   }
 
+  /**
+   * Particle-space position AND orientation of a joint reference, for a
+   * generator that rides the hand every frame (AttachType.SourceActorWeapon —
+   * the logging hatchet, the fishing rod: a 0x1F mesh the routine spawns into
+   * the actor's grip). Same reference resolution as getActorAttachPosition;
+   * the rotation is the joint's world quaternion taken into particle space,
+   * which is DAT space mirrored on X and Z (M = diag(−1, 1, −1)). The mesh
+   * itself is authored in the joint's own DAT-space frame, so the map is
+   * R' = M·R — one change of space on the way out, not a conjugation. With
+   * M·R·M the hatchet came out turned 180° in the hand, head where the butt
+   * should be.
+   */
+  getActorAttachTransform(jointRef = 0, attach = null) {
+    const position = this.getActorAttachPosition(jointRef, attach);
+    if (!position) return null;
+    const refs = this.model.skeleton?.references ?? [];
+    let idx = jointRef | 0;
+    if (idx >= 49 && idx <= 51) idx = RING_REF_START;
+    const q = this.pose.rot?.[refs[idx]?.index | 0];
+    const rotation = new Mat4();
+    if (q) {
+      rotation.setRotationFromQuaternionInPlace(q[0], q[1], q[2], q[3]);
+      const m = new Mat4().scaleInPlace(new Vec3(-1, 1, -1));
+      m.multiply(rotation, rotation);
+    }
+    return { position, rotation };
+  }
+
   /** Reset the camera to frame whatever is on screen — a model/zone or a
    *  standalone effect (which has no model bounds to fit). */
   resetCamera() {
@@ -2144,13 +2173,20 @@ export class Renderer {
     const clip = this.currentAnimation;
     const frame = this.animFrame;
     this.pose.evaluate(null, 0);
-    this._restBounds = this.computeBounds();
+    // Body only: equipped weapons (tagged at load) are left out so the frame
+    // and orbit pivot sit on the character, not on a box a polearm doubles.
+    this._restBounds = this.computeBounds({ bodyOnly: true });
     this.pose.evaluate(clip ?? null, clip ? frame : 0);
     this.poseDirty = true;
     return this._restBounds;
   }
 
-  computeBounds() {
+  /**
+   * @param {{bodyOnly?: boolean}} [opts] bodyOnly skips mesh groups tagged
+   *   `isWeapon` (falls back to everything when nothing else is there, e.g. a
+   *   weapon DAT viewed on its own).
+   */
+  computeBounds(opts = {}) {
     if (!this.pose || !this.model) return null;
     // Zones precompute bounds from sane placements — scanning millions of
     // baked verts is slow and a single wild coord used to blast the camera
@@ -2162,7 +2198,10 @@ export class Renderer {
     const min = [Infinity, Infinity, Infinity];
     const max = [-Infinity, -Infinity, -Infinity];
     const ys = [];
-    for (const group of this.model.meshGroups) {
+    const groups = this.model.meshGroups;
+    const skipWeapons = !!opts.bodyOnly && groups.some((g) => !g.isWeapon);
+    for (const group of groups) {
+      if (skipWeapons && group.isWeapon) continue;
       const pools = [group.vertices];
       if (group.flippedVertices) pools.push(group.flippedVertices);
       for (const pool of pools) {
@@ -3434,6 +3473,7 @@ export class Renderer {
     const toDat = (v) => new Vec3(-v.x, -v.y, v.z);
     const self = this;
     system.getActorAttachPosition = (jointRef, attach) => self.getActorAttachPosition(jointRef, attach);
+    system.getActorAttachTransform = (jointRef, attach) => self.getActorAttachTransform(jointRef, attach);
     // GroundProjection (0x42) / decal: entity floor plane in particle DAT Y.
     // Zones keep null until real terrain queries exist; bare effect stage = y0.
     system.floorQuery = (pos) => {

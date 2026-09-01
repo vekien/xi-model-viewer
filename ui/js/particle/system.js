@@ -694,6 +694,9 @@ export class ParticleSystem {
 
   /** True while the stage is empty and parked — played out, or stopped. */
   isEffectFinished() { return !!(this._effect?.done || this._effect?.stopped); }
+  /** A routine has been started (playing, paused, stopped or finished) — as
+   *  opposed to merely armed for a later fire. */
+  hasEffectRoutine() { return !!this._effect; }
 
   #advanceEffect(elapsedFrames) {
     const e = this._effect;

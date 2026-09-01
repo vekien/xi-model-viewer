@@ -15564,6 +15564,171 @@
       ],
       "mid": 114,
       "fileId": 9530
+     },
+     {
+      "id": "135:90/59",
+      "label": "Halcyon Rod (Composite / MMM Fishing Rod)",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\59.DAT"
+      ],
+      "mid": 1,
+      "fileId": 39308,
+      "rod": true
+     },
+     {
+      "id": "136:90/60",
+      "label": "Single-Hook Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\60.DAT"
+      ],
+      "mid": 2,
+      "fileId": 39309,
+      "rod": true
+     },
+     {
+      "id": "137:90/61",
+      "label": "Clothespole",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\61.DAT"
+      ],
+      "mid": 3,
+      "fileId": 39310,
+      "rod": true
+     },
+     {
+      "id": "138:90/62",
+      "label": "Carbon Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\62.DAT"
+      ],
+      "mid": 4,
+      "fileId": 39311,
+      "rod": true
+     },
+     {
+      "id": "139:90/63",
+      "label": "Glass Fiber Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\63.DAT"
+      ],
+      "mid": 5,
+      "fileId": 39312,
+      "rod": true
+     },
+     {
+      "id": "140:90/64",
+      "label": "Tarutaru Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\64.DAT"
+      ],
+      "mid": 6,
+      "fileId": 39313,
+      "rod": true
+     },
+     {
+      "id": "141:90/65",
+      "label": "Bamboo Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\65.DAT"
+      ],
+      "mid": 7,
+      "fileId": 39314,
+      "rod": true
+     },
+     {
+      "id": "142:90/66",
+      "label": "Hume Fishing Rod (Fastwater Fishing Rod)",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\66.DAT"
+      ],
+      "mid": 8,
+      "fileId": 39315,
+      "rod": true
+     },
+     {
+      "id": "143:90/67",
+      "label": "Yew Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\67.DAT"
+      ],
+      "mid": 9,
+      "fileId": 39316,
+      "rod": true
+     },
+     {
+      "id": "144:90/68",
+      "label": "Willow Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\68.DAT"
+      ],
+      "mid": 10,
+      "fileId": 39317,
+      "rod": true
+     },
+     {
+      "id": "145:90/69",
+      "label": "Lu Shang's Fishing Rod (Judge's Rod)",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\69.DAT"
+      ],
+      "mid": 11,
+      "fileId": 39318,
+      "rod": true
+     },
+     {
+      "id": "146:143/68",
+      "label": "Goldfish Basket",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\143\\68.DAT"
+      ],
+      "mid": 12,
+      "fileId": 39319,
+      "rod": true
+     },
+     {
+      "id": "147:267/61",
+      "label": "Ebisu Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\267\\61.DAT"
+      ],
+      "mid": 13,
+      "fileId": 39320,
+      "rod": true
+     },
+     {
+      "id": "148:334/72",
+      "label": "Lu Shang's Fishing Rod +1",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\334\\72.DAT"
+      ],
+      "mid": 14,
+      "fileId": 39321,
+      "rod": true
+     },
+     {
+      "id": "149:334/73",
+      "label": "Ebisu Fishing Rod +1",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\334\\73.DAT"
+      ],
+      "mid": 15,
+      "fileId": 39322,
+      "rod": true
      }
     ],
     "head": [
@@ -56082,6 +56247,171 @@
       ],
       "mid": 115,
       "fileId": 12707
+     },
+     {
+      "id": "136:90/71",
+      "label": "Halcyon Rod (Composite / MMM Fishing Rod)",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\71.DAT"
+      ],
+      "mid": 1,
+      "fileId": 39340,
+      "rod": true
+     },
+     {
+      "id": "137:90/72",
+      "label": "Single-Hook Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\72.DAT"
+      ],
+      "mid": 2,
+      "fileId": 39341,
+      "rod": true
+     },
+     {
+      "id": "138:90/73",
+      "label": "Clothespole",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\73.DAT"
+      ],
+      "mid": 3,
+      "fileId": 39342,
+      "rod": true
+     },
+     {
+      "id": "139:90/74",
+      "label": "Carbon Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\74.DAT"
+      ],
+      "mid": 4,
+      "fileId": 39343,
+      "rod": true
+     },
+     {
+      "id": "140:90/75",
+      "label": "Glass Fiber Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\75.DAT"
+      ],
+      "mid": 5,
+      "fileId": 39344,
+      "rod": true
+     },
+     {
+      "id": "141:90/76",
+      "label": "Tarutaru Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\76.DAT"
+      ],
+      "mid": 6,
+      "fileId": 39345,
+      "rod": true
+     },
+     {
+      "id": "142:90/77",
+      "label": "Bamboo Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\77.DAT"
+      ],
+      "mid": 7,
+      "fileId": 39346,
+      "rod": true
+     },
+     {
+      "id": "143:90/78",
+      "label": "Hume Fishing Rod (Fastwater Fishing Rod)",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\78.DAT"
+      ],
+      "mid": 8,
+      "fileId": 39347,
+      "rod": true
+     },
+     {
+      "id": "144:90/79",
+      "label": "Yew Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\79.DAT"
+      ],
+      "mid": 9,
+      "fileId": 39348,
+      "rod": true
+     },
+     {
+      "id": "145:90/80",
+      "label": "Willow Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\80.DAT"
+      ],
+      "mid": 10,
+      "fileId": 39349,
+      "rod": true
+     },
+     {
+      "id": "146:90/81",
+      "label": "Lu Shang's Fishing Rod (Judge's Rod)",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\81.DAT"
+      ],
+      "mid": 11,
+      "fileId": 39350,
+      "rod": true
+     },
+     {
+      "id": "147:143/69",
+      "label": "Goldfish Basket",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\143\\69.DAT"
+      ],
+      "mid": 12,
+      "fileId": 39351,
+      "rod": true
+     },
+     {
+      "id": "148:267/62",
+      "label": "Ebisu Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\267\\62.DAT"
+      ],
+      "mid": 13,
+      "fileId": 39352,
+      "rod": true
+     },
+     {
+      "id": "149:334/74",
+      "label": "Lu Shang's Fishing Rod +1",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\334\\74.DAT"
+      ],
+      "mid": 14,
+      "fileId": 39353,
+      "rod": true
+     },
+     {
+      "id": "150:334/75",
+      "label": "Ebisu Fishing Rod +1",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\334\\75.DAT"
+      ],
+      "mid": 15,
+      "fileId": 39354,
+      "rod": true
      }
     ],
     "head": [
@@ -92746,6 +93076,171 @@
       ],
       "mid": 115,
       "fileId": 15883
+     },
+     {
+      "id": "137:90/83",
+      "label": "Halcyon Rod (Composite / MMM Fishing Rod)",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\83.DAT"
+      ],
+      "mid": 1,
+      "fileId": 39372,
+      "rod": true
+     },
+     {
+      "id": "138:90/84",
+      "label": "Single-Hook Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\84.DAT"
+      ],
+      "mid": 2,
+      "fileId": 39373,
+      "rod": true
+     },
+     {
+      "id": "139:90/85",
+      "label": "Clothespole",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\85.DAT"
+      ],
+      "mid": 3,
+      "fileId": 39374,
+      "rod": true
+     },
+     {
+      "id": "140:90/86",
+      "label": "Carbon Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\86.DAT"
+      ],
+      "mid": 4,
+      "fileId": 39375,
+      "rod": true
+     },
+     {
+      "id": "141:90/87",
+      "label": "Glass Fiber Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\87.DAT"
+      ],
+      "mid": 5,
+      "fileId": 39376,
+      "rod": true
+     },
+     {
+      "id": "142:90/88",
+      "label": "Tarutaru Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\88.DAT"
+      ],
+      "mid": 6,
+      "fileId": 39377,
+      "rod": true
+     },
+     {
+      "id": "143:90/89",
+      "label": "Bamboo Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\89.DAT"
+      ],
+      "mid": 7,
+      "fileId": 39378,
+      "rod": true
+     },
+     {
+      "id": "144:90/90",
+      "label": "Hume Fishing Rod (Fastwater Fishing Rod)",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\90.DAT"
+      ],
+      "mid": 8,
+      "fileId": 39379,
+      "rod": true
+     },
+     {
+      "id": "145:90/91",
+      "label": "Yew Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\91.DAT"
+      ],
+      "mid": 9,
+      "fileId": 39380,
+      "rod": true
+     },
+     {
+      "id": "146:90/92",
+      "label": "Willow Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\92.DAT"
+      ],
+      "mid": 10,
+      "fileId": 39381,
+      "rod": true
+     },
+     {
+      "id": "147:90/93",
+      "label": "Lu Shang's Fishing Rod (Judge's Rod)",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\93.DAT"
+      ],
+      "mid": 11,
+      "fileId": 39382,
+      "rod": true
+     },
+     {
+      "id": "148:143/70",
+      "label": "Goldfish Basket",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\143\\70.DAT"
+      ],
+      "mid": 12,
+      "fileId": 39383,
+      "rod": true
+     },
+     {
+      "id": "149:267/63",
+      "label": "Ebisu Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\267\\63.DAT"
+      ],
+      "mid": 13,
+      "fileId": 39384,
+      "rod": true
+     },
+     {
+      "id": "150:334/76",
+      "label": "Lu Shang's Fishing Rod +1",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\334\\76.DAT"
+      ],
+      "mid": 14,
+      "fileId": 39385,
+      "rod": true
+     },
+     {
+      "id": "151:334/77",
+      "label": "Ebisu Fishing Rod +1",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\334\\77.DAT"
+      ],
+      "mid": 15,
+      "fileId": 39386,
+      "rod": true
      }
     ],
     "head": [
@@ -130997,6 +131492,171 @@
       ],
       "mid": 115,
       "fileId": 19059
+     },
+     {
+      "id": "137:90/95",
+      "label": "Halcyon Rod (Composite / MMM Fishing Rod)",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\95.DAT"
+      ],
+      "mid": 1,
+      "fileId": 39404,
+      "rod": true
+     },
+     {
+      "id": "138:90/96",
+      "label": "Single-Hook Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\96.DAT"
+      ],
+      "mid": 2,
+      "fileId": 39405,
+      "rod": true
+     },
+     {
+      "id": "139:90/97",
+      "label": "Clothespole",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\97.DAT"
+      ],
+      "mid": 3,
+      "fileId": 39406,
+      "rod": true
+     },
+     {
+      "id": "140:90/98",
+      "label": "Carbon Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\98.DAT"
+      ],
+      "mid": 4,
+      "fileId": 39407,
+      "rod": true
+     },
+     {
+      "id": "141:90/99",
+      "label": "Glass Fiber Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\99.DAT"
+      ],
+      "mid": 5,
+      "fileId": 39408,
+      "rod": true
+     },
+     {
+      "id": "142:90/100",
+      "label": "Tarutaru Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\100.DAT"
+      ],
+      "mid": 6,
+      "fileId": 39409,
+      "rod": true
+     },
+     {
+      "id": "143:90/101",
+      "label": "Bamboo Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\101.DAT"
+      ],
+      "mid": 7,
+      "fileId": 39410,
+      "rod": true
+     },
+     {
+      "id": "144:90/102",
+      "label": "Hume Fishing Rod (Fastwater Fishing Rod)",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\102.DAT"
+      ],
+      "mid": 8,
+      "fileId": 39411,
+      "rod": true
+     },
+     {
+      "id": "145:90/103",
+      "label": "Yew Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\103.DAT"
+      ],
+      "mid": 9,
+      "fileId": 39412,
+      "rod": true
+     },
+     {
+      "id": "146:90/104",
+      "label": "Willow Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\104.DAT"
+      ],
+      "mid": 10,
+      "fileId": 39413,
+      "rod": true
+     },
+     {
+      "id": "147:90/105",
+      "label": "Lu Shang's Fishing Rod (Judge's Rod)",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\105.DAT"
+      ],
+      "mid": 11,
+      "fileId": 39414,
+      "rod": true
+     },
+     {
+      "id": "148:143/71",
+      "label": "Goldfish Basket",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\143\\71.DAT"
+      ],
+      "mid": 12,
+      "fileId": 39415,
+      "rod": true
+     },
+     {
+      "id": "149:267/64",
+      "label": "Ebisu Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\267\\64.DAT"
+      ],
+      "mid": 13,
+      "fileId": 39416,
+      "rod": true
+     },
+     {
+      "id": "150:334/78",
+      "label": "Lu Shang's Fishing Rod +1",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\334\\78.DAT"
+      ],
+      "mid": 14,
+      "fileId": 39417,
+      "rod": true
+     },
+     {
+      "id": "151:334/79",
+      "label": "Ebisu Fishing Rod +1",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\334\\79.DAT"
+      ],
+      "mid": 15,
+      "fileId": 39418,
+      "rod": true
      }
     ],
     "head": [
@@ -167826,6 +168486,171 @@
       ],
       "mid": 115,
       "fileId": 22235
+     },
+     {
+      "id": "141:90/107",
+      "label": "Halcyon Rod (Composite / MMM Fishing Rod)",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\107.DAT"
+      ],
+      "mid": 1,
+      "fileId": 39436,
+      "rod": true
+     },
+     {
+      "id": "142:90/108",
+      "label": "Single-Hook Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\108.DAT"
+      ],
+      "mid": 2,
+      "fileId": 39437,
+      "rod": true
+     },
+     {
+      "id": "143:90/109",
+      "label": "Clothespole",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\109.DAT"
+      ],
+      "mid": 3,
+      "fileId": 39438,
+      "rod": true
+     },
+     {
+      "id": "144:90/110",
+      "label": "Carbon Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\110.DAT"
+      ],
+      "mid": 4,
+      "fileId": 39439,
+      "rod": true
+     },
+     {
+      "id": "145:90/111",
+      "label": "Glass Fiber Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\111.DAT"
+      ],
+      "mid": 5,
+      "fileId": 39440,
+      "rod": true
+     },
+     {
+      "id": "146:90/112",
+      "label": "Tarutaru Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\112.DAT"
+      ],
+      "mid": 6,
+      "fileId": 39441,
+      "rod": true
+     },
+     {
+      "id": "147:90/113",
+      "label": "Bamboo Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\113.DAT"
+      ],
+      "mid": 7,
+      "fileId": 39442,
+      "rod": true
+     },
+     {
+      "id": "148:90/114",
+      "label": "Hume Fishing Rod (Fastwater Fishing Rod)",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\114.DAT"
+      ],
+      "mid": 8,
+      "fileId": 39443,
+      "rod": true
+     },
+     {
+      "id": "149:90/115",
+      "label": "Yew Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\115.DAT"
+      ],
+      "mid": 9,
+      "fileId": 39444,
+      "rod": true
+     },
+     {
+      "id": "150:90/116",
+      "label": "Willow Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\116.DAT"
+      ],
+      "mid": 10,
+      "fileId": 39445,
+      "rod": true
+     },
+     {
+      "id": "151:90/117",
+      "label": "Lu Shang's Fishing Rod (Judge's Rod)",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\117.DAT"
+      ],
+      "mid": 11,
+      "fileId": 39446,
+      "rod": true
+     },
+     {
+      "id": "152:143/72",
+      "label": "Goldfish Basket",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\143\\72.DAT"
+      ],
+      "mid": 12,
+      "fileId": 39447,
+      "rod": true
+     },
+     {
+      "id": "153:267/65",
+      "label": "Ebisu Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\267\\65.DAT"
+      ],
+      "mid": 13,
+      "fileId": 39448,
+      "rod": true
+     },
+     {
+      "id": "154:334/80",
+      "label": "Lu Shang's Fishing Rod +1",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\334\\80.DAT"
+      ],
+      "mid": 14,
+      "fileId": 39449,
+      "rod": true
+     },
+     {
+      "id": "155:334/81",
+      "label": "Ebisu Fishing Rod +1",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\334\\81.DAT"
+      ],
+      "mid": 15,
+      "fileId": 39450,
+      "rod": true
      }
     ],
     "head": [
@@ -208460,6 +209285,171 @@
       ],
       "mid": 115,
       "fileId": 25635
+     },
+     {
+      "id": "136:90/119",
+      "label": "Halcyon Rod (Composite / MMM Fishing Rod)",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\119.DAT"
+      ],
+      "mid": 1,
+      "fileId": 39468,
+      "rod": true
+     },
+     {
+      "id": "137:90/120",
+      "label": "Single-Hook Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\120.DAT"
+      ],
+      "mid": 2,
+      "fileId": 39469,
+      "rod": true
+     },
+     {
+      "id": "138:90/121",
+      "label": "Clothespole",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\121.DAT"
+      ],
+      "mid": 3,
+      "fileId": 39470,
+      "rod": true
+     },
+     {
+      "id": "139:90/122",
+      "label": "Carbon Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\122.DAT"
+      ],
+      "mid": 4,
+      "fileId": 39471,
+      "rod": true
+     },
+     {
+      "id": "140:90/123",
+      "label": "Glass Fiber Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\123.DAT"
+      ],
+      "mid": 5,
+      "fileId": 39472,
+      "rod": true
+     },
+     {
+      "id": "141:90/124",
+      "label": "Tarutaru Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\124.DAT"
+      ],
+      "mid": 6,
+      "fileId": 39473,
+      "rod": true
+     },
+     {
+      "id": "142:90/125",
+      "label": "Bamboo Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\125.DAT"
+      ],
+      "mid": 7,
+      "fileId": 39474,
+      "rod": true
+     },
+     {
+      "id": "143:90/126",
+      "label": "Hume Fishing Rod (Fastwater Fishing Rod)",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\126.DAT"
+      ],
+      "mid": 8,
+      "fileId": 39475,
+      "rod": true
+     },
+     {
+      "id": "144:90/127",
+      "label": "Yew Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\90\\127.DAT"
+      ],
+      "mid": 9,
+      "fileId": 39476,
+      "rod": true
+     },
+     {
+      "id": "145:91/0",
+      "label": "Willow Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\91\\0.DAT"
+      ],
+      "mid": 10,
+      "fileId": 39477,
+      "rod": true
+     },
+     {
+      "id": "146:91/1",
+      "label": "Lu Shang's Fishing Rod (Judge's Rod)",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\91\\1.DAT"
+      ],
+      "mid": 11,
+      "fileId": 39478,
+      "rod": true
+     },
+     {
+      "id": "147:143/73",
+      "label": "Goldfish Basket",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\143\\73.DAT"
+      ],
+      "mid": 12,
+      "fileId": 39479,
+      "rod": true
+     },
+     {
+      "id": "148:267/66",
+      "label": "Ebisu Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\267\\66.DAT"
+      ],
+      "mid": 13,
+      "fileId": 39480,
+      "rod": true
+     },
+     {
+      "id": "149:334/82",
+      "label": "Lu Shang's Fishing Rod +1",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\334\\82.DAT"
+      ],
+      "mid": 14,
+      "fileId": 39481,
+      "rod": true
+     },
+     {
+      "id": "150:334/83",
+      "label": "Ebisu Fishing Rod +1",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\334\\83.DAT"
+      ],
+      "mid": 15,
+      "fileId": 39482,
+      "rod": true
      }
     ],
     "head": [
@@ -246052,6 +247042,171 @@
       ],
       "mid": 115,
       "fileId": 28811
+     },
+     {
+      "id": "136:91/3",
+      "label": "Halcyon Rod (Composite / MMM Fishing Rod)",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\91\\3.DAT"
+      ],
+      "mid": 1,
+      "fileId": 39500,
+      "rod": true
+     },
+     {
+      "id": "137:91/4",
+      "label": "Single-Hook Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\91\\4.DAT"
+      ],
+      "mid": 2,
+      "fileId": 39501,
+      "rod": true
+     },
+     {
+      "id": "138:91/5",
+      "label": "Clothespole",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\91\\5.DAT"
+      ],
+      "mid": 3,
+      "fileId": 39502,
+      "rod": true
+     },
+     {
+      "id": "139:91/6",
+      "label": "Carbon Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\91\\6.DAT"
+      ],
+      "mid": 4,
+      "fileId": 39503,
+      "rod": true
+     },
+     {
+      "id": "140:91/7",
+      "label": "Glass Fiber Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\91\\7.DAT"
+      ],
+      "mid": 5,
+      "fileId": 39504,
+      "rod": true
+     },
+     {
+      "id": "141:91/8",
+      "label": "Tarutaru Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\91\\8.DAT"
+      ],
+      "mid": 6,
+      "fileId": 39505,
+      "rod": true
+     },
+     {
+      "id": "142:91/9",
+      "label": "Bamboo Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\91\\9.DAT"
+      ],
+      "mid": 7,
+      "fileId": 39506,
+      "rod": true
+     },
+     {
+      "id": "143:91/10",
+      "label": "Hume Fishing Rod (Fastwater Fishing Rod)",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\91\\10.DAT"
+      ],
+      "mid": 8,
+      "fileId": 39507,
+      "rod": true
+     },
+     {
+      "id": "144:91/11",
+      "label": "Yew Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\91\\11.DAT"
+      ],
+      "mid": 9,
+      "fileId": 39508,
+      "rod": true
+     },
+     {
+      "id": "145:91/12",
+      "label": "Willow Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\91\\12.DAT"
+      ],
+      "mid": 10,
+      "fileId": 39509,
+      "rod": true
+     },
+     {
+      "id": "146:91/13",
+      "label": "Lu Shang's Fishing Rod (Judge's Rod)",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\91\\13.DAT"
+      ],
+      "mid": 11,
+      "fileId": 39510,
+      "rod": true
+     },
+     {
+      "id": "147:143/74",
+      "label": "Goldfish Basket",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\143\\74.DAT"
+      ],
+      "mid": 12,
+      "fileId": 39511,
+      "rod": true
+     },
+     {
+      "id": "148:267/67",
+      "label": "Ebisu Fishing Rod",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\267\\67.DAT"
+      ],
+      "mid": 13,
+      "fileId": 39512,
+      "rod": true
+     },
+     {
+      "id": "149:334/84",
+      "label": "Lu Shang's Fishing Rod +1",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\334\\84.DAT"
+      ],
+      "mid": 14,
+      "fileId": 39513,
+      "rod": true
+     },
+     {
+      "id": "150:334/85",
+      "label": "Ebisu Fishing Rod +1",
+      "group": "Fishing",
+      "paths": [
+       "ROM\\334\\85.DAT"
+      ],
+      "mid": 15,
+      "fileId": 39514,
+      "rod": true
      }
     ],
     "head": [
@@ -268236,6 +269391,9 @@
   "showForActionGroups": [
    "Archery",
    "Marksmanship"
+  ],
+  "showForActions": [
+   "Fishing"
   ],
   "handRef": 126
  }

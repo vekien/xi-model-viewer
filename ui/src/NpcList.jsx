@@ -39,6 +39,15 @@ function savePins(keys) {
   try { localStorage.setItem(PIN_KEY, JSON.stringify(keys)); } catch { /* quota */ }
 }
 
+// The selection is the absolute path of the loaded DAT; list variants are
+// game-relative (ROM\258\122.DAT). Match on the tail at a separator so
+// 22.DAT never claims 122.DAT.
+function pathIs(selectedPath, variant) {
+  if (!selectedPath) return false;
+  const v = String(variant).toLowerCase();
+  return selectedPath === v || selectedPath.endsWith('\\' + v) || selectedPath.endsWith('/' + v);
+}
+
 function entryMatches(entry, q) {
   if (entry.separator !== undefined) return false;
   if ((entry.name || '').toLowerCase().includes(q)) return true;
@@ -90,7 +99,7 @@ export function NpcList({ onSelectEntry, selectedPath, onError }) {
       for (let i = 0; i < (cat.entries?.length ?? 0); i++) {
         const entry = cat.entries[i];
         if (entry.separator !== undefined) continue;
-        const hit = (entry.variants ?? []).some((v) => v.toLowerCase() === sel);
+        const hit = (entry.variants ?? []).some((v) => pathIs(sel, v));
         if (!hit) continue;
         setOpenCats((s) => {
           if (s.has(cat.name)) return s;
@@ -335,7 +344,7 @@ function NpcEntry({
       key: variant.toLowerCase(),
     });
 
-  const isSelected = (variant) => selectedPath === variant.toLowerCase();
+  const isSelected = (variant) => pathIs(selectedPath, variant);
 
   return (
     <div

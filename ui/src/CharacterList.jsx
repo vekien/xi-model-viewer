@@ -421,6 +421,10 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
     const motionExtra = raceData.current.get(race)?.motionExtra ?? [];
     const paths = [r.base, ...motionExtra];
     const weaponSlots = {};
+    // A fishing rod in the Ranged slot is a rigged prop, not a weapon mesh:
+    // it goes to App as rodPaths (grafted onto the actor) and stays out of the
+    // ranged re-parenting.
+    let rodPaths = null;
     // Per-part breakdown for the Details panel (label + which DATs each slot contributed).
     const parts = [{ key: 'race', label: 'Race', itemLabel: r.label, paths: [r.base] }];
     for (const s of SLOTS) {
@@ -428,10 +432,14 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
       if (!items?.length) continue;
       const item = items.find((it) => it.id === sel[s.key]);
       if (!item) return;
-      paths.push(...item.paths);
-      // main/sub drive the hand re-parenting; range rides along so App can stow
-      // the bow when it isn't in use (it has no grip joint to re-parent).
-      if (s.key === 'main' || s.key === 'sub' || s.key === 'range') weaponSlots[s.key] = item.paths;
+      if (s.key === 'range' && item.rod) {
+        rodPaths = item.paths;
+      } else {
+        paths.push(...item.paths);
+        // main/sub drive the hand re-parenting; range rides along so App can stow
+        // the bow when it isn't in use (it has no grip joint to re-parent).
+        if (s.key === 'main' || s.key === 'sub' || s.key === 'range') weaponSlots[s.key] = item.paths;
+      }
       // Always list every equipped slot in Details / Data Struct — including
       // None placeholders (they still have a DAT) and empty-path stubs.
       parts.push({
@@ -448,13 +456,18 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
     const focusPaths = act ? [...act.paths] : [];
     const motionPaths = act?.motionPaths ?? [];
     if (act) paths.push(...focusPaths, ...motionPaths);
+    // A ranged item is on show for its own skill groups, or for a named action
+    // (Fishing draws the rod).
+    const rcfg = sectionCfg.current.rangedDisplay;
+    const rangedInUse = (rcfg?.showForActionGroups ?? []).includes(actionGroup)
+      || (rcfg?.showForActions ?? []).includes(act?.label ?? '');
     // Motion / schedule packs must load from game (or pivot), never HD — HD
     // stubs empty the Anim list and break weapon skills when HD is enabled.
     const animOnlyPaths = [...motionExtra, ...focusPaths, ...motionPaths];
 
     const unique = [...new Set(paths)];
     // Prefix race so a shared face label never collapses two skeletons into one key.
-    const key = `${race}|${unique.join('|')}`;
+    const key = `${race}|${unique.join('|')}|${(rodPaths ?? []).join('|')}`;
     if (key === lastKey.current) return;
     lastKey.current = key;
 
@@ -490,8 +503,9 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
       parts,
       // Drawn vs stowed: a ranged action holds the weapon, so App re-parents its
       // back-mount bone onto the bow hand. Same source as the stowing rule.
-      rangedInUse: (sectionCfg.current.rangedDisplay?.showForActionGroups ?? []).includes(actionGroup),
-      rangedHandRef: sectionCfg.current.rangedDisplay?.handRef ?? null,
+      rangedInUse,
+      rangedHandRef: rcfg?.handRef ?? null,
+      rodPaths,
       keepCamera: isGearSwap,
     });
     lastRace.current = race;
@@ -554,6 +568,7 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
     // is one of these groups. App gates the mesh on it.
     rangedDisplay: sectionCfg.current.rangedDisplay ?? null,
     rangedPaths: slots?.range?.find((it) => it.id === sel.range)?.paths ?? null,
+    actionLabel: actions.find((a) => a.id === action)?.label ?? '',
   };
 }
 

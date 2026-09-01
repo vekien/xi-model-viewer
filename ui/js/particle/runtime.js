@@ -483,7 +483,10 @@ export class ParticleGenerator {
     }
     // Freeze actor attach on first sample — spawn at the character, do not ride
     // the animation (TargetActor in-game is a world point, not a bone follow).
-    if (isActorAttach(this.def.attachType) && !this._actorAttachFrozen) {
+    // The exception is a held tool (SourceActorWeapon): that IS a bone follow,
+    // re-sampled every frame so the hatchet swings with the hand.
+    const attach = this.def.attachType;
+    if (isActorAttach(attach) && (!this._actorAttachFrozen || attach === AttachType.SourceActorWeapon)) {
       this.updateAssociatedPosition(elapsedFrames);
     }
     this.emit(elapsedFrames);
@@ -568,6 +571,19 @@ export class ParticleGenerator {
     } else if (attach === AttachType.Moon) {
       this.genAssociatedPosition.copyFrom(this.runtime.getMoonPosition())
         .addInPlace(this.runtime.camera.getPosition());
+    } else if (attach === AttachType.SourceActorWeapon && this.runtime.getActorAttachTransform) {
+      // Held in the hand: position AND orientation of the grip reference, every
+      // frame. A hatchet or fishing rod is a 0x1F mesh the routine spawns into
+      // the actor's grip, and it has to turn with the wrist, not just sit
+      // where the hand was when it spawned.
+      const xf = this.runtime.getActorAttachTransform(this.def.attachedJoint0 | 0, attach);
+      if (xf) {
+        this.genAssociatedPosition.copyFrom(xf.position);
+        this.genAssociatedRotation.copyFrom(xf.rotation);
+        this._actorAttachFrozen = true;
+      } else {
+        this.genAssociatedPosition.set(0, 0, 0);
+      }
     } else if (isActorAttach(attach)) {
       // DAT attachFlags name a joint (joint1 = target, joint0 = source). Sample
       // once at spawn so the FX does not ride the animation; authored

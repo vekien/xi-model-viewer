@@ -56,6 +56,7 @@ import { makeParsers } from '../js/dat/sections.js';
 import { parseParticleGenerator } from '../js/particle/parser.js';
 import { ParticleSystem } from '../js/particle/system.js';
 import { parseEffectRoutines, flattenRoutine } from '../js/effect.js';
+import { graftRig } from '../js/dat.js';
 import { EffectList } from './EffectList.jsx';
 import { ensureXiToolsOnBoot } from '../js/toolsBoot.js';
 import { WeatherAudio } from '../js/particle/audio.js';
@@ -940,6 +941,11 @@ export default function App({ launch = null }) {
   const pcFxModeRef = useRef(pcFxMode);
   const pcMeshPathsRef = useRef(null);   // every DAT the current PC mesh came from
   const [actorLoadTick, setActorLoadTick] = useState(0);  // bumped when a model reaches the stage
+  // Set with the tick when the load was a gear swap that kept the same clip
+  // running mid-cycle. The effect hook then re-arms the action's routine
+  // without firing it: the VFX plays at the clip's next loop point (or on
+  // Play), not the instant a weapon is changed.
+  const actorContinuedRef = useRef(false);
   const pcFxReplayRef = useRef(null);    // re-fires the action's routine on each animation loop
   const effectSfxOnRef = useRef(true);
   const effectTokenRef = useRef(0);                         // drop stale effect-load results
@@ -1527,7 +1533,8 @@ export default function App({ launch = null }) {
     const {
       focusPaths = null, weaponSlots = null, battleTable = null, skirtByType = null,
       parts = null, displayPath = null, animOnlyPaths = null, preferAnim = null,
-      rangedInUse = false, rangedHandRef = null,
+      rangedInUse = false, rangedHandRef = null, npcEntry = null,
+      rodPaths = null,
     } = opts;
     // Keep framing when the caller asks (gear swap) or the user has already
     // orbit/pan/zoomed on an entity — browsing successive DATs shouldn't yank
@@ -1625,6 +1632,38 @@ export default function App({ launch = null }) {
       }
       if (!stillCurrent()) { releaseOverlay(); return; }
       const model = parsed.length === 1 ? parsed[0].model : mergeModels(parsed.map((e) => e.model), displayName);
+      // Fishing rod: a rigged prop (own skeleton + bend clips), grafted onto
+      // the actor rather than merged like gear. The client spawns it as a
+      // separate actor at the character's position and rotation (xim
+      // FishingStartEvent / syncDummyDependents) — NOT on a hand — and the
+      // rod's own clips carry it from there into the grip. So the root goes
+      // under the actor origin; hanging it off the hand applied the hand's
+      // transform twice and left the rod floating out in front. See graftRig.
+      if (rodPaths?.length && model.skeleton) {
+        for (const rp of rodPaths) {
+          try {
+            const { path: rpath, model: rig } = await parse1(rp, true);
+            if (!stillCurrent()) { releaseOverlay(); return; }
+            graftRig(model, rig, -1, rpath);
+          } catch (err) {
+            skipped.push(rp);
+            console.warn(`skipping rod ${rp}:`, err);
+          }
+        }
+      }
+      // Mark the equipped weapons' geometry so the camera frames and orbits
+      // the body alone. A great katana held overhead stretches the model box
+      // to ~2× the character and pushes its centre up and forward: F then
+      // parked her at the bottom of the view with the pivot hanging in front
+      // of her chest.
+      if (weaponSlots) {
+        const wkeys = new Set(
+          ['main', 'sub', 'range'].flatMap((k) => (weaponSlots[k] ?? []).map((q) => pathKey(q, settingsRef.current))),
+        );
+        for (const g of model.meshGroups) {
+          if (g.sourcePath && wkeys.has(pathKey(g.sourcePath, settingsRef.current))) g.isWeapon = true;
+        }
+      }
 
       if (!model.isRenderable) {
         releaseOverlay();
@@ -1704,11 +1743,6 @@ export default function App({ launch = null }) {
       if (parts?.length) pcPartsRef.current = parts;
       // Every DAT this model's meshes came from, so VFX Only can hide the lot.
       pcMeshPathsRef.current = [...new Set(model.meshGroups.map((g) => g.sourcePath).filter(Boolean))];
-      // Signals "an actor is on stage now". The action-effect arming waits on
-      // this: on a cold open it would otherwise fire while the character was
-      // still loading, find no actor, and bail.
-      setActorLoadTick((t) => t + 1);
-
       // Viewbar lists. Group over the WHOLE model so each clip's body-region
       // parts merge across DATs — locomotion is split (lower body wlk0 lives in
       // the race/movement DAT, upper body wlk1 in the weapon's battle DAT), and
@@ -1723,6 +1757,10 @@ export default function App({ launch = null }) {
       // Full set kept for underlays / graft source even when the viewbar is focused.
       const allGrouped = grouped;
       let schedSrc = model.schedules ?? [];
+      // Whether the selected action's own DATs carry an idle. Weapon skills
+      // and the Basic packs do; a tool action (Logging) ships only its clip
+      // and schedule, and must not be parked on the race idle instead.
+      let focusOwnsIdle = !focusPaths?.length;
       if (focusPaths?.length) {
         const fset = new Set(focusPaths.map((p) => pathKey(p, settingsRef.current)));
         const fBases = new Set();   // clip display-names (body-slot digit stripped)
@@ -1736,6 +1774,7 @@ export default function App({ launch = null }) {
         // build, the lists stay empty rather than falling back to every clip.
         schedSrc = schedSrc.filter((s) => fScheds.has(s.id));
         for (const s of schedSrc) for (const c of s.clipIds) fBases.add(animDisplayName(c));
+        focusOwnsIdle = fBases.has('idl');
         grouped = grouped.filter((g) => fBases.has(g.id));
       }
       // Stance clips always stay on the Anim list. `btl` lives in the weapon's
@@ -1789,6 +1828,10 @@ export default function App({ launch = null }) {
         // nothing having happened. Skipped on a gear swap (keepCamera), where
         // the action has not changed and the current pick should survive.
         || (!keepCamera && pickSched('main') && { schedule: pickSched('main') })
+        // No `main` and no idle of its own: the action is its one schedule
+        // (Logging → em00, which also spawns the hatchet), so lead with that.
+        || (!keepCamera && !focusOwnsIdle && schedSrc.find((s) => s.clipIds.length)
+          && { schedule: schedSrc.find((s) => s.clipIds.length) })
         // An NPC skill pack is picked for its one clip: landing on idle reads
         // as the choice not having taken. Its `main` routine is pure VFX with
         // no clip refs, so the schedule rule above never catches it.
@@ -1805,8 +1848,10 @@ export default function App({ launch = null }) {
         || null;
 
       const autoPlay = settingsRef.current?.autoPlay ?? false;
+      let continued = false;
       if (chosen?.anim) {
         const same = keepCamera && prevPlay.kind === 'anim' && prevPlay.id === chosen.anim.id;
+        continued = same;
         // Battle btl lacks waist tracks — withBaseIdle underlays idl2 so skirts
         // don't freeze in bind pose.
         renderer.setAnimation(
@@ -1820,6 +1865,7 @@ export default function App({ launch = null }) {
         setPlayingState(renderer.playing);
       } else if (chosen?.schedule) {
         const same = keepCamera && prevPlay.kind === 'schedule' && prevPlay.id === chosen.schedule.id;
+        continued = same;
         renderer.setAnimation(
           asMontage(model, scheduleClip(model, chosen.schedule), baseAnimRef.current),
           same ? { frame: resumeFrame } : undefined,
@@ -1837,6 +1883,12 @@ export default function App({ launch = null }) {
         setCurrentSchedule('');
         setPlayingState(false);
       }
+      // Signals "an actor is on stage now". The action-effect arming waits on
+      // this: on a cold open it would otherwise fire while the character was
+      // still loading, find no actor, and bail. Bumped after the playback
+      // choice so the hook can tell a gear swap that kept the clip going.
+      actorContinuedRef.current = continued;
+      setActorLoadTick((t) => t + 1);
       // Re-fit after the idle pose is applied so the floor snaps to feet (not bind-pose /
       // dangling weapon tips that made some actors hover). Gear swaps on the
       // same actor keep the user's camera.
@@ -1930,9 +1982,13 @@ export default function App({ launch = null }) {
       releaseOverlay();
       setStatusText(skipped.length ? `${skipped.length} missing DAT${skipped.length > 1 ? 's' : ''} skipped` : '');
       try {
+        // `npc` is the list entry an NPC came from, so a reload goes back
+        // through loadNpcEntry and gets its Specials — a bare loadModel of
+        // the same paths never populates the pack list.
         localStorage.setItem(LAST_DAT_KEY, JSON.stringify({
           paths, name: displayName,
-          opts: { focusPaths, animOnlyPaths, weaponSlots, battleTable, parts },
+          opts: { focusPaths, animOnlyPaths, weaponSlots, battleTable, parts, rodPaths },
+          ...(npcEntry ? { npc: npcEntry } : {}),
         }));
       } catch { /* quota / private mode */ }
       // Remember NPC/PC for Effects → back without a full reload.
@@ -1974,7 +2030,14 @@ export default function App({ launch = null }) {
       npcEntryRef.current = entry;
       setNpcPacks(packs);
       setNpcPack(pack?.path ?? '');
-      loadModel([...entry.paths, ...(pack ? [pack.path] : [])].map(abs), entry.name, {
+      // What gets remembered across a reload: the list entry itself, not the
+      // one-shot load flags.
+      const { keepCamera: _kc, ...persistable } = entry;
+      // A loaded pack rides last in `paths`, which is where the primary path
+      // is read from — without a displayPath the status bar and the NPC tree
+      // would point at the borrowed ROM/262 DAT instead of the NPC.
+      const ownPath = entry.paths[entry.paths.length - 1];
+      return loadModel([...entry.paths, ...(pack ? [pack.path] : [])].map(abs), entry.name, {
         focusPaths: entry.focusPaths?.map(abs) ?? null,
         animOnlyPaths: pack ? [abs(pack.path)] : (entry.animOnlyPaths?.map(abs) ?? null),
         preferAnim: pack?.clips?.[0] ?? null,
@@ -1988,9 +2051,11 @@ export default function App({ launch = null }) {
         raceId: entry.raceId ?? null,
         parts: entry.parts?.map((p) => ({ ...p, paths: p.paths.map(abs) })) ?? null,
         keepCamera: !!entry.keepCamera,
-        displayPath: entry.displayPath ? abs(entry.displayPath) : null,
+        displayPath: abs(entry.displayPath ?? ownPath),
         rangedInUse: !!entry.rangedInUse,
         rangedHandRef: entry.rangedHandRef ?? null,
+        rodPaths: entry.rodPaths?.map(abs) ?? null,
+        npcEntry: persistable,
       });
     },
     [loadModel]);
@@ -2100,6 +2165,9 @@ export default function App({ launch = null }) {
    * draws the particles at the world origin (no actor rig — see effect.js).
    */
   /**
+   * `opts.armOnly` — with keepActorAnim: install the routine for the loop
+   * point / Play but do not fire it or rewind the clip (gear swap that kept
+   * the current clip running).
    * `opts.keepActorAnim` — the caller (the PC view) is already driving the
    * character and owns the status bar. The Effects view assumes the opposite:
    * it either builds a magic-cast sequence from the routine's 0x05 anim refs
@@ -2351,14 +2419,25 @@ export default function App({ launch = null }) {
         },
         onFinished: keepActorAnim ? null : effectFinishedRef.current,
       });
-      // Start both from the top on the first arm too — the schedule is already
-      // mid-cycle when the mode is switched, and without this the first pass
-      // runs out of phase until the clip happens to wrap.
-      if (keepActorAnim) renderer.animFrame = 0;
-      armRoutine();
-      armed = true;
+      // On an actor the effect only ever runs WITH the clip: it fires here
+      // only if the clip is playing right now (a fresh action with auto-play,
+      // or the FX mode toggled while it runs), and both restart from the top
+      // so they stay in phase. Otherwise it is only armed, and the loop point
+      // / Play / Reset fire it. So a boot or reload onto a stopped character
+      // shows nothing, and a gear swap that carried the clip on mid-cycle
+      // (armOnly) neither rewinds the clip nor replays the skill.
+      const fireNow = !opts.armOnly && (!keepActorAnim || !!renderer.playing);
+      if (fireNow) {
+        if (keepActorAnim) renderer.animFrame = 0;
+        armRoutine();
+        armed = true;
+      }
       pcFxReplayRef.current = keepActorAnim ? armRoutine : null;
-      setWasd(false);                    // effects orbit; fly controls would fight the framing
+      // Only the empty stage frames itself (frameEffect), which fly controls
+      // would fight. An effect on an actor — a Special, a PC action, an
+      // Effects-view spell over a loaded model — frames nothing, so the
+      // user's WASD mode and camera must survive picking one.
+      if (!onActor) setWasd(false);
 
       const forceViewReset = forceCamResetOnViewRef.current;
       if (forceViewReset) forceCamResetOnViewRef.current = false;
@@ -3219,9 +3298,14 @@ export default function App({ launch = null }) {
       // out over the top of the next pass instead of being cut off.
       r.onAnimLoop = () => pcFxReplayRef.current?.();
     }
+    // A gear swap that carried the clip on mid-cycle: re-arm only. The clip
+    // was not restarted, so the routine must not be either.
+    const armOnly = actorContinuedRef.current;
+    actorContinuedRef.current = false;
     loadEffect({ path: fxPath, name: fxName },
       {
         keepActorAnim: true,
+        armOnly,
         routineId: leftView === 'npc' && !npcPackActive ? npcFxRoutine : null,
       });
     return () => {
@@ -3271,9 +3355,10 @@ export default function App({ launch = null }) {
     const cfg = pc.rangedDisplay;
     const paths = pc.rangedPaths;
     if (!cfg || !paths?.length) { r.setHiddenSources(null); return; }
-    const inUse = (cfg.showForActionGroups ?? []).includes(pc.actionGroup);
+    const inUse = (cfg.showForActionGroups ?? []).includes(pc.actionGroup)
+      || (cfg.showForActions ?? []).includes(pc.actionLabel);
     r.setHiddenSources(inUse ? null : paths);
-  }, [pc.rangedDisplay, pc.rangedPaths, pc.actionGroup, leftView, pcFxMode, modelPath]);
+  }, [pc.rangedDisplay, pc.rangedPaths, pc.actionGroup, pc.actionLabel, leftView, pcFxMode, modelPath]);
 
   // --- Character Creation (high-poly RT/SHAPE + SQLE models) ----------------
 
@@ -3704,6 +3789,7 @@ export default function App({ launch = null }) {
         let paths = null;
         let name = null;
         let lastOpts = null;
+        let lastNpc = null;
         let lastZone = null;
         try {
           const last = JSON.parse(localStorage.getItem(LAST_DAT_KEY) || 'null');
@@ -3718,6 +3804,7 @@ export default function App({ launch = null }) {
             paths = last.paths;
             name = last.name || relativeName(last.paths[last.paths.length - 1]);
             lastOpts = last.opts ?? null;
+            lastNpc = last.npc?.paths?.length ? last.npc : null;
           }
         } catch { /* stale path or corrupt entry */ }
 
@@ -3739,7 +3826,11 @@ export default function App({ launch = null }) {
             paths = [`${gamePath}\\${DEFAULT_DAT_SUFFIX}`];
             name = DEFAULT_DAT_SUFFIX;
           }
-          await loadModel(paths, name, lastOpts ?? {});
+          // An NPC goes back through its list entry so the Specials (borrowed
+          // anim packs) come with it; a plain loadModel of the same paths
+          // shows the model with an empty pack list.
+          if (lastNpc) await loadNpcEntry(lastNpc);
+          else await loadModel(paths, name, lastOpts ?? {});
           setRevealTarget(paths[paths.length - 1].toLowerCase());
         }
       } catch (err) {
@@ -3749,13 +3840,14 @@ export default function App({ launch = null }) {
     })();
   // loadImage is declared below this effect; the async body closes over it safely,
   // but listing it in deps would hit the temporal dead zone on first render.
-  }, [loadModel, loadZone, loadEffect, setWasd, openLaunchZone]);
+  }, [loadModel, loadNpcEntry, loadZone, loadEffect, setWasd, openLaunchZone]);
 
   // Debug/verification hook (used by the headless capture flow)
   useEffect(() => {
     window.xi = {
       renderer: rendererRef.current,
       loadDat: (p) => loadModel([p], p),
+      loadModel,
       loadZone,
       getModel: () => modelRef.current,
     };
@@ -3970,7 +4062,13 @@ export default function App({ launch = null }) {
     }
     setPlaying(true);
     if (r) r.effectPaused = false;
-    if ((wasStopped || atEnd) && pcFxArmed()) pcFxReplayRef.current();
+    // Armed but never fired (boot / reload onto a stopped character, or a
+    // gear swap while stopped): Play from the top starts the effect with the
+    // clip. From mid-clip it waits for the loop point instead, so the two
+    // never run out of phase.
+    const unfired = !!r && !r.particleSystem?.hasEffectRoutine?.();
+    const atStart = !!r && r.animFrame <= 1e-3;
+    if ((wasStopped || atEnd || (unfired && atStart)) && pcFxArmed()) pcFxReplayRef.current();
   };
   const pcPause = () => {
     setPlaying(false);

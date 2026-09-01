@@ -411,6 +411,68 @@ export function mergeModels(models, sourceName = '') {
   return out;
 }
 
+/**
+ * Hangs a rigged prop off one joint of an actor: the fishing rod.
+ *
+ * A rod is not a weapon mesh. It is an entity of its own — a 9-joint skeleton
+ * so the tip can bend, one mesh, and a full set of fishing clips (fh00…fhd0)
+ * plus the same fsh0…fsh9 schedules the character plays — that the client
+ * spawns as a second actor at the character's position and rotation while
+ * fishing (FFXiMain keeps a per-race base file id; the rod's item model id
+ * indexes it). Its clips move it from that origin into the grip. Rather than
+ * run a second actor, the rig is grafted onto the character: its joints are
+ * appended with the root parented onto `hostJoint` (−1 = the actor origin,
+ * which is where the client puts it), its mesh re-indexed onto them, and each
+ * clip's tracks merged into the character's clip of the same id — so when
+ * fsh1 plays the rod bends on the very same timeline, and the pose/skinning
+ * path needs no new concept. Clips only the rig has are added as-is.
+ */
+export function graftRig(model, rig, hostJoint, sourcePath = null) {
+  const skel = model.skeleton;
+  if (!skel || !rig?.skeleton || !rig.meshGroups?.length) return false;
+  const N = skel.joints.length;
+  for (const j of rig.skeleton.joints) {
+    skel.joints.push({
+      parent: j.parent < 0 ? hostJoint : j.parent + N,
+      rot: j.rot,
+      trans: j.trans,
+    });
+  }
+  const remap = (v) => ({
+    ...v,
+    joint0: v.joint0 >= 0 ? v.joint0 + N : v.joint0,
+    joint1: v.joint1 >= 0 ? v.joint1 + N : v.joint1,
+  });
+  const src = String(sourcePath ?? rig.sourceName ?? '').replace(/\//g, '\\').toLowerCase();
+  for (const g of rig.meshGroups) {
+    model.meshGroups.push({
+      ...g,
+      vertices: g.vertices.map(remap),
+      flippedVertices: g.flippedVertices ? g.flippedVertices.map(remap) : g.flippedVertices,
+      sourcePath: src || g.sourcePath || null,
+      // Framing and the orbit pivot ignore it like a weapon — it is long.
+      isWeapon: true,
+      rig: true,
+    });
+  }
+  for (const [name, tex] of rig.textures ?? []) {
+    if (!model.textures.has(name)) model.textures.set(name, tex);
+  }
+  const byId = new Map(model.animations.map((a) => [a.id, a]));
+  for (const a of rig.animations ?? []) {
+    const tracks = new Map([...a.jointTracks].map(([j, t]) => [j + N, t]));
+    const host = byId.get(a.id);
+    if (host) {
+      for (const [j, t] of tracks) host.jointTracks.set(j, t);
+    } else {
+      const copy = { ...a, jointTracks: tracks };
+      model.animations.push(copy);
+      byId.set(a.id, copy);
+    }
+  }
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // Body-region animation grouping
 // ---------------------------------------------------------------------------

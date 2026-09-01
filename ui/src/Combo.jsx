@@ -99,14 +99,17 @@ const STANDARD_GROUP = 'Standard';
 
 function normalizeTypeItems(items, standardLabel = STANDARD_GROUP) {
   let needsStandard = false;
+  let noneGrouped = false;
   for (const it of items) {
-    if (it.label.toLowerCase() === 'none') continue;
+    if (it.label.toLowerCase() === 'none') { if (it.group) noneGrouped = true; continue; }
     if (!it.group || it.group.startsWith('---')) { needsStandard = true; break; }
   }
-  if (!needsStandard) return items;
+  if (!needsStandard && !noneGrouped) return items;
   return items.map((it) => {
+    // None always sits loose above the types — the source lists give it a
+    // group of its own ("None"), which read as a one-item type to drill into.
     if (it.label.toLowerCase() === 'none') return it.group ? { ...it, group: null } : it;
-    if (!it.group || it.group.startsWith('---')) return { ...it, group: standardLabel };
+    if (needsStandard && (!it.group || it.group.startsWith('---'))) return { ...it, group: standardLabel };
     return it;
   });
 }
@@ -220,7 +223,9 @@ function SearchCombo({ value, items, onChange, placeholder, className }) {
 /**
  * Two-step picker: types first (Hand / Katana / Artifact / …), then items in
  * that type. Open lands on the selected item's type so sibling swaps are one
- * click; the back row returns to types. Typing on the type screen searches all.
+ * click; the back row returns to types. Typing searches every type, wherever
+ * you are — results come back under their type headers, so there is no need to
+ * back out of Katana to find a Great Katana.
  */
 function GroupedSearchCombo({ value, items: rawItems, onChange, placeholder, className, standardLabel }) {
   const items = useMemo(() => normalizeTypeItems(rawItems, standardLabel), [rawItems, standardLabel]);
@@ -253,12 +258,9 @@ function GroupedSearchCombo({ value, items: rawItems, onChange, placeholder, cla
   const searching = query.trim().length > 0;
 
   const shown = useMemo(() => {
-    if (scope == null) {
-      // Type screen: typing searches every item so a name still works.
-      return searching ? filterItems(items, query) : loose;
-    }
-    const inType = items.filter((it) => it.group === scope);
-    return searching ? filterItems(inType, query) : inType;
+    if (searching) return filterItems(items, query);
+    if (scope == null) return loose;
+    return items.filter((it) => it.group === scope);
   }, [items, loose, query, scope, searching]);
 
   // Seed scope each time the panel opens.
@@ -273,7 +275,7 @@ function GroupedSearchCombo({ value, items: rawItems, onChange, placeholder, cla
   const ph = !open
     ? placeholder
     : scope
-      ? `Filter ${scope}…`
+      ? `${scope} — or search all…`
       : 'Type or search…';
 
   // Type menu only when not drilled in and not mid-search.
@@ -305,6 +307,9 @@ function GroupedSearchCombo({ value, items: rawItems, onChange, placeholder, cla
             />
             <span className="icon combo-chevron">unfold_more</span>
           </ComboboxButton>
+          {/* Drilled in, the panel is a column: a fixed header bar (the way
+              back) over the scrolling list, so the bar never has to float
+              over rows or fight the panel's padding and corner radius. */}
           <ComboboxOptions anchor="bottom start" className="combo-options combo-options-typed" style={panelStyle}>
             {scope != null && (
               <button
@@ -313,10 +318,12 @@ function GroupedSearchCombo({ value, items: rawItems, onChange, placeholder, cla
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); setScope(null); setQuery(''); }}
               >
-                <span className="icon">chevron_left</span>
-                {scope}
+                <span className="icon">arrow_back</span>
+                <span className="combo-back-scope">{searching ? 'All types' : scope}</span>
+                {!searching && <span className="combo-back-count">{counts.get(scope) ?? 0}</span>}
               </button>
             )}
+            <div className="combo-scroll">
             {showTypes && (
               <>
                 {loose.length > 0 && optionRows(loose, ComboboxOption)}
@@ -332,6 +339,7 @@ function GroupedSearchCombo({ value, items: rawItems, onChange, placeholder, cla
                     >
                       <span className="combo-type-name">{g}</span>
                       <span className="combo-type-count">{counts.get(g) ?? 0}</span>
+                      <span className="icon combo-type-go">chevron_right</span>
                     </button>
                   );
                 })}
@@ -342,6 +350,7 @@ function GroupedSearchCombo({ value, items: rawItems, onChange, placeholder, cla
                 ? <div className="combo-empty">No match</div>
                 : optionRows(shown, ComboboxOption)
             )}
+            </div>
           </ComboboxOptions>
         </div>
       )}

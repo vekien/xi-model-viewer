@@ -2598,18 +2598,29 @@ button.details-path-link.mono { font-family: var(--font-mono); font-size: 11px; 
 }
 .combo-option[data-selected] .opt-badge { color: var(--accent); }
 
-/* Weapon type → item drill-down. Same row chrome as .combo-option so the panel
-   reads as one flat list, not a bar stacked on another list. */
+/* Weapon type → item drill-down. Both row kinds are <button>s, so every bit
+   of the global button chrome (gradient, ring, inset highlight, drop shadow,
+   30px min-height, :active inset) has to be reset or the list reads as a
+   stack of buttons rather than rows. */
+.combo-type,
 .combo-back,
-.combo-type {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  width: 100%;
-  padding: 4px 9px;
+.combo-type:hover,
+.combo-back:hover,
+.combo-type:active,
+.combo-back:active {
+  min-height: 0;
   border: 0;
   border-radius: 6px;
   background: transparent;
+  box-shadow: none;
+  transition: none;
+}
+.combo-type {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 6px 5px 9px;
   color: var(--gray-100);
   font-family: var(--font-mono);
   font-size: 12px;
@@ -2619,35 +2630,96 @@ button.details-path-link.mono { font-family: var(--font-mono); font-size: 11px; 
   text-align: left;
   white-space: nowrap;
 }
-.combo-back {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  color: var(--muted);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  /* Bleed into panel padding so the sticky edge is clean, without a second surface. */
-  margin: 0 0 2px;
-  background: linear-gradient(180deg, var(--gray-850) 70%, transparent);
-}
-.combo-back .icon { font-size: 14px; color: var(--muted); margin-left: -2px; }
-.combo-back:hover { color: var(--gray-100); background: rgba(255, 255, 255, 0.06); }
-.combo-back:hover .icon { color: var(--gray-100); }
-.combo-type:hover { background: rgba(255, 255, 255, 0.09); }
+.combo-type:hover,
+.combo-type:focus-visible { background: rgba(255, 255, 255, 0.07); outline: 0; }
 .combo-type.on { color: var(--accent); font-weight: 600; }
 .combo-type-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .combo-type-count {
   flex: 0 0 auto;
-  margin-left: 8px;
-  font-size: 11px;
-  font-weight: 500;
+  font: 500 11px/1 var(--font-mono);
   color: var(--gray-500);
   font-variant-numeric: tabular-nums;
 }
-.combo-type.on .combo-type-count { color: var(--accent); opacity: 0.7; }
+.combo-type-go { flex: 0 0 auto; font-size: 14px; color: var(--gray-500); opacity: 0.6; }
+.combo-type:hover .combo-type-go { opacity: 1; color: var(--gray-300); }
+/* Loose rows (None) sit above the types; give the two a visible seam. */
+.combo-options-typed .combo-option + .combo-type {
+  margin-top: 5px;
+  position: relative;
+}
+.combo-options-typed .combo-option + .combo-type::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  top: -3px;
+  height: 1px;
+  background: var(--ring);
+}
+
+/* Drilled in, the panel is a column: header bar over a scrolling list. The
+   panel's own padding/overflow move onto .combo-scroll so the bar sits flush
+   in the top corners and never floats over rows. */
+.combo-options-typed {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  /* The base panel reserves a scrollbar gutter, and that still applies with
+     overflow: hidden — stacked on .combo-scroll's own gutter it left a blank
+     column down the right of the type rows and past the header's count. */
+  scrollbar-gutter: auto;
+}
+.combo-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px;
+  /* No reserved gutter: the type screen never scrolls, and a reserved
+     column there read as dead space past the chevrons. */
+  scrollbar-gutter: auto;
+}
+.combo-back,
+.combo-back:hover,
+.combo-back:active {
+  /* Solid, so the panel's top-edge highlight gradient doesn't show through
+     as a pale band above the title. */
+  background: var(--gray-800);
+}
+.combo-back {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 0;
+  border-bottom: 1px solid var(--ring);
+  color: var(--gray-100);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+.combo-back:hover,
+.combo-back:active { border-radius: 0; border-bottom: 1px solid var(--ring); }
+.combo-back .icon { font-size: 15px; color: var(--muted); }
+.combo-back-scope { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.combo-back-count {
+  flex: 0 0 auto;
+  font: 500 11px/1 var(--font-mono);
+  color: var(--gray-500);
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+.combo-back:hover,
+.combo-back:focus-visible { background: var(--gray-750); outline: 0; }
+.combo-back:hover .icon { color: var(--gray-100); }
 
 /* --- Headless UI: Checkbox ------------------------------------------------- */
 
@@ -3167,14 +3239,6 @@ input[type='color'] {
   min-height: 30px;
   box-sizing: border-box;
 }
-.cseq-fps {
-  height: 30px;
-  min-height: 30px;
-  box-sizing: border-box;
-  padding: 0 26px 0 9px;
-  font-size: 12px;
-}
-.cseq-secs { color: var(--gray-300); font-size: 12px; margin-left: auto; }
 
 /* --- timeline --- */
 
@@ -3328,6 +3392,7 @@ input[type='color'] {
 .cseq-frame b { color: var(--text); font-weight: 600; }
 .cseq-frame-dim { color: var(--gray-500); }
 .cseq-frame-s { color: var(--gray-500); margin-left: 8px; }
+.cseq-row .cseq-frame { margin-left: auto; margin-right: 4px; }
 
 .cseq-record {
   flex: 0 0 auto;
