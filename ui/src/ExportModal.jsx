@@ -1,56 +1,79 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Checkbox, Field, Label } from '@headlessui/react';
+import { Button } from '@headlessui/react';
 import { backend } from '../js/backend.js';
+import { ArgsInput } from './ArgsInput.jsx';
 import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
 import { parseAudioHeader, toWav, FMT_ATRAC3 } from '../js/audio.js';
+import {
+  EXPORT_COMMANDS, TYPE_TO_CATALOG, addToken, removeFlag, tokenValue, tokensToArgv,
+} from './exportArgs.js';
 
 const sanitize = (name) => name.replace(/[<>:"/\\|?*]+/g, '_').trim() || 'export';
 
-/** Per-type export folders persist independently (music, sfx, model, zone, …). */
+/** Per-type export folders / formats / args persist independently. */
 const folderKey = (type) => `exportFolder_${type}`;
 const optsKey = (type) => `exportOpts_${type}`;
+const argsKey = (type) => `exportArgs_${type}`;
 
-const DEFAULT_MODEL_OPTS = {
-  format: 'glb', allParts: true, animEnabled: false, anim: '', frame: 0, weld: true, splitTex: false,
-};
+/** Only the output container still lives outside the args box. */
+const DEFAULT_FORMAT = 'glb';
+const DEFAULT_ARGS = { model: ['--all-parts'], zone: [] };
 
-const DEFAULT_ZONE_OPTS = {
-  format: 'glb', noSky: false, noVfx: false, objects: false, collision: false, useBase: false,
-};
-
-function loadOpts(type, defaults) {
+function loadFormat(type) {
   try {
-    const raw = localStorage.getItem(optsKey(type));
-    if (!raw) return { ...defaults };
-    const saved = JSON.parse(raw);
-    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return { ...defaults };
-    // Only keep known keys so stale fields don't linger.
-    const out = { ...defaults };
-    for (const k of Object.keys(defaults)) {
-      if (!(k in saved)) continue;
-      const v = saved[k];
-      // Coerce JSON booleans/numbers; ignore wrong types.
-      if (typeof defaults[k] === 'boolean') out[k] = !!v;
-      else if (typeof defaults[k] === 'number') out[k] = Number(v) || 0;
-      else if (typeof defaults[k] === 'string') out[k] = v == null ? defaults[k] : String(v);
-      else out[k] = v;
-    }
-    return out;
+    const saved = JSON.parse(localStorage.getItem(optsKey(type)) || 'null');
+    return saved?.format === 'fbx' ? 'fbx' : DEFAULT_FORMAT;
   } catch {
-    return { ...defaults };
+    return DEFAULT_FORMAT;
   }
 }
 
-function saveOpts(type, opts) {
+function saveFormat(type, format) {
+  try { localStorage.setItem(optsKey(type), JSON.stringify({ format })); } catch { /* quota */ }
+}
+
+/**
+ * Args the dialog used to spell as checkboxes, recovered once from the old
+ * `exportOpts_*` blob so an existing setup survives the switch to the args box.
+ */
+function migrateArgs(type) {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(optsKey(type)) || 'null'); } catch { /* corrupt */ }
+  if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return [...(DEFAULT_ARGS[type] ?? [])];
+  const out = [];
+  if (type === 'model') {
+    if (saved.allParts) out.push('--all-parts');
+    if (saved.weld === false) out.push('--no-weld');
+    if (saved.splitTex) out.push('--split-tex');
+    if (saved.animEnabled && saved.anim) {
+      out.push(`--anim ${saved.anim}`);
+      out.push(`--frame ${Number(saved.frame) || 0}`);
+    }
+  } else {
+    if (saved.noSky) out.push('--no-sky');
+    if (saved.noVfx) out.push('--no-vfx');
+    if (saved.objects) out.push('--objects');
+    if (saved.collision) out.push('--collision');
+    if (saved.useBase) out.push('--base');
+  }
+  return out;
+}
+
+function loadArgs(type) {
   try {
-    // Strip per-session fields that shouldn't stick across models.
-    const { anim: _a, frame: _f, ...rest } = opts;
-    const payload = type === 'model'
-      ? { ...rest, anim: opts.anim || '', frame: opts.frame || 0 }
-      : { ...opts };
-    localStorage.setItem(optsKey(type), JSON.stringify(payload));
-  } catch { /* quota */ }
+    const raw = localStorage.getItem(argsKey(type));
+    if (raw == null) return migrateArgs(type);
+    const saved = JSON.parse(raw);
+    if (!Array.isArray(saved)) return [...(DEFAULT_ARGS[type] ?? [])];
+    return saved.map((t) => String(t).trim()).filter(Boolean);
+  } catch {
+    return [...(DEFAULT_ARGS[type] ?? [])];
+  }
+}
+
+function saveArgs(type, args) {
+  try { localStorage.setItem(argsKey(type), JSON.stringify(args)); } catch { /* quota */ }
 }
 
 function shellQuote(s) {
@@ -76,8 +99,8 @@ function xiEnvFromSpec(spec) {
 export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
   const [folder, setFolder] = useState('');
   const [busy, setBusy] = useState(false);
-  const [modelOpts, setModelOpts] = useState(() => loadOpts('model', DEFAULT_MODEL_OPTS));
-  const [zoneOpts, setZoneOpts] = useState(() => loadOpts('zone', DEFAULT_ZONE_OPTS));
+  const [format, setFormat] = useState(DEFAULT_FORMAT);
+  const [args, setArgs] = useState([]);
   const [pos, setPos] = useState(null);
   const panelRef = useRef(null);
   const dragState = useRef(null);
@@ -95,12 +118,20 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
     if (!justOpened) return;
 
     setFolder(localStorage.getItem(folderKey(spec.type)) || '');
-    const m = loadOpts('model', DEFAULT_MODEL_OPTS);
-    // Re-seed anim from the loaded model; frame stays if same clip still exists.
-    const anims = spec.animations ?? [];
-    const anim = anims.some((a) => a.id === m.anim) ? m.anim : (anims[0]?.id ?? '');
-    setModelOpts({ ...m, anim, frame: anim === m.anim ? (Number(m.frame) || 0) : 0 });
-    setZoneOpts(loadOpts('zone', DEFAULT_ZONE_OPTS));
+    if (spec.type === 'model' || spec.type === 'zone') {
+      setFormat(loadFormat(spec.type));
+      // A saved --anim naming a clip this model doesn't have would fail the
+      // export, so it (and the frame it indexes) is dropped on open.
+      let next = loadArgs(spec.type);
+      const anim = tokenValue(next, '--anim');
+      if (anim != null && !(spec.animations ?? []).some((a) => a.id === anim)) {
+        next = removeFlag(removeFlag(next, '--anim'), '--frame');
+      }
+      setArgs(next);
+      // Pin the result now: the first format change rewrites exportOpts_*, and
+      // with it the old checkbox blob the migration reads from.
+      saveArgs(spec.type, next);
+    }
     setPos(null);
     setBusy(false);
   }, [open, spec]);
@@ -112,17 +143,15 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
   const isXi = isModel || isZone;
   const needsXi = isXi && !spec.xiPath;
   const needsGame = isXi && !spec.gamePath;
-  const setM = (patch) => setModelOpts((o) => {
-    const next = { ...o, ...patch };
-    saveOpts('model', next);
-    return next;
-  });
-  const setZ = (patch) => setZoneOpts((o) => {
-    const next = { ...o, ...patch };
-    saveOpts('zone', next);
-    return next;
-  });
-  const animFrames = spec.animations?.find((a) => a.id === modelOpts.anim)?.frames ?? 1;
+  const catalog = TYPE_TO_CATALOG[spec.type];
+
+  const setFmt = (v) => { setFormat(v); saveFormat(spec.type, v); };
+  const setArgList = (next) => { setArgs(next); saveArgs(spec.type, next); };
+
+  const animId = tokenValue(args, '--anim');
+  const animFrames = spec.animations?.find((a) => a.id === animId)?.frames ?? 1;
+  const frame = Math.min(Math.max(Number(tokenValue(args, '--frame')) || 0, 0), Math.max(animFrames - 1, 0));
+  const setFrame = (n) => setArgList(addToken(catalog, args, `--frame ${n}`));
 
   const startDrag = (e) => {
     if (e.target.closest('button, input, a, [role="button"]')) return;
@@ -141,18 +170,15 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
     if (picked) { setFolder(picked); localStorage.setItem(folderKey(spec.type), picked); }
   };
 
-  const format = isZone ? zoneOpts.format : modelOpts.format;
   const outExt = isXi ? (format === 'fbx' ? 'fbx' : 'glb') : 'wav';
   const outStem = isXi ? spec.datStem : sanitize(spec.outStem);
+  const previewArgs = isXi ? buildXiArgs(catalog, spec.sourcePath, folder || '…', format, args) : null;
 
   const doExport = async () => {
     if (!folder) { onStatus?.('Choose an export folder first.'); return; }
     if (needsXi) { onStatus?.('Set the xi-tools folder in Settings first.'); return; }
     if (needsGame) { onStatus?.('Set the Game path in Settings first (FFXI_DIR).'); return; }
     setBusy(true);
-    // Persist current toggles before closing (in case last click hadn't flushed).
-    if (isModel) saveOpts('model', modelOpts);
-    if (isZone) saveOpts('zone', zoneOpts);
     const env = xiEnvFromSpec(spec);
     // Snapshot before onClose unmounts this modal (xi path closes early).
     const snap = {
@@ -161,14 +187,10 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
       sourcePath: spec.sourcePath,
       outExt,
       isZone,
-      modelOpts: { ...modelOpts },
-      zoneOpts: { ...zoneOpts },
     };
     try {
       if (isXi) {
-        const xiArgs = snap.isZone
-          ? buildZoneArgs(snap.sourcePath, folder, snap.zoneOpts)
-          : buildModelArgs(snap.sourcePath, folder, snap.modelOpts);
+        const xiArgs = buildXiArgs(catalog, snap.sourcePath, folder, format, args);
         const cmd = `xi ${xiArgs.map(shellQuote).join(' ')}`;
         const kind = snap.isZone ? 'zone' : 'mesh';
         const title = `xi ${kind} export · ${snap.datStem}`;
@@ -267,82 +289,41 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
             </div>
           )}
 
-          {isModel && (
+          {isXi && (
             <>
               <div className="form-row">
                 <label className="form-label">Output type</label>
                 <Combo
-                  value={modelOpts.format}
+                  value={format}
                   items={[
                     { id: 'glb', label: 'glTF (.glb)' },
                     { id: 'fbx', label: 'FBX (needs Blender)' },
                   ]}
-                  onChange={(v) => setM({ format: v })}
+                  onChange={setFmt}
                   className="export-select"
                 />
               </div>
 
-              <Toggle checked={modelOpts.allParts} onChange={(v) => setM({ allParts: v })}
-                title="All parts" hint="Merge every mesh section into one model (multi-part gear)." />
-
-              <Toggle checked={modelOpts.weld} onChange={(v) => setM({ weld: v })}
-                title="Weld vertices" hint="Join sections by world position + UV (Noesis-style)." />
-
-              <Toggle checked={modelOpts.splitTex} onChange={(v) => setM({ splitTex: v })}
-                title="Split texture" hint="Un-mirror the skin into a stacked 2-up atlas; no overlapping UVs." />
-
-              <div className="export-anim">
-                <Toggle checked={modelOpts.animEnabled} onChange={(v) => setM({ animEnabled: v })}
-                  title="Animation freeze frame" hint="Pose the mesh by an animation instead of bind pose." />
-                {modelOpts.animEnabled && (
-                  <div className="export-anim-controls">
-                    <Combo
-                      value={modelOpts.anim}
-                      items={(spec.animations ?? []).map((a) => ({ id: a.id, label: a.id }))}
-                      onChange={(v) => setM({ anim: v, frame: 0 })}
-                      placeholder="— pick —"
-                    />
-                    <div className="export-frame">
-                      <input type="range" min="0" max={Math.max(animFrames - 1, 0)} value={modelOpts.frame}
-                        onChange={(e) => setM({ frame: +e.target.value })} className="vol-slider"
-                        style={{ '--fill': `${animFrames > 1 ? (modelOpts.frame / (animFrames - 1)) * 100 : 0}%` }} />
-                      <span className="mono export-frame-num">frame {modelOpts.frame}/{Math.max(animFrames - 1, 0)}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-
-          {isZone && (
-            <>
               <div className="form-row">
-                <label className="form-label">Output type</label>
-                <Combo
-                  value={zoneOpts.format}
-                  items={[
-                    { id: 'glb', label: 'glTF (.glb)' },
-                    { id: 'fbx', label: 'FBX (needs Blender)' },
-                  ]}
-                  onChange={(v) => setZ({ format: v })}
-                  className="export-select"
-                />
+                <label className="form-label">
+                  Arguments <span className="form-label-dim">· xi {EXPORT_COMMANDS[catalog].join(' ')}</span>
+                </label>
+                <ArgsInput type={catalog} tokens={args} onChange={setArgList}
+                  dynamicValues={isModel ? { '--anim': (spec.animations ?? []).map((a) => ({ value: a.id })) } : undefined} />
+                <div className="args-preview mono">
+                  {previewArgs.map(shellQuote).join(' ')}
+                </div>
               </div>
 
-              <Toggle checked={zoneOpts.noSky} onChange={(v) => setZ({ noSky: v })}
-                title="Omit skybox" hint="Drop sun/moon/stars/clouds chunks (unplaced celestial)." />
-
-              <Toggle checked={zoneOpts.noVfx} onChange={(v) => setZ({ noVfx: v })}
-                title="Omit VFX / unplaced" hint="Drop effect-placed VFX and unreferenced meshes (water jets, glows, dead geo)." />
-
-              <Toggle checked={zoneOpts.objects} onChange={(v) => setZ({ objects: v })}
-                title="Per-object files" hint="One .glb per mesh into a _objects folder (local space), not one combined zone." />
-
-              <Toggle checked={zoneOpts.collision} onChange={(v) => setZ({ collision: v })}
-                title="Collision mesh" hint="Also dump the player-collision MZB as .collision.obj overlay." />
-
-              <Toggle checked={zoneOpts.useBase} onChange={(v) => setZ({ useBase: v })}
-                title="Pristine base" hint="Export from the original .base backup instead of the live/edited DAT." />
+              {isModel && animId && (
+                <div className="export-frame-row">
+                  <span className="export-frame-label mono">--frame</span>
+                  <input type="range" min="0" max={Math.max(animFrames - 1, 0)} value={frame}
+                    onChange={(e) => setFrame(+e.target.value)} className="vol-slider"
+                    style={{ '--fill': `${animFrames > 1 ? (frame / (animFrames - 1)) * 100 : 0}%` }} />
+                  <span className="mono export-frame-num">{frame}/{Math.max(animFrames - 1, 0)}</span>
+                </div>
+              )}
             </>
           )}
 
@@ -373,41 +354,17 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
   );
 }
 
-function buildModelArgs(datPath, folder, opts) {
-  const args = ['mesh', 'export', datPath, '--output', folder];
-  if (opts.format === 'fbx') args.push('--fbx');
-  if (opts.allParts) args.push('--all-parts');
-  args.push(opts.weld ? '--weld' : '--no-weld');
-  if (opts.splitTex) args.push('--split-tex');
-  if (opts.animEnabled && opts.anim) {
-    args.push('--anim', opts.anim, '--frame', String(opts.frame));
-  }
-  return args;
-}
-
-function buildZoneArgs(datPath, folder, opts) {
-  const args = ['zone', 'export', datPath, '--output', folder];
-  if (opts.format === 'fbx') args.push('--fbx');
-  if (opts.noSky) args.push('--no-sky');
-  if (opts.noVfx) args.push('--no-vfx');
-  if (opts.objects) args.push('--objects');
-  if (opts.collision) args.push('--collision');
-  if (opts.useBase) args.push('--base');
-  return args;
-}
-
-function Toggle({ checked, onChange, title, hint }) {
-  return (
-    <Field className="export-toggle">
-      <Checkbox checked={checked} onChange={onChange} className="checkbox">
-        <span className="icon check-icon">check</span>
-      </Checkbox>
-      <div className="export-toggle-text">
-        <Label className="export-toggle-title">{title}</Label>
-        {hint && <div className="export-toggle-hint">{hint}</div>}
-      </div>
-    </Field>
-  );
+/**
+ * `xi <cmd> <dat> --output <dir> [--fbx] <user args…>`. Anything the user typed
+ * for a flag the dialog owns wins, so a hand-written `--output` isn't doubled.
+ */
+function buildXiArgs(catalog, datPath, folder, format, userArgs) {
+  const argv = tokensToArgv(userArgs);
+  const has = (flag) => argv.includes(flag);
+  const args = [...EXPORT_COMMANDS[catalog], datPath];
+  if (!has('--output')) args.push('--output', folder);
+  if (format === 'fbx' && !has('--fbx')) args.push('--fbx');
+  return [...args, ...argv];
 }
 
 function clamp(p, panel) {

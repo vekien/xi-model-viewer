@@ -3662,24 +3662,129 @@ button.update-dl-btn .update-dl-meta {
 .export-warn em { color: var(--accent); font-style: normal; }
 
 .export-select { width: 100%; }
-.export-toggle { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; }
-.export-toggle .checkbox { margin-top: 1px; }
-.export-toggle-text { display: flex; flex-direction: column; gap: 1px; }
-.export-toggle-title { color: var(--gray-100); font-weight: 500; cursor: pointer; }
-.export-toggle-hint { color: var(--muted); font-size: 11px; line-height: 1.4; }
+.form-label-dim { color: var(--gray-500); font-family: var(--font-mono); font-size: 11px; }
 
-.export-anim { display: flex; flex-direction: column; gap: 10px; }
-.export-anim-controls {
-  display: flex; flex-direction: column; gap: 10px;
-  margin-left: 27px;
-  padding: 10px; border-radius: 8px;
+/* The --frame slider, shown only while the args carry an --anim to index. */
+.export-frame-row {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: -4px;
+  padding: 8px 10px; border-radius: 8px;
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid var(--ring);
 }
-.export-anim-controls .combo-input { width: 160px; }
-.export-frame { display: flex; align-items: center; gap: 10px; }
-.export-frame .vol-slider { flex: 1 1 auto; }
+.export-frame-row .vol-slider { flex: 1 1 auto; }
+.export-frame-label { color: var(--gray-300); font-size: 11px; flex: 0 0 auto; }
 .export-frame-num { color: var(--muted); font-size: 11px; flex: 0 0 auto; }
+
+/* --- Args box: tags-style CLI flag entry (see src/ArgsInput.jsx) ----------- */
+
+.args-field { position: relative; }
+
+/* Same chrome as .combo-input, but it wraps and grows with the chips. */
+.args-box {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+  width: 100%;
+  font: 500 13px/1.3 var(--font-ui);
+  color: var(--gray-100);
+  background: linear-gradient(180deg, var(--gray-700), var(--gray-800));
+  border: 1px solid var(--ring-strong);
+  border-radius: 7px;
+  min-height: 30px;
+  max-height: 132px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding: 4px 26px 4px 6px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 1px 2px rgba(0, 0, 0, 0.35);
+  cursor: text;
+}
+.args-box:hover { border-color: rgba(255, 255, 255, 0.2); }
+.args-box.open { border-color: var(--accent); }
+.args-chevron { position: absolute; right: 7px; top: 7px; pointer-events: none; }
+
+.arg-chip {
+  display: inline-flex; align-items: stretch;
+  border-radius: 6px;
+  background: rgba(77, 163, 255, 0.16);
+  border: 1px solid rgba(77, 163, 255, 0.4);
+  overflow: hidden;
+}
+.arg-chip.unknown {
+  background: rgba(255, 200, 80, 0.14);
+  border-color: rgba(255, 200, 80, 0.42);
+}
+.arg-chip.managed {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--ring-strong);
+}
+.arg-chip-text,
+.arg-chip-x {
+  display: flex; align-items: center; gap: 5px;
+  border: 0; background: transparent;
+  color: var(--gray-100);
+  font: 500 11.5px/1 var(--font-mono);
+  cursor: pointer;
+  padding: 4px 6px;
+  min-height: 0;
+  box-shadow: none;
+}
+.arg-chip-text:hover { background: rgba(255, 255, 255, 0.09); }
+.arg-chip-flag { color: var(--accent); }
+.arg-chip.unknown .arg-chip-flag { color: #f0c060; }
+.arg-chip.managed .arg-chip-flag { color: var(--gray-300); }
+.arg-chip-value { color: var(--gray-100); }
+.arg-chip-x { padding: 4px 5px 4px 3px; color: var(--gray-400); }
+.arg-chip-x:hover { background: rgba(255, 255, 255, 0.12); color: var(--gray-100); }
+.arg-chip-x .icon { font-size: 13px; }
+
+/* Out-specifies theme.css's input[type='text'] box inside the field. */
+.args-box .args-entry {
+  flex: 1 1 80px; min-width: 80px; width: auto;
+  font: 500 12px/1.3 var(--font-mono); color: inherit;
+  background: none; border: 0; border-radius: 0; box-shadow: none;
+  padding: 3px 0; margin: 0; min-height: 0; outline: none;
+}
+.args-box .args-entry::placeholder { color: var(--muted); opacity: 1; font-family: var(--font-ui); }
+
+/* Panel reuses .combo-options chrome, anchored to the field rather than
+   portalled — Headless UI's floating anchor isn't in play here. */
+.args-menu {
+  position: absolute;
+  left: 0; right: 0;
+  top: calc(100% + 4px);
+  width: auto;
+  min-width: 0;
+  max-width: none !important;
+  max-height: 260px !important;
+  margin-top: 0;
+}
+.args-menu.up { top: auto; bottom: calc(100% + 4px); }
+.args-menu-head { position: static; text-transform: none; letter-spacing: 0; }
+.args-option { gap: 8px; white-space: normal; }
+.args-option-flag { color: var(--accent); flex: 0 0 auto; }
+.args-option[data-selected] { color: inherit; font-weight: inherit; }
+.args-option[data-selected] .args-option-flag { color: var(--gray-400); }
+.args-option[data-selected] .args-option-text { color: var(--gray-500); }
+.args-option-on { font-size: 14px; color: var(--accent); flex: 0 0 auto; margin-left: auto; }
+.args-option-text {
+  flex: 1 1 auto; min-width: 0;
+  color: var(--gray-300);
+  font-family: var(--font-ui); font-size: 11.5px; font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.args-menu-foot {
+  position: sticky; bottom: 0;
+  margin: 4px -4px -4px;
+  padding: 6px 9px;
+  border-top: 1px solid var(--ring);
+  background: var(--gray-850);
+  color: var(--muted); font-size: 11px; line-height: 1.4;
+}
+
+.args-preview {
+  color: var(--gray-500);
+  font-size: 11px; line-height: 1.5;
+  word-break: break-all;
+}
 
 /* Banner when DAT Browser opens a DAT that can't be rendered (no mesh, etc.). */
 .file-open-banner {
