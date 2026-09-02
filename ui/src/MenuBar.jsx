@@ -86,10 +86,11 @@ export function MenuBar({
   floorRadius = 42, onFloorRadius,
   floorFadeRadius = 30, onFloorFadeRadius,
   flatFloor = false, onFlatFloor, flatFloorColor = '#8a8a94', onFlatFloorColor,
-  onFloor, onClearFloor, selectedFloor = '',
+  onFloor, onClearFloor, selectedFloor = '', zoneLoaded = false,
   shadowsOn = false, shadowDistance = 90, onShadowDistance,
   renderHeight = 0, onRenderHeight, bufferSize = null,
   fpsCap = 0, onFpsCap, onGraphicsOpenChange,
+  renderDistance = 5000, onRenderDistance,
 }) {
   const [active, setActive] = useState(null);   // { label, left, top } | null
   const [scene, setScene] = useState(null);     // { left, top } | null
@@ -328,6 +329,7 @@ export function MenuBar({
               onFlatFloor={onFlatFloor}
               flatFloorColor={flatFloorColor}
               onFlatFloorColor={onFlatFloorColor}
+              zoneLoaded={zoneLoaded}
             />
           </div>,
           document.body,
@@ -350,6 +352,8 @@ export function MenuBar({
               onFpsCap={onFpsCap}
               fov={fov}
               onFov={onFov}
+              renderDistance={renderDistance}
+              onRenderDistance={onRenderDistance}
             />
           </div>,
           document.body,

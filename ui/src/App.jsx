@@ -878,6 +878,13 @@ export default function App({ launch = null }) {
   // Mirrored so the cinematic camera can restore your FOV when it hands back.
   const fovRef = useRef(fov);
   fovRef.current = fov;
+  // Graphics › Render Distance — the zone far plane, persisted.
+  const [renderDistance, setRenderDistanceState] = useState(() => {
+    const saved = Number(localStorage.getItem('renderDistance'));
+    return Number.isFinite(saved) && saved >= 250 && saved <= 10000 ? saved : 5000;
+  });
+  const renderDistanceRef = useRef(renderDistance);
+  renderDistanceRef.current = renderDistance;
   const [showNavmesh, setShowNavmesh] = useState(false);
   // Sky, clouds and weather shells are on unless the user turned them off —
   // a zone without its weather isn't what the zone looks like.
@@ -1287,6 +1294,7 @@ export default function App({ launch = null }) {
     renderer.setCustomSunDir(customSunDir);
     renderer.setLightGain(lightGain);
     renderer.camera.fovDegrees = fov;
+    renderer.camera.renderDistance = renderDistance;
     {
       const id = normalizeBgId(localStorage.getItem('bgImage') || 'none');
       const url = resolveBgUrl(id);
@@ -3436,6 +3444,7 @@ export default function App({ launch = null }) {
     }
     r.creationCamera = null;
     cam.fovDegrees = fovRef.current;
+    cam.renderDistance = renderDistanceRef.current;
     // Always return to orbit — creation is an orbit view; fly mode would make
     // drag update lookDir while eye stays frozen at the last cinematic shot.
     if (wasdRef.current) {
@@ -6055,6 +6064,15 @@ export default function App({ launch = null }) {
     if (camera) camera.fovDegrees = v;
   }, []);
 
+  const setRenderDistance = useCallback((v) => {
+    const d = Math.min(10000, Math.max(250, Math.round(v)));
+    setRenderDistanceState(d);
+    try { localStorage.setItem('renderDistance', String(d)); } catch { /* quota */ }
+    // Read every frame by projectionMatrix(), so no redraw call needed.
+    const camera = rendererRef.current?.camera;
+    if (camera) camera.renderDistance = d;
+  }, []);
+
   // Ambient/weather SFX volume. Kept in a ref as well so a zone loading later
   // can apply it without waiting for a re-render.
   const [sfxVolume, setSfxVolumeState] = useState(() => {
@@ -7367,6 +7385,8 @@ export default function App({ launch = null }) {
         fps={fps}
         fov={fov}
         onFov={setFov}
+        renderDistance={renderDistance}
+        onRenderDistance={setRenderDistance}
         sequencerOpen={sequencerOpen}
         bgColor={settings?.bgColor ?? DEFAULT_BG}
         onBgColor={setBg}
@@ -7385,6 +7405,7 @@ export default function App({ launch = null }) {
         onFlatFloor={changeFlatFloor}
         flatFloorColor={flatFloorColor}
         onFlatFloorColor={changeFlatFloorColor}
+        zoneLoaded={!!modelInfo?.zone}
         shadowsOn={showShadows}
         shadowDistance={shadowDistance}
         onShadowDistance={setShadowDistance}

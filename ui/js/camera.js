@@ -102,6 +102,8 @@ export class OrbitCamera {
     this.maxDistance = 500;
     this.near = 0.05;
     this.far = 1000;
+    // Graphics › Render Distance: zone far plane override (0 = the 5000 default).
+    this.renderDistance = 0;
     // Fly state — separate remembered speeds per context
     this.pos = [0, 0, 5];
     // Set while the Camera Sequencer is flying a recorded path: WASD, drags and
@@ -159,7 +161,11 @@ export class OrbitCamera {
   }
 
   projectionMatrix(aspect) {
-    const far = Math.max(this.far, (this.mode === 'fly' ? this.flySpeed * 40 : this.distance * 8) + 50);
+    // Graphics › Render Distance pins the zone far plane; entities keep the
+    // distance-scaled far so close-up depth precision is unaffected.
+    const far = (this.rangeKind === 'zone' && this.renderDistance > 0)
+      ? Math.max(this.renderDistance, this.near * 4)
+      : Math.max(this.far, (this.mode === 'fly' ? this.flySpeed * 40 : this.distance * 8) + 50);
     const near = Math.min(this.near, Math.max((this.mode === 'fly' ? this.flySpeed : this.distance) * 0.0005, 0.05));
     return mat4Perspective((this.fovDegrees * Math.PI) / 180, aspect, near, far);
   }

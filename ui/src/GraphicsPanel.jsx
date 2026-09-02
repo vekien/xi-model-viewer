@@ -12,6 +12,9 @@ const RESOLUTIONS = [
 
 const SHADOW_MIN = 20;
 const SHADOW_MAX = 600;
+export const RENDER_DIST_MIN = 250;
+export const RENDER_DIST_MAX = 10000;
+export const RENDER_DIST_DEFAULT = 5000;
 
 const FPS_CAPS = [
   { id: '0', label: 'Uncapped' },
@@ -27,9 +30,12 @@ export function GraphicsPanel({
   renderHeight = 0, onRenderHeight,
   fpsCap = 0, onFpsCap,
   fov = 45, onFov,
+  renderDistance = RENDER_DIST_DEFAULT, onRenderDistance,
 }) {
   const dist = Math.round(shadowDistance);
   const distPct = ((dist - SHADOW_MIN) / (SHADOW_MAX - SHADOW_MIN)) * 100;
+  const rdist = Math.round(renderDistance);
+  const rdistPct = ((rdist - RENDER_DIST_MIN) / (RENDER_DIST_MAX - RENDER_DIST_MIN)) * 100;
   const fovPct = ((fov - 20) / 100) * 100;
 
   return (
@@ -40,8 +46,6 @@ export function GraphicsPanel({
       <div className={`gfx-line${shadowsOn ? '' : ' dim'}`}>
         <span className="gfx-lab">Shadow Distance &nbsp; • &nbsp; <strong>{dist}</strong></span>
       </div>
-      <div className="gfx-help">Requires shadows enabled</div>
-
       <input
         type="range"
         min={SHADOW_MIN}
@@ -53,7 +57,20 @@ export function GraphicsPanel({
         className="vol-slider gfx-slider"
         style={{ '--fill': `${distPct}%` }}
       />
-      
+
+      <div className="gfx-line">
+        <span className="gfx-lab">Render Distance &nbsp; • &nbsp; <strong>{rdist}</strong></span>
+      </div>
+      <input
+        type="range"
+        min={RENDER_DIST_MIN}
+        max={RENDER_DIST_MAX}
+        step="50"
+        value={rdist}
+        onChange={(e) => onRenderDistance?.(+e.target.value)}
+        className="vol-slider gfx-slider"
+        style={{ '--fill': `${rdistPct}%` }}
+      />
 
       <hr />
 

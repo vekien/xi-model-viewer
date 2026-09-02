@@ -440,7 +440,7 @@ body:has(#img-sprites) #placements {
   width: 100%;
   margin: 0;
   padding: 5px 8px;
-  min-height: 0;
+  min-height: 15px;
   border: none;
   border-radius: 6px;
   background: transparent;
@@ -5397,3 +5397,20 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .dbx-modal { width: min(520px, 92vw); }
 .dbx-seg { align-self: flex-start; }
 .dbx-seg .seg-tab { flex: 0 0 auto; white-space: nowrap; padding: 0 12px; }
+
+/* Scene panel while a zone is loaded: floor / background image parked. */
+/* The floor block is one child of the popover's flex column, so it has to
+   lay its own rows out the same way or the 12px gaps collapse. */
+.scene-floor { display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto; min-height: 0; }
+.scene-locked { opacity: 0.42; pointer-events: none; }
+.scene-note {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin: 4px 0 8px;
+  padding: 7px 9px;
+  font-size: 11px; line-height: 1.45;
+  color: var(--gray-300);
+  background: rgba(127, 196, 160, 0.1);
+  border: 1px solid rgba(127, 196, 160, 0.3);
+  border-radius: 7px;
+}
+.scene-note .icon { font-size: 15px; color: #7fc4a0; flex: 0 0 auto; }

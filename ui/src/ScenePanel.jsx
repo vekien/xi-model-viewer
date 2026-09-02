@@ -49,6 +49,7 @@ export function ScenePanel({
   onFlatFloor,
   flatFloorColor = '#8a8a94',
   onFlatFloorColor,
+  zoneLoaded = false,
 }) {
   const [floors, setFloors] = useState(null);
 
@@ -83,7 +84,14 @@ export function ScenePanel({
         </div>
       </div>
 
-      <div className="gfx-line">
+      {zoneLoaded && (
+        <div className="scene-note">
+          <span className="icon">map</span>
+          <span>Background image and floor are paused while a zone is loaded — the zone brings its own ground and sky. Settings are kept.</span>
+        </div>
+      )}
+
+      <div className={`gfx-line${zoneLoaded ? ' scene-locked' : ''}`}>
         <span className="gfx-lab">Background Image</span>
         <div className="gfx-ctrl">
           <Combo
@@ -100,6 +108,7 @@ export function ScenePanel({
 
       <hr />
 
+      <div className={`scene-floor${zoneLoaded ? ' scene-locked' : ''}`}>
       <div className="tool-pop-actions">
         <Tooltip content={hasFloor ? 'Remove the ground plane' : 'No floor loaded'}>
           <button
@@ -217,6 +226,7 @@ export function ScenePanel({
             </button>
           );
         })}
+      </div>
       </div>
     </div>
   );

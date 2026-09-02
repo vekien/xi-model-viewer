@@ -1723,7 +1723,8 @@ export class Renderer {
     // textured floor is actually drawn — otherwise axes/grid diverge at the
     // origin when zoomed (the old always-on 0.02 bias).
     const baseY = (this.effectMode || this.model?.kind === 'zone') ? 0 : (this.floorY ?? 0);
-    const floorOn = !!this.floor;
+    // Zones bring their own ground: the Scene floor is not drawn under them.
+    const floorOn = !!this.floor && this.model?.kind !== 'zone';
     // DAT space for entities (drawn via datVP) and display space for zones —
     // the lift follows which one this grid is in, not the camera.
     const datSpaceGrid = !this.effectMode && this.model?.kind !== 'zone';
@@ -2627,7 +2628,10 @@ export class Renderer {
     // kept and the viewport is always filled, so the overflowing axis is
     // cropped rather than bordered; `contain` here left the clear colour
     // showing as bars down the side of the canvas.
-    if (this.bgImage?.texture) {
+    // Zones fill the frame themselves (terrain + sky dome), so the Scene
+    // background image and floor stay parked until an entity is back.
+    const zoneUp = this.model?.kind === 'zone';
+    if (this.bgImage?.texture && !zoneUp) {
       const img = this.bgImage;
       const canvasAspect = this.canvas.width / Math.max(this.canvas.height, 1);
       const imgAspect = (img.width || 1) / Math.max(img.height || 1, 1);
@@ -2662,7 +2666,7 @@ export class Renderer {
     // wins over a loaded ground texture while it is on, and stands in for one
     // when none is loaded.
     const flatOn = this.flatFloor.on && !!this.flatFloorTex;
-    if (this.floor || flatOn) {
+    if ((this.floor || flatOn) && !zoneUp) {
       gl.useProgram(this.floorProgram);
       gl.uniformMatrix4fv(this.floorUniforms.viewProj, false, datVP);
       gl.uniform1f(this.floorUniforms.tile, this.floorTile);
