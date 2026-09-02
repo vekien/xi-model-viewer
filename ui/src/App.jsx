@@ -8,6 +8,7 @@ import { Renderer } from '../js/renderer.js';
 import { FileTree } from './FileTree.jsx';
 import { DatabaseList } from './DatabaseList.jsx';
 import { DatabaseViewer, invalidateDbCache, dbDataDir, importDbFolder } from './DatabaseViewer.jsx';
+import { DatabaseManagerModal } from './DatabaseManagerModal.jsx';
 import { ActorsPanel } from './ActorsPanel.jsx';
 import { ActorEditorModal } from './ActorEditorModal.jsx';
 import { ActorSetsModal } from './ActorSetsModal.jsx';
@@ -652,6 +653,12 @@ export default function App({ launch = null }) {
   // Bumped after `xi mv database` finishes so an open table re-reads its JSON.
   const [dbReloadTick, setDbReloadTick] = useState(0);
   const [dbExportTick, setDbExportTick] = useState(0);
+  // File › Database Manager: update / import the prebuilt tables.
+  const [dbManagerOpen, setDbManagerOpen] = useState(false);
+  const [dbManagerDir, setDbManagerDir] = useState('');
+  const [dbManagerTick, setDbManagerTick] = useState(0);
+  const [dbUpdating, setDbUpdating] = useState(false);
+  const [dbXiConnected, setDbXiConnected] = useState(false);
   const dbUpdateRunningRef = useRef(false);
   // Structure owns the viewport when the DAT Browser has nothing rendered, or
   // what it opened is a plain table. Otherwise it's the status-bar overlay.
@@ -5789,6 +5796,7 @@ export default function App({ launch = null }) {
       setCliOutput({ title, text: lines.join('\n') });
     };
     dbUpdateRunningRef.current = true;
+    setDbUpdating(true);
     log();
     setStatusText('Updating database…');
     try {
@@ -5810,6 +5818,8 @@ export default function App({ launch = null }) {
       setStatusText(`Database update failed: ${msg}`);
     } finally {
       dbUpdateRunningRef.current = false;
+      setDbUpdating(false);
+      setDbManagerTick((n) => n + 1);
     }
   }, []);
 
@@ -5831,6 +5841,7 @@ export default function App({ launch = null }) {
       const { copied, dir } = await importDbFolder(picked);
       invalidateDbCache();
       setDbReloadTick((n) => n + 1);
+      setDbManagerTick((n) => n + 1);
       setStatusText(`Imported ${copied} table file${copied === 1 ? '' : 's'} → ${dir}`);
     } catch (e) {
       setStatusText(`Import failed: ${e?.message ?? e}`);
@@ -6303,6 +6314,17 @@ export default function App({ launch = null }) {
       if (zoneActorKey && rightPanelPrefRef.current === 'none') setPlcOpen(false);
     }
   }, [zoneActorKey]);
+
+  // Database Manager needs the app's db folder and whether xi-tools can run.
+  useEffect(() => {
+    if (!dbManagerOpen) return undefined;
+    let alive = true;
+    dbDataDir().then((d) => { if (alive) setDbManagerDir(d); }).catch(() => { if (alive) setDbManagerDir(''); });
+    const xi = (settingsRef.current?.xiPath || '').trim();
+    if (!xi) setDbXiConnected(false);
+    else backend.xiAvailable(xi).then((ok) => { if (alive) setDbXiConnected(!!ok); }).catch(() => { if (alive) setDbXiConnected(false); });
+    return () => { alive = false; };
+  }, [dbManagerOpen, dbManagerTick, settings?.xiPath]);
 
   /** Database → DAT Browser: open the table's DAT the way File › Open DAT does. */
   const openDbPathInBrowser = useCallback(async (rel) => {
@@ -6894,6 +6916,11 @@ export default function App({ launch = null }) {
         break;
       }
       case 'export': {
+        // On the Database page, Export means the open table (JSON / CSV).
+        if (leftView === 'database') {
+          setDbExportTick((n) => n + 1);
+          break;
+        }
         const spec = buildExportSpec();
         if (spec) setExportSpec(spec);
         else setStatusText('Nothing to export — load a model or play a track first.');
@@ -7108,19 +7135,8 @@ export default function App({ launch = null }) {
       case 'assets-database':
         setLeftView('database');
         break;
-      case 'update-database':
-        runDatabaseUpdate();
-        break;
-      case 'import-database':
-        importDatabase();
-        break;
-      case 'export-database':
-        if (leftView !== 'database') {
-          setLeftView('database');
-          setStatusText('Pick a table, then File › Export Database again.');
-        } else {
-          setDbExportTick((n) => n + 1);
-        }
+      case 'database-manager':
+        setDbManagerOpen(true);
         break;
       case 'assets-npcs':
         setLeftView('npc');
@@ -8360,6 +8376,17 @@ export default function App({ launch = null }) {
             rendererRef.current?.setActorTransform(editingActor.id, null, identity, 1);
             updateActor(editingActor.id, { rot: identity, scale: 1 });
           }}
+        />
+      )}
+      {dbManagerOpen && (
+        <DatabaseManagerModal
+          dbDir={dbManagerDir}
+          xiConnected={dbXiConnected}
+          updating={dbUpdating}
+          refreshTick={dbManagerTick}
+          onUpdate={runDatabaseUpdate}
+          onImport={importDatabase}
+          onClose={() => setDbManagerOpen(false)}
         />
       )}
       {actorSetsOpen && modelInfo?.zone && (
