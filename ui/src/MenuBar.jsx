@@ -48,6 +48,7 @@ const MENUS = [
     label: 'Assets',
     items: [
       { id: 'assets-files', label: 'DAT Browser', icon: 'folder_open' },
+      { id: 'assets-database', label: 'Database', icon: 'database' },
       { id: 'assets-characters', label: 'Characters', icon: 'person' },
       { id: 'assets-npcs', label: 'NPCs', icon: 'pets' },
       { id: 'assets-zones', label: 'Zones', icon: 'map' },

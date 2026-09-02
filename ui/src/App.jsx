@@ -6,6 +6,9 @@ import { battleSkirtPath } from '../js/pclists.js';
 import { animDisplayName, groupAnimations, matchAnimRef, mergeModels, parseEntity, resolveScheduleClip } from '../js/dat.js';
 import { Renderer } from '../js/renderer.js';
 import { FileTree } from './FileTree.jsx';
+import { DatabaseList } from './DatabaseList.jsx';
+import { DatabaseViewer } from './DatabaseViewer.jsx';
+import { findDbTable } from '../js/database.js';
 import { MenuBar } from './MenuBar.jsx';
 import { NpcList } from './NpcList.jsx';
 import { CharacterList, useCharacter } from './CharacterList.jsx';
@@ -124,7 +127,7 @@ function readZoneCamera(key) {
   const snap = readZoneCamMap()[key];
   return snap && Array.isArray(snap.target) ? snap : null;
 }
-const VIEWS = ['files', 'npc', 'pc', 'creation', 'music', 'sfx', 'zones', 'images', 'effects'];
+const VIEWS = ['files', 'database', 'npc', 'pc', 'creation', 'music', 'sfx', 'zones', 'images', 'effects'];
 /** Views that browse individual models, where fly controls are a hindrance. */
 const ORBIT_VIEWS = new Set(['files', 'npc', 'pc', 'creation']);
 // Seconds of real time one in-game day takes when the day/night cycle is
@@ -153,7 +156,7 @@ const ZONE_VIEWS = new Set(['zones']);
 const AUDIO_VIEWS = new Set(['music', 'sfx']);
 // Views that put their own content on screen as soon as they open. Restoring
 // one of these at startup must not also load the last/default DAT.
-const SELF_LOADING_VIEWS = new Set(['pc', 'creation', 'images', 'music', 'sfx', 'effects']);
+const SELF_LOADING_VIEWS = new Set(['pc', 'creation', 'images', 'music', 'sfx', 'effects', 'database']);
 // A schedule sequence lays segments on a timeline; a joint whose segment hasn't
 // started yet would show bind pose (T-pose flash each loop). Underlay a looping
 // idle so those joints rest naturally — battle idle for weapon actions if it's
@@ -629,6 +632,18 @@ export default function App({ launch = null }) {
   // What the DAT Browser last opened (zone/image/…); drives the right-hand
   // panels without leaving Assets > DAT Browser.
   const [browserKind, setBrowserKind] = useState(null);
+  // Assets > Database: the picked record table and client language, persisted.
+  const [dbTable, setDbTableState] = useState(() => findDbTable(localStorage.getItem('dbTable') || ''));
+  const setDbTable = useCallback((t) => {
+    setDbTableState(t ? findDbTable(t.key) : null);
+    try { localStorage.setItem('dbTable', t?.key || ''); } catch { /* quota */ }
+  }, []);
+  const [dbLang, setDbLangState] = useState(() => (localStorage.getItem('dbLang') === 'jp' ? 'jp' : 'en'));
+  const setDbLang = useCallback((l) => {
+    setDbLangState(l);
+    try { localStorage.setItem('dbLang', l); } catch { /* quota */ }
+  }, []);
+  const [dbCounts, setDbCounts] = useState({});
   // Structure owns the viewport when the DAT Browser has nothing rendered, or
   // what it opened is a plain table. Otherwise it's the status-bar overlay.
   const dataOwnsPage = browserKind === 'data' || (leftView === 'files' && !browserKind);
@@ -3794,7 +3809,7 @@ export default function App({ launch = null }) {
           return;
         }
         // Lists that own no model on boot — don't resurrect the last DAT behind them.
-        if (restoredView === 'music' || restoredView === 'sfx') return;
+        if (restoredView === 'music' || restoredView === 'sfx' || restoredView === 'database') return;
         // Effects: boot to a quiet stage. Nothing is armed or played until the
         // user picks something. This used to replay the last effect so a reload
         // landed on a live preview, but that fires particles and sound at
@@ -4293,6 +4308,11 @@ export default function App({ launch = null }) {
         }
       }
       await backend.revealPath(abs);
+      // The path is what people usually want next; hand it to the clipboard too.
+      try {
+        await navigator.clipboard.writeText(abs);
+        setStatusText(`Copied ${abs}`);
+      } catch { /* clipboard blocked — Explorer still opened */ }
     } catch (err) {
       setStatusText(`Could not show in Explorer: ${err.message ?? err}`);
     }
@@ -5654,6 +5674,20 @@ export default function App({ launch = null }) {
     if (leftView === 'files') ensureFilePathIndex();
   }, [leftView, ensureFilePathIndex, settings?.gamePath]);
 
+  /** FTABLE file id for a game-relative DAT path (Database detail card). */
+  const dbFileIdOf = useCallback(async (rel) => {
+    const { byPath } = await loadMergedTables(settingsRef.current, dataTablesRef);
+    return byPath.get(normRel(rel).toUpperCase()) ?? null;
+  }, []);
+
+  /** Database → DAT Browser: open the table's DAT the way File › Open DAT does. */
+  const openDbPathInBrowser = useCallback(async (rel) => {
+    const abs = await backend.resolvePrefer(gameCandidates(rel, settingsRef.current));
+    if (!abs) return;
+    pendingBrowserFileRef.current = abs;
+    setLeftView('files');
+  }, [setLeftView]);
+
   /**
    * Assets > DAT Browser click: sniff the DAT and open the matching viewer
    * (zone / model / image / music / sfx / effect / data inspector).
@@ -6437,6 +6471,9 @@ export default function App({ launch = null }) {
         break;
       case 'assets-files':
         setLeftView('files');
+        break;
+      case 'assets-database':
+        setLeftView('database');
         break;
       case 'assets-npcs':
         setLeftView('npc');
@@ -7328,6 +7365,14 @@ export default function App({ launch = null }) {
           settings={settings}
         />
       )}
+      {explorerOpen && leftView === 'database' && (
+        <DatabaseList
+          selectedKey={dbTable?.key ?? null}
+          onSelectTable={setDbTable}
+          lang={dbLang}
+          counts={dbCounts}
+        />
+      )}
       {explorerOpen && leftView === 'npc' && (
         <NpcList
           onSelectEntry={loadNpcEntry}
@@ -7385,6 +7430,19 @@ export default function App({ launch = null }) {
 
       {explorerOpen && leftView === 'effects' && (
         <EffectList onSelect={loadEffect} selectedPath={effectEntry?.path} />
+      )}
+
+      {leftView === 'database' && (
+        <DatabaseViewer
+          table={dbTable}
+          settings={settings}
+          lang={dbLang}
+          onLang={setDbLang}
+          fileIdOf={dbFileIdOf}
+          onLoaded={(t, lang, n) => setDbCounts((prev) => ({ ...prev, [`${t.key}:${lang}`]: n }))}
+          onRevealPath={openDbPathInBrowser}
+          onStatus={setStatusText}
+        />
       )}
 
       {/* Structure: owned page (empty browser / table / failed open) or overlay. */}
@@ -7561,7 +7619,7 @@ export default function App({ launch = null }) {
       {/* Left floating bar: DAT path + Data Struct toggle */}
       <div id="statusFile" className="panel mono">
         {!player.current && modelPath && selectedDat ? (
-            <Tooltip content="Show in Explorer">
+            <Tooltip content="Show in Explorer · copies the path">
               <button
                 id="statusPath"
                 className="status-path-link"
