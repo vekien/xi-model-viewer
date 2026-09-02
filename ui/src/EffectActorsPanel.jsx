@@ -87,7 +87,7 @@ const PC_SLOTS = [
   { key: 'feet', label: 'Feet', section: 'Armor' },
 ];
 
-function EffectPcStrip({ pc }) {
+export function EffectPcStrip({ pc, gearsetsFirst = false }) {
   const {
     races, race, setRace, slots, sel, setSel, applyGearSet,
   } = pc ?? {};
@@ -160,8 +160,16 @@ function EffectPcStrip({ pc }) {
     );
   };
 
+  const gearRow = (label) => (
+    <div className="pc-ctrl">
+      <span className="pc-ctrl-label">{label}</span>
+      <Combo value={gearId} items={gearItems} onChange={onGear} placeholder="— none —" />
+    </div>
+  );
+
   return (
     <div className="fx-actor-pc">
+      {gearsetsFirst && gearRow('Gearsets')}
       <div className="pc-ctrl">
         <span className="pc-ctrl-label">Race</span>
         <Combo value={race} items={raceItems} onChange={setRace} />
@@ -169,10 +177,7 @@ function EffectPcStrip({ pc }) {
       {slotRow(PC_SLOTS[0]) /* Face */}
       {section('Weapon')}
       {section('Armor')}
-      <div className="pc-ctrl">
-        <span className="pc-ctrl-label">Gearset</span>
-        <Combo value={gearId} items={gearItems} onChange={onGear} placeholder="— none —" />
-      </div>
+      {!gearsetsFirst && gearRow('Gearset')}
     </div>
   );
 }

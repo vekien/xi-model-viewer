@@ -71,12 +71,33 @@ notice until the next release.
 - **Scene** — background images, a flat floor with a colour picker, floor repeat
   and a radial edge fade, plus a trackball gizmo for aiming the sun that casts
   the model's shadow.
+- **Zone actors** — place NPCs, composed characters and light sources on any
+  zone's terrain (click to place with a ground line-trace), then select them in
+  the viewport and move / rotate / scale with a gizmo (keys 1 / 2 / 3, Esc to
+  drop the selection, F to frame). Each actor plays its own motion, schedule or
+  borrowed pack, casts and receives the sun shadows, and duplicates with
+  Ctrl+C / Ctrl+V. Point, spot and ambient lights take colour or temperature,
+  intensity and radius and light the terrain, props and actors around them.
+  Whole arrangements save and load as named actor sets.
+- **Database** — the client's record DATs as searchable, sortable tables: items
+  (with decoded stats, jobs, slots, icons), quests, missions, key items,
+  titles, spells, abilities and the other d_msg string tables, in English or
+  Japanese. Advanced filters (rule builder or an SQL-ish query string such as
+  `str > 20 and int > 20`), CSV / JSON export, and a one-click `xi mv database`
+  bake so the tables load instantly instead of parsing 20 MB DATs.
+- **Camera** — WASD fly camera with roll (Alt+Q / Alt+E), fly speed in steps
+  of 5, a render-distance slider, and a keyframe Camera Sequencer with a spline
+  path, linear-rotation option and time-of-day / weather tracks.
 - **Throughout** — type-to-filter dropdowns, search on every asset list,
   arrow-key list navigation, pinned favourite zones and files, reveal-any-DAT in
   the system file manager, wireframe / unlit / collision / navmesh / skybox
   overlays, and glTF/FBX model export (via the xi-tools CLI).
 
 ## Screenshots
+
+Place NPCs, characters and lights in a zone and light the scene at dusk:
+
+![Orcish Warchief and a Hume in West Ronfaure at dusk, lit by a placed lamp](ss/17.png)
 
 Zones render with weather and time-of-day; the object browser lists every placement:
 

@@ -240,3 +240,72 @@ export function axisDragDelta(renderer, gizmo, axis, prevX, prevY, clientX, clie
     dz: dir[2] * world,
   };
 }
+
+// --- Actor gizmo (move | rotate | scale) -------------------------------------
+
+/**
+ * Hit-test the actor gizmo by mode. Returns 'x'|'y'|'z' (move), 'r' (rotate
+ * ring), 'u' (uniform scale handle) or null.
+ */
+export function pickActorGizmoAxis(renderer, gizmo, clientX, clientY) {
+  if (!renderer || !gizmo?.pos) return null;
+  if (gizmo.mode === 'move') return pickGizmoAxis(renderer, gizmo, clientX, clientY);
+  const rect = renderer.canvas.getBoundingClientRect();
+  if (!rect.width || !rect.height) return null;
+  const mx = clientX - rect.left;
+  const my = clientY - rect.top;
+  const size = gizmoSize(renderer, gizmo);
+  const o = gizmo.pos;
+  if (gizmo.mode === 'scale') {
+    const a = worldToScreen(renderer, o[0], o[1], o[2]);
+    const b = worldToScreen(renderer, o[0], o[1] + size, o[2]);
+    if (!a || !b) return null;
+    return distPointSeg2d(mx, my, a.x, a.y, b.x, b.y) < 18 ? 'u' : null;
+  }
+  // rotate: nearest of the three projected ring polylines (world X / Y / Z).
+  const SEGS = 40;
+  let bestId = null;
+  let best = 14;
+  for (const [id, ring] of [['rx', ringPointX], ['ry', ringPointY], ['rz', ringPointZ]]) {
+    let prev = null;
+    for (let i = 0; i <= SEGS; i++) {
+      const t = (i / SEGS) * Math.PI * 2;
+      const w = ring(o, size, t);
+      const p = worldToScreen(renderer, w[0], w[1], w[2]);
+      if (p && prev) {
+        const d = distPointSeg2d(mx, my, prev.x, prev.y, p.x, p.y);
+        if (d < best) { best = d; bestId = id; }
+      }
+      prev = p;
+    }
+  }
+  return bestId;
+}
+
+const ringPointX = (o, r, t) => [o[0], o[1] + Math.cos(t) * r, o[2] + Math.sin(t) * r];
+const ringPointY = (o, r, t) => [o[0] + Math.cos(t) * r, o[1], o[2] + Math.sin(t) * r];
+const ringPointZ = (o, r, t) => [o[0] + Math.cos(t) * r, o[1] + Math.sin(t) * r, o[2]];
+
+/**
+ * Rotate-ring drag: change in the mouse's angle around the gizmo's projected
+ * centre, in radians (screen-space, so it follows the cursor around the ring).
+ */
+export function ringDragAngle(renderer, gizmo, axis, prevX, prevY, clientX, clientY) {
+  if (!renderer || !gizmo?.pos) return 0;
+  const rect = renderer.canvas.getBoundingClientRect();
+  const o = gizmo.pos;
+  const c = worldToScreen(renderer, o[0], o[1], o[2]);
+  if (!c) return 0;
+  const a0 = Math.atan2(prevY - rect.top - c.y, prevX - rect.left - c.x);
+  const a1 = Math.atan2(clientY - rect.top - c.y, clientX - rect.left - c.x);
+  let d = a1 - a0;
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d < -Math.PI) d += Math.PI * 2;
+  // Screen-clockwise is a negative rotation about an axis pointing at the
+  // camera; flip when the ring's axis points away so the cursor is followed.
+  const eye = renderer.camera?.eye;
+  const n = axis === 'rx' ? [1, 0, 0] : axis === 'rz' ? [0, 0, 1] : [0, 1, 0];
+  const toEye = eye ? [eye[0] - o[0], eye[1] - o[1], eye[2] - o[2]] : n;
+  const facing = n[0] * toEye[0] + n[1] * toEye[1] + n[2] * toEye[2];
+  return facing >= 0 ? -d : d;
+}

@@ -242,3 +242,99 @@ export function pickZoneAt(renderer, model, clientX, clientY) {
   if (!ray) return null;
   return pickZonePlacement(list, ray.origin, ray.dir, model.zoneMeshes ?? null);
 }
+
+// --- Ground hit for actor placement ------------------------------------------
+
+/**
+ * Nearest hit along the ray against the zone's collision mesh (display
+ * space, flat triangle list) — the line trace that puts an actor on the
+ * floor. Falls back to every placed mesh (no prop-size filtering) when the
+ * zone carries no collision data.
+ * @returns {{ t: number, point: number[] } | null}
+ */
+export function raycastZoneGround(model, origin, dir) {
+  if (!model || !origin || !dir) return null;
+  let bestT = Infinity;
+  const col = model.collision?.positions;
+  if (col?.length >= 9) {
+    const n = (col.length / 9) | 0;
+    for (let i = 0; i < n; i++) {
+      const o = i * 9;
+      const t = rayTriangle(
+        origin, dir,
+        [col[o], col[o + 1], col[o + 2]],
+        [col[o + 3], col[o + 4], col[o + 5]],
+        [col[o + 6], col[o + 7], col[o + 8]],
+      );
+      if (t != null && t < bestT) bestT = t;
+    }
+  }
+  if (bestT === Infinity && model.zonePlacements?.length && model.zoneMeshes) {
+    for (const p of model.zonePlacements) {
+      if (p.kind === 'sky' || p.kind === 'water') continue;
+      if (p.userHidden || p.dragHidden || p.pvsHidden) continue;
+      const b = p.bounds;
+      if (b?.min && b?.max && rayAabb(origin, dir, b.min, b.max) == null) continue;
+      const t = rayPlacementMeshAll(origin, dir, p, model.zoneMeshes);
+      if (t != null && t < bestT) bestT = t;
+    }
+  }
+  if (bestT === Infinity) return null;
+  return {
+    t: bestT,
+    point: [origin[0] + dir[0] * bestT, origin[1] + dir[1] * bestT, origin[2] + dir[2] * bestT],
+  };
+}
+
+/** rayPlacementMesh without the triangle cap — terrain tiles are big. */
+function rayPlacementMeshAll(origin, dir, placement, meshes) {
+  const prims = meshes?.get?.(placement.mesh || placement.meshId);
+  if (!prims?.length) return null;
+  const matrix = trsMatrix(placement.rawPos || placement.pos || [0, 0, 0], placement.rot, placement.scale);
+  let bestT = Infinity;
+  for (const prim of prims) {
+    const pos = prim.positions;
+    if (!pos?.length) continue;
+    const n = (pos.length / 9) | 0;
+    for (let t = 0; t < n; t++) {
+      const o = t * 9;
+      const hit = rayTriangle(
+        origin, dir,
+        mulPointDisplay(matrix, pos[o], pos[o + 1], pos[o + 2]),
+        mulPointDisplay(matrix, pos[o + 3], pos[o + 4], pos[o + 5]),
+        mulPointDisplay(matrix, pos[o + 6], pos[o + 7], pos[o + 8]),
+      );
+      if (hit != null && hit < bestT) bestT = hit;
+    }
+  }
+  return bestT < Infinity ? bestT : null;
+}
+
+/** Ground point under a client pixel, or null when the click misses the zone. */
+export function pickZoneGroundAt(renderer, model, clientX, clientY) {
+  if (!renderer || model?.kind !== 'zone') return null;
+  const ndc = clientToNdc(renderer, clientX, clientY);
+  if (!ndc) return null;
+  const ray = cameraScreenRay(renderer.camera, ndc.ndcX, ndc.ndcY, ndc.aspect);
+  if (!ray) return null;
+  return raycastZoneGround(model, ray.origin, ray.dir);
+}
+
+/** Nearest visible actor under a client pixel (renderer.actors), or null. */
+export function pickActorAt(renderer, clientX, clientY) {
+  const actors = renderer?.actors;
+  if (!actors?.length) return null;
+  const ndc = clientToNdc(renderer, clientX, clientY);
+  if (!ndc) return null;
+  const ray = cameraScreenRay(renderer.camera, ndc.ndcX, ndc.ndcY, ndc.aspect);
+  if (!ray) return null;
+  let best = null;
+  let bestT = Infinity;
+  for (const a of actors) {
+    if (!a.visible) continue;
+    const b = renderer.actorBoundsDisplay(a);
+    const t = rayAabb(ray.origin, ray.dir, b.min, b.max);
+    if (t != null && t < bestT) { bestT = t; best = a; }
+  }
+  return best ? { actor: best, t: bestT } : null;
+}

@@ -163,6 +163,28 @@ export const EASINGS = {
   smooth: (t) => t,
 };
 
+/** Centripetal (alpha 0.5) knot times for four control points. */
+function knots(p0, p1, p2, p3) {
+  const knot = (a, b) => Math.sqrt(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])) || 1e-4;
+  const t0 = 0;
+  const t1 = t0 + knot(p0, p1);
+  const t2 = t1 + knot(p1, p2);
+  const t3 = t2 + knot(p2, p3);
+  return [t0, t1, t2, t3];
+}
+
+/** Barry–Goldman Catmull-Rom on a scalar channel with the given knots. */
+function catmullKnots(v0, v1, v2, v3, [t0, t1, t2, t3], u) {
+  const t = t1 + u * (t2 - t1);
+  const L = (a, b, ta, tb) => (tb - ta < 1e-9 ? a : a + (b - a) * ((t - ta) / (tb - ta)));
+  const A1 = L(v0, v1, t0, t1);
+  const A2 = L(v1, v2, t1, t2);
+  const A3 = L(v2, v3, t2, t3);
+  const B1 = L(A1, A2, t0, t2);
+  const B2 = L(A2, A3, t1, t3);
+  return L(B1, B2, t1, t2);
+}
+
 export class CameraSequence {
   /**
    * `keys` — [{ frame, eye, forward }] in any order.
@@ -171,8 +193,12 @@ export class CameraSequence {
    *   segments). Keyframes are ALWAYS hit at their exact frame times; there is
    *   no whole-timeline ease that warps the clock.
    */
-  constructor(keys, { totalFrames = 300, curve = 'spline', ease } = {}) {
+  constructor(keys, { totalFrames = 300, curve = 'spline', ease, rotation = 'spline' } = {}) {
     this.totalFrames = Math.max(1, Math.round(totalFrames));
+    // How the facing moves between keys: 'spline' rides the same centripetal
+    // curve as the eye, 'linear' turns at a constant rate per segment while
+    // the eye still follows the curve.
+    this.rotation = rotation === 'linear' ? 'linear' : 'spline';
     // Migrate old `ease` flag: anything that wasn't explicitly linear → spline.
     if (curve !== 'linear' && curve !== 'spline') {
       curve = (ease === 'linear' || ease === false) ? 'linear' : 'spline';
@@ -250,10 +276,23 @@ export class CameraSequence {
 
     const p0 = k[Math.max(0, i - 1)];
     const p3 = k[Math.min(k.length - 1, i + 2)];
-    const yaw = catmull1(p0.yaw, a.yaw, b.yaw, p3.yaw, u);
+    let yaw;
+    let pitch;
+    if (this.rotation === 'linear') {
+      yaw = a.yaw + (b.yaw - a.yaw) * u;
+      pitch = a.pitch + (b.pitch - a.pitch) * u;
+    } else {
+      // Angles on the same centripetal knots as the eye path. The uniform
+      // Catmull-Rom this replaced parameterised by key index, so a short
+      // segment next to a long one swung the view through most of its turn
+      // in the first few frames — the "snap" mid-curve.
+      const kn = knots(p0.eye, a.eye, b.eye, p3.eye);
+      yaw = catmullKnots(p0.yaw, a.yaw, b.yaw, p3.yaw, kn, u);
+      pitch = catmullKnots(p0.pitch, a.pitch, b.pitch, p3.pitch, kn, u);
+    }
     // The spline can overshoot slightly on the angle channels; the fly camera
     // clamps pitch to ±1.55 anyway, so clamp here and stay in sync with it.
-    const pitch = clamp(catmull1(p0.pitch, a.pitch, b.pitch, p3.pitch, u), -1.55, 1.55);
+    pitch = clamp(pitch, -1.55, 1.55);
     const cp = Math.cos(pitch);
     return {
       eye: catmull3(p0.eye, a.eye, b.eye, p3.eye, u),

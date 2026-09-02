@@ -51,6 +51,155 @@ const ENTITY_ROT_M = new Float32Array([
 /** The matrix above applied to a point — for anything comparing against raw DAT. */
 const toEntityPt = (p) => [p[0], -p[1], -p[2]];
 
+const IDENTITY_M = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+
+/**
+ * Zone actor placement: display-space translation and a yaw about +Y, then
+ * ENTITY_ROT_M so the raw DAT mesh lands in display space like the main
+ * entity does. Column-major: M = T(pos) · Ry(yaw) · ENTITY_ROT.
+ */
+function actorModelMatrix(pos, rot, out = new Float32Array(16), scale = 1) {
+  const k = scale > 0 ? scale : 1;
+  const R = rot || MAT3_IDENTITY;
+  // M = T · R · S · ENTITY_ROT; ENTITY_ROT = diag(1,-1,-1) negates columns 1 and 2.
+  out[0] = R[0] * k; out[1] = R[1] * k; out[2] = R[2] * k; out[3] = 0;
+  out[4] = -R[3] * k; out[5] = -R[4] * k; out[6] = -R[5] * k; out[7] = 0;
+  out[8] = -R[6] * k; out[9] = -R[7] * k; out[10] = -R[8] * k; out[11] = 0;
+  out[12] = pos[0]; out[13] = pos[1]; out[14] = pos[2]; out[15] = 1;
+  return out;
+}
+
+const MAT3_IDENTITY = new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+
+/** Column-major 3x3 rotation about a world axis ('x' | 'y' | 'z'). */
+function mat3AxisRotation(axis, angle) {
+  const c = Math.cos(angle);
+  const sn = Math.sin(angle);
+  if (axis === 'x') return new Float32Array([1, 0, 0, 0, c, sn, 0, -sn, c]);
+  if (axis === 'z') return new Float32Array([c, sn, 0, -sn, c, 0, 0, 0, 1]);
+  return new Float32Array([c, 0, -sn, 0, 1, 0, sn, 0, c]);
+}
+
+/** out = a · b for column-major 3x3 matrices. */
+function mat3Mul(a, b, out = new Float32Array(9)) {
+  for (let col = 0; col < 3; col++) {
+    for (let row = 0; row < 3; row++) {
+      out[col * 3 + row] = a[row] * b[col * 3] + a[3 + row] * b[col * 3 + 1] + a[6 + row] * b[col * 3 + 2];
+    }
+  }
+  return out;
+}
+
+/** Flat annulus in the XZ plane (radius 1) — the rotate-gizmo ring. */
+function buildRingMesh(rgb, r0 = 0.9, r1 = 1.0, segs = 56) {
+  const verts = [];
+  const push = (p) => verts.push(p[0], p[1], p[2], rgb[0], rgb[1], rgb[2]);
+  for (let i = 0; i < segs; i++) {
+    const a0 = (i / segs) * Math.PI * 2;
+    const a1 = ((i + 1) / segs) * Math.PI * 2;
+    const c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+    const p0 = [c0 * r0, 0, s0 * r0], p1 = [c0 * r1, 0, s0 * r1];
+    const p2 = [c1 * r1, 0, s1 * r1], p3 = [c1 * r0, 0, s1 * r0];
+    push(p0); push(p1); push(p2);
+    push(p0); push(p2); push(p3);
+  }
+  return new Float32Array(verts);
+}
+
+/** Small sphere (overlay triangles) marking a light-source actor. */
+function lightMarkerFigure(center, rgb, R = 0.22) {
+  const positions = [];
+  const colors = [];
+  const SEG = 12, RINGS = 8;
+  const pt = (i, j) => {
+    const th = (i / RINGS) * Math.PI;
+    const ph = (j / SEG) * Math.PI * 2;
+    return [
+      center[0] + R * Math.sin(th) * Math.cos(ph),
+      center[1] + R * Math.cos(th),
+      center[2] + R * Math.sin(th) * Math.sin(ph),
+    ];
+  };
+  const push = (p) => { positions.push(...p); colors.push(rgb[0], rgb[1], rgb[2]); };
+  for (let i = 0; i < RINGS; i++) {
+    for (let j = 0; j < SEG; j++) {
+      const a = pt(i, j), b = pt(i + 1, j), c = pt(i + 1, j + 1), d = pt(i, j + 1);
+      push(a); push(b); push(c);
+      push(a); push(c); push(d);
+    }
+  }
+  return { positions, colors };
+}
+
+/** Thin square prism from `c` along unit `axis` (spot-light aim stub). */
+function spotStubFigure(c, axis, rgb, len = 0.9, w = 0.05) {
+  const positions = [];
+  const colors = [];
+  // Any two vectors perpendicular to the axis.
+  const ref = Math.abs(axis[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  let u = [axis[1] * ref[2] - axis[2] * ref[1], axis[2] * ref[0] - axis[0] * ref[2], axis[0] * ref[1] - axis[1] * ref[0]];
+  const ul = Math.hypot(u[0], u[1], u[2]) || 1;
+  u = [u[0] / ul * w, u[1] / ul * w, u[2] / ul * w];
+  const v = [axis[1] * u[2] - axis[2] * u[1], axis[2] * u[0] - axis[0] * u[2], axis[0] * u[1] - axis[1] * u[0]];
+  const vl = Math.hypot(v[0], v[1], v[2]) || 1;
+  const vv = [v[0] / vl * w, v[1] / vl * w, v[2] / vl * w];
+  const p = (t, su, sv) => [
+    c[0] + axis[0] * t + u[0] * su + vv[0] * sv,
+    c[1] + axis[1] * t + u[1] * su + vv[1] * sv,
+    c[2] + axis[2] * t + u[2] * su + vv[2] * sv,
+  ];
+  const corners = [
+    p(0, -1, -1), p(0, 1, -1), p(0, 1, 1), p(0, -1, 1),
+    p(len, -1, -1), p(len, 1, -1), p(len, 1, 1), p(len, -1, 1),
+  ];
+  const faces = [[0, 1, 2, 3], [5, 4, 7, 6], [4, 0, 3, 7], [1, 5, 6, 2], [3, 2, 6, 7], [4, 5, 1, 0]];
+  for (const [a, b, d, e] of faces) {
+    for (const i of [a, b, d, a, d, e]) { positions.push(...corners[i]); colors.push(...rgb); }
+  }
+  return { positions, colors };
+}
+
+/**
+ * Placeholder figure for an actor with no model yet: a body box and a head
+ * box standing on `pos` (display space, feet at y = 0), as overlay triangles.
+ */
+function placeholderFigure(pos, rot, color, scale = 1) {
+  const positions = [];
+  const colors = [];
+  const R = rot || MAT3_IDENTITY;
+  const box = (cx, cy, cz, hx, hy, hz, rgb) => {
+    const corner = (x, y, z) => {
+      // display-space local point (feet at the origin, Y up, -Z forward)
+      const lx = x * scale, ly = y * scale, lz = z * scale;
+      return [
+        pos[0] + R[0] * lx + R[3] * ly + R[6] * lz,
+        pos[1] + R[1] * lx + R[4] * ly + R[7] * lz,
+        pos[2] + R[2] * lx + R[5] * ly + R[8] * lz,
+      ];
+    };
+    const p = [
+      corner(cx - hx, cy - hy, cz - hz), corner(cx + hx, cy - hy, cz - hz),
+      corner(cx + hx, cy + hy, cz - hz), corner(cx - hx, cy + hy, cz - hz),
+      corner(cx - hx, cy - hy, cz + hz), corner(cx + hx, cy - hy, cz + hz),
+      corner(cx + hx, cy + hy, cz + hz), corner(cx - hx, cy + hy, cz + hz),
+    ];
+    const faces = [
+      [0, 1, 2, 3], [5, 4, 7, 6], [4, 0, 3, 7], [1, 5, 6, 2], [3, 2, 6, 7], [4, 5, 1, 0],
+    ];
+    for (const [a, b, d, e] of faces) {
+      for (const i of [a, b, d, a, d, e]) {
+        positions.push(...p[i]);
+        colors.push(...rgb);
+      }
+    }
+  };
+  // Body, head, and a small nose wedge so the facing direction is readable.
+  box(0, 0.75, 0, 0.28, 0.75, 0.16, color);
+  box(0, 1.72, 0, 0.2, 0.2, 0.2, color);
+  box(0, 1.72, -0.28, 0.06, 0.06, 0.1, [1, 1, 1]);
+  return { positions, colors };
+}
+
 // Full-screen background image (Scene > Background Image).
 // uCoverScale = fraction of the texture kept on each axis (cover = fill the
 // viewport, crop the overflow). See the draw site for how it is derived.
@@ -91,6 +240,7 @@ layout(location=6) in vec2 aUV;
 layout(location=7) in vec4 aColor;
 
 uniform mat4 uViewProj;
+uniform mat4 uModel;      // identity for the main model; placement for zone actors
 uniform vec4 uRot[${MAX_JOINTS}];
 uniform vec4 uTrans[${MAX_JOINTS}];
 uniform vec4 uScale[${MAX_JOINTS}];
@@ -114,11 +264,54 @@ void main() {
   vec3 world = qrot(uRot[j0], uScale[j0].xyz * aP0) + aWeights.x * uTrans[j0].xyz
              + qrot(uRot[j1], uScale[j1].xyz * aP1) + aWeights.y * uTrans[j1].xyz;
 
-  vNormal = aWeights.x * qrot(uRot[j0], aN0) + aWeights.y * qrot(uRot[j1], aN1);
+  vec3 nrm = aWeights.x * qrot(uRot[j0], aN0) + aWeights.y * qrot(uRot[j1], aN1);
+  vec4 placed = uModel * vec4(world, 1.0);
+  vNormal = mat3(uModel) * nrm;
   vUV = aUV;
   vColor = aColor;
-  vWorld = world;
-  gl_Position = uViewProj * vec4(world, 1.0);
+  vWorld = placed.xyz;
+  gl_Position = uViewProj * placed;
+}
+`;
+
+// Zone light-source actors (Actors › Light Source): up to MAX_PLIGHTS point
+// lights plus one summed ambient term, applied on top of the xim terrain
+// lighting for zone geometry and for actors standing in it.
+const MAX_PLIGHTS = 8;
+const PLIGHT_UNIFORMS = `
+uniform int uPointCount;
+uniform vec3 uPointPos[${MAX_PLIGHTS}];
+uniform vec3 uPointColor[${MAX_PLIGHTS}];   // colour × intensity
+uniform float uPointRadius[${MAX_PLIGHTS}];
+uniform vec3 uPointDir[${MAX_PLIGHTS}];     // spot axis (unit); unused for omni
+uniform float uPointCone[${MAX_PLIGHTS}];   // cos(half-angle) for spots, 0 = omni
+uniform vec3 uExtraAmbient;
+`;
+const PLIGHT_APPLY = `
+vec3 pointLighting(vec3 world, vec3 n, vec3 base) {
+  vec3 acc = base * uExtraAmbient;
+  for (int i = 0; i < ${MAX_PLIGHTS}; i++) {
+    if (i >= uPointCount) break;
+    vec3 d = uPointPos[i] - world;
+    float dist = length(d);
+    float r = max(uPointRadius[i], 0.01);
+    if (dist >= r) continue;
+    float att = 1.0 - dist / r;
+    att *= att;
+    float cone = uPointCone[i];
+    if (cone > 0.0) {
+      // Spot: fade over the outer ~8° of the cone.
+      float cd = dot(-d / max(dist, 1e-4), uPointDir[i]);
+      att *= smoothstep(cone, min(1.0, cone + 0.08), cd);
+      if (att <= 0.0) continue;
+    }
+    float ndl = clamp(dot(n, d / max(dist, 1e-4)), 0.0, 1.0);
+    // A little wrap so the ground right under a lamp is not black on the
+    // far side of a bump; keeps lamps reading as lamps at low poly counts.
+    ndl = mix(0.2, 1.0, ndl);
+    acc += base * ndl * uPointColor[i] * att;
+  }
+  return acc;
 }
 `;
 
@@ -265,9 +458,11 @@ uniform float uSunLit;     // 1 = swap the camera key light for the shadow sun
 uniform float uLightGain;  // viewer brightness (1 = 100%, up to ~2)
 ${FOG_UNIFORMS}
 ${SHADOW_UNIFORMS}
+${PLIGHT_UNIFORMS}
 
 out vec4 outColor;
 ${SHADOW_SAMPLE}
+${PLIGHT_APPLY}
 
 void main() {
   vec4 tex = texture(uTexture, vUV);
@@ -310,7 +505,8 @@ void main() {
     vec3 amb = vColor.rgb * uAmbient;
     vec3 df0 = vColor.rgb * clamp(ndl, 0.0, 1.0) * uSunColor;
     vec3 df1 = vColor.rgb * clamp(dot(n, uMoonDir), 0.0, 1.0) * uMoonColor;
-    litRgb = clamp(amb + df0 + df1, 0.0, 1.0) * sunShadow(vWorld, n, ndl) * gain;
+    litRgb = clamp(amb + df0 + df1, 0.0, 1.0) * sunShadow(vWorld, n, ndl);
+    litRgb = clamp(litRgb + pointLighting(vWorld, n, vColor.rgb), 0.0, 1.0) * gain;
   } else if (uSunLit > 0.5) {
     // Shadows on: one directional key from the sun's angle. The camera light
     // below can't be used here — its shading would disagree with where the
@@ -391,9 +587,11 @@ uniform vec3 uMoonColor;
 uniform float uLightGain;
 ${FOG_UNIFORMS}
 ${SHADOW_UNIFORMS}
+${PLIGHT_UNIFORMS}
 
 out vec4 outColor;
 ${SHADOW_SAMPLE}
+${PLIGHT_APPLY}
 
 void main() {
   vec4 tex = texture(uTexture, vUV);
@@ -405,7 +603,10 @@ void main() {
   vec3 amb = vColor.rgb * uAmbient;
   vec3 df0 = vColor.rgb * clamp(ndl, 0.0, 1.0) * uSunColor;
   vec3 df1 = vColor.rgb * clamp(dot(n, uMoonDir), 0.0, 1.0) * uMoonColor;
-  vec3 lit = clamp(amb + df0 + df1, 0.0, 1.0) * sunShadow(vWorld, n, ndl) * max(uLightGain, 0.0);
+  // Sun shadow only darkens the sun/moon/ambient share; lamps still light
+  // a shadowed patch, which is what makes them worth placing.
+  vec3 lit = clamp(amb + df0 + df1, 0.0, 1.0) * sunShadow(vWorld, n, ndl);
+  lit = clamp(lit + pointLighting(vWorld, n, vColor.rgb), 0.0, 1.0) * max(uLightGain, 0.0);
 
   float alpha = 4.0 * vColor.a * tex.a;
   if (alpha < uDiscard) discard;
@@ -573,6 +774,7 @@ layout(location=6) in vec2 aUV;
 layout(location=7) in vec4 aColor;
 
 uniform mat4 uLightViewProj;
+uniform mat4 uModel;      // identity for the main entity; placement for zone actors
 uniform vec4 uRot[${MAX_JOINTS}];
 uniform vec4 uTrans[${MAX_JOINTS}];
 uniform vec4 uScale[${MAX_JOINTS}];
@@ -591,7 +793,7 @@ void main() {
              + qrot(uRot[j1], uScale[j1].xyz * aP1) + aWeights.y * uTrans[j1].xyz;
   vUV = aUV;
   vAlpha = aColor.a;
-  gl_Position = uLightViewProj * vec4(world, 1.0);
+  gl_Position = uLightViewProj * (uModel * vec4(world, 1.0));
 }
 `;
 
@@ -668,6 +870,7 @@ export class Renderer {
     this.program = buildProgram(gl, VERTEX_SHADER, FRAGMENT_SHADER);
     this.uniforms = {
       viewProj: gl.getUniformLocation(this.program, 'uViewProj'),
+      model: gl.getUniformLocation(this.program, 'uModel'),
       rot: gl.getUniformLocation(this.program, 'uRot'),
       trans: gl.getUniformLocation(this.program, 'uTrans'),
       scale: gl.getUniformLocation(this.program, 'uScale'),
@@ -693,6 +896,13 @@ export class Renderer {
       lightViewProj1: gl.getUniformLocation(this.program, 'uLightViewProj1'),
       shadowParams: gl.getUniformLocation(this.program, 'uShadowParams'),
       shadowParams1: gl.getUniformLocation(this.program, 'uShadowParams1'),
+      pointCount: gl.getUniformLocation(this.program, 'uPointCount'),
+      pointPos: gl.getUniformLocation(this.program, 'uPointPos'),
+      pointColor: gl.getUniformLocation(this.program, 'uPointColor'),
+      pointRadius: gl.getUniformLocation(this.program, 'uPointRadius'),
+      pointDir: gl.getUniformLocation(this.program, 'uPointDir'),
+      pointCone: gl.getUniformLocation(this.program, 'uPointCone'),
+      extraAmbient: gl.getUniformLocation(this.program, 'uExtraAmbient'),
     };
     // Default midday outdoor terrain lighting (overwritten per-zone from 0x2F).
     this.terrainLighting = {
@@ -740,6 +950,13 @@ export class Renderer {
       lightViewProj1: gl.getUniformLocation(this.zoneProgram, 'uLightViewProj1'),
       shadowParams: gl.getUniformLocation(this.zoneProgram, 'uShadowParams'),
       shadowParams1: gl.getUniformLocation(this.zoneProgram, 'uShadowParams1'),
+      pointCount: gl.getUniformLocation(this.zoneProgram, 'uPointCount'),
+      pointPos: gl.getUniformLocation(this.zoneProgram, 'uPointPos'),
+      pointColor: gl.getUniformLocation(this.zoneProgram, 'uPointColor'),
+      pointRadius: gl.getUniformLocation(this.zoneProgram, 'uPointRadius'),
+      pointDir: gl.getUniformLocation(this.zoneProgram, 'uPointDir'),
+      pointCone: gl.getUniformLocation(this.zoneProgram, 'uPointCone'),
+      extraAmbient: gl.getUniformLocation(this.zoneProgram, 'uExtraAmbient'),
     };
     // Shadow depth pass (View > Toggle Shadows). Off by default — it is a
     // viewer embellishment, not something retail FFXI ever drew.
@@ -753,6 +970,7 @@ export class Renderer {
     this.shadowEntityProgram = buildProgram(gl, SHADOW_ENTITY_VS, SHADOW_FRAGMENT_SHADER);
     this.shadowEntityUniforms = {
       lightViewProj: gl.getUniformLocation(this.shadowEntityProgram, 'uLightViewProj'),
+      model: gl.getUniformLocation(this.shadowEntityProgram, 'uModel'),
       rot: gl.getUniformLocation(this.shadowEntityProgram, 'uRot'),
       trans: gl.getUniformLocation(this.shadowEntityProgram, 'uTrans'),
       scale: gl.getUniformLocation(this.shadowEntityProgram, 'uScale'),
@@ -905,6 +1123,12 @@ export class Renderer {
     this.camera = new OrbitCamera();
 
     this.model = null;
+    // Zone actors (Objects › Actors): NPCs / characters placed on the terrain,
+    // each with its own batches, textures, pose and clip. See addActor().
+    this.actors = [];
+    // { actorId, mode: 'move'|'rotate'|'scale', hoverAxis, activeAxis } — the
+    // transform grabber on the selected actor (Actors panel live selection).
+    this.actorGizmo = null;
     this.pose = null;
     this.batches = [];
     this.textures = new Map();
@@ -1344,6 +1568,7 @@ export class Renderer {
     this.poseDirty = true;
     this.creationDriver = null;   // CPU animator for high-poly creation models
     this.creationCamera = null;   // authored camera track (see creation.js)
+    this.clearActors();
 
     if (!model || !model.isRenderable) return;
 
@@ -2325,7 +2550,7 @@ export class Renderer {
     };
   }
 
-  buildBatch(group, piece) {
+  buildBatch(group, piece, texMap = null) {
     const gl = this.gl;
     const pool = piece.mirrored ? group.flippedVertices : group.vertices;
     if (!pool || piece.corners.length < 3) return null;
@@ -2400,7 +2625,7 @@ export class Renderer {
       wireCount: wireIdx ? wireIdx.length : 0,
       mode: isStrip ? gl.TRIANGLE_STRIP : gl.TRIANGLES,
       count: piece.corners.length,
-      texture: piece.textureName ? this.textures.get(piece.textureName) ?? null : null,
+      texture: piece.textureName ? (texMap ?? this.textures).get(piece.textureName) ?? null : null,
       alphaMode,
       layer: piece.layer || 'world', // 'world' | 'env' (sky/water)
       sourcePath: group.sourcePath || null,
@@ -2579,6 +2804,7 @@ export class Renderer {
     }
 
     this._updateEnvironment(dtSeconds);
+    this._advanceActors(dtSeconds);
 
     const aspect = this.canvas.width / this.canvas.height;
     // The Explorer panel overlays the left of the canvas, so the scene is nudged
@@ -2698,11 +2924,15 @@ export class Renderer {
       if (this.showSkybox) this._drawSky(viewProj, eye);
       this._drawZone(viewProj, eye, fogFar);
       this._drawZoneSpinners(viewProj, eye, fogFar);
+      this._drawActors(viewProj, eye, fogFar);
       this._drawZoneMoveProxy(viewProj, eye, fogFar);
       this._drawParticles();
       this._drawOverlay(viewProj, this.showCollision ? this.collisionOverlay : null, this.collisionOpacity);
       this._drawOverlay(viewProj, this.showNavmesh ? this.navmeshOverlay : null, this.navmeshOpacity);
-      this._drawZonePickOverlay(viewProj);
+      if (!this.camera?.sequenceLock) {
+        this._drawZonePickOverlay(viewProj);
+        this._drawActorGizmo(viewProj);
+      }
       if (this.showSoundMarkers) this._drawSoundMarkers(viewProj);
       if (this.showGrid) this._drawGrid(viewProj);
       if (this.showAxes) this._drawAxes(viewProj);
@@ -2764,6 +2994,7 @@ export class Renderer {
     gl.uniform4fv(this.uniforms.trans, this.transArray);
     gl.uniform4fv(this.uniforms.scale, this.scaleArray);
     gl.uniformMatrix4fv(this.uniforms.viewProj, false, datVP);
+    gl.uniformMatrix4fv(this.uniforms.model, false, IDENTITY_M);
     gl.uniform3fv(this.uniforms.lightDir, this.camera.forward);
     gl.uniform1i(this.uniforms.texture, 0);
     gl.uniform3fv(this.uniforms.cameraPos, datEye);
@@ -2794,6 +3025,8 @@ export class Renderer {
     }
     gl.uniform1f(this.uniforms.sunLit, !isZone && this.shadowActive ? 1 : 0);
     gl.uniform1f(this.uniforms.lightGain, this.lightGain ?? 1);
+    gl.uniform1i(this.uniforms.pointCount, 0);
+    gl.uniform3f(this.uniforms.extraAmbient, 0, 0, 0);
     this._bindShadowUniforms(this.uniforms);
 
     const usePolyMode = this.showWireframe && this.polygonMode;
@@ -2873,6 +3106,528 @@ export class Renderer {
   }
 
   // --- Cast shadows --------------------------------------------------------
+
+  // --- Zone actors ----------------------------------------------------------
+
+  /**
+   * Add an actor standing at `pos` (display space; y = ground). It shows as
+   * a placeholder figure until setActorModel() gives it a mesh.
+   */
+  addActor(id, pos, rot = null) {
+    this.removeActor(id);
+    const actor = {
+      id,
+      pos: [pos[0], pos[1], pos[2]],
+      rot: rot ? Float32Array.from(rot) : new Float32Array(MAT3_IDENTITY),
+      scale: 1,
+      light: null,
+      model: null,
+      pose: null,
+      batches: [],
+      textures: new Map(),
+      rotArray: new Float32Array(MAX_JOINTS * 4),
+      transArray: new Float32Array(MAX_JOINTS * 4),
+      scaleArray: new Float32Array(MAX_JOINTS * 4),
+      poseDirty: true,
+      currentAnimation: null,
+      animFrame: 0,
+      playing: true,
+      loop: true,
+      speed: 1,
+      visible: true,
+      placeholder: null,
+      color: [0.42, 0.72, 1.0],
+      modelMatrix: new Float32Array(16),
+    };
+    this._syncActorTransform(actor);
+    this.actors.push(actor);
+    return actor;
+  }
+
+  getActor(id) {
+    return this.actors.find((a) => a.id === id) || null;
+  }
+
+  removeActor(id) {
+    const i = this.actors.findIndex((a) => a.id === id);
+    if (i < 0) return;
+    this._freeActorGeometry(this.actors[i]);
+    this.actors.splice(i, 1);
+  }
+
+  clearActors() {
+    for (const a of this.actors) this._freeActorGeometry(a);
+    this.actors = [];
+    this.actorGizmo = null;
+  }
+
+  _freeActorGeometry(actor) {
+    const gl = this.gl;
+    for (const b of actor.batches) {
+      gl.deleteBuffer(b.vbo);
+      if (b.wireEbo) gl.deleteBuffer(b.wireEbo);
+      if (b.vao) gl.deleteVertexArray(b.vao);
+    }
+    actor.batches = [];
+    for (const t of actor.textures.values()) gl.deleteTexture(t);
+    actor.textures.clear();
+    this._freeOverlay(actor.placeholder);
+    actor.placeholder = null;
+  }
+
+  _syncActorTransform(actor) {
+    actorModelMatrix(actor.pos, actor.rot, actor.modelMatrix, actor.scale ?? 1);
+    if (actor.light) {
+      // Light marker: a small sphere in the light's colour, hovering over the spot.
+      this._freeOverlay(actor.placeholder);
+      const fig = lightMarkerFigure([actor.pos[0], actor.pos[1] + 0.6, actor.pos[2]], actor.light.color || [1, 1, 1]);
+      if (actor.light.type === 'spot') {
+        // A stub along the spot axis (actor -Y) so the aim is readable.
+        const R = actor.rot || MAT3_IDENTITY;
+        const c = [actor.pos[0], actor.pos[1] + 0.6, actor.pos[2]];
+        const ax = [-R[3], -R[4], -R[5]];
+        const stub = spotStubFigure(c, ax, actor.light.color || [1, 1, 1]);
+        fig.positions.push(...stub.positions);
+        fig.colors.push(...stub.colors);
+      }
+      actor.placeholder = this._buildOverlay(fig.positions, fig.colors);
+      return;
+    }
+    if (!actor.model) {
+      this._freeOverlay(actor.placeholder);
+      const fig = placeholderFigure(actor.pos, actor.rot, actor.color, actor.scale ?? 1);
+      actor.placeholder = this._buildOverlay(fig.positions, fig.colors);
+    }
+  }
+
+  /** pos: [x,y,z] | null, rot: column-major 3x3 (9 numbers) | null, scale: number | null. */
+  setActorTransform(id, pos, rot, scale) {
+    const actor = this.getActor(id);
+    if (!actor) return;
+    if (pos) actor.pos = [pos[0], pos[1], pos[2]];
+    if (rot && rot.length === 9) actor.rot = Float32Array.from(rot);
+    if (scale != null && scale > 0) actor.scale = scale;
+    this._syncActorTransform(actor);
+  }
+
+  /** Rotate an actor about a WORLD axis (the rotate-gizmo rings). */
+  rotateActorWorld(id, axis, angle) {
+    const actor = this.getActor(id);
+    if (!actor || !angle) return;
+    actor.rot = mat3Mul(mat3AxisRotation(axis, angle), actor.rot);
+    this._syncActorTransform(actor);
+  }
+
+  /**
+   * Display-space box around an actor for viewport picking: the posed joint
+   * origins (DAT space) through its placement matrix, padded for limbs; a
+   * body-sized box for a placeholder.
+   */
+  actorBoundsDisplay(actor) {
+    const m = actor.modelMatrix;
+    const min = [Infinity, Infinity, Infinity];
+    const max = [-Infinity, -Infinity, -Infinity];
+    const add = (x, y, z) => {
+      const wx = m[0] * x + m[4] * y + m[8] * z + m[12];
+      const wy = m[1] * x + m[5] * y + m[9] * z + m[13];
+      const wz = m[2] * x + m[6] * y + m[10] * z + m[14];
+      if (wx < min[0]) min[0] = wx; if (wx > max[0]) max[0] = wx;
+      if (wy < min[1]) min[1] = wy; if (wy > max[1]) max[1] = wy;
+      if (wz < min[2]) min[2] = wz; if (wz > max[2]) max[2] = wz;
+    };
+    const pose = actor.pose;
+    const n = pose?.skeleton?.joints?.length ?? 0;
+    if (actor.model && pose && n) {
+      if (actor.poseDirty) {
+        pose.pack(actor.rotArray, actor.transArray, actor.scaleArray);
+        actor.poseDirty = false;
+      }
+      for (let i = 0; i < n; i++) add(actor.transArray[i * 4], actor.transArray[i * 4 + 1], actor.transArray[i * 4 + 2]);
+      const pad = 0.35 * (actor.scale ?? 1);
+      for (let k = 0; k < 3; k++) { min[k] -= pad; max[k] += pad; }
+      // Joints alone under-report height for a standing figure (no head top).
+      max[1] = Math.max(max[1], actor.pos[1] + 0.9 * (actor.scale ?? 1));
+      return { min, max };
+    }
+    if (actor.light) {
+      return {
+        min: [actor.pos[0] - 0.5, actor.pos[1], actor.pos[2] - 0.5],
+        max: [actor.pos[0] + 0.5, actor.pos[1] + 1.2, actor.pos[2] + 0.5],
+      };
+    }
+    const hw = 0.45 * (actor.scale ?? 1);
+    const h = 2.0 * (actor.scale ?? 1);
+    return {
+      min: [actor.pos[0] - hw, actor.pos[1], actor.pos[2] - hw],
+      max: [actor.pos[0] + hw, actor.pos[1] + h, actor.pos[2] + hw],
+    };
+  }
+
+  /**
+   * Give an actor a light source ({ type, color: [r,g,b], intensity, radius })
+   * or null. A light actor draws a marker instead of a mesh / placeholder.
+   */
+  setActorLight(id, light) {
+    const actor = this.getActor(id);
+    if (!actor) return;
+    actor.light = light ? { ...light } : null;
+    this._syncActorTransform(actor);
+  }
+
+  /** Upload this frame's light-source actors to a program's uniform table. */
+  _uploadPointLights(u) {
+    const gl = this.gl;
+    if (!u || u.pointCount == null) return;
+    const pos = this._plightPos || (this._plightPos = new Float32Array(MAX_PLIGHTS * 3));
+    const col = this._plightCol || (this._plightCol = new Float32Array(MAX_PLIGHTS * 3));
+    const rad = this._plightRad || (this._plightRad = new Float32Array(MAX_PLIGHTS));
+    const dir = this._plightDir || (this._plightDir = new Float32Array(MAX_PLIGHTS * 3));
+    const cone = this._plightCone || (this._plightCone = new Float32Array(MAX_PLIGHTS));
+    let n = 0;
+    const amb = [0, 0, 0];
+    for (const a of this.actors) {
+      const L = a.light;
+      if (!L || !a.visible) continue;
+      const k = Math.max(0, L.intensity ?? 1);
+      const c = L.color || [1, 1, 1];
+      if (L.type === 'ambient') {
+        amb[0] += c[0] * k * 0.5; amb[1] += c[1] * k * 0.5; amb[2] += c[2] * k * 0.5;
+        continue;
+      }
+      if (n >= MAX_PLIGHTS) continue;
+      // Lamp sits a little above its marker so it lights the ground it stands on.
+      pos[n * 3] = a.pos[0]; pos[n * 3 + 1] = a.pos[1] + 0.6; pos[n * 3 + 2] = a.pos[2];
+      col[n * 3] = c[0] * k; col[n * 3 + 1] = c[1] * k; col[n * 3 + 2] = c[2] * k;
+      rad[n] = Math.max(0.5, L.radius ?? 20);
+      if (L.type === 'spot') {
+        // Spot axis: the actor's local -Y (straight down until rotated).
+        const R = a.rot || MAT3_IDENTITY;
+        const dx = -R[3], dy = -R[4], dz = -R[5];
+        const len = Math.hypot(dx, dy, dz) || 1;
+        dir[n * 3] = dx / len; dir[n * 3 + 1] = dy / len; dir[n * 3 + 2] = dz / len;
+        const half = Math.min(85, Math.max(2, L.cone ?? 35));
+        cone[n] = Math.cos((half * Math.PI) / 180);
+      } else {
+        dir[n * 3] = 0; dir[n * 3 + 1] = -1; dir[n * 3 + 2] = 0;
+        cone[n] = 0;
+      }
+      n++;
+    }
+    gl.uniform1i(u.pointCount, n);
+    if (n) {
+      gl.uniform3fv(u.pointPos, pos);
+      gl.uniform3fv(u.pointColor, col);
+      gl.uniform1fv(u.pointRadius, rad);
+      gl.uniform3fv(u.pointDir, dir);
+      gl.uniform1fv(u.pointCone, cone);
+    }
+    gl.uniform3f(u.extraAmbient, amb[0], amb[1], amb[2]);
+  }
+
+  /** Radius rings on the ground under point-light actors. */
+  _drawLightMarkers(viewProj) {
+    const lights = this.actors.filter((a) => a.light && a.visible && a.light.type !== 'ambient');
+    if (!lights.length) return;
+    this._ensureGizmoMesh();
+    if (!this.gizmoParts.ring) {
+      // Rings are built lazily by setActorGizmo; borrow that path once.
+      const keep = this.actorGizmo;
+      const any = this.actors[0];
+      if (any) { this.setActorGizmo(any.id, 'move'); this.actorGizmo = keep; }
+    }
+    if (!this.gizmoParts.ring) return;
+    const gl = this.gl;
+    gl.useProgram(this.overlayProgram);
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthMask(false);
+    gl.disable(gl.CULL_FACE);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.uniform1f(this.overlayUniforms.opacity, 0.3);
+    gl.bindVertexArray(this.gizmoParts.ring.vao);
+    for (const a of lights) {
+      const r = Math.max(0.5, a.light.radius ?? 20);
+      const ring = new Float32Array([r, 0, 0, 0, 0, r, 0, 0, 0, 0, r, 0, a.pos[0], a.pos[1] + 0.05, a.pos[2], 1]);
+      gl.uniformMatrix4fv(this.overlayUniforms.viewProj, false, mat4Multiply(viewProj, ring));
+      gl.drawArrays(gl.TRIANGLES, 0, this.gizmoParts.ring.count);
+    }
+    gl.disable(gl.BLEND);
+    gl.depthMask(true);
+    gl.bindVertexArray(null);
+  }
+
+  /** Show the transform grabber on an actor (mode: move | rotate | scale), or clear it. */
+  setActorGizmo(actorId, mode = 'move') {
+    if (actorId == null || !this.getActor(actorId)) { this.actorGizmo = null; return; }
+    const prev = this.actorGizmo;
+    this.actorGizmo = {
+      actorId, mode,
+      hoverAxis: prev?.actorId === actorId ? prev.hoverAxis : null,
+      activeAxis: null,
+    };
+    this._ensureGizmoMesh();
+    if (!this.gizmoParts.ring) {
+      const gl = this.gl;
+      const upload = (data) => {
+        const vbo = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+        gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+        const vao = gl.createVertexArray();
+        gl.bindVertexArray(vao);
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+        gl.enableVertexAttribArray(0);
+        gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0);
+        gl.enableVertexAttribArray(1);
+        gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+        gl.bindVertexArray(null);
+        return { vao, vbo, count: data.length / 6 };
+      };
+      this.gizmoParts.ring = upload(buildRingMesh([0.95, 0.82, 0.25]));
+      this.gizmoParts.ringHot = upload(buildRingMesh([1.0, 0.95, 0.55], 0.88, 1.02));
+      this.gizmoParts.ringX = upload(buildRingMesh([0.90, 0.20, 0.22]));
+      this.gizmoParts.ringXHot = upload(buildRingMesh([1.0, 0.55, 0.45], 0.88, 1.02));
+      this.gizmoParts.ringY = upload(buildRingMesh([0.24, 0.80, 0.30]));
+      this.gizmoParts.ringYHot = upload(buildRingMesh([0.55, 1.0, 0.50], 0.88, 1.02));
+      this.gizmoParts.ringZ = upload(buildRingMesh([0.24, 0.44, 0.95]));
+      this.gizmoParts.ringZHot = upload(buildRingMesh([0.50, 0.70, 1.0], 0.88, 1.02));
+    }
+  }
+
+  /** Gizmo with its live position and world size, for hit-testing. */
+  getActorGizmo() {
+    const gz = this.actorGizmo;
+    if (!gz) return null;
+    const actor = this.getActor(gz.actorId);
+    if (!actor) { this.actorGizmo = null; return null; }
+    const base = { pos: [actor.pos[0], actor.pos[1], actor.pos[2]] };
+    return { ...gz, pos: base.pos, size: gizmoSize(this, base), actor };
+  }
+
+  setActorGizmoHover(axis) {
+    if (this.actorGizmo) this.actorGizmo.hoverAxis = axis || null;
+  }
+
+  setActorGizmoActive(axis) {
+    if (this.actorGizmo) this.actorGizmo.activeAxis = axis || null;
+  }
+
+  _drawActorGizmo(viewProj) {
+    const gz = this.getActorGizmo();
+    if (!gz || !this.gizmoParts) return;
+    const gl = this.gl;
+    const s = gz.size;
+    const hot = gz.activeAxis || gz.hoverAxis || null;
+    const drawPart = (part, scaleMul = 1, R = MAT3_IDENTITY) => {
+      if (!part) return;
+      const sc = s * scaleMul;
+      const model = new Float32Array([
+        R[0] * sc, R[1] * sc, R[2] * sc, 0,
+        R[3] * sc, R[4] * sc, R[5] * sc, 0,
+        R[6] * sc, R[7] * sc, R[8] * sc, 0,
+        gz.pos[0], gz.pos[1], gz.pos[2], 1,
+      ]);
+      gl.uniformMatrix4fv(this.overlayUniforms.viewProj, false, mat4Multiply(viewProj, model));
+      gl.bindVertexArray(part.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, part.count);
+    };
+    gl.useProgram(this.overlayProgram);
+    gl.uniform1f(this.overlayUniforms.opacity, 1);
+    gl.disable(gl.CULL_FACE);
+    gl.disable(gl.BLEND);
+    gl.disable(gl.DEPTH_TEST);
+    gl.depthMask(false);
+    drawPart(this.gizmoParts.center, 1);
+    if (gz.mode === 'rotate') {
+      // Ring mesh lies in XZ (normal +Y); tip it to face each world axis.
+      const RX = mat3AxisRotation('z', Math.PI / 2);   // normal → X
+      const RZ = mat3AxisRotation('x', Math.PI / 2);   // normal → Z
+      const rings = [['rx', 'ringX', RX], ['ry', 'ringY', MAT3_IDENTITY], ['rz', 'ringZ', RZ]];
+      for (const [id, part, R] of rings) {
+        if (hot === id) continue;
+        drawPart(this.gizmoParts[part], 1, R);
+      }
+      const hotRing = rings.find(([id]) => id === hot);
+      if (hotRing) drawPart(this.gizmoParts[`${hotRing[1]}Hot`], 1.04, hotRing[2]);
+    } else if (gz.mode === 'scale') {
+      drawPart(this.gizmoParts[hot === 'u' ? 'yHot' : 'y'], hot === 'u' ? 1.18 : 1);
+    } else {
+      for (const id of ['x', 'y', 'z']) {
+        const isHot = hot === id;
+        drawPart(this.gizmoParts[isHot ? `${id}Hot` : id], isHot ? 1.18 : 1);
+      }
+    }
+    gl.bindVertexArray(null);
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthMask(true);
+  }
+
+  setActorVisible(id, visible) {
+    const actor = this.getActor(id);
+    if (actor) actor.visible = !!visible;
+  }
+
+  /**
+   * Give an actor a parsed entity model (same shape setModel takes), or null
+   * to go back to the placeholder. Textures and batches are owned by the actor.
+   */
+  setActorModel(id, model) {
+    const actor = this.getActor(id);
+    if (!actor) return;
+    this._freeActorGeometry(actor);
+    actor.model = model && model.isRenderable ? model : null;
+    actor.pose = null;
+    actor.currentAnimation = null;
+    actor.animFrame = 0;
+    if (!actor.model) {
+      this._syncActorTransform(actor);
+      return;
+    }
+    actor.pose = new SkeletonPose(actor.model.skeleton, actor.model.jointOverrides ?? null);
+    for (const tex of actor.model.textures.values()) {
+      const t = this.createTexture(tex);
+      if (t) actor.textures.set(tex.name, t);
+    }
+    const occl = new Set(actor.model.meshGroups.map((g) => g.occludeType ?? 0));
+    for (const group of actor.model.meshGroups) {
+      for (const piece of group.pieces) {
+        if (occludesDisplayType(piece.props?.displayType ?? 0, occl)) continue;
+        const batch = this.buildBatch(group, piece, actor.textures);
+        if (batch) actor.batches.push(batch);
+      }
+    }
+    actor.batches.forEach((b, i) => { b.depthNudge = -i; });
+    actor.poseDirty = true;
+    this._syncActorTransform(actor);
+  }
+
+  setActorAnimation(id, clip, opts = {}) {
+    const actor = this.getActor(id);
+    if (!actor) return;
+    actor.currentAnimation = clip;
+    if (opts.loop != null) actor.loop = !!opts.loop;
+    if (opts.speed != null) actor.speed = opts.speed;
+    const len = clip?.lengthInFrames ?? 0;
+    actor.animFrame = (opts.frame != null && len > 0) ? opts.frame % len : 0;
+    if (actor.pose) actor.pose.evaluate(clip, actor.animFrame);
+    actor.poseDirty = true;
+  }
+
+  setActorPlaying(id, playing) {
+    const actor = this.getActor(id);
+    if (actor) actor.playing = !!playing;
+  }
+
+  _advanceActors(dtSeconds) {
+    for (const actor of this.actors) {
+      if (!actor.playing || !actor.currentAnimation || !actor.pose) continue;
+      const clip = actor.currentAnimation;
+      actor.animFrame += dtSeconds * (clip.fps ?? 30) * (actor.speed ?? 1);
+      const len = clip.lengthInFrames;
+      if (!(len > 0)) actor.animFrame = 0;
+      else if (actor.animFrame > len) {
+        if (actor.loop === false) { actor.animFrame = len; actor.playing = false; }
+        else actor.animFrame %= len;
+      }
+      actor.pose.evaluate(clip, actor.animFrame);
+      actor.poseDirty = true;
+    }
+  }
+
+  /**
+   * Draw every actor inside the zone pass: same skinning program as the main
+   * entity, but placed by uModel and lit/fogged/shadowed like the terrain
+   * around it (display space, zone light set, zone cascades).
+   */
+  _drawActors(viewProj, eye, fogFar) {
+    if (!this.actors.length) return;
+    const gl = this.gl;
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LEQUAL);
+
+    // Placeholders first (overlay program handles its own state). A playing
+    // camera sequence hides every helper: lamps become just their light.
+    const helpersOn = !this.camera?.sequenceLock;
+    for (const actor of this.actors) {
+      if (!helpersOn) break;
+      if (!actor.visible || actor.model || !actor.placeholder) continue;
+      gl.depthMask(true);
+      gl.disable(gl.POLYGON_OFFSET_FILL);
+      this._drawOverlay(viewProj, actor.placeholder, 0.85);
+      gl.depthMask(true);
+      gl.disable(gl.BLEND);
+      gl.disable(gl.POLYGON_OFFSET_FILL);
+      gl.polygonOffset(0, 0);
+    }
+
+    if (helpersOn) this._drawLightMarkers(viewProj);
+
+    const skinned = this.actors.filter((a) => a.visible && a.model && a.pose && a.batches.length);
+    if (!skinned.length) return;
+
+    gl.useProgram(this.program);
+    gl.uniformMatrix4fv(this.uniforms.viewProj, false, viewProj);
+    gl.uniform3fv(this.uniforms.lightDir, this.camera.forward);
+    gl.uniform1i(this.uniforms.texture, 0);
+    gl.uniform3fv(this.uniforms.cameraPos, eye);
+    gl.uniform3fv(this.uniforms.fogColor, this.fog.color);
+    gl.uniform2f(this.uniforms.fogRange, this.fog.near, fogFar);
+    const alphaOn = !!this.showAlpha;
+    gl.uniform1f(this.uniforms.showAlpha, alphaOn ? 1 : 0);
+    gl.uniform1f(this.uniforms.terrainLit, 1);
+    const L = this._zoneLightUniforms();
+    gl.uniform3fv(this.uniforms.ambient, L.ambient);
+    gl.uniform3fv(this.uniforms.sunDir, L.sunDir);
+    gl.uniform3fv(this.uniforms.sunColor, L.sunColor);
+    gl.uniform3fv(this.uniforms.moonDir, L.moonDir);
+    gl.uniform3fv(this.uniforms.moonColor, L.moonColor);
+    gl.uniform1f(this.uniforms.sunLit, 0);
+    gl.uniform1f(this.uniforms.lightGain, this.lightGain ?? 1);
+    this._bindShadowUniforms(this.uniforms);
+    this._uploadPointLights(this.uniforms);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.enable(gl.POLYGON_OFFSET_FILL);
+    gl.disable(gl.CULL_FACE);
+
+    const drawActorBatches = (actor, pred) => {
+      for (const batch of actor.batches) {
+        if (pred && !pred(batch)) continue;
+        gl.uniform1i(this.uniforms.alphaMode, batch.alphaMode ?? 0);
+        gl.polygonOffset(0, batch.depthNudge ?? 0);
+        gl.bindTexture(gl.TEXTURE_2D, this.showTextures && batch.texture ? batch.texture : this.whiteTexture);
+        gl.bindVertexArray(batch.vao);
+        gl.drawArrays(batch.mode, 0, batch.count);
+      }
+    };
+
+    for (const actor of skinned) {
+      if (actor.poseDirty) {
+        actor.pose.pack(actor.rotArray, actor.transArray, actor.scaleArray);
+        actor.poseDirty = false;
+      }
+      gl.uniform4fv(this.uniforms.rot, actor.rotArray);
+      gl.uniform4fv(this.uniforms.trans, actor.transArray);
+      gl.uniform4fv(this.uniforms.scale, actor.scaleArray);
+      gl.uniformMatrix4fv(this.uniforms.model, false, actor.modelMatrix);
+
+      gl.disable(gl.BLEND);
+      gl.depthMask(true);
+      gl.uniform1i(this.uniforms.alphaPass, 0);
+      drawActorBatches(actor, (b) => (b.alphaMode ?? 0) !== 3);
+      if (alphaOn) {
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        gl.depthMask(false);
+        gl.uniform1i(this.uniforms.alphaPass, 1);
+        drawActorBatches(actor, (b) => { const m = b.alphaMode ?? 0; return m === 0 || m === 3; });
+      }
+    }
+
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
+    gl.disable(gl.POLYGON_OFFSET_FILL);
+    gl.polygonOffset(0, 0);
+    gl.bindVertexArray(null);
+  }
 
   /** Depth-only render targets, one per cascade; rebuilt when the size changes. */
   _ensureShadowTargets(count) {
@@ -3208,6 +3963,31 @@ export class Renderer {
             console.warn('particle shadow cast failed', e);
           }
         }
+        // Placed actors cast like the main entity would, placed by uModel.
+        const casterActors = this.actors.filter((a) => a.visible && a.model && a.pose && a.batches.length);
+        if (casterActors.length) {
+          const u = this.shadowEntityUniforms;
+          gl.useProgram(this.shadowEntityProgram);
+          gl.uniformMatrix4fv(u.lightViewProj, false, cascade.lvp);
+          gl.uniform1i(u.texture, 0);
+          gl.uniform1f(u.cutout, alphaOn ? 0.5 : 0);
+          for (const actor of casterActors) {
+            if (actor.poseDirty) {
+              actor.pose.pack(actor.rotArray, actor.transArray, actor.scaleArray);
+              actor.poseDirty = false;
+            }
+            gl.uniform4fv(u.rot, actor.rotArray);
+            gl.uniform4fv(u.trans, actor.transArray);
+            gl.uniform4fv(u.scale, actor.scaleArray);
+            gl.uniformMatrix4fv(u.model, false, actor.modelMatrix);
+            for (const batch of actor.batches) {
+              if ((batch.alphaMode ?? 0) === 3) continue;
+              gl.bindTexture(gl.TEXTURE_2D, batch.texture || this.whiteTexture);
+              gl.bindVertexArray(batch.vao);
+              gl.drawArrays(batch.mode, 0, batch.count);
+            }
+          }
+        }
       } else {
         const u = this.shadowEntityUniforms;
         gl.useProgram(this.shadowEntityProgram);
@@ -3215,6 +3995,7 @@ export class Renderer {
         gl.uniform4fv(u.trans, this.transArray);
         gl.uniform4fv(u.scale, this.scaleArray);
         gl.uniformMatrix4fv(u.lightViewProj, false, cascade.lvp);
+        gl.uniformMatrix4fv(u.model, false, IDENTITY_M);
         gl.uniform1i(u.texture, 0);
         // Same 0.5 split the opaque colour pass uses: only the solid half of
         // the model casts, so hair cards and glass don't shadow as filled quads.
@@ -3356,6 +4137,7 @@ export class Renderer {
     gl.useProgram(this.zoneProgram);
     gl.uniformMatrix4fv(this.zoneUniforms.viewProj, false, viewProj);
     gl.uniform1i(this.zoneUniforms.texture, 0);
+    this._uploadPointLights(this.zoneUniforms);
     gl.uniform3fv(this.zoneUniforms.cameraPos, eye);
     gl.uniform3fv(this.zoneUniforms.fogColor, this.fog.color);
     gl.uniform2f(this.zoneUniforms.fogRange, this.fog.near, fogFar);
@@ -3895,6 +4677,7 @@ export class Renderer {
    * Safe to call twice: every field is nulled and the guard returns early.
    */
   dispose() {
+    this.clearActors();
     if (this._disposed) return;
     this._disposed = true;
     const gl = this.gl;
