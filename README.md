@@ -2,10 +2,11 @@
 
 A FFXI asset browser — **zones, NPCs & monsters, playable characters, spell
 effects, textures, music, sound effects and raw DAT data** — with a **WebGL2**
-viewport, wrapped in a **Tauri 2** shell (~7 MB standalone exe, no Electron). Skinning runs on the GPU: the vertex
-shader rotates pre-weighted joint-local positions by per-joint pose quaternions;
-the CPU only evaluates the skeleton pose (one quat/trans/scale triplet per joint
-per frame).
+viewport, wrapped in a **Tauri 2** shell (one standalone ~38 MB exe, no
+Electron — it embeds vgmstream, the baked asset lists and the viewport
+backgrounds). Skinning runs on the GPU: the vertex shader rotates pre-weighted
+joint-local positions by per-joint pose quaternions; the CPU only evaluates the
+skeleton pose (one quat/trans/scale triplet per joint per frame).
 
 ## Download
 
@@ -18,20 +19,36 @@ notice until the next release.
 ## Features
 
 - **Zones** — full zone geometry with day/night time-of-day and weather
-  (auroras, fog, rain, …), adjustable brightness and scene background, a
-  searchable object/placement browser, and zone BGM + ambient sound effects.
-- **NPCs & monsters** — a categorised tree of every entity model. Play any of
-  its animations or schedules, scrub the timeline frame-by-frame, set playback
-  speed (10–200 %), and inspect the bone hierarchy in a skeleton overlay.
+  (auroras, fog, rain, …), adjustable brightness and scene background, and zone
+  BGM + ambient sound effects. The object browser groups placements by kind
+  (sky, water, collision, sub-areas, unplaced) with per-object and per-group
+  visibility toggles, and lists the zone's visual effects and sound groups
+  alongside its meshes. **Live Selection** picks objects in the world and drags
+  them on an XYZ gizmo (in-memory, with undo), and **View → Region Culling**
+  draws only what the zone's own PVS regions say is visible.
+- **NPCs & monsters** — a categorised tree of every entity model. A single
+  **Motion** picker covers its animations, schedules and the skill packs a trust
+  borrows; scrub the timeline frame-by-frame, set playback speed (10–200 %),
+  play the entity's own VFX routines, and inspect the bone hierarchy in a
+  skeleton overlay. **Base** (Idle / Battle) lays the selected clip over a
+  resting pose as a montage — blend in, play through, blend back.
 - **Characters** — compose a PC from race, face, weapons and gear. Gear is
-  grouped by set (Artifact / Relic / Empyrean / Ebur / Furia / Ebon) and sorted
-  A–Z; equipped weapons play their weapon-skill animations; the 40-character
-  look string is generated and copyable.
-- **Effects** — search and play any standalone spell/ability VFX (magic, job
-  abilities, summons, weapon skills) on an empty stage, with schedule picker,
-  playback speed and the effect's own sound.
+  grouped by set (Artifact / Relic / Empyrean / Ebur · Furia · Ebon /
+  Abjuration / Mythic / Aeonic / Prime) and sorted A–Z; equipped weapons play
+  their weapon-skill animations and a ranged weapon stays stowed unless the
+  action draws it; the 40-character look string is generated and copyable.
+- **Effects** — search and play any spell/ability VFX (magic, job abilities,
+  summons, weapon skills) on an empty stage *or on a loaded character or NPC* —
+  attached to the joints the DAT names, with the caster's own cast animation, a
+  Play / Pause / Rewind / Loop transport, playback speed and the effect's sound.
+- **Camera Sequencer** — a two-track timeline (Camera + Scene): record keyframes
+  at the playhead, scrub, curve the path between them, and lerp time-of-day
+  across a shot. **Lock to Actor** keeps a moving subject framed by tracking the
+  pelvis, effects and sound play back with the take, and sequences can be named
+  and saved.
 - **Images** — browse every UI, map and cutscene texture DAT with a filter,
-  per-set list and zoom.
+  per-set list and zoom, plus a **sprite panel** that lists every sprite in a
+  title/lobby layout, filtered to the atlas you have selected.
 - **Music & Sound FX** — play any BGW/SPW track (vgmstream-decoded) with a live
   waveform visualiser, seek bar and loop info.
 - **Data** — a DAT inspector: walks any DAT's section tree (folders, resource
@@ -39,10 +56,25 @@ notice until the next release.
   dumping payloads; textures open in a viewer on click. FTABLE/VTABLE pairs
   render as a searchable file-id → DAT table whose rows jump straight to the
   named DAT's structure, with gear model ids browsable per race/slot and
-  monster/NPC model ids resolved from the same tables.
-- **Throughout** — type-to-filter dropdowns, arrow-key list navigation,
-  reveal-any-DAT in the system file manager, wireframe / unlit / collision /
-  navmesh / skybox overlays, and glTF/FBX model export (via the xi-tools CLI).
+  monster/NPC model ids resolved from the same tables. Bump maps preview as
+  normal maps, routes open as keyframe tables, XISTRING menu strings and `USER\`
+  macro books get real layouts, and spell/ability tables open in a draggable
+  inspector.
+- **Title UI editing** — inspect UiMenu (0x30) windows and UiElementGroup (0x31)
+  sets as tables, then patch position, size and nav and **save back to the DAT**
+  through the xi-tools CLI. Writes land in the right root (pivot / HD / game),
+  resolved per DAT.
+- **Notes** — free-text notes on any DAT, kept in a plain
+  `%LOCALAPPDATA%\XiModelViewer\notes.json` you can edit outside the app. The
+  file tree shows each note as a tooltip, so a folder of numbered DATs stops
+  being anonymous.
+- **Scene** — background images, a flat floor with a colour picker, floor repeat
+  and a radial edge fade, plus a trackball gizmo for aiming the sun that casts
+  the model's shadow.
+- **Throughout** — type-to-filter dropdowns, search on every asset list,
+  arrow-key list navigation, pinned favourite zones and files, reveal-any-DAT in
+  the system file manager, wireframe / unlit / collision / navmesh / skybox
+  overlays, and glTF/FBX model export (via the xi-tools CLI).
 
 ## Screenshots
 
