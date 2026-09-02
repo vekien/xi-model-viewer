@@ -8,6 +8,11 @@ import { Renderer } from '../js/renderer.js';
 import { FileTree } from './FileTree.jsx';
 import { DatabaseList } from './DatabaseList.jsx';
 import { DatabaseViewer, invalidateDbCache, dbDataDir, importDbFolder } from './DatabaseViewer.jsx';
+import { ActorsPanel } from './ActorsPanel.jsx';
+import { ActorEditorModal } from './ActorEditorModal.jsx';
+import { ActorSetsModal } from './ActorSetsModal.jsx';
+import { loadActorSets, saveActorSet, deleteActorSet, serializeActor } from '../js/actorSets.js';
+import { DEFAULT_LIGHT, lightRgb } from '../js/lightUtil.js';
 import { findDbTable } from '../js/database.js';
 import { MenuBar } from './MenuBar.jsx';
 import { NpcList } from './NpcList.jsx';
@@ -49,9 +54,9 @@ import {
   zoneDatRelPath, zoneToModel, rebuildZoneDraws, buildPlacementDraws, translatePlacementDisplay,
   clonePlacementPose, applyPlacementPose, posesEqual, pickPvsRegion, applyPvsRegion,
 } from '../js/zoneModel.js';
-import { pickZoneAt } from '../js/zonePick.js';
+import { pickZoneAt, pickZoneGroundAt, pickActorAt } from '../js/zonePick.js';
 import { loadDatTypeLists, makeDatTypeLookup } from '../js/dattypes.js';
-import { pickGizmoAxis, axisDragDelta } from '../js/zoneGizmo.js';
+import { pickGizmoAxis, axisDragDelta, pickActorGizmoAxis, ringDragAngle } from '../js/zoneGizmo.js';
 import { parseEnvironments, parseEnvironmentsByRoot, resolveEnvironment, defaultWeather, listWeathers, terrainLightingFromEnv, skyDomeFromEnv, EnvironmentManager, sunDirDisplay } from '../js/environment.js';
 import { parseSections } from '../js/zone.js';
 import { buildDatTree, SEC } from '../js/dat/tree.js';
@@ -992,6 +997,55 @@ export default function App({ launch = null }) {
   const [todPlaying, setTodPlaying] = useState(false);
   const [plcSelected, setPlcSelected] = useState('');       // 'mesh:…' | 'inst:…'
   const [plcOpen, setPlcOpen] = useState(true);
+  // Zone actors (bottom-right › Actors): NPCs / characters placed on the
+  // terrain. Definitions live here; geometry lives in the renderer (addActor).
+  const [zoneActors, setZoneActors] = useState([]);
+  const zoneActorsRef = useRef([]);
+  zoneActorsRef.current = zoneActors;
+  const [actorsPanelOpen, setActorsPanelOpen] = useState(false);
+  // Which right-rail panel was last up in a zone ('objects' | 'actors' |
+  // 'none'); a zone that loads later opens the same one.
+  const rightPanelPrefRef = useRef((() => {
+    try { return localStorage.getItem('zoneRightPanel') || 'objects'; } catch { return 'objects'; }
+  })());
+  const rememberRightPanel = (v) => {
+    rightPanelPrefRef.current = v;
+    try { localStorage.setItem('zoneRightPanel', v); } catch { /* quota */ }
+  };
+  // null | { forId: number|null } — waiting for a click on the terrain.
+  const [actorPlacing, setActorPlacing] = useState(null);
+  const actorPlacingRef = useRef(null);
+  actorPlacingRef.current = actorPlacing;
+  const [actorEditId, setActorEditId] = useState(null);
+  const actorEditIdRef = useRef(null);
+  actorEditIdRef.current = actorEditId;
+  const actorSeqRef = useRef(1);
+  const actorLoadGenRef = useRef(new Map());
+  // Actors live selection (panel header toggle): click an actor in the
+  // viewport to select it and show its gizmo. 1 / 2 / 3 switch the gizmo.
+  // On by default and not persisted: closing the panel clears the selection
+  // but leaves the toggle as it is for next time the panel opens.
+  const [actorPick, setActorPick] = useState(true);
+  const actorPickRef = useRef(actorPick);
+  actorPickRef.current = actorPick;
+  const [actorSelectedId, setActorSelectedId] = useState(null);
+  const actorSelectedIdRef = useRef(null);
+  actorSelectedIdRef.current = actorSelectedId;
+  const [actorGizmoMode, setActorGizmoMode] = useState('move');
+  const actorGizmoModeRef = useRef('move');
+  actorGizmoModeRef.current = actorGizmoMode;
+  const actorGizmoDragRef = useRef(null); // { id, axis, mode, lastX, lastY }
+  const actorGizmoHoverRef = useRef(null);
+  // Saved actor sets (Manage Actor Sets): the list, and which set the stage
+  // came from so a re-save updates it instead of adding another.
+  const [actorSetsOpen, setActorSetsOpen] = useState(false);
+  const [actorSets, setActorSets] = useState([]);
+  const [currentActorSet, setCurrentActorSet] = useState(null);
+  // Ctrl+C / Ctrl+V: a copy of the selected actor's definition. The key
+  // handler is declared before the paste logic, so it goes through refs.
+  const actorClipboardRef = useRef(null);
+  const copySelectedActorRef = useRef(null);
+  const pasteActorRef = useRef(null);
   const [actorsOpen, setActorsOpen] = useState(() => {
     try { return localStorage.getItem('effectActorsOpen') !== '0'; } catch { return true; }
   });
@@ -1023,6 +1077,11 @@ export default function App({ launch = null }) {
       rendererRef.current?.setZonePickHighlight?.(null);
     }
   }, []);
+
+  // Objects Live Selection only makes sense with the Objects panel up.
+  useEffect(() => {
+    if (!plcOpen && liveSelectionRef.current) toggleLiveSelection();
+  }, [plcOpen, toggleLiveSelection]);
 
   const gizmoDragRef = useRef(null); // { axis, placement, lastX, lastY, startPose }
   // Undo stack of pose snapshots taken *before* each completed gizmo move.
@@ -1360,6 +1419,7 @@ export default function App({ launch = null }) {
       if (wasdRef.current && !renderer.camera.sequenceLock) {
         renderer.camera.flyUpdate(dt, heldKeys.current);
       }
+      if (!renderer.camera.sequenceLock) renderer.camera.rollUpdate?.(dt, heldKeys.current);
       if (now - lastRegionCheck > 150) { lastRegionCheck = now; updateRegions(); }
       renderer.render(dt);
       // The camera owns fly speed and changes it from the wheel, from zone vs
@@ -1419,6 +1479,12 @@ export default function App({ launch = null }) {
         focusOrResetCameraRef.current?.();
         return;
       }
+      // Alt+Q / Alt+E: roll the view (any camera mode).
+      if (e.altKey && (k === 'q' || k === 'e')) {
+        heldKeys.current.add(k === 'q' ? 'rollL' : 'rollR');
+        e.preventDefault();
+        return;
+      }
       if (k === 'w' || k === 'a' || k === 's' || k === 'd' || k === 'q' || k === 'e') {
         if (wasdRef.current) {
           heldKeys.current.add(k);
@@ -1431,6 +1497,9 @@ export default function App({ launch = null }) {
     const onKeyUp = (e) => {
       const k = e.key.toLowerCase();
       heldKeys.current.delete(k);
+      if (k === 'q') heldKeys.current.delete('rollL');
+      if (k === 'e') heldKeys.current.delete('rollR');
+      if (e.key === 'Alt') { heldKeys.current.delete('rollL'); heldKeys.current.delete('rollR'); }
       if (e.key === 'Shift') heldKeys.current.delete('shift');
     };
     const onBlur = () => heldKeys.current.clear();
@@ -5768,6 +5837,473 @@ export default function App({ launch = null }) {
     }
   }, []);
 
+  // ── Zone actors ────────────────────────────────────────────────────────────
+
+  const updateActor = useCallback((id, patch) => {
+    setZoneActors((prev) => prev.map((a) => (a.id === id ? { ...a, ...(typeof patch === 'function' ? patch(a) : patch) } : a)));
+  }, []);
+
+  /**
+   * Parse an NPC / character entry (the same shape NpcList and useCharacter
+   * emit) into a renderable model without touching the main scene. Mirrors
+   * the relevant parts of loadModel: HD-skipping for anim packs, weapon
+   * battle idle, rod graft, and the weapon grip re-parenting.
+   */
+  const buildActorModel = useCallback(async (entry, packPath = null) => {
+    const settings = settingsRef.current;
+    const isAbs = (p) => /^[a-zA-Z]:\\/.test(p) || String(p).startsWith('\\\\');
+    const abs = (p) => (isAbs(p) ? p : `${settings.gamePath}\\${p}`);
+    const animOnly = new Set((entry.animOnlyPaths ?? entry.focusPaths ?? []).map((p) => pathKey(p, settings)));
+    if (packPath) animOnly.add(pathKey(packPath, settings));
+    const parse1 = async (path, forceSkipHd = false) => {
+      const rel = relFromAbs(path, settings);
+      const skipHd = forceSkipHd || animOnly.has(pathKey(path, settings));
+      const cands = rel !== path
+        ? gameCandidates(rel, settings, { skipHd })
+        : (skipHd ? gameCandidates(path, settings, { skipHd: true }) : [path]);
+      const { path: resolved, data } = await backend.readPrefer(cands.length ? cands : [path]);
+      return { path: resolved, model: parseEntity(data, resolved) };
+    };
+    const paths = [...(entry.paths ?? []), ...(packPath ? [packPath] : [])].map(abs);
+    const parsed = [];
+    for (const p of paths) {
+      try { parsed.push(await parse1(p)); } catch (err) {
+        if (paths.length === 1) throw err;
+        console.warn(`actor: skipping ${p}:`, err);
+      }
+    }
+    if (!parsed.length) throw new Error('no readable DATs');
+    const weaponSlots = entry.weaponSlots ?? null;
+    if (entry.battleTable && weaponSlots?.main?.length) {
+      const mainSet = new Set(weaponSlots.main.map((p) => pathKey(p, settings)));
+      const weapon = parsed.find((e) => mainSet.has(pathKey(e.path, settings)))?.model;
+      const type = weapon?.info?.weaponAnimationType;
+      const rel = type != null ? entry.battleTable[type] : null;
+      const loadAnimDat = async (relPath) => {
+        if (!relPath) return;
+        const key = pathKey(relPath, settings);
+        if (parsed.some((e) => pathKey(e.path, settings) === key)) return;
+        try { parsed.push(await parse1(relPath, true)); } catch (err) { console.warn('actor battle DAT', relPath, err); }
+      };
+      if (rel) {
+        await loadAnimDat(rel);
+        let skirt = (entry.skirtByType && type != null) ? entry.skirtByType[type] : null;
+        if (!skirt) {
+          const races = ['HumeM', 'HumeF', 'ElvaanM', 'ElvaanF', 'Tarutaru', 'TaruM', 'Mithra', 'Galka'];
+          if (entry.raceId) races.unshift(entry.raceId);
+          for (const rid of races) { skirt = battleSkirtPath(rel, rid); if (skirt) break; }
+        }
+        await loadAnimDat(skirt);
+      }
+    }
+    const model = parsed.length === 1 ? parsed[0].model : mergeModels(parsed.map((e) => e.model), entry.name);
+    if (entry.rodPaths?.length && model.skeleton) {
+      for (const rp of entry.rodPaths) {
+        try { const { path: rpath, model: rig } = await parse1(rp, true); graftRig(model, rig, -1, rpath); } catch (err) { console.warn('actor rod', rp, err); }
+      }
+    }
+    if (weaponSlots) {
+      const wkeys = new Set(['main', 'sub', 'range'].flatMap((k) => (weaponSlots[k] ?? []).map((q) => pathKey(q, settings))));
+      for (const g of model.meshGroups) {
+        if (g.sourcePath && wkeys.has(pathKey(g.sourcePath, settings))) g.isWeapon = true;
+      }
+    }
+    if (!model.isRenderable) throw new Error('no renderable skeleton + mesh');
+    const refs = model.skeleton?.references ?? [];
+    if (weaponSlots && refs.length > 127) {
+      const overrides = new Map();
+      for (const [slot, handRefIdx] of [['main', 127], ['sub', 126]]) {
+        const slotSet = new Set((weaponSlots[slot] ?? []).map((p) => pathKey(p, settings)));
+        const weapon = parsed.find((e) => slotSet.has(pathKey(e.path, settings)))?.model;
+        const stdIdx = weapon?.info?.standardJointIndex;
+        if (stdIdx == null) continue;
+        const grip = refs[stdIdx];
+        const hand = refs[handRefIdx];
+        if (grip && hand && grip.index !== hand.index) overrides.set(grip.index, hand.index);
+      }
+      if (entry.rangedInUse && weaponSlots.range?.length) {
+        const slotSet = new Set(weaponSlots.range.map((p) => pathKey(p, settings)));
+        const bow = parsed.find((e) => slotSet.has(pathKey(e.path, settings)))?.model;
+        let mount = null;
+        for (const g of bow?.meshGroups ?? []) {
+          for (const v of g.vertices ?? []) {
+            for (const j of [v.joint0, v.joint1]) {
+              if (typeof j === 'number' && j >= 0 && (mount === null || j < mount)) mount = j;
+            }
+          }
+        }
+        const hand = refs[entry.rangedHandRef ?? 126];
+        if (mount != null && hand && hand.index !== mount) overrides.set(mount, hand.index);
+      }
+      if (overrides.size) model.jointOverrides = overrides;
+    }
+    const anims = graftIdleWaist(
+      groupAnimations(model.animations).filter((g) => g.clip.jointTracks.size > 0 && g.clip.numFrames > 0),
+    );
+    const schedules = (model.schedules ?? []).filter((sc) => sc.clipIds?.length > 0);
+    return { model, anims, schedules };
+  }, []);
+
+  /** Clip for an actor's motion selection, wrapped like the main viewport does. */
+  const actorClipFor = (actor, motion) => {
+    const model = actor?.model;
+    if (!model || !motion?.id) return null;
+    if (motion.kind === 'anim') {
+      const g = (actor.anims ?? []).find((x) => x.id === motion.id);
+      return g ? withBaseIdle(model, g.clip) : null;
+    }
+    if (motion.kind === 'sched') {
+      const sc = (model.schedules ?? []).find((x) => x.id === motion.id);
+      return sc?.clipIds?.length ? scheduleClip(model, sc) : null;
+    }
+    return null;
+  };
+
+  const applyActorMotion = useCallback((actor, motion) => {
+    const r = rendererRef.current;
+    if (!r) return;
+    const clip = actorClipFor(actor, motion);
+    r.setActorAnimation(actor.id, clip, { loop: actor.loop !== false });
+    r.setActorPlaying(actor.id, clip ? actor.playing !== false : false);
+  }, []);
+
+  /** Load (or reload with a borrowed pack) the model behind an actor. */
+  const loadActorEntry = useCallback(async (id, kind, entry, packPath = null, opts = {}) => {
+    const gen = (actorLoadGenRef.current.get(id) ?? 0) + 1;
+    actorLoadGenRef.current.set(id, gen);
+    const packs = entry.animPacks ?? [];
+    updateActor(id, {
+      kind, entry, packs, pack: packPath, status: 'loading',
+      label: entry.name || '', selectedPath: entry.key ?? (entry.paths?.[entry.paths.length - 1] ?? '').toLowerCase(),
+    });
+    try {
+      const { model, anims, schedules } = await buildActorModel(entry, packPath);
+      if (actorLoadGenRef.current.get(id) !== gen) return;
+      const r = rendererRef.current;
+      if (!r || !r.getActor(id)) return;
+      r.setActorModel(id, model);
+      // Default motion: the pack's own clip when a Special was picked, else idle.
+      const packClip = packPath ? packs.find((p) => p.path === packPath)?.clips?.[0] : null;
+      const preferId = packClip ? animDisplayName(packClip) : null;
+      const pick = (preferId && anims.find((g) => g.id === preferId))
+        || anims.find((g) => g.id === 'idl') || anims.find((g) => g.id === 'std') || anims[0] || null;
+      const want = opts.motion;
+      const wantOk = !!want && (
+        (want.kind === 'anim' && anims.some((g) => g.id === want.id))
+        || (want.kind === 'sched' && schedules.some((sc) => sc.id === want.id)));
+      const motion = wantOk ? { kind: want.kind, id: want.id } : (pick ? { kind: 'anim', id: pick.id } : null);
+      let next = null;
+      setZoneActors((prev) => prev.map((a) => {
+        if (a.id !== id) return a;
+        next = {
+          ...a, model, anims, schedules, motion, status: 'ready', label: entry.name || a.label,
+          playing: opts.playing ?? a.playing, loop: opts.loop ?? a.loop,
+        };
+        return next;
+      }));
+      if (next) applyActorMotion(next, motion);
+      else applyActorMotion({ id, model, anims, loop: true, playing: true }, motion);
+    } catch (err) {
+      if (actorLoadGenRef.current.get(id) !== gen) return;
+      console.warn('actor load failed', err);
+      updateActor(id, { status: 'error' });
+      setStatusText(`Actor load failed: ${err?.message ?? err}`);
+    }
+  }, [buildActorModel, updateActor, applyActorMotion]);
+
+  const editingActor = zoneActors.find((a) => a.id === actorEditId) || null;
+
+  // The Character form for the actor being edited — one composer instance,
+  // enabled while a character actor's editor is open; its own storage key so
+  // it never fights the Characters page over pcState.
+  const actorPc = useCharacter({
+    enabled: !!editingActor && editingActor.kind === 'pc' && !!settings?.gamePath,
+    storageKey: 'actorPcState',
+    onLoad: (entry) => {
+      const id = actorEditIdRef.current;
+      if (id == null) return;
+      loadActorEntry(id, 'pc', entry);
+      const pcNow = actorPcRef.current;
+      if (pcNow) updateActor(id, { pcState: { race: pcNow.race, gear: pcNow.sel } });
+    },
+    onError: (msg) => setStatusText(msg),
+  });
+  const actorPcRef = useRef(actorPc);
+  actorPcRef.current = actorPc;
+
+  /** Put a new actor (or the one being moved) at a ground point. */
+  const placeActorAt = useCallback((point) => {
+    const r = rendererRef.current;
+    const placing = actorPlacingRef.current;
+    if (!r || !placing) return;
+    if (placing.forId != null) {
+      r.setActorTransform(placing.forId, point, null);
+      updateActor(placing.forId, { pos: [...point] });
+      setActorPlacing(null);
+      setStatusText('Actor moved.');
+      return;
+    }
+    const id = actorSeqRef.current++;
+    const actor = {
+      id, name: `Actor ${id}`, kind: null, entry: null, pos: [...point], rot: null,
+      visible: true, status: 'placeholder', label: '', anims: [], schedules: [], packs: [],
+      pack: null, motion: null, playing: true, loop: true, model: null, selectedPath: '', scale: 1,
+    };
+    r.addActor(id, point);
+    setZoneActors((prev) => [...prev, actor]);
+    setActorPlacing(null);
+    setActorEditId(id);
+    setStatusText(`${actor.name} placed — pick an NPC or build a character.`);
+  }, [updateActor]);
+
+  const removeActor = useCallback((id) => {
+    if (actorSelectedIdRef.current === id) {
+      actorSelectedIdRef.current = null;
+      setActorSelectedId(null);
+    }
+    rendererRef.current?.removeActor(id);
+    actorLoadGenRef.current.delete(id);
+    setZoneActors((prev) => prev.filter((a) => a.id !== id));
+    setActorEditId((cur) => (cur === id ? null : cur));
+    setActorPlacing((cur) => (cur?.forId === id ? null : cur));
+  }, []);
+
+  /** Renderer-side light: resolved colour, intensity, radius. */
+  const rendererLight = (light) => ({
+    type: light.type, color: lightRgb(light), intensity: light.intensity, radius: light.radius, cone: light.cone,
+  });
+  const lightLabel = (light) => (light.type === 'ambient' ? 'Ambient light' : light.type === 'spot' ? 'Spot light' : 'Point light');
+
+  const updateActorLight = useCallback((id, patch) => {
+    const a = zoneActorsRef.current.find((x) => x.id === id);
+    if (!a) return;
+    const light = { ...DEFAULT_LIGHT, ...(a.light || {}), ...patch };
+    rendererRef.current?.setActorLight(id, rendererLight(light));
+    updateActor(id, { light, label: lightLabel(light) });
+  }, [updateActor]);
+
+  const setActorKind = useCallback((id, kind) => {
+    const r = rendererRef.current;
+    const a = zoneActorsRef.current.find((x) => x.id === id);
+    if (kind === 'light') {
+      const light = { ...DEFAULT_LIGHT, ...(a?.light || {}) };
+      actorLoadGenRef.current.set(id, (actorLoadGenRef.current.get(id) ?? 0) + 1);
+      r?.setActorModel(id, null);
+      r?.setActorLight(id, rendererLight(light));
+      updateActor(id, {
+        kind, light, model: null, anims: [], schedules: [], packs: [], pack: null, motion: null,
+        entry: null, status: 'ready', label: lightLabel(light),
+      });
+      return;
+    }
+    if (a?.kind === 'light') {
+      r?.setActorLight(id, null);
+      updateActor(id, { kind, status: 'placeholder', label: '' });
+    } else {
+      updateActor(id, { kind });
+    }
+    if (kind === 'pc') {
+      // The composer assembles from its current selections; restore this
+      // actor's own look first when it has one, then force a (re)load.
+      const a = zoneActorsRef.current.find((x) => x.id === id);
+      const pcNow = actorPcRef.current;
+      if (a?.pcState?.race && pcNow?.races) pcNow.applyGearSet(a.pcState);
+      else pcNow?.reload?.();
+    }
+  }, [updateActor]);
+
+  const setActorMotion = useCallback((id, motionId) => {
+    const a = zoneActorsRef.current.find((x) => x.id === id);
+    if (!a) return;
+    if (!motionId) {
+      updateActor(id, { motion: null });
+      applyActorMotion({ ...a, motion: null }, null);
+      return;
+    }
+    const [kind, ...rest] = String(motionId).split(':');
+    const key = rest.join(':');
+    if (kind === 'pack') {
+      if (a.entry) loadActorEntry(id, a.kind, a.entry, key);
+      return;
+    }
+    const motion = { kind, id: key };
+    updateActor(id, { motion, playing: true });
+    applyActorMotion({ ...a, playing: true }, motion);
+  }, [updateActor, applyActorMotion, loadActorEntry]);
+
+  /** Select an actor (or null): keeps the renderer's gizmo on it. */
+  const selectActor = useCallback((id) => {
+    actorSelectedIdRef.current = id;
+    setActorSelectedId(id);
+    const r = rendererRef.current;
+    if (!r) return;
+    if (id == null) r.setActorGizmo(null);
+    else r.setActorGizmo(id, actorGizmoModeRef.current);
+    actorGizmoHoverRef.current = null;
+  }, []);
+
+  const toggleActorPick = useCallback(() => {
+    const next = !actorPickRef.current;
+    actorPickRef.current = next;
+    setActorPick(next);
+    if (!next) selectActor(null);
+  }, [selectActor]);
+
+  // Panel closed → nothing selected, no gizmo.
+  useEffect(() => {
+    if (!actorsPanelOpen) selectActor(null);
+  }, [actorsPanelOpen, selectActor]);
+
+  // 1 / 2 / 3: move / rotate / scale gizmo on the selected actor.
+  useEffect(() => {
+    const onKey = (e) => {
+      const t = e.target;
+      const typing = !!(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable));
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !typing) {
+        const k = e.key.toLowerCase();
+        if (k === 'c' && copySelectedActorRef.current?.()) { e.preventDefault(); return; }
+        if (k === 'v' && pasteActorRef.current?.()) { e.preventDefault(); return; }
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      // Esc: close the actor editor / sets window and drop the selection. A
+      // field inside the editor just loses focus first.
+      if (e.key === 'Escape') {
+        if (typing) { t.blur?.(); return; }
+        let handled = false;
+        if (actorEditIdRef.current != null) { setActorEditId(null); handled = true; }
+        setActorSetsOpen((open) => { if (open) handled = true; return false; });
+        if (actorSelectedIdRef.current != null) { selectActor(null); handled = true; }
+        if (handled) setStatusText('');
+        return;
+      }
+      if (actorSelectedIdRef.current == null) return;
+      if (typing) return;
+      const mode = e.key === '1' ? 'move' : e.key === '2' ? 'rotate' : e.key === '3' ? 'scale' : null;
+      if (!mode) return;
+      e.preventDefault();
+      actorGizmoModeRef.current = mode;
+      setActorGizmoMode(mode);
+      rendererRef.current?.setActorGizmo(actorSelectedIdRef.current, mode);
+      setStatusText(`Actor gizmo: ${mode}  (1 move · 2 rotate · 3 scale)`);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectActor]);
+
+  /** Manage Actor Sets › Save / Update: snapshot the stage under `name`. */
+  const saveCurrentActorSet = useCallback((name, setId) => {
+    try {
+      const zone = modelInfo?.zone
+        ? { name: modelInfo.zone.name || modelInfo.name || '', path: modelInfo.zone.path || '' }
+        : null;
+      const set = saveActorSet({ id: setId, name, zone, actors: zoneActorsRef.current });
+      setActorSets(loadActorSets());
+      setCurrentActorSet({ id: set.id, name: set.name });
+      setStatusText(`${setId ? 'Updated' : 'Saved'} actor set “${set.name}” (${set.actors.length})`);
+    } catch (e) {
+      setStatusText(`Could not save actor set: ${e?.message ?? e}`);
+    }
+  }, [modelInfo?.zone, modelInfo?.name]);
+
+  /**
+   * Bring a saved actor definition (actorSets.js shape) onto the stage: the
+   * renderer record, the state record, and the model load if it has one.
+   * Returns the new state record, or null for a malformed entry.
+   */
+  const spawnActorFromSaved = useCallback((sa) => {
+    const r = rendererRef.current;
+    if (!r || !Array.isArray(sa?.pos) || sa.pos.length !== 3) return null;
+    const id = actorSeqRef.current++;
+    r.addActor(id, sa.pos, Array.isArray(sa.rot) && sa.rot.length === 9 ? sa.rot : null);
+    r.setActorTransform(id, null, null, sa.scale ?? 1);
+    r.setActorVisible(id, sa.visible !== false);
+    if (sa.kind === 'light' && sa.light) r.setActorLight(id, rendererLight({ ...DEFAULT_LIGHT, ...sa.light }));
+    const a = {
+      id, name: sa.name || `Actor ${id}`, kind: sa.kind ?? null, entry: sa.entry ?? null,
+      pos: [...sa.pos], rot: Array.isArray(sa.rot) ? [...sa.rot] : null, scale: sa.scale ?? 1,
+      visible: sa.visible !== false, status: sa.entry || sa.kind === 'light' ? (sa.kind === 'light' ? 'ready' : 'loading') : 'placeholder',
+      label: sa.kind === 'light' && sa.light ? lightLabel(sa.light) : (sa.entry?.name || ''),
+      light: sa.kind === 'light' && sa.light ? { ...DEFAULT_LIGHT, ...sa.light } : null,
+      anims: [], schedules: [], packs: sa.entry?.animPacks ?? [],
+      pack: sa.pack ?? null, motion: sa.motion ?? null, playing: sa.playing !== false,
+      loop: sa.loop !== false, model: null, selectedPath: sa.entry?.key ?? '', pcState: sa.pcState ?? null,
+    };
+    setZoneActors((prev) => [...prev, a]);
+    if (a.entry && a.kind !== 'light') {
+      loadActorEntry(a.id, a.kind, a.entry, a.pack, { motion: a.motion, playing: a.playing, loop: a.loop });
+    }
+    return a;
+  }, [loadActorEntry]);
+
+  /** Manage Actor Sets › Load: replace the stage with a saved set. */
+  const loadActorSet = useCallback((set) => {
+    const r = rendererRef.current;
+    if (!r || !set) return;
+    r.clearActors();
+    actorLoadGenRef.current.clear();
+    actorSelectedIdRef.current = null;
+    setActorSelectedId(null);
+    setActorEditId(null);
+    setActorPlacing(null);
+    setZoneActors([]);
+    let n = 0;
+    for (const sa of set.actors) if (spawnActorFromSaved(sa)) n++;
+    setCurrentActorSet({ id: set.id, name: set.name });
+    setStatusText(`Loaded actor set “${set.name}” (${n} actor${n === 1 ? '' : 's'})`);
+  }, [spawnActorFromSaved]);
+
+  /** Ctrl+C: remember the selected actor; Ctrl+V: place a copy just beside it. */
+  const copySelectedActor = useCallback(() => {
+    const a = zoneActorsRef.current.find((x) => x.id === actorSelectedIdRef.current);
+    if (!a) return false;
+    actorClipboardRef.current = serializeActor(a);
+    setStatusText(`Copied ${a.name}`);
+    return true;
+  }, []);
+  const pasteActor = useCallback(() => {
+    const clip = actorClipboardRef.current;
+    if (!clip || modelRef.current?.kind !== 'zone') return false;
+    const sa = {
+      ...clip,
+      name: /copy$/i.test(clip.name) ? clip.name : `${clip.name} copy`,
+      pos: [clip.pos[0] + 1.2, clip.pos[1], clip.pos[2] + 1.2],
+    };
+    const a = spawnActorFromSaved(sa);
+    if (!a) return false;
+    // Paste again and the next copy steps on from this one.
+    actorClipboardRef.current = { ...clip, pos: sa.pos, name: sa.name };
+    selectActor(a.id);
+    // An open editor follows the copy, so only the new row reads as picked.
+    setActorEditId((cur) => (cur != null ? a.id : cur));
+    setStatusText(`Pasted ${a.name}`);
+    return true;
+  }, [spawnActorFromSaved, selectActor]);
+  copySelectedActorRef.current = copySelectedActor;
+  pasteActorRef.current = pasteActor;
+
+  // Leaving the zone (or swapping zones) drops the actors with it — the
+  // renderer already freed their geometry in setModel.
+  const zoneActorKey = modelInfo?.zone?.path ?? null;
+  useEffect(() => {
+    setZoneActors([]);
+    setActorEditId(null);
+    setActorPlacing(null);
+    actorSelectedIdRef.current = null;
+    setActorSelectedId(null);
+    actorLoadGenRef.current.clear();
+    setCurrentActorSet(null);
+    setActorSetsOpen(false);
+    // A (re)loaded zone brings the Objects panel back up by default; put up
+    // whichever panel the user had last time instead.
+    if (zoneActorKey && rightPanelPrefRef.current === 'actors') {
+      setPlcOpen(false);
+      setActorsPanelOpen(true);
+    } else {
+      setActorsPanelOpen(false);
+      if (zoneActorKey && rightPanelPrefRef.current === 'none') setPlcOpen(false);
+    }
+  }, [zoneActorKey]);
+
   /** Database → DAT Browser: open the table's DAT the way File › Open DAT does. */
   const openDbPathInBrowser = useCallback(async (rel) => {
     const abs = await backend.resolvePrefer(gameCandidates(rel, settingsRef.current));
@@ -6655,6 +7191,19 @@ export default function App({ launch = null }) {
   const focusOrResetCamera = useCallback(() => {
     const r = rendererRef.current;
     if (!r) return;
+    // A selected actor wins: frame it, whatever else is picked.
+    if (actorSelectedIdRef.current != null && modelRef.current?.kind === 'zone') {
+      const ra = r.getActor?.(actorSelectedIdRef.current);
+      if (ra) {
+        const b = r.actorBoundsDisplay(ra);
+        const pad = 0.6;
+        focusBounds(
+          [b.min[0] - pad, b.min[1] - pad, b.min[2] - pad],
+          [b.max[0] + pad, b.max[1] + pad, b.max[2] + pad],
+        );
+        return;
+      }
+    }
     const model = modelRef.current;
     if (model?.kind === 'zone') {
       const key = plcSelectedRef.current || '';
@@ -6986,6 +7535,11 @@ export default function App({ launch = null }) {
       return;
     }
 
+    if (actorGizmoDragRef.current) {
+      actorGizmoDragRef.current = null;
+      rendererRef.current?.setActorGizmoActive?.(null);
+    }
+
     // No active camera/gizmo drag — nothing to tear down.
     if (!(d?.btn >= 0) && !gest.active) return;
 
@@ -7004,6 +7558,26 @@ export default function App({ launch = null }) {
       try { canvas.releasePointerCapture(pointerId); } catch { /* already released */ }
     }
 
+    // Actors › Add Actor / Move: a click on the terrain places the actor.
+    if (fromCanvasClick && wasClick && actorPlacingRef.current && modelRef.current?.kind === 'zone') {
+      const ground = pickZoneGroundAt(rendererRef.current, modelRef.current, clientX, clientY);
+      if (ground) placeActorAt(ground.point);
+      else setStatusText('No ground under the cursor — click on the zone terrain.');
+      return;
+    }
+
+    // Actors live selection: pick the actor under the cursor.
+    if (fromCanvasClick && wasClick && actorPickRef.current && modelRef.current?.kind === 'zone') {
+      const hit = pickActorAt(rendererRef.current, clientX, clientY);
+      if (hit) {
+        selectActor(hit.actor.id);
+        setStatusText(`${zoneActorsRef.current.find((a) => a.id === hit.actor.id)?.name ?? 'Actor'} selected — 1 move · 2 rotate · 3 scale`);
+      } else if (actorSelectedIdRef.current != null) {
+        selectActor(null);
+      }
+      return;
+    }
+
     // Live Selection: genuine canvas click only (not window teardown over UI).
     if (!fromCanvasClick || !liveSelectionRef.current || !wasClick) return;
     if (rendererRef.current?.camera?.sequenceLock) return;
@@ -7018,7 +7592,7 @@ export default function App({ launch = null }) {
       setStatusText('No object under cursor');
       syncZonePickHighlight();
     }
-  }, [endPlacementDrag, selectPlacementInstance, syncZonePickHighlight]);
+  }, [endPlacementDrag, selectPlacementInstance, syncZonePickHighlight, placeActorAt, selectActor]);
 
   // Robust camera-drag teardown (ported from xi-zone-editor): releasing RMB over a
   // panel used to open that UI's context menu and never deliver canvas pointerup,
@@ -7095,6 +7669,25 @@ export default function App({ launch = null }) {
     if (rendererRef.current?.camera?.sequenceLock) return;
     if (modelRef.current?.kind !== 'zone') return;
 
+    // Selected actor's gizmo (move / rotate / scale) takes the press first.
+    {
+      const r = rendererRef.current;
+      const agz = r?.getActorGizmo?.();
+      const axis = agz ? pickActorGizmoAxis(r, agz, e.clientX, e.clientY) : null;
+      if (axis) {
+        actorGizmoDragRef.current = {
+          id: agz.actorId, axis, mode: agz.mode, lastX: e.clientX, lastY: e.clientY,
+        };
+        actorGizmoHoverRef.current = axis;
+        r.setActorGizmoActive(axis);
+        drag.current.gizmo = true;
+        drag.current.moved = true;
+        camGestureRef.current.moved = true;
+        e.preventDefault();
+        return;
+      }
+    }
+
     const r = rendererRef.current;
     const gz = r?.getZoneGizmo?.();
     if (!gz?.pos) return;
@@ -7143,6 +7736,40 @@ export default function App({ launch = null }) {
   const onPointerMove = (e) => {
     // Gizmo axis drag — screen-projected so mouse direction matches the arrow
     // (FFXI display X is mirrored; ray-t deltas felt inverted left/right).
+    const agd = actorGizmoDragRef.current;
+    if (agd) {
+      const r = rendererRef.current;
+      const gz = r?.getActorGizmo?.();
+      const ra = r?.getActor?.(agd.id);
+      if (!gz || !ra) { actorGizmoDragRef.current = null; return; }
+      const { lastX, lastY } = agd;
+      agd.lastX = e.clientX;
+      agd.lastY = e.clientY;
+      if (agd.mode === 'rotate') {
+        const da = ringDragAngle(r, gz, agd.axis, lastX, lastY, e.clientX, e.clientY);
+        if (da) {
+          r.rotateActorWorld(agd.id, agd.axis.slice(1), da);
+          updateActor(agd.id, { rot: Array.from(ra.rot) });
+        }
+      } else if (agd.mode === 'scale') {
+        const d = axisDragDelta(r, gz, 'y', lastX, lastY, e.clientX, e.clientY);
+        if (d && d.dy) {
+          const next = Math.min(20, Math.max(0.05, (ra.scale ?? 1) * (1 + d.dy / Math.max(gz.size, 1e-3))));
+          r.setActorTransform(agd.id, null, null, next);
+          updateActor(agd.id, { scale: next });
+        }
+      } else {
+        const d = axisDragDelta(r, gz, agd.axis, lastX, lastY, e.clientX, e.clientY);
+        if (d && (Math.abs(d.dx) + Math.abs(d.dy) + Math.abs(d.dz)) > 1e-8) {
+          const pos = [ra.pos[0] + d.dx, ra.pos[1] + d.dy, ra.pos[2] + d.dz];
+          r.setActorTransform(agd.id, pos, null);
+          updateActor(agd.id, { pos });
+        }
+      }
+      e.preventDefault();
+      return;
+    }
+
     const gd = gizmoDragRef.current;
     if (gd) {
       const r = rendererRef.current;
@@ -7203,6 +7830,24 @@ export default function App({ launch = null }) {
     if (rendererRef.current?.camera?.sequenceLock) return;
     const model = modelRef.current;
     if (model?.kind === 'zone') {
+      const r0 = rendererRef.current;
+      const agz = r0?.getActorGizmo?.();
+      if (agz) {
+        const axis = pickActorGizmoAxis(r0, agz, e.clientX, e.clientY);
+        if (axis !== actorGizmoHoverRef.current) {
+          actorGizmoHoverRef.current = axis;
+          r0.setActorGizmoHover(axis);
+        }
+        const canvas = canvasRef.current;
+        if (canvas) {
+          canvas.style.cursor = axis
+            ? (axis.startsWith('r') ? 'grab' : axis === 'u' || axis === 'y' ? 'ns-resize' : 'ew-resize')
+            : ((actorPickRef.current && actorsPanelOpen) || liveSelectionRef.current ? 'crosshair' : '');
+        }
+        if (axis) return;
+      }
+    }
+    if (model?.kind === 'zone') {
       const r = rendererRef.current;
       const gz = r?.getZoneGizmo?.();
       if (gz) {
@@ -7258,11 +7903,15 @@ export default function App({ launch = null }) {
     <canvas
       id="canvas"
       ref={canvasRef}
-      className={liveSelection && (leftView === 'zones' || browserKind === 'zone') ? 'live-pick' : undefined}
+      className={(actorPlacing || (actorPick && actorsPanelOpen) || (liveSelection && (leftView === 'zones' || browserKind === 'zone'))) ? 'live-pick' : undefined}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       onPointerMove={onPointerMove}
       onPointerLeave={() => {
+        if (actorGizmoHoverRef.current) {
+          actorGizmoHoverRef.current = null;
+          rendererRef.current?.setActorGizmoHover?.(null);
+        }
         if (gizmoHoverRef.current) {
           gizmoHoverRef.current = null;
           rendererRef.current?.setGizmoHoverAxis?.(null);
@@ -7658,6 +8307,78 @@ export default function App({ launch = null }) {
           so taking the panel over would pull the controls out from under it. */}
       {!dataStructOpen && (leftView === 'zones' || browserKind === 'zone') && zonePanel}
 
+      {!dataStructOpen && actorsPanelOpen && modelInfo?.zone && (
+        <ActorsPanel
+          actors={zoneActors}
+          placing={actorPlacing}
+          editingId={actorEditId}
+          selectedId={actorSelectedId}
+          liveSelection={actorPick}
+          onToggleLiveSelection={toggleActorPick}
+          onAddActor={() => { setActorEditId(null); setActorPlacing({ forId: null }); }}
+          onCancelPlace={() => setActorPlacing(null)}
+          onManageSets={() => { setActorSets(loadActorSets()); setActorSetsOpen(true); }}
+          onEdit={(id) => { selectActor(id); setActorEditId(id); }}
+          onRemove={removeActor}
+          onToggleVisible={(id) => {
+            const a = zoneActorsRef.current.find((x) => x.id === id);
+            if (!a) return;
+            rendererRef.current?.setActorVisible(id, !a.visible);
+            updateActor(id, { visible: !a.visible });
+          }}
+          onClose={() => { setActorsPanelOpen(false); setActorPlacing(null); rememberRightPanel('none'); }}
+        />
+      )}
+      {editingActor && modelInfo?.zone && (
+        <ActorEditorModal
+          actor={editingActor}
+          pc={actorPc}
+          zIndex={2150}
+          onClose={() => setActorEditId(null)}
+          onRename={(name) => updateActor(editingActor.id, { name })}
+          onKind={(kind) => setActorKind(editingActor.id, kind)}
+          onSelectNpc={(entry) => loadActorEntry(editingActor.id, 'npc', entry)}
+          onMotion={(id) => setActorMotion(editingActor.id, id)}
+          onPlaying={(playing) => {
+            rendererRef.current?.setActorPlaying(editingActor.id, playing);
+            updateActor(editingActor.id, { playing });
+          }}
+          onLoop={(loop) => {
+            const ra = rendererRef.current?.getActor(editingActor.id);
+            if (ra) ra.loop = loop;
+            updateActor(editingActor.id, { loop });
+          }}
+          onLight={(patch) => updateActorLight(editingActor.id, patch)}
+          gizmoMode={actorGizmoMode}
+          onGizmoMode={(mode) => {
+            actorGizmoModeRef.current = mode;
+            setActorGizmoMode(mode);
+            selectActor(editingActor.id);
+          }}
+          onResetTransform={() => {
+            const identity = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+            rendererRef.current?.setActorTransform(editingActor.id, null, identity, 1);
+            updateActor(editingActor.id, { rot: identity, scale: 1 });
+          }}
+        />
+      )}
+      {actorSetsOpen && modelInfo?.zone && (
+        <ActorSetsModal
+          sets={actorSets}
+          current={currentActorSet}
+          actorCount={zoneActors.length}
+          zoneName={modelInfo.zone.name || modelInfo.name || ''}
+          onClose={() => setActorSetsOpen(false)}
+          onSave={saveCurrentActorSet}
+          onLoad={loadActorSet}
+          onDelete={(set) => {
+            setActorSets(deleteActorSet(set.id));
+            if (currentActorSet?.id === set.id) setCurrentActorSet(null);
+            setStatusText(`Deleted actor set “${set.name}”`);
+          }}
+        />
+      )}
+
       {!dataStructOpen && objectGroups && plcOpen
         && (leftView === 'zones' || browserKind === 'zone') && (
         <PlacementPanel
@@ -7665,7 +8386,7 @@ export default function App({ launch = null }) {
           selectedKey={plcSelected}
           onSelectGroup={focusPlacementGroup}
           onSelectInstance={focusPlacementInstance}
-          onClose={() => setPlcOpen(false)}
+          onClose={() => { setPlcOpen(false); rememberRightPanel('none'); }}
           showEnv={showSkybox}
           liveSelection={liveSelection}
           onToggleLiveSelection={toggleLiveSelection}
@@ -7804,8 +8525,26 @@ export default function App({ launch = null }) {
               {objectGroups && (
                 <>
                   <span className="status-sep">·</span>
-                  <button className="status-link" onClick={() => setPlcOpen((v) => !v)}>
+                  <button className="status-link" onClick={() => { setActorsPanelOpen(false); setPlcOpen((v) => { rememberRightPanel(v ? 'none' : 'objects'); return !v; }); }}>
                     {plcOpen ? 'Hide objects' : 'Objects'}
+                  </button>
+                </>
+              )}
+              {modelInfo?.zone && (
+                <>
+                  <span className="status-sep">·</span>
+                  <button
+                    className="status-link"
+                    onClick={() => {
+                      setActorsPanelOpen((v) => {
+                        if (!v) setPlcOpen(false);
+                        else { setActorPlacing(null); }
+                        rememberRightPanel(v ? 'none' : 'actors');
+                        return !v;
+                      });
+                    }}
+                  >
+                    {actorsPanelOpen ? 'Hide actors' : 'Actors'}
                   </button>
                 </>
               )}
@@ -7850,8 +8589,26 @@ export default function App({ launch = null }) {
               {objectGroups && (
                 <>
                   <span className="status-sep">·</span>
-                  <button className="status-link" onClick={() => setPlcOpen((v) => !v)}>
+                  <button className="status-link" onClick={() => { setActorsPanelOpen(false); setPlcOpen((v) => { rememberRightPanel(v ? 'none' : 'objects'); return !v; }); }}>
                     {plcOpen ? 'Hide objects' : 'Objects'}
+                  </button>
+                </>
+              )}
+              {modelInfo?.zone && (
+                <>
+                  <span className="status-sep">·</span>
+                  <button
+                    className="status-link"
+                    onClick={() => {
+                      setActorsPanelOpen((v) => {
+                        if (!v) setPlcOpen(false);
+                        else { setActorPlacing(null); }
+                        rememberRightPanel(v ? 'none' : 'actors');
+                        return !v;
+                      });
+                    }}
+                  >
+                    {actorsPanelOpen ? 'Hide actors' : 'Actors'}
                   </button>
                 </>
               )}

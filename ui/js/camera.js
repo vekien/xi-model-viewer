@@ -98,6 +98,8 @@ export class OrbitCamera {
     this.pitch = 0.3;
     this.distance = 5;
     this.fovDegrees = 45;
+    // Roll about the view direction (Alt+Q / Alt+E); reset by fit().
+    this.roll = 0;
     this.minDistance = 0.1;
     this.maxDistance = 500;
     this.near = 0.05;
@@ -116,8 +118,31 @@ export class OrbitCamera {
     this.flySpeed = this.flySpeedEntity;
   }
 
-  get up() {
+  /** World up for the current handedness, before any roll. */
+  get baseUp() {
     return this.yUp ? [0, 1, 0] : [0, -1, 0];
+  }
+
+  /** View up: world up rotated about the view direction by `roll`. */
+  get up() {
+    const base = this.baseUp;
+    if (!this.roll) return base;
+    let f;
+    if (this.mode === 'fly') f = this.lookDir;
+    else {
+      const e = this.eye;
+      f = norm([this.target[0] - e[0], this.target[1] - e[1], this.target[2] - e[2]]);
+    }
+    // Rodrigues: rotate `base` about unit axis `f`.
+    const c = Math.cos(this.roll);
+    const s = Math.sin(this.roll);
+    const d = f[0] * base[0] + f[1] * base[1] + f[2] * base[2];
+    const cr = cross(f, base);
+    return [
+      base[0] * c + cr[0] * s + f[0] * d * (1 - c),
+      base[1] * c + cr[1] * s + f[1] * d * (1 - c),
+      base[2] * c + cr[2] * s + f[2] * d * (1 - c),
+    ];
   }
 
   /** Unit look direction for fly mode (pitch > 0 = look "up" on screen). */
@@ -350,10 +375,28 @@ export class OrbitCamera {
     }
   }
 
-  /** Wheel adjusts fly speed (level editor: ×1.15 per notch). */
+  /** Wheel adjusts fly speed in steps of 5 (snapping onto the 5 grid). */
   adjustFlySpeed(direction) {
-    this.setFlySpeed(this.flySpeed * Math.pow(1.15, direction));
+    const step = 5;
+    const dir = Math.sign(direction) || 1;
+    const q = this.flySpeed / step;
+    const onGrid = Math.abs(q - Math.round(q)) < 1e-6;
+    // Off the grid (e.g. an old 4.17 entity speed): the first notch lands on
+    // the next grid value in that direction rather than skipping past it.
+    const next = onGrid
+      ? this.flySpeed + step * dir
+      : (dir > 0 ? Math.ceil(q) : Math.floor(q)) * step;
+    this.setFlySpeed(Math.max(step, next));
   }
+
+  /** Alt+Q / Alt+E roll (any mode); `keys` carries 'rollL' / 'rollR'. */
+  rollUpdate(dt, keys) {
+    const rate = 1.4;   // rad/s
+    if (keys.has('rollL')) this.roll -= rate * dt;
+    if (keys.has('rollR')) this.roll += rate * dt;
+  }
+
+  resetRoll() { this.roll = 0; }
 
   /**
    * WASD/QE fly move. `keys` is a Set of lowercase key names; shift boosts ×3.
@@ -362,7 +405,8 @@ export class OrbitCamera {
   flyUpdate(dt, keys) {
     if (this.mode !== 'fly') return;
     const fwd = this.lookDir;
-    const up = this.up;
+    // Movement stays on the world axes even while the view is rolled.
+    const up = this.baseUp;
     const right = norm(cross(fwd, up));
     let mx = 0, my = 0, mz = 0;
     if (keys.has('w')) { mx += fwd[0]; my += fwd[1]; mz += fwd[2]; }
@@ -470,6 +514,7 @@ export class OrbitCamera {
    */
   fit(min, max, opts = {}) {
     this.userFramed = false;
+    this.roll = 0;
     this.target = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
     const sx = Math.max(Math.abs(max[0] - min[0]), 0.5);
     const sy = Math.max(Math.abs(max[1] - min[1]), 0.5);

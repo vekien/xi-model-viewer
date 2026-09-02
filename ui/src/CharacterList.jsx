@@ -195,8 +195,8 @@ const PC_STATE_KEY = 'pcState';
 const GEARSETS_KEY = 'pcGearSets';
 
 /** Persisted composer selections: { race, sel, actionGroup, action }. */
-function loadPcState() {
-  try { return JSON.parse(localStorage.getItem(PC_STATE_KEY) || 'null') ?? {}; } catch { return {}; }
+function loadPcState(key = PC_STATE_KEY) {
+  try { return JSON.parse(localStorage.getItem(key) || 'null') ?? {}; } catch { return {}; }
 }
 
 /**
@@ -236,8 +236,8 @@ function snapshotLoadout(race, sel, slots) {
   return { race, gear };
 }
 
-export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
-  const saved = useRef(loadPcState());
+export function useCharacter({ enabled, onLoad, onError, onIsolationChange, storageKey = PC_STATE_KEY }) {
+  const saved = useRef(loadPcState(storageKey));
   const [races, setRaces] = useState(null);
   const [race, setRaceState] = useState(saved.current.race ?? '');
   const [slots, setSlots] = useState(null);     // { slotKey: items[] | null }
@@ -398,9 +398,9 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange }) {
   useEffect(() => {
     if (!races?.length || !race) return;
     try {
-      localStorage.setItem(PC_STATE_KEY, JSON.stringify({ race, sel, actionGroup, action }));
+      localStorage.setItem(storageKey, JSON.stringify({ race, sel, actionGroup, action }));
     } catch { /* quota / private mode */ }
-  }, [races, race, sel, actionGroup, action]);
+  }, [races, race, sel, actionGroup, action, storageKey]);
 
   // Re-enter the Characters view: allow a reload (and a camera re-fit) even if
   // selections didn't change — another view may have replaced the model.

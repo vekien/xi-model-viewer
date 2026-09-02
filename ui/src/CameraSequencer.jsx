@@ -22,7 +22,7 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 const EMPTY_DOC = {
   name: '', totalFrames: 300, fps: 30, curve: true, loop: false, cine: true, snap: false,
-  lockActor: false,
+  lockActor: false, linearRotation: false,
   camera: [], scene: [], tod: [],
 };
 // Joint Lock to Actor aims at. FFXI skeletons carry no names — a joint is an
@@ -65,6 +65,7 @@ function toDoc(raw) {
     ...raw,
     curve: !!curve,
     lockActor: !!raw.lockActor,
+    linearRotation: !!raw.linearRotation,
     // `keys` is the pre-timeline field name — carry an old saved sequence over.
     camera: Array.isArray(raw.camera) ? raw.camera : (Array.isArray(raw.keys) ? raw.keys : []),
     scene,
@@ -140,7 +141,7 @@ export function CameraSequencer({
   const [selected, setSelected] = useState([]);
   const [zoom, setZoom] = useState(1);
 
-  const { totalFrames, fps, curve, loop, cine, snap, lockActor } = doc;
+  const { totalFrames, fps, curve, loop, cine, snap, lockActor, linearRotation } = doc;
 
   /**
    * World point "the actor" means in the current view — the orbit pivot, which
@@ -194,8 +195,10 @@ export function CameraSequencer({
   docRef.current = doc;
 
   const seq = useMemo(
-    () => new CameraSequence(doc.camera, { totalFrames, curve: curve ? 'spline' : 'linear' }),
-    [doc.camera, totalFrames, curve],
+    () => new CameraSequence(doc.camera, {
+      totalFrames, curve: curve ? 'spline' : 'linear', rotation: linearRotation ? 'linear' : 'spline',
+    }),
+    [doc.camera, totalFrames, curve, linearRotation],
   );
   seqRef.current = seq;
 
@@ -701,7 +704,7 @@ export function CameraSequencer({
 
   const clearAll = () => {
     if (playing) stop(true);
-    setDoc({ ...EMPTY_DOC, fps, totalFrames, curve, loop, cine, snap, lockActor });
+    setDoc({ ...EMPTY_DOC, fps, totalFrames, curve, loop, cine, snap, lockActor, linearRotation });
     setSelected([]);
     frameRef.current = 0;
     setFrame(0);
@@ -710,7 +713,7 @@ export function CameraSequencer({
   /** Blank sequence — clears keys + name; keeps fps / toggle prefs. */
   const newSequence = () => {
     if (playing) stop(true);
-    setDoc({ ...EMPTY_DOC, fps, curve, loop, cine, snap, lockActor });
+    setDoc({ ...EMPTY_DOC, fps, curve, loop, cine, snap, lockActor, linearRotation });
     setName('');
     setSelected([]);
     setZoom(1);
@@ -1070,6 +1073,13 @@ export function CameraSequencer({
                 <input type="checkbox" checked={!!curve} onChange={(e) => patch({ curve: e.target.checked })} />
                 <span className="track" />
                 <span className="cseq-switch-label">Curve</span>
+              </label>
+            </Tooltip>
+            <Tooltip content="Turn at a constant rate between keys while the eye still follows the curve (off = facing rides the curve too)" placement="top">
+              <label className="switch cseq-switch">
+                <input type="checkbox" checked={!!linearRotation} disabled={!curve} onChange={(e) => patch({ linearRotation: e.target.checked })} />
+                <span className="track" />
+                <span className="cseq-switch-label">Linear rotation</span>
               </label>
             </Tooltip>
             <Tooltip content="Keep the camera pointed at the actor — keyframes record facing it, and playback re-aims every frame" placement="top">
