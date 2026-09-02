@@ -140,6 +140,11 @@ browse the FTABLE/VTABLE file-id → DAT mapping:
 
 ![Gear model ids per race and slot](ss/14.png)
 
+Browse the client's record DATs as tables — items with decoded stats, jobs and
+icons, quests, missions and the string tables — with filters and CSV / JSON export:
+
+![Database: the armor table with decoded stats and an item detail card](ss/18.png)
+
 ---
 
 ## Setup
