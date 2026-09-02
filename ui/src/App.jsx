@@ -7,7 +7,7 @@ import { animDisplayName, groupAnimations, matchAnimRef, mergeModels, parseEntit
 import { Renderer } from '../js/renderer.js';
 import { FileTree } from './FileTree.jsx';
 import { DatabaseList } from './DatabaseList.jsx';
-import { DatabaseViewer } from './DatabaseViewer.jsx';
+import { DatabaseViewer, invalidateDbCache, dbDataDir, importDbFolder } from './DatabaseViewer.jsx';
 import { findDbTable } from '../js/database.js';
 import { MenuBar } from './MenuBar.jsx';
 import { NpcList } from './NpcList.jsx';
@@ -29,7 +29,7 @@ import { ZoneList } from './ZoneList.jsx';
 import { PlacementPanel } from './PlacementPanel.jsx';
 import { LoadingOverlay } from './LoadingOverlay.jsx';
 import { SettingsModal } from './SettingsModal.jsx';
-import { ExportModal } from './ExportModal.jsx';
+import { ExportModal, xiEnvFromSpec } from './ExportModal.jsx';
 import { BatchExportModal } from './BatchExportModal.jsx';
 import { DetailsPanel } from './DetailsPanel.jsx';
 import { SkeletonPanel } from './SkeletonPanel.jsx';
@@ -644,6 +644,10 @@ export default function App({ launch = null }) {
     try { localStorage.setItem('dbLang', l); } catch { /* quota */ }
   }, []);
   const [dbCounts, setDbCounts] = useState({});
+  // Bumped after `xi mv database` finishes so an open table re-reads its JSON.
+  const [dbReloadTick, setDbReloadTick] = useState(0);
+  const [dbExportTick, setDbExportTick] = useState(0);
+  const dbUpdateRunningRef = useRef(false);
   // Structure owns the viewport when the DAT Browser has nothing rendered, or
   // what it opened is a plain table. Otherwise it's the status-bar overlay.
   const dataOwnsPage = browserKind === 'data' || (leftView === 'files' && !browserKind);
@@ -5680,6 +5684,81 @@ export default function App({ launch = null }) {
     return byPath.get(normRel(rel).toUpperCase()) ?? null;
   }, []);
 
+  /**
+   * File › Update Database: `xi mv database` through the connected xi-tools,
+   * streamed to the console panel. Rebakes every table in both languages
+   * into <xi-tools>/mv/db, then drops the viewer's cached tables.
+   */
+  const runDatabaseUpdate = useCallback(async () => {
+    if (dbUpdateRunningRef.current) { setStatusText('Database update already running.'); return; }
+    const st = settingsRef.current || {};
+    const xiPath = (st.xiPath || '').trim();
+    if (!xiPath || !(await backend.xiAvailable(xiPath).catch(() => false))) {
+      setStatusText('xi-tools is not connected — set it up in Settings › XI Tools first.');
+      return;
+    }
+    if (!st.gamePath) { setStatusText('Set the Game path in Settings first (FFXI_DIR).'); return; }
+    // Bake into the app's own folder so it does not matter which xi-tools
+    // checkout is connected (the managed one lives under AppData).
+    let outDir = null;
+    try { outDir = await dbDataDir(); } catch { /* fall back to xi-tools' mv/db */ }
+    const args = outDir ? ['mv', 'database', '--out', outDir] : ['mv', 'database'];
+    const env = xiEnvFromSpec(st);
+    const title = 'xi mv database';
+    const lines = [`# FFXI_DIR=${st.gamePath}`, `$ xi ${args.join(' ')}`, '# running…'];
+    const log = () => {
+      if (settingsRef.current?.showXiConsole === false) return;
+      setCliOutput({ title, text: lines.join('\n') });
+    };
+    dbUpdateRunningRef.current = true;
+    log();
+    setStatusText('Updating database…');
+    try {
+      const code = await backend.xiRunStream(args, xiPath, env, (line) => {
+        if (/^# exit /.test(line)) return;
+        lines.push(line);
+        log();
+      });
+      if (code && code !== 0) throw new Error(`xi exited with code ${code}`);
+      lines.push('# done');
+      if (settingsRef.current?.showXiConsole !== false) setCliOutput({ title: `${title} · ok`, text: lines.join('\n') });
+      invalidateDbCache();
+      setDbReloadTick((n) => n + 1);
+      setStatusText(`Database updated → ${outDir || `${xiPath}\\mv\\db`}`);
+    } catch (e) {
+      const msg = e?.message || String(e);
+      lines.push(msg);
+      if (settingsRef.current?.showXiConsole !== false) setCliOutput({ title: `${title} · failed`, text: lines.join('\n') });
+      setStatusText(`Database update failed: ${msg}`);
+    } finally {
+      dbUpdateRunningRef.current = false;
+    }
+  }, []);
+
+  /**
+   * File › Import Database…: copy a `mv/db` folder (e.g. from a checkout where
+   * `xi mv database` was run) into the app's db folder and reload.
+   */
+  const importDatabase = useCallback(async () => {
+    const st = settingsRef.current || {};
+    const xi = (st.xiPath || '').trim();
+    const initial = xi ? `${xi.replace(/[\\/]+$/, '')}\\mv\\db` : '';
+    const picked = await backend.pickFolder(initial).catch(() => null);
+    if (!picked) {
+      if (!window.__TAURI__) setStatusText('Import Database needs the desktop app (folder picker).');
+      return;
+    }
+    setStatusText(`Importing database from ${picked}…`);
+    try {
+      const { copied, dir } = await importDbFolder(picked);
+      invalidateDbCache();
+      setDbReloadTick((n) => n + 1);
+      setStatusText(`Imported ${copied} table file${copied === 1 ? '' : 's'} → ${dir}`);
+    } catch (e) {
+      setStatusText(`Import failed: ${e?.message ?? e}`);
+    }
+  }, []);
+
   /** Database → DAT Browser: open the table's DAT the way File › Open DAT does. */
   const openDbPathInBrowser = useCallback(async (rel) => {
     const abs = await backend.resolvePrefer(gameCandidates(rel, settingsRef.current));
@@ -6474,6 +6553,20 @@ export default function App({ launch = null }) {
         break;
       case 'assets-database':
         setLeftView('database');
+        break;
+      case 'update-database':
+        runDatabaseUpdate();
+        break;
+      case 'import-database':
+        importDatabase();
+        break;
+      case 'export-database':
+        if (leftView !== 'database') {
+          setLeftView('database');
+          setStatusText('Pick a table, then File › Export Database again.');
+        } else {
+          setDbExportTick((n) => n + 1);
+        }
         break;
       case 'assets-npcs':
         setLeftView('npc');
@@ -7442,6 +7535,8 @@ export default function App({ launch = null }) {
           onLoaded={(t, lang, n) => setDbCounts((prev) => ({ ...prev, [`${t.key}:${lang}`]: n }))}
           onRevealPath={openDbPathInBrowser}
           onStatus={setStatusText}
+          reloadTick={dbReloadTick}
+          exportTick={dbExportTick}
         />
       )}
 

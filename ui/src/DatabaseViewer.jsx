@@ -8,6 +8,7 @@ import {
 } from '../js/database.js';
 import { Tooltip } from './Tooltip.jsx';
 import { DatabaseFilter } from './DatabaseFilter.jsx';
+import { DatabaseExportModal } from './DatabaseExportModal.jsx';
 import { fieldsFor } from '../js/dbFilter.js';
 
 const ROW_H = 26;
@@ -16,19 +17,62 @@ const OVERSCAN = 12;
 /** Loaded tables, keyed `${table.key}:${lang}`. */
 const docCache = new Map();
 
+/** Drop every loaded table (after `xi mv database` rewrites the JSON). */
+export function invalidateDbCache() {
+  docCache.clear();
+}
+
 /**
- * Prebuilt JSON from `xi mv database` lives under <xi-tools>/mv/db. When it is
- * there we skip the DAT reads entirely; the DAT is only touched later, lazily,
- * for a picked item's icon.
+ * The viewer's own database folder: `%LOCALAPPDATA%\\XiModelViewer\\db`.
+ * File › Update Database bakes straight into it and File › Import Database
+ * copies a `mv/db` folder in, so it works whichever xi-tools checkout the
+ * JSON came from.
+ */
+export async function dbDataDir() {
+  const base = await backend.userDataDir();
+  return `${String(base).replace(/[\\/]+$/, '')}\\db`;
+}
+
+/** Folders searched for `<table>.<lang>.json`, first hit wins. */
+export async function prebuiltDirs(settings) {
+  const dirs = [];
+  try { dirs.push(await dbDataDir()); } catch { /* browser shim without user-data */ }
+  const xi = (settings?.xiPath || '').trim();
+  if (xi) dirs.push(`${xi.replace(/[\\/]+$/, '')}\\mv\\db`);
+  return dirs;
+}
+
+/**
+ * Prebuilt JSON from `xi mv database` — the app's db folder first, then the
+ * connected xi-tools' mv/db. When it is there we skip the DAT reads
+ * entirely; the DAT is only touched later, lazily, for a picked item's icon.
  */
 async function readPrebuilt(table, lang, settings) {
-  const dir = (settings?.xiPath || '').trim();
-  if (!dir) return null;
-  const path = `${dir.replace(/[\\/]+$/, '')}\\mv\\db\\${table.key}.${lang}.json`;
-  if (!(await backend.fileExists(path))) return null;
-  const data = await backend.readFile(path);
-  const json = JSON.parse(new TextDecoder('utf-8').decode(new Uint8Array(data)));
-  return { json, path };
+  for (const dir of await prebuiltDirs(settings)) {
+    const path = `${dir}\\${table.key}.${lang}.json`;
+    if (!(await backend.fileExists(path))) continue;
+    const data = await backend.readFile(path);
+    const json = JSON.parse(new TextDecoder('utf-8').decode(new Uint8Array(data)));
+    return { json, path };
+  }
+  return null;
+}
+
+/**
+ * Copy every `*.json` from a `mv/db` folder into the app's db folder.
+ * @returns {{ copied: number, dir: string }}
+ */
+export async function importDbFolder(srcDir) {
+  const dst = await dbDataDir();
+  const src = String(srcDir).replace(/[\\/]+$/, '');
+  const entries = await backend.listDir(src);
+  const files = entries.filter((e) => !e.is_dir && /\.json$/i.test(e.name));
+  if (!files.length) throw new Error(`no .json tables in ${src}`);
+  for (const f of files) {
+    const data = await backend.readFile(`${src}\\${f.name}`);
+    await backend.writeFile(`${dst}\\${f.name}`, data);
+  }
+  return { copied: files.length, dir: dst };
 }
 
 async function loadTable(table, lang, settings) {
@@ -180,7 +224,8 @@ function compareBy(key, dir) {
  * the DAT structure inspector does.
  */
 export function DatabaseViewer({
-  table, settings, lang = 'en', onLang, fileIdOf, onLoaded, onRevealPath, onStatus,
+  table, settings, lang = 'en', onLang, fileIdOf, onLoaded, onRevealPath, onStatus, reloadTick = 0,
+  exportTick = 0,
 }) {
   const [entry, setEntry] = useState(null);
   const [error, setError] = useState(null);
@@ -196,6 +241,15 @@ export function DatabaseViewer({
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterDraft, setFilterDraft] = useState({ tab: 'advanced', rules: [], match: 'and', query: '' });
   const [activeFilter, setActiveFilter] = useState(null);
+  // File › Export Database bumps exportTick; the modal needs the loaded rows.
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportTickSeen = useRef(exportTick);
+  useEffect(() => {
+    if (exportTick === exportTickSeen.current) return;
+    exportTickSeen.current = exportTick;
+    if (entry) setExportOpen(true);
+    else onStatus?.('Pick a table to export first.');
+  }, [exportTick, entry, onStatus]);
 
   // Load (or pull from cache) whenever the table or language changes.
   useEffect(() => {
@@ -218,7 +272,7 @@ export function DatabaseViewer({
       .catch((err) => { if (alive) setError(err?.message ?? String(err)); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [table?.key, lang, settings?.gamePath, settings?.hdPath, settings?.pivotPath, settings?.xiPath]);
+  }, [table?.key, lang, settings?.gamePath, settings?.hdPath, settings?.pivotPath, settings?.xiPath, reloadTick]);
 
   const doc = entry?.doc ?? null;
   const columns = useMemo(() => (doc ? columnsFor(doc) : []), [doc]);
@@ -465,6 +519,20 @@ export function DatabaseViewer({
           </div>
         )}
       </div>
+
+      {exportOpen && doc && (
+        <DatabaseExportModal
+          table={table}
+          lang={lang}
+          doc={doc}
+          rows={rows}
+          columns={columns}
+          filterActive={!!(activeFilter?.predicate || query.trim())}
+          settings={settings}
+          onClose={() => setExportOpen(false)}
+          onStatus={onStatus}
+        />
+      )}
 
       <div className="data-side">
         <div className="panel data-card db-detail">

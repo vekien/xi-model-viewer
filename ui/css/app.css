@@ -5392,3 +5392,8 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .dbf-btn.primary { background: var(--accent); border-color: var(--accent); color: #0b1420; }
 .dbf-btn.primary:hover { background: #6db3ff; }
 .dbf-btn .icon { font-size: 15px; }
+
+/* Export Database modal */
+.dbx-modal { width: min(520px, 92vw); }
+.dbx-seg { align-self: flex-start; }
+.dbx-seg .seg-tab { flex: 0 0 auto; white-space: nowrap; padding: 0 12px; }
