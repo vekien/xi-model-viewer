@@ -53,7 +53,9 @@ function groupRows(items) {
 function optionRows(items, Option) {
   return groupRows(items).map((r) =>
     r.header !== undefined
-      ? <div key={r.key} className="combo-group">{r.header}</div>
+      ? (r.header.startsWith('---')
+        ? <div key={r.key} className="combo-rule" />
+        : <div key={r.key} className="combo-group">{r.header}</div>)
       : (
         <Option key={r.key} value={r.item.id} className="combo-option">
           {r.item.label}
@@ -150,7 +152,7 @@ function PlainCombo({ value, items, onChange, placeholder, className }) {
         >
           <ListboxButton ref={trigger} className={`combo-input${className ? ` ${className}` : ''}`}>
             <span className="combo-value">{current?.label ?? placeholder}</span>
-            <span className="icon combo-chevron">unfold_more</span>
+            <span className="icon combo-chevron">expand_more</span>
           </ListboxButton>
           <ListboxOptions anchor="bottom start" className="combo-options" style={panelStyle}>
             {optionRows(items, ListboxOption)}
@@ -207,7 +209,7 @@ function SearchCombo({ value, items, onChange, placeholder, className }) {
               // could never contain one.
               onKeyDown={(e) => e.stopPropagation()}
             />
-            <span className="icon combo-chevron">unfold_more</span>
+            <span className="icon combo-chevron">expand_more</span>
           </ComboboxButton>
           <ComboboxOptions anchor="bottom start" className="combo-options" style={panelStyle}>
             {shown.length === 0
@@ -305,7 +307,7 @@ function GroupedSearchCombo({ value, items: rawItems, onChange, placeholder, cla
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.stopPropagation()}
             />
-            <span className="icon combo-chevron">unfold_more</span>
+            <span className="icon combo-chevron">expand_more</span>
           </ComboboxButton>
           {/* Drilled in, the panel is a column: a fixed header bar (the way
               back) over the scrolling list, so the bar never has to float

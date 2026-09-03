@@ -938,6 +938,8 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
   white-space: nowrap;
 }
 .combo-group + * { margin-top: 0; }
+/* A "---" group heads its run with a rule instead of a name. */
+.combo-rule { height: 1px; margin: 5px 6px; background: var(--ring); }
 
 /* --- Scene panel (floors + fog/bg controls) -------------------------------- */
 
@@ -2538,7 +2540,15 @@ button.details-path-link.mono { font-family: var(--font-mono); font-size: 11px; 
 .combo-input:hover { border-color: rgba(255, 255, 255, 0.2); }
 .combo-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .combo-value { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.combo-chevron { font-size: 16px; color: var(--muted); flex: 0 0 auto; }
+.combo-chevron {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  overflow: hidden;
+  line-height: 1;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
 
 /* Filter variant: the value slot is a text field rather than a span. Selector
    has to out-specify theme.css's input[type='text'], which would otherwise draw

@@ -84,7 +84,7 @@ function FrameScrubber({ frameSink, onSeek }) {
  * view — every other view drives a plain clip and gets no action pickers.
  */
 export function AnimationPanel({ pc, anim }) {
-  const { actionGroups = [], actionGroup, setActionGroup,
+  const { actionGroups = [], actionGroupItems = [], actionGroup, setActionGroup,
           actionEntries = [], action, setAction } = pc ?? {};
   const { anims = [], currentAnim = '', onAnimChange,
           schedules = [], currentSchedule = '', onScheduleChange,
@@ -182,7 +182,7 @@ export function AnimationPanel({ pc, anim }) {
           <Row label="Category">
             <Combo
               value={actionGroup}
-              items={actionGroups.map((g) => ({ id: g, label: g }))}
+              items={actionGroupItems}
               onChange={setActionGroup}
             />
           </Row>

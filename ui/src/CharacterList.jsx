@@ -61,10 +61,14 @@ const DEFAULT_SECTIONS = { order: [], standardLabel: 'Standard', other: null };
 /** A-Z, but "None" stays pinned to the top of its group rather than sorting
  *  into the N's. Numeric collation keeps the id-style labels ("29/21",
  *  "183/67") in count order instead of 1-before-2-before-9. */
+const isNone = (it) => it.label?.toLowerCase() === 'none';
+/** Everyday animation categories, listed first in this order; the rest follow A-Z. */
+const PINNED_ACTION_GROUPS = ['General', 'Basic', 'Battle', 'Emote'];
+const collate = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+
 function byLabel(a, b) {
-  const isNone = (it) => it.label.toLowerCase() === 'none';
   if (isNone(a) !== isNone(b)) return isNone(a) ? -1 : 1;
-  return a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' });
+  return collate(a.label, b.label);
 }
 
 /**
@@ -136,28 +140,33 @@ function orderSlotItems(items, slotKey, sections = DEFAULT_SECTIONS) {
     const name = gearSection(it);
     if (name) { push(name, it); continue; }
     // "None" is the unequip row and pins to the top; it never gets swept up.
-    const isNone = it.label?.toLowerCase() === 'none';
     const ungrouped = !it.group || it.group.startsWith('---');
-    if (otherHere && !isNone && (otherGroups.has(it.group) || (ungrouped && otherHere.includeUngrouped))) {
+    if (otherHere && !isNone(it) && (otherGroups.has(it.group) || (ungrouped && otherHere.includeUngrouped))) {
       push(otherHere.label, it);
       continue;
     }
     // The source splits each armour list in half with a rule of dashes. It has
     // no name to head a section with, so that run just reads as plain gear.
-    plain.push(ungrouped && !isNone ? { ...it, group: null } : it);
+    plain.push(ungrouped && !isNone(it) ? { ...it, group: null } : it);
   }
 
-  // Listed sections in their given order, then anything else the data carried,
-  // alphabetically — an unrecognised set surfaces instead of being dropped.
-  // The catch-all always sinks to the bottom.
-  const extras = [...found.keys()]
-    .filter((n) => !listed.includes(n) && n !== otherHere?.label)
-    .sort();
-  const order = [
-    ...listed.filter((n) => found.has(n)),
-    ...extras,
-    ...(otherHere && found.has(otherHere.label) ? [otherHere.label] : []),
-  ];
+  if (otherHere) {
+    // Weapon slots read A-Z, types and set families alike, so a type is found
+    // by eye rather than by knowing the skill order the data comes in. "None"
+    // stays pinned on top; the catch-all still sinks to the bottom. Every other
+    // plain row here carries a type group (the ungrouped ones went to it).
+    const none = plain.filter(isNone);
+    for (const it of plain) if (!isNone(it)) push(it.group, it);
+    const names = [...found.keys()].filter((n) => n !== otherHere.label).sort(collate);
+    if (found.has(otherHere.label)) names.push(otherHere.label);
+    return [...none, ...names.flatMap((name) => found.get(name).sort(byLabel))];
+  }
+
+  // Armour: listed sections in their given order, then anything else the data
+  // carried, alphabetically — an unrecognised set surfaces instead of being
+  // dropped.
+  const extras = [...found.keys()].filter((n) => !listed.includes(n)).sort();
+  const order = [...listed.filter((n) => found.has(n)), ...extras];
   return [
     ...sortWithinGroups(plain),
     ...order.flatMap((name) => found.get(name).sort(byLabel)),
@@ -201,7 +210,14 @@ function loadPcState(key = PC_STATE_KEY) {
 
 /**
  * Gear set library (localStorage → app data in the Tauri shell).
- * sets: { id, name, race, gear: { slotKey: label } }
+ * sets: { id, name, race, gear: { slotKey: SlotRef }, updatedAt }
+ *
+ * A SlotRef names one pick: { fileId, path, mid, midAlt?, label }. `fileId`
+ * and `path` identify the exact DAT — unique within a slot list and never
+ * shared between races — so a set restores byte-for-byte on the race it was
+ * saved on. `mid` is the equipment model id, the one key that survives a race
+ * switch (Pumpkin Head is model 50 for everyone; its DAT is not). `label` is
+ * display text and the only key a v2 set (bare label string) carries.
  */
 function loadGearSets() {
   try {
@@ -219,19 +235,57 @@ function loadGearSets() {
 }
 
 function saveGearSets(sets) {
-  try { localStorage.setItem(GEARSETS_KEY, JSON.stringify({ version: 2, sets })); } catch { /* quota */ }
+  try { localStorage.setItem(GEARSETS_KEY, JSON.stringify({ version: 3, sets })); } catch { /* quota */ }
+}
+
+/** Build the SlotRef for a slot item (see loadGearSets). */
+function slotRef(item) {
+  if (!item) return null;
+  const ref = { label: item.label ?? '' };
+  if (Number.isFinite(item.fileId)) ref.fileId = item.fileId;
+  if (item.paths?.[0]) ref.path = item.paths[0];
+  if (Number.isFinite(item.mid)) ref.mid = item.mid;
+  if (Number.isFinite(item.midAlt)) ref.midAlt = item.midAlt;
+  return ref;
+}
+
+/**
+ * Resolve a SlotRef (or v2 label string) against a slot list: exact DAT
+ * first, then model id for cross-race sets, then label as a last resort.
+ * null when nothing matches, so the caller keeps its current pick.
+ */
+function matchSlotRef(items, ref) {
+  if (!items?.length || !ref) return null;
+  if (typeof ref === 'string') return items.find((it) => it.label === ref) ?? null;
+  if (Number.isFinite(ref.fileId)) {
+    const hit = items.find((it) => it.fileId === ref.fileId);
+    if (hit) return hit;
+  }
+  if (ref.path) {
+    const hit = items.find((it) => it.paths?.[0] === ref.path);
+    if (hit) return hit;
+  }
+  // Tarutaru spans two look races that number the same DAT differently, so
+  // either of an item's ids may stand in for either of the ref's. Several
+  // entries share model 0 ("None" and unnamed DATs): label breaks the tie.
+  const ids = [ref.mid, ref.midAlt].filter(Number.isFinite);
+  if (ids.length) {
+    const same = items.filter((it) => ids.includes(it.mid) || ids.includes(it.midAlt));
+    if (same.length) return same.find((it) => it.label === ref.label) ?? same[0];
+  }
+  return (ref.label && items.find((it) => it.label === ref.label)) || null;
 }
 
 function newId(prefix) {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
-/** Snapshot the current look as race + per-slot item labels (portable across races/rebakes). */
+/** Snapshot the current look as race + per-slot SlotRefs (exact DATs; portable across races). */
 function snapshotLoadout(race, sel, slots) {
   const gear = {};
   for (const s of SLOTS) {
     const it = slots?.[s.key]?.find((x) => x.id === sel[s.key]);
-    if (it) gear[s.key] = it.label;
+    if (it) gear[s.key] = slotRef(it);
   }
   return { race, gear };
 }
@@ -262,6 +316,7 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
   const partsRef = useRef([]);
   const carry = useRef({ gear: {}, actionKey: null });   // selections to carry across a race switch
   const pendingGear = useRef(null);             // gear-set labels to apply after race/slots ready
+  const pendingAction = useRef(null);           // { actionGroup, action } to apply after race/slots ready
   const prevSelRef = useRef(null);              // sel snapshot from the last onLoad (for displayPath)
   const raceData = useRef(new Map());           // race id -> full characters.json entry
   const sectionCfg = useRef(DEFAULT_SECTIONS);  // characters.json `gearSections`
@@ -285,7 +340,17 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
   };
 
   const groupOf = (a) => a.group ?? 'Other';
-  const actionGroups = [...new Set(actions.map(groupOf))];
+  // Everyday categories first, then a rule and the rest A-Z — the data lists
+  // them in skill order, which reads as random.
+  const allGroups = [...new Set(actions.map(groupOf))];
+  const pinnedGroups = PINNED_ACTION_GROUPS.filter((g) => allGroups.includes(g));
+  const restGroups = allGroups.filter((g) => !PINNED_ACTION_GROUPS.includes(g)).sort(collate);
+  const actionGroups = [...pinnedGroups, ...restGroups];
+  // Combo rows: a dash-rule group draws the divider (see Combo optionRows).
+  const actionGroupItems = [
+    ...pinnedGroups.map((g) => ({ id: g, label: g })),
+    ...restGroups.map((g) => ({ id: g, label: g, group: '---' })),
+  ];
   const actionEntries = actions.filter((a) => groupOf(a) === actionGroup);
 
   /** Switching category also selects its first entry. */
@@ -319,14 +384,14 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
     })();
   }, [enabled, races]);
 
-  // Mirror the current selections by *label* so a race switch can carry them
-  // over (item ids are race-specific, labels are shared). Deps exclude race, so
-  // this holds the previous race's picks while the per-race effect reloads.
+  // Mirror the current selections as SlotRefs so a race switch can carry them
+  // over (item ids are race-specific, model ids are shared). Deps exclude race,
+  // so this holds the previous race's picks while the per-race effect reloads.
   useEffect(() => {
     const gear = {};
     for (const s of SLOTS) {
       const it = slots?.[s.key]?.find((x) => x.id === sel[s.key]);
-      if (it) gear[s.key] = it.label;
+      if (it) gear[s.key] = slotRef(it);
     }
     const a = actions.find((x) => x.id === action);
     carry.current = { gear, actionKey: a ? `${a.group ?? ''}|${a.label}` : null };
@@ -353,25 +418,35 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
     const acts = entry.actions ?? [];
 
     // Restore the saved selections once, and only for the race they belong to
-    // (gear lists are race-specific; a manual race switch carries by label).
-    // A pending gear-set load wins over both (labels applied after slots exist).
+    // (gear lists are race-specific; a manual race switch carries by model id).
+    // A pending gear-set load wins over both (refs resolved after slots exist).
     const s = saved.current;
     const restoring = !restored.current && s.race === race;
     restored.current = true;
     const startSel = { ...defaults };
     let startGroup = acts[0]?.group ?? (acts.length ? 'Other' : '');
     let startAction = acts[0]?.id ?? '';
-    const applyLabels = (labels) => {
-      if (!labels) return;
+    const applyRefs = (refs) => {
+      if (!refs) return;
       for (const s2 of SLOTS) {
-        const want = labels[s2.key];
-        const hit = want && slotMap[s2.key]?.find((it) => it.label === want);
+        const hit = matchSlotRef(slotMap[s2.key], refs[s2.key]);
         if (hit) startSel[s2.key] = hit.id;
       }
     };
-    if (pendingGear.current) {
-      applyLabels(pendingGear.current);
+    const fromSet = !!pendingGear.current;
+    if (fromSet) {
+      applyRefs(pendingGear.current);
       pendingGear.current = null;
+    }
+    if (pendingAction.current) {
+      const p = pendingAction.current;
+      pendingAction.current = null;
+      const byId = p.action && acts.find((a) => a.id === p.action);
+      if (byId) { startGroup = byId.group ?? 'Other'; startAction = byId.id; }
+      else if (p.actionGroup && acts.some((a) => (a.group ?? 'Other') === p.actionGroup)) {
+        startGroup = p.actionGroup;
+        startAction = acts.find((a) => (a.group ?? 'Other') === p.actionGroup)?.id ?? startAction;
+      }
     } else if (restoring) {
       for (const [k, id] of Object.entries(s.sel ?? {})) {
         if (slotMap[k]?.some((it) => it.id === id)) startSel[k] = id;
@@ -379,8 +454,10 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
       const act = acts.find((a) => a.id === s.action);
       if (act) { startGroup = act.group ?? 'Other'; startAction = act.id; }
     } else if (carry.current.actionKey || Object.keys(carry.current.gear).length) {
-      // Race switch: carry gear + action over by label (item ids differ per race).
-      applyLabels(carry.current.gear);
+      // Race switch: carry gear + action over (item ids differ per race). When a
+      // gear set just filled the slots, painting the previous look over it would
+      // undo the apply — only the action carries then.
+      if (!fromSet) applyRefs(carry.current.gear);
       const [g, l] = (carry.current.actionKey ?? '').split('|');
       const act = acts.find((a) => (a.group ?? '') === g && a.label === l);
       if (act) { startGroup = act.group ?? 'Other'; startAction = act.id; }
@@ -532,12 +609,15 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
     });
   }, []);
 
-  /** Apply a saved gear set (race + slot labels). Switches race if needed. */
+  /** Apply a saved gear set (race + slot refs). Switches race if needed. */
   const applyGearSet = useCallback((entry) => {
     if (!entry?.race || !entry.gear) return;
     if (!raceData.current.has(entry.race)) {
       cbRef.current.onError?.(`Gear set race “${entry.race}” is not available.`);
       return;
+    }
+    if (entry.action != null || entry.actionGroup != null) {
+      pendingAction.current = { actionGroup: entry.actionGroup, action: entry.action };
     }
     if (entry.race !== race) {
       pendingGear.current = entry.gear;
@@ -548,7 +628,7 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
       setRaceState(entry.race);
       return;
     }
-    // Same race — map labels → ids on the live slot lists.
+    // Same race — resolve refs → ids on the live slot lists.
     if (!slots || slotsRace !== race) {
       pendingGear.current = entry.gear;
       return;
@@ -556,17 +636,27 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
     setSel((prev) => {
       const next = { ...prev };
       for (const s of SLOTS) {
-        const want = entry.gear[s.key];
-        const hit = want && slots[s.key]?.find((it) => it.label === want);
+        const hit = matchSlotRef(slots[s.key], entry.gear[s.key]);
         if (hit) next[s.key] = hit.id;
       }
       return next;
     });
-  }, [race, slots, slotsRace]);
+    if (pendingAction.current) {
+      const p = pendingAction.current;
+      pendingAction.current = null;
+      const byId = p.action && actions.find((a) => a.id === p.action);
+      if (byId) { setActionGroupState(byId.group ?? 'Other'); setAction(byId.id); }
+      else if (p.actionGroup) {
+        setActionGroupState(p.actionGroup);
+        const first = actions.find((a) => (a.group ?? 'Other') === p.actionGroup);
+        if (first) setAction(first.id);
+      }
+    }
+  }, [race, slots, slotsRace, actions]);
 
   return {
     races, race, setRace, slots, sel, setSel,
-    actionGroups, actionGroup, setActionGroup, actionEntries, action, setAction,
+    actionGroups, actionGroupItems, actionGroup, setActionGroup, actionEntries, action, setAction,
     applyGearSet, reload,
     isolated, toggleIsolate,
     // Read from characters.json alongside the races; the list is already
@@ -577,6 +667,14 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
     rangedDisplay: sectionCfg.current.rangedDisplay ?? null,
     rangedPaths: slots?.range?.find((it) => it.id === sel.range)?.paths ?? null,
     actionLabel: actions.find((a) => a.id === action)?.label ?? '',
+    snapshot: () => {
+      const gear = {};
+      for (const s of SLOTS) {
+        const it = slots?.[s.key]?.find((x) => x.id === sel[s.key]);
+        if (it) gear[s.key] = slotRef(it);
+      }
+      return { race, gear, actionGroup, action };
+    },
   };
 }
 
