@@ -164,6 +164,16 @@ const AUDIO_VIEWS = new Set(['music', 'sfx']);
 // Views that put their own content on screen as soon as they open. Restoring
 // one of these at startup must not also load the last/default DAT.
 const SELF_LOADING_VIEWS = new Set(['pc', 'creation', 'images', 'music', 'sfx', 'effects', 'database']);
+
+/** DAT paths of the composer parts whose slot keys are isolated. */
+function pcIsolationPaths(keys, parts) {
+  const paths = [];
+  for (const p of parts) {
+    if (!keys.has(p.key)) continue;
+    for (const path of p.paths ?? []) paths.push(path);
+  }
+  return paths;
+}
 // A schedule sequence lays segments on a timeline; a joint whose segment hasn't
 // started yet would show bind pose (T-pose flash each loop). Underlay a looping
 // idle so those joints rest naturally — battle idle for weapon actions if it's
@@ -1865,7 +1875,13 @@ export default function App({ launch = null }) {
       setModelPath(relativeName(primaryPath));
       shownPathRef.current = primaryPath;
       sourcePathRef.current = paths[paths.length - 1];
-      if (parts?.length) pcPartsRef.current = parts;
+      if (parts?.length) {
+        pcPartsRef.current = parts;
+        // setModel just dropped the isolation filter. The composer re-applied
+        // it when this load was *requested*, against a model that did not exist
+        // yet — put it back against the parts that actually loaded.
+        if (pcIsoKeysRef.current.size) renderer.setMeshSourceFilter(pcIsolationPaths(pcIsoKeysRef.current, parts));
+      }
       // Every DAT this model's meshes came from, so VFX Only can hide the lot.
       pcMeshPathsRef.current = [...new Set(model.meshGroups.map((g) => g.sourcePath).filter(Boolean))];
       // Viewbar lists. Group over the WHOLE model so each clip's body-region
@@ -3356,20 +3372,13 @@ export default function App({ launch = null }) {
   // Character composer (Assets > Characters) — shared by the left panel and
   // the Animation panel Action combo.
   const pcPartsRef = useRef([]);
+  const pcIsoKeysRef = useRef(new Set());   // slot keys isolated in the composer
   const applyPcIsolation = useCallback((keys, parts) => {
     if (parts) pcPartsRef.current = parts;
+    pcIsoKeysRef.current = keys ?? new Set();
     const r = rendererRef.current;
     if (!r) return;
-    if (!keys?.size) {
-      r.setMeshSourceFilter(null);
-      return;
-    }
-    const paths = [];
-    for (const p of pcPartsRef.current) {
-      if (!keys.has(p.key)) continue;
-      for (const path of p.paths ?? []) paths.push(path);
-    }
-    r.setMeshSourceFilter(paths);
+    r.setMeshSourceFilter(keys?.size ? pcIsolationPaths(keys, pcPartsRef.current) : null);
   }, []);
   // Effects ACTORS panel can drive the same PC composer as Assets > Characters.
   const [effectActorTab, setEffectActorTab] = useState('pc'); // 'none' | 'pc' | 'npc'
