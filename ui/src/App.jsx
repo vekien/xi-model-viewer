@@ -1022,7 +1022,7 @@ export default function App({ launch = null }) {
   // Time-of-day auto-advance (the play button on the Zone panel's clock row).
   const [todPlaying, setTodPlaying] = useState(false);
   const [plcSelected, setPlcSelected] = useState('');       // 'mesh:…' | 'inst:…'
-  const [plcOpen, setPlcOpen] = useState(true);
+  const [plcOpen, setPlcOpen] = useState(false);
   // Zone actors (bottom-right › Actors): NPCs / characters placed on the
   // terrain. Definitions live here; geometry lives in the renderer (addActor).
   const [zoneActors, setZoneActors] = useState([]);
@@ -1035,14 +1035,10 @@ export default function App({ launch = null }) {
   const actorsPanelOpenRef = useRef(false);
   actorsPanelOpenRef.current = actorsPanelOpen;
   // Which right-rail panel was last up in a zone ('objects' | 'actors' |
-  // 'none'); a zone that loads later opens the same one.
-  const rightPanelPrefRef = useRef((() => {
-    try { return localStorage.getItem('zoneRightPanel') || 'objects'; } catch { return 'objects'; }
-  })());
-  const rememberRightPanel = (v) => {
-    rightPanelPrefRef.current = v;
-    try { localStorage.setItem('zoneRightPanel', v); } catch { /* quota */ }
-  };
+  // 'none'); a zone that loads later in the session opens the same one. Every
+  // launch starts at 'none' — both panels stay down until asked for.
+  const rightPanelPrefRef = useRef('none');
+  const rememberRightPanel = (v) => { rightPanelPrefRef.current = v; };
   // null | { forId: number|null } — waiting for a click on the terrain.
   const [actorPlacing, setActorPlacing] = useState(null);
   const actorPlacingRef = useRef(null);
@@ -3321,7 +3317,9 @@ export default function App({ launch = null }) {
       setSoundGroups(particleSystem?.listSoundGroups?.() ?? []);
       setSfxListTick((n) => n + 1);
       setPlcSelected('');
-      setPlcOpen(true);
+      // Objects comes up only when it was the panel last in use (the
+      // zoneActorKey effect settles Actors); a fresh launch keeps it down.
+      setPlcOpen(rightPanelPrefRef.current === 'objects');
       // Fresh zone — drop edit history / originals from the previous area.
       plcUndoRef.current = [];
       plcOriginalRef.current = new Map();
@@ -6514,8 +6512,8 @@ export default function App({ launch = null }) {
     actorLoadGenRef.current.clear();
     setCurrentActorSet(null);
     setActorSetsOpen(false);
-    // A (re)loaded zone brings the Objects panel back up by default; put up
-    // whichever panel the user had last time instead.
+    // A (re)loaded zone puts up whichever panel the user had last time in
+    // this session — nothing on a fresh launch.
     if (zoneActorKey && rightPanelPrefRef.current === 'actors') {
       setPlcOpen(false);
       setActorsPanelOpen(true);
