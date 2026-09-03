@@ -80,7 +80,7 @@ function ZoneTabs({ tabs, activeKey, onSelect }) {
 
 export function DataViewer({
   doc, sources, onSelectSource, onOpenTexture, onOpenSkeleton, onOpenZoneDef,
-  onOpenRoute, onOpenUiMenu, onOpenUiElementGroup, onOpenDataTable, onOpenParticle, onPlaySound, playingSoundKey, onRevealPath, onOpenDat, onRenderFile,
+  onOpenRoute, onOpenUiMenu, onOpenUiElementGroup, onOpenDataTable, onOpenParticle, onOpenZoneMesh, onPlaySound, playingSoundKey, onRevealPath, onOpenDat, onRenderFile,
 }) {
   if (!doc) {
     return (
@@ -264,6 +264,7 @@ export function DataViewer({
       onOpenUiElementGroup={onOpenUiElementGroup}
       onOpenDataTable={onOpenDataTable}
       onOpenParticle={onOpenParticle}
+      onOpenZoneMesh={onOpenZoneMesh}
       onPlaySound={onPlaySound}
       playingSoundKey={playingSoundKey}
       onRevealPath={onRevealPath}
@@ -381,7 +382,7 @@ function SectionsView({
   doc, sourceItems, activeSource, zoneChrome, onSelectSource,
   onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenRoute, onOpenUiMenu,
   onOpenUiElementGroup, onOpenDataTable,
-  onOpenParticle, onPlaySound, playingSoundKey,
+  onOpenParticle, onOpenZoneMesh, onPlaySound, playingSoundKey,
   onRevealPath, onRenderFile,
 }) {
   const [query, setQuery] = useState('');
@@ -434,6 +435,7 @@ function SectionsView({
               onOpenUiElementGroup={onOpenUiElementGroup}
               onOpenDataTable={onOpenDataTable}
               onOpenParticle={onOpenParticle}
+              onOpenZoneMesh={onOpenZoneMesh}
               onPlaySound={onPlaySound}
               playingSoundKey={playingSoundKey}
             />
@@ -1422,7 +1424,7 @@ function GearSlotNode({ node, onOpenDat, tableRace }) {
   );
 }
 
-function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenRoute, onOpenUiMenu, onOpenUiElementGroup, onOpenDataTable, onOpenParticle, onPlaySound, playingSoundKey }) {
+function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenRoute, onOpenUiMenu, onOpenUiElementGroup, onOpenDataTable, onOpenParticle, onOpenZoneMesh, onPlaySound, playingSoundKey }) {
   const [open, setOpen] = useState(depth < 4 || !!forceOpen);
   // While filtering, keep matching branches expanded.
   const expanded = forceOpen || open;
@@ -1471,6 +1473,7 @@ function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onOpenZ
               onOpenUiElementGroup={onOpenUiElementGroup}
               onOpenDataTable={onOpenDataTable}
               onOpenParticle={onOpenParticle}
+              onOpenZoneMesh={onOpenZoneMesh}
               onPlaySound={onPlaySound}
               playingSoundKey={playingSoundKey}
             />
@@ -1488,6 +1491,7 @@ function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onOpenZ
               onOpenUiElementGroup={onOpenUiElementGroup}
               onOpenDataTable={onOpenDataTable}
               onOpenParticle={onOpenParticle}
+              onOpenZoneMesh={onOpenZoneMesh}
               onPlaySound={onPlaySound}
               playingSoundKey={playingSoundKey}
             />
@@ -1497,7 +1501,7 @@ function DirNode({ dir, depth, forceOpen, onOpenTexture, onOpenSkeleton, onOpenZ
   );
 }
 
-function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenRoute, onOpenUiMenu, onOpenUiElementGroup, onOpenDataTable, onOpenParticle, onPlaySound, playingSoundKey }) {
+function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenRoute, onOpenUiMenu, onOpenUiElementGroup, onOpenDataTable, onOpenParticle, onOpenZoneMesh, onPlaySound, playingSoundKey }) {
   const isTex = !!(res.isTexture || res.textureName
     || res.type === 0x20 || res.type === 0x5D
     || res.name === 'Texture' || res.name === 'BumpMap');
@@ -1546,6 +1550,15 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
   const isSkeletonAnimation = !!(res.isSkeletonAnimation
     || res.type === 0x2b || res.type === 43
     || res.name === 'SkeletonAnimation');
+  const isZoneInteractions = !!(res.isZoneInteractions
+    || res.type === 0x36 || res.type === 54
+    || res.name === 'ZoneInteractions');
+  const isEnvironment = !!(res.isEnvironment
+    || res.type === 0x2F || res.type === 47
+    || res.name === 'Environment');
+  const isZoneMesh = !!(res.isZoneMesh
+    || res.type === 0x2E || res.type === 46
+    || res.name === 'ZoneMesh');
   const isParticle = !!(res.isParticleGenerator || res.type === 0x05 || res.type === 5
     || res.name === 'ParticleGenerator');
   const soundKey = isSound && res.soundId != null
@@ -1560,10 +1573,12 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
   const uiMenuClick = isUiMenu;
   const uiEgClick = isUiElementGroup;
   const dataTableClick = isDataTable || isEffectRoutine || isSpriteSheet || isParticleMesh
-    || isKeyFrame || isWeightedMesh || isSkeletonMesh || isInfo || isSkeletonAnimation;
+    || isKeyFrame || isWeightedMesh || isSkeletonMesh || isInfo || isSkeletonAnimation
+    || isZoneInteractions || isEnvironment;
   const particleClick = isParticle;
+  const zmeshClick = isZoneMesh;
   const soundClick = isSound && res.soundId != null && !!onPlaySound;
-  const clickable = texClick || skelClick || soundClick || zdefClick || particleClick || routeClick || uiMenuClick || uiEgClick || dataTableClick;
+  const clickable = texClick || skelClick || soundClick || zdefClick || particleClick || zmeshClick || routeClick || uiMenuClick || uiEgClick || dataTableClick;
   const openKey = res.textureName || res.id?.trim() || null;
   const onActivate = (e) => {
     e?.preventDefault?.();
@@ -1572,6 +1587,9 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
     else if (particleClick) {
       if (typeof onOpenParticle === 'function') onOpenParticle(res);
       else console.error('ParticleGenerator click: onOpenParticle handler missing', res);
+    } else if (zmeshClick) {
+      if (typeof onOpenZoneMesh === 'function') onOpenZoneMesh(res);
+      else console.error('ZoneMesh click: onOpenZoneMesh handler missing', res);
     } else if (dataTableClick) {
       if (typeof onOpenDataTable === 'function') onOpenDataTable(res);
       else console.error('DataTable click: onOpenDataTable handler missing', res);
@@ -1596,7 +1614,9 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
     ? (soundPlaying ? `Click to stop se ${res.soundId}` : `Click to play se ${res.soundId}`)
     : particleClick
       ? `Click to play particle · ${String(res.id || '').trim() || 'generator'}`
-      : dataTableClick
+      : zmeshClick
+        ? `Click to view mesh · ${at}`
+        : dataTableClick
         ? (isEffectRoutine
           ? `Click to view routine commands · ${at}`
           : isSpriteSheet
@@ -1613,7 +1633,11 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
                       ? `Click to view info · ${at}`
                       : isSkeletonAnimation
                         ? `Click to view animation · ${at}`
-                        : `Click to view table · ${at}`)
+                        : isZoneInteractions
+                          ? `Click to view trigger volumes · ${at}`
+                          : isEnvironment
+                            ? `Click to view lighting / sky · ${at}`
+                            : `Click to view table · ${at}`)
         : uiEgClick
           ? `Click to view element group / sprites · ${at}`
           : uiMenuClick
@@ -1630,7 +1654,7 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
   return (
     <Tooltip content={tip}>
       <div
-        className={`data-row data-res-row${isTex ? ' data-res-tex' : ''}${isSkel ? ' data-res-skel' : ''}${isZoneDef ? ' data-res-zdef' : ''}${isRoute ? ' data-res-route' : ''}${isUiMenu ? ' data-res-uimenu' : ''}${isUiElementGroup ? ' data-res-uieg' : ''}${isDataTable ? ' data-res-table' : ''}${isEffectRoutine ? ' data-res-routine' : ''}${isSpriteSheet ? ' data-res-sprites' : ''}${isParticleMesh ? ' data-res-pmesh' : ''}${isKeyFrame ? ' data-res-keys' : ''}${isWeightedMesh ? ' data-res-wmesh' : ''}${isSkeletonMesh ? ' data-res-smesh' : ''}${isInfo ? ' data-res-info' : ''}${isSkeletonAnimation ? ' data-res-anim' : ''}${isParticle ? ' data-res-fx' : ''}${isSound ? ' data-res-sfx' : ''}${soundPlaying ? ' data-res-sfx-play' : ''}${clickable ? ' data-res-click' : ''}`}
+        className={`data-row data-res-row${isTex ? ' data-res-tex' : ''}${isSkel ? ' data-res-skel' : ''}${isZoneDef ? ' data-res-zdef' : ''}${isRoute ? ' data-res-route' : ''}${isUiMenu ? ' data-res-uimenu' : ''}${isUiElementGroup ? ' data-res-uieg' : ''}${isDataTable ? ' data-res-table' : ''}${isEffectRoutine ? ' data-res-routine' : ''}${isSpriteSheet ? ' data-res-sprites' : ''}${isParticleMesh ? ' data-res-pmesh' : ''}${isKeyFrame ? ' data-res-keys' : ''}${isWeightedMesh ? ' data-res-wmesh' : ''}${isSkeletonMesh ? ' data-res-smesh' : ''}${isInfo ? ' data-res-info' : ''}${isSkeletonAnimation ? ' data-res-anim' : ''}${isZoneInteractions ? ' data-res-zint' : ''}${isEnvironment ? ' data-res-env' : ''}${isZoneMesh ? ' data-res-zmesh' : ''}${isParticle ? ' data-res-fx' : ''}${isSound ? ' data-res-sfx' : ''}${soundPlaying ? ' data-res-sfx-play' : ''}${clickable ? ' data-res-click' : ''}`}
         style={{ paddingLeft: 8 + depth * 14 }}
         onClick={clickable ? onActivate : undefined}
         role={clickable ? 'button' : undefined}

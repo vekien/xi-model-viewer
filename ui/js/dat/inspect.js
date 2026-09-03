@@ -1464,7 +1464,124 @@ export function parseInspectInfo(buffer, offset) {
 /** 0x2E — the mesh name sits at +0x20 in plaintext even in encrypted zones. */
 function peekZoneMesh(bytes, dv, s) {
   const name = strAt(bytes, s.start + 0x20, 0x10).trim();
-  return name.length >= 2 && printable(name) ? { text: name } : null;
+  return {
+    text: name.length >= 2 && printable(name) ? name : null,
+    isZoneMesh: true,
+  };
+}
+
+function envTimeLabel(id) {
+  const digits = String(id || '').replace(/\D/g, '');
+  if (digits.length < 3 || digits.length > 4) return id || '';
+  const s = digits.padStart(4, '0');
+  return `${s.slice(0, 2)}:${s.slice(2, 4)}`;
+}
+
+function fmtRgba(bytes, p) {
+  const r = bytes[p], g = bytes[p + 1], b = bytes[p + 2], a = bytes[p + 3];
+  const hex = `#${[r, g, b].map((x) => x.toString(16).padStart(2, '0')).join('')}`;
+  return { text: `${hex}  ${r},${g},${b},${a}`, swatch: hex };
+}
+
+function lightRows(prefix, bytes, dv, p) {
+  const color = (label, off) => {
+    const s = fmtRgba(bytes, off);
+    return { field: `${prefix} ${label}`, value: s.text, swatch: s.swatch };
+  };
+  const fogEnd = dv.getFloat32(p + 16, true);
+  const fogStart = dv.getFloat32(p + 20, true);
+  const diffuse = dv.getFloat32(p + 24, true);
+  return [
+    color('sun', p),
+    color('moon', p + 4),
+    color('ambient', p + 8),
+    color('fog', p + 12),
+    {
+      field: `${prefix} fog start / end`,
+      value: `${Number.isFinite(fogStart) ? fogStart.toFixed(1) : '—'} / ${Number.isFinite(fogEnd) ? fogEnd.toFixed(1) : '—'}`,
+    },
+    { field: `${prefix} diffuse`, value: Number.isFinite(diffuse) ? diffuse.toFixed(3) : '—' },
+  ];
+}
+
+/**
+ * 0x2F Environment — one TOD lighting/sky keyframe (xim EnvironmentSection).
+ * Section id is HHMM (`0000` midnight, `1200` noon). Body is 0xAC bytes.
+ */
+export function parseInspectEnvironment(buffer, offset) {
+  const bytes = buffer instanceof Uint8Array
+    ? buffer
+    : new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const start = offset | 0;
+  if (start + 0x20 > bytes.length) return null;
+  const meta = dv.getUint32(start + 4, true);
+  const type = meta & 0x7f;
+  if (type !== 0x2F) return null;
+  const size = ((meta >>> 7) & 0x7ffff) * 0x10;
+  const ds = start + 0x10;
+  const bodyEnd = Math.min(start + (size > 0 ? size : 0), bytes.length);
+  if (ds + 0xAC > bodyEnd) return null;
+
+  const id = fourcc(bytes, start).trim() || 'env';
+  const time = envTimeLabel(id);
+  const indoorFlag = dv.getUint32(ds, true);
+  const indoors = indoorFlag === 1;
+  const drawDistance = dv.getFloat32(ds + 0x58, true);
+  const spokes = dv.getUint16(ds + 0x5e, true);
+  const radius = dv.getFloat32(ds + 0x68, true);
+  const clear = fmtRgba(bytes, ds + 0x4c);
+  const unkColor = fmtRgba(bytes, ds + 0x60);
+
+  const rows = [
+    { field: 'Time', value: time || id },
+    { field: 'Indoors', value: indoors ? 'yes' : 'no' },
+    { field: 'Draw distance', value: Number.isFinite(drawDistance) ? drawDistance.toFixed(1) : '—' },
+    { field: 'Skybox spokes', value: String(spokes) },
+    { field: 'Skybox radius', value: Number.isFinite(radius) ? radius.toFixed(2) : '—' },
+    { field: 'Clear color', value: clear.text, swatch: clear.swatch },
+    { field: 'Unk color', value: unkColor.text, swatch: unkColor.swatch },
+    ...lightRows('Model', bytes, dv, ds + 0x0c),
+    ...lightRows('Terrain', bytes, dv, ds + 0x2c),
+  ];
+
+  if (indoors) {
+    const s2b = (v) => (v > 127 ? v - 256 : v) / 128;
+    const mx = s2b(bytes[ds + 0x30]), my = s2b(bytes[ds + 0x31]), mz = s2b(bytes[ds + 0x32]);
+    rows.splice(2, 0, {
+      field: 'Indoor light dir',
+      value: `${mx.toFixed(3)}, ${my.toFixed(3)}, ${mz.toFixed(3)} (from moon RGBA)`,
+    });
+  }
+
+  for (let i = 0; i < 8; i++) {
+    const col = fmtRgba(bytes, ds + 0x6c + i * 4);
+    const elev = dv.getFloat32(ds + 0x8c + i * 4, true);
+    rows.push({
+      field: `Sky slice ${i}`,
+      value: `${col.text}  elev ${Number.isFinite(elev) ? elev.toFixed(2) : '—'}`,
+      swatch: col.swatch,
+    });
+  }
+
+  return {
+    kind: 'environment',
+    id,
+    type,
+    title: 'Environment',
+    subtitle: `${time || id} · ${indoors ? 'indoor' : 'outdoor'}`,
+    note: 'Time-of-day lighting keyframe (0x2F). Section id is HHMM. Zones interpolate neighbouring keyframes for sky, fog, and lights.',
+    offset: start,
+    size: size || bodyEnd - start,
+    columns: [{ key: 'field', label: 'Field' }, { key: 'value', label: 'Value' }],
+    rows,
+  };
+}
+
+function peekEnvironment(bytes, dv, s) {
+  const t = parseInspectEnvironment(bytes, s.start);
+  if (!t) return { text: null, isEnvironment: true };
+  return { text: t.subtitle, isEnvironment: true };
 }
 
 /** 0x1C — placement table; count is readable before decrypt. */
@@ -1474,6 +1591,150 @@ function peekZoneDef(bytes, dv, s) {
   return {
     text: `${nodeCount.toLocaleString()} placement${nodeCount === 1 ? '' : 's'}`,
     isZoneDef: true,
+  };
+}
+
+const INTERACTION_KIND = {
+  m: 'Sub-area',
+  z: 'Zone line',
+  _: 'Door',
+  f: 'Fishing',
+  e: 'Event',
+};
+const INTERACTION_KIND_WORD = {
+  'Sub-area': ['sub-area', 'sub-areas'],
+  'Zone line': ['zone line', 'zone lines'],
+  Entrance: ['entrance', 'entrances'],
+  Door: ['door', 'doors'],
+  Fishing: ['fishing', 'fishing'],
+  Event: ['event', 'events'],
+};
+const TERRAIN_TYPE = [
+  'Object', 'Path', 'Grass', 'Sand', 'Snow', 'Stone', 'Metal', 'Wood',
+  'Shallow water', 'Deep water', 'Unk0xA',
+];
+
+function fmtVec3(dv, off) {
+  const f = (v) => (Number.isFinite(v) ? v.toFixed(2) : '—');
+  return `${f(dv.getFloat32(off, true))}, ${f(dv.getFloat32(off + 4, true))}, ${f(dv.getFloat32(off + 8, true))}`;
+}
+
+function datIdAt(bytes, p) {
+  return fourcc(bytes, p).trim();
+}
+
+function interactionKindLabel(kind, dest) {
+  if (kind === 'z') return dest ? 'Zone line' : 'Entrance';
+  return INTERACTION_KIND[kind] || (kind ? `'${kind}'` : '—');
+}
+
+/**
+ * 0x36 ZoneInteractions — plaintext RID trigger volumes (xim ZoneInteractionSection).
+ * Each 0x40-byte OBB: pos/ori/size, source/dest fourcc, param, terrain/map, elevator s16s.
+ */
+export function parseInspectZoneInteractions(buffer, offset) {
+  const bytes = buffer instanceof Uint8Array
+    ? buffer
+    : new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const start = offset | 0;
+  if (start + 0x30 > bytes.length) return null;
+  const meta = dv.getUint32(start + 4, true);
+  const type = meta & 0x7f;
+  if (type !== 0x36) return null;
+  const size = ((meta >>> 7) & 0x7ffff) * 0x10;
+  const dataStart = start + 0x10;
+  const bodyEnd = Math.min(start + (size > 0 ? size : 0), bytes.length);
+  if (dataStart + 0x20 > bodyEnd) return null;
+  if (strAt(bytes, dataStart, 4).slice(0, 3) !== 'RID') return null;
+
+  const dataOffset = dv.getUint32(dataStart + 0x10, true);
+  const table = dataStart + dataOffset;
+  if (table + 0x10 > bodyEnd) return null;
+  let numEntries = dv.getUint32(table, true);
+  const maxN = Math.floor((bodyEnd - table - 0x10) / 0x40);
+  if (numEntries > maxN) numEntries = maxN;
+  if (numEntries < 0 || numEntries > 200000) return null;
+
+  const id = fourcc(bytes, start).trim() || 'RID';
+  const columns = [
+    { key: 'idx', label: '#' },
+    { key: 'kind', label: 'Kind' },
+    { key: 'source', label: 'Source' },
+    { key: 'dest', label: 'Dest' },
+    { key: 'param', label: 'Param' },
+    { key: 'pos', label: 'Position' },
+    { key: 'rot', label: 'Rotation' },
+    { key: 'size', label: 'Size' },
+    { key: 'map', label: 'Map' },
+    { key: 'flags', label: 'Flags' },
+  ];
+  const rows = [];
+  const kindCounts = new Map();
+  for (let i = 0; i < numEntries; i++) {
+    const off = table + 0x10 + i * 0x40;
+    if (off + 0x40 > bodyEnd) break;
+    const source = datIdAt(bytes, off + 0x24);
+    const dest = datIdAt(bytes, off + 0x28);
+    const kindByte = bytes[off + 0x24];
+    const kindChar = kindByte >= 0x20 && kindByte < 0x7f ? String.fromCharCode(kindByte) : '';
+    const kind = interactionKindLabel(kindChar, dest);
+    const param = dv.getUint32(off + 0x2C, true);
+    const terrainFlags = dv.getUint16(off + 0x30, true);
+    const mapId = dv.getUint16(off + 0x32, true);
+    const terrainIdx = (terrainFlags >>> 4) & 0xF;
+    const terrain = terrainIdx ? (TERRAIN_TYPE[terrainIdx] || `0x${terrainIdx.toString(16)}`) : '';
+    const flags = terrainFlags
+      ? `0x${terrainFlags.toString(16)}${terrain ? ` ${terrain}` : ''}`
+      : '—';
+    kindCounts.set(kind, (kindCounts.get(kind) || 0) + 1);
+    rows.push({
+      idx: i,
+      kind,
+      source: source || '—',
+      dest: dest || '—',
+      param,
+      pos: fmtVec3(dv, off),
+      rot: fmtVec3(dv, off + 12),
+      size: fmtVec3(dv, off + 24),
+      map: mapId || '—',
+      flags,
+      _offset: off,
+    });
+  }
+
+  const bits = [];
+  for (const name of ['Sub-area', 'Zone line', 'Entrance', 'Door', 'Fishing', 'Event']) {
+    const n = kindCounts.get(name);
+    if (!n) continue;
+    const pair = INTERACTION_KIND_WORD[name] || [name.toLowerCase(), name.toLowerCase()];
+    bits.push(`${n} ${n === 1 ? pair[0] : pair[1]}`);
+  }
+  const n = rows.length;
+  const subtitle = bits.length
+    ? `${n.toLocaleString()} trigger${n === 1 ? '' : 's'} · ${bits.join(' · ')}`
+    : `${n.toLocaleString()} trigger${n === 1 ? '' : 's'}`;
+
+  return {
+    kind: 'zoneInteractions',
+    id,
+    type,
+    title: 'ZoneInteractions',
+    subtitle,
+    columns,
+    rows,
+    offset: start,
+    size: size || bodyEnd - start,
+    note: 'RID trigger volumes (0x40 OBB). Kind from source id: m = sub-area, z = zone line / entrance, _ = door, f = fishing. Param is sub-area id (m) or dest zone (z).',
+  };
+}
+
+function peekZoneInteractions(bytes, dv, s) {
+  const t = parseInspectZoneInteractions(bytes, s.start);
+  if (!t) return { text: null, isZoneInteractions: true };
+  return {
+    text: t.subtitle || `${t.rows?.length ?? 0} triggers`,
+    isZoneInteractions: true,
   };
 }
 
@@ -1678,8 +1939,10 @@ const PEEKS = {
   0x2A: peekSkeletonMesh,
   0x2B: peekAnimation,
   0x2E: peekZoneMesh,
+  0x2F: peekEnvironment,
   0x30: peekUiMenu,
   0x31: peekUiElementGroup,
+  0x36: peekZoneInteractions,
   0x3D: peekSoundPointer,
   0x45: peekInfo,
   0x49: peekDataTable,
@@ -2528,6 +2791,9 @@ export function inspectDat(buffer, path = '') {
       let isSkeletonMesh = type === 0x2a;
       let isInfo = type === 0x45;
       let isSkeletonAnimation = type === 0x2b;
+      let isZoneInteractions = type === 0x36;
+      let isEnvironment = type === 0x2F;
+      let isZoneMesh = type === 0x2E;
       const isParticleGenerator = type === 0x05;
       let soundId = null;
       const peek = PEEKS[type];
@@ -2551,6 +2817,9 @@ export function inspectDat(buffer, path = '') {
           if (r?.isSkeletonMesh) isSkeletonMesh = true;
           if (r?.isInfo) isInfo = true;
           if (r?.isSkeletonAnimation) isSkeletonAnimation = true;
+          if (r?.isZoneInteractions) isZoneInteractions = true;
+          if (r?.isEnvironment) isEnvironment = true;
+          if (r?.isZoneMesh) isZoneMesh = true;
           if (r?.soundId != null) soundId = r.soundId;
         } catch { /* malformed header — list it plain */ }
       }
@@ -2566,6 +2835,7 @@ export function inspectDat(buffer, path = '') {
         isSound, soundId, isZoneDef, isParticleGenerator, isRoute, isUiMenu,
         isUiElementGroup, isDataTable, isEffectRoutine, isSpriteSheet, isParticleMesh,
         isKeyFrame, isWeightedMesh, isSkeletonMesh, isInfo, isSkeletonAnimation,
+        isZoneInteractions, isEnvironment, isZoneMesh,
       });
       const agg = summary.get(type) ?? { count: 0, bytes: 0 };
       agg.count++; agg.bytes += size;

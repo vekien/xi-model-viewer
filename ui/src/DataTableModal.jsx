@@ -56,7 +56,8 @@ export function DataTableModal({
   const endDrag = () => { dragState.current = null; };
 
   const sheetPair = table?.kind === 'spriteSheet' || table?.kind === 'particleMesh' || table?.kind === 'weightedMesh';
-  const tableW = sheetPair ? 'min(560px, 52vw)' : 'min(720px, 90vw)';
+  const wide = table?.kind === 'zoneInteractions';
+  const tableW = sheetPair ? 'min(560px, 52vw)' : wide ? 'min(920px, 92vw)' : 'min(720px, 90vw)';
   const style = pos
     ? {
       position: 'fixed', left: pos.x, top: pos.y, transform: 'none', zIndex,
@@ -77,7 +78,9 @@ export function DataTableModal({
                 : table.kind === 'skeletonMesh' ? 'deployed_code'
                   : table.kind === 'info' ? 'info'
                     : table.kind === 'skeletonAnimation' ? 'animation'
-                      : 'table_rows';
+                      : table.kind === 'zoneInteractions' ? 'touch_app'
+                        : table.kind === 'environment' ? 'cloud'
+                          : 'table_rows';
 
   return (
     <div className="zdef-modal datatable-modal" ref={panelRef} style={style} onPointerDown={onFocus}>
@@ -158,8 +161,11 @@ export function DataTableModal({
                     const cell = (
                       <td
                         key={c.key}
-                        className={`mono${c.key === 'raw' ? ' zdef-vec' : ''}${c.external ? ' datatable-ext-cell' : ''}`}
+                        className={`mono${c.key === 'raw' || c.key === 'pos' || c.key === 'rot' || c.key === 'size' ? ' zdef-vec' : ''}${c.external ? ' datatable-ext-cell' : ''}`}
                       >
+                        {c.key === 'value' && row.swatch ? (
+                          <span className="datatable-swatch" style={{ background: row.swatch }} />
+                        ) : null}
                         {row[c.key] ?? (c.external ? '…' : '')}
                       </td>
                     );

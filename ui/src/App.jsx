@@ -46,9 +46,10 @@ import { LightGizmo, DEFAULT_LIGHT_DIR } from './LightGizmo.jsx';
 
 import { CameraSequencer } from './CameraSequencer.jsx';
 import { parseFloorTexture } from '../js/dat.js';
-import { extractKeyTables, parseZone, parseDatTextures, parseZoneDefAt } from '../js/zone.js';
+import { extractKeyTables, parseZone, parseDatTextures, parseZoneDefAt, parseZoneMeshAt } from '../js/zone.js';
 import { ZoneDefModal } from './ZoneDefModal.jsx';
 import { ParticlePreviewModal } from './ParticlePreviewModal.jsx';
+import { ZoneMeshPreviewModal } from './ZoneMeshPreviewModal.jsx';
 import { armGeneratorPreview } from '../js/particlePreview.js';
 import { checkForUpdate, checkForUpdateManual, dismissUpdate } from '../js/update.js';
 import {
@@ -71,7 +72,7 @@ import { ensureXiToolsOnBoot } from '../js/toolsBoot.js';
 import { WeatherAudio } from '../js/particle/audio.js';
 import { toAudioBuffer, parseAudioHeader, FMT_ATRAC3 } from '../js/audio.js';
 import { parseImageDat, textureForSet } from '../js/images.js';
-import { inspectDat, parseInspectSkeleton, parseInspectRoute, parseInspectUiMenu, parseInspectUiElementGroup, parseInspectDataTable, parseInspectEffectRoutine, parseInspectSpriteSheet, parseInspectParticleMesh, parseInspectKeyFrame, parseInspectWeightedMesh, parseInspectSkeletonMesh, parseInspectInfo, parseInspectSkeletonAnimation, inspectDmsg, attachDataTableNames } from '../js/dat/inspect.js';
+import { inspectDat, parseInspectSkeleton, parseInspectRoute, parseInspectUiMenu, parseInspectUiElementGroup, parseInspectDataTable, parseInspectEffectRoutine, parseInspectSpriteSheet, parseInspectParticleMesh, parseInspectKeyFrame, parseInspectWeightedMesh, parseInspectSkeletonMesh, parseInspectInfo, parseInspectSkeletonAnimation, parseInspectZoneInteractions, parseInspectEnvironment, inspectDmsg, attachDataTableNames } from '../js/dat/inspect.js';
 import { SkeletonModal } from './SkeletonModal.jsx';
 import { RouteModal } from './RouteModal.jsx';
 import { UiMenuModal } from './UiMenuModal.jsx';
@@ -708,6 +709,8 @@ export default function App({ launch = null }) {
   const [skelWindows, setSkelWindows] = useState([]); // [{ id, joints, title, cascade }]
   const skelIdRef = useRef(0);
   const [zdefWindows, setZdefWindows] = useState([]); // [{ id, placements, title, cascade }]
+  const [zmeshWindows, setZmeshWindows] = useState([]); // [{ id, mesh, textures, title }]
+  const zmeshIdRef = useRef(0);
   const zdefIdRef = useRef(0);
   const [routeWindows, setRouteWindows] = useState([]); // [{ id, route, title }]
   const routeIdRef = useRef(0);
@@ -2911,6 +2914,58 @@ export default function App({ launch = null }) {
     }
   }, [ensureGlobalEffects, raiseModal]);
 
+  /** Data Struct ZoneMesh row → floating unlit mesh preview. */
+  const openDataZoneMesh = useCallback((res) => {
+    const tag = (res?.id && String(res.id).trim()) || res?.detail || 'ZoneMesh';
+    const key = `zmesh:${res?.offset ?? tag}`;
+    const title = tag;
+
+    const pushWin = (partial) => {
+      setZmeshWindows((prev) => {
+        const i = prev.findIndex((w) => w.key === key);
+        if (i >= 0) {
+          const copy = prev.slice();
+          copy[i] = { ...copy[i], ...partial, title };
+          const [hit] = copy.splice(i, 1);
+          copy.push(hit);
+          raiseModal(`zmesh:${hit.id}`);
+          return copy;
+        }
+        const id = ++zmeshIdRef.current;
+        raiseModal(`zmesh:${id}`);
+        return [...prev, {
+          id, key, title, mesh: null, textures: null, loading: false, error: '', cascade: prev.length, ...partial,
+        }];
+      });
+    };
+
+    pushWin({ mesh: null, textures: null, loading: true, error: '' });
+    setStatusText(`Reading ${title}…`);
+
+    (async () => {
+      try {
+        if (!dataBufRef.current) {
+          throw new Error('No DAT buffer — reopen Data Struct on this file');
+        }
+        const keys = await getKeyTables();
+        if (!keys?.table1 || !keys?.table2) throw new Error('FFXiMain.dll keys missing (check game path)');
+        const parsed = parseZoneMeshAt(dataBufRef.current, res?.offset ?? 0, keys);
+        const prims = parsed?.prims ?? [];
+        if (!prims.length) throw new Error('No render geometry in this ZoneMesh');
+        const textures = parseDatTextures(dataBufRef.current);
+        const mesh = { meshName: parsed.meshName || title, prims };
+        pushWin({ mesh, textures, loading: false, error: '' });
+        const tris = prims.reduce((n, p) => n + (p.positions?.length || 0) / 3, 0);
+        setStatusText(`${mesh.meshName} · ${tris.toLocaleString()} tris`);
+      } catch (e) {
+        console.error('ZoneMesh open failed', e);
+        const msg = e?.message ?? String(e);
+        pushWin({ mesh: null, textures: null, loading: false, error: msg });
+        setStatusText(`ZoneMesh: ${msg}`);
+      }
+    })();
+  }, [getKeyTables, raiseModal]);
+
   /**
    * Zone BGM from the server's zone_settings (baked by `xi mv update --only zone-music`).
    * Each zone names a day and a night track; id 0 means genuine silence, which
@@ -4064,6 +4119,11 @@ export default function App({ launch = null }) {
         e.preventDefault();
         return;
       }
+      if (zmeshWindows.length > 0) {
+        setZmeshWindows((prev) => prev.slice(0, -1));
+        e.preventDefault();
+        return;
+      }
       if (dataTableWindows.length > 0) {
         setDataTableWindows((prev) => prev.slice(0, -1));
         e.preventDefault();
@@ -4109,7 +4169,7 @@ export default function App({ launch = null }) {
       window.removeEventListener('keydown', onKey, true);
       document.removeEventListener('visibilitychange', onVis);
     };
-  }, [exportSpec, batchOpen, settingsOpen, helpOpen, datNotesOpen, texWindows.length, skelWindows.length, zdefWindows.length, routeWindows.length, uiMenuWindows.length, uiEgWindows.length, dataTableWindows.length, fxPreview, closeFxPreview, explorerOpen]);
+  }, [exportSpec, batchOpen, settingsOpen, helpOpen, datNotesOpen, texWindows.length, skelWindows.length, zdefWindows.length, zmeshWindows.length, routeWindows.length, uiMenuWindows.length, uiEgWindows.length, dataTableWindows.length, fxPreview, closeFxPreview, explorerOpen]);
 
   // --- handlers ------------------------------------------------------------
 
@@ -5153,6 +5213,10 @@ export default function App({ launch = null }) {
         table = parseInspectInfo(dataBufRef.current, res.offset);
       } else if (res?.isSkeletonAnimation || res?.type === 0x2b || res?.name === 'SkeletonAnimation') {
         table = parseInspectSkeletonAnimation(dataBufRef.current, res.offset);
+      } else if (res?.isZoneInteractions || res?.type === 0x36 || res?.name === 'ZoneInteractions') {
+        table = parseInspectZoneInteractions(dataBufRef.current, res.offset);
+      } else if (res?.isEnvironment || res?.type === 0x2F || res?.name === 'Environment') {
+        table = parseInspectEnvironment(dataBufRef.current, res.offset);
       }
       if (!table?.rows) table = parseInspectDataTable(dataBufRef.current, res.offset);
     } catch (e) {
@@ -8421,6 +8485,7 @@ export default function App({ launch = null }) {
             onOpenUiElementGroup={openDataUiElementGroup}
             onOpenDataTable={openDataTable}
             onOpenParticle={openDataParticle}
+            onOpenZoneMesh={openDataZoneMesh}
             onPlaySound={playDataSound}
             playingSoundKey={playingSoundKey}
             onRevealPath={revealInExplorer}
@@ -9033,6 +9098,21 @@ export default function App({ launch = null }) {
           zIndex={modalZ(`uieg:${w.id}`, 2130 + i)}
           onClose={() => closeUiEgWin(w.id)}
           onFocus={() => focusUiEgWin(w.id)}
+        />
+      ))}
+
+      {zmeshWindows.map((w, i) => (
+        <ZoneMeshPreviewModal
+          key={w.id}
+          title={w.title}
+          mesh={w.mesh}
+          textures={w.textures}
+          error={w.error || ''}
+          loading={!!w.loading}
+          cascadeOffset={w.cascade}
+          zIndex={modalZ(`zmesh:${w.id}`, 2015 + i)}
+          onFocus={() => raiseModal(`zmesh:${w.id}`)}
+          onClose={() => setZmeshWindows((prev) => prev.filter((x) => x.id !== w.id))}
         />
       ))}
 

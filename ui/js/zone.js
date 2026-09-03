@@ -511,6 +511,30 @@ function parsePvsRegions(dv, section, placements) {
 }
 
 /**
+ * Data Struct: decrypt and parse one 0x2E ZoneMesh at `sectionStart`.
+ * Copies the buffer so decryption does not mutate the inspect cache.
+ * Returns { meshName, prims } or null.
+ */
+export function parseZoneMeshAt(buffer, sectionStart, keyTables) {
+  if (!keyTables?.table1 || !keyTables?.table2 || sectionStart == null) return null;
+  const src = buffer instanceof Uint8Array
+    ? buffer
+    : new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const bytes = src.slice();
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const sections = parseSections(dv);
+  const section = sections.find((s) => s.start === sectionStart && s.typeCode === 0x2E)
+    ?? sections.find((s) => s.typeCode === 0x2E);
+  if (!section) return null;
+  try {
+    decryptZoneMesh(bytes, dv, section.dataStart, keyTables.table1, keyTables.table2);
+    return parseZoneMeshSection(bytes, dv, section);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Data Struct: parse the 0x1C ZoneDef placement table at `sectionStart`.
  * Copies the buffer so decryption does not mutate the inspect cache.
  * Returns { placements, nodeCount, stride } or null.

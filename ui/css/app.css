@@ -4478,6 +4478,49 @@ button.data-zone-tab.on .icon { color: var(--accent); }
 .data-res-wmesh.data-res-click:hover .data-id,
 .data-res-wmesh.data-res-click:hover .data-type,
 .data-res-wmesh.data-res-click:hover .data-detail { color: #e0c0f0; }
+.data-res-zint .data-kind,
+.data-res-zint .data-id,
+.data-res-zint .data-type,
+.data-res-zint .data-detail { color: #8fd4c8; }
+.data-res-zint .data-kind { opacity: 1; }
+.data-res-zint.data-res-click:hover .data-kind,
+.data-res-zint.data-res-click:hover .data-id,
+.data-res-zint.data-res-click:hover .data-type,
+.data-res-zint.data-res-click:hover .data-detail { color: #b4ebe2; }
+.data-res-zint .data-tex-hint { color: #8fd4c8; }
+.data-res-zint.data-res-click:hover .data-tex-hint { color: #b4ebe2; }
+.data-res-env .data-kind,
+.data-res-env .data-id,
+.data-res-env .data-type,
+.data-res-env .data-detail { color: #7eb8e8; }
+.data-res-env .data-kind { opacity: 1; }
+.data-res-env.data-res-click:hover .data-kind,
+.data-res-env.data-res-click:hover .data-id,
+.data-res-env.data-res-click:hover .data-type,
+.data-res-env.data-res-click:hover .data-detail { color: #a8d4f4; }
+.data-res-env .data-tex-hint { color: #7eb8e8; }
+.data-res-env.data-res-click:hover .data-tex-hint { color: #a8d4f4; }
+.data-res-zmesh .data-kind,
+.data-res-zmesh .data-id,
+.data-res-zmesh .data-type,
+.data-res-zmesh .data-detail { color: #9ec5a8; }
+.data-res-zmesh .data-kind { opacity: 1; }
+.data-res-zmesh.data-res-click:hover .data-kind,
+.data-res-zmesh.data-res-click:hover .data-id,
+.data-res-zmesh.data-res-click:hover .data-type,
+.data-res-zmesh.data-res-click:hover .data-detail { color: #c0e0c8; }
+.data-res-zmesh .data-tex-hint { color: #9ec5a8; }
+.data-res-zmesh.data-res-click:hover .data-tex-hint { color: #c0e0c8; }
+.zmesh-modal .modal-title { color: #9ec5a8; }
+.datatable-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  margin-right: 8px;
+  vertical-align: -2px;
+}
 
 /* Route modal reuses .zdef-modal chrome; accent the count. */
 .route-modal .route-count {
