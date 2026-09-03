@@ -377,14 +377,19 @@ float shadowPcf(sampler2DShadow map, vec3 uvz) {
 // comes back as 0 at the cascade centre and 1 at its border, which is what
 // drives both the cross-fade and the outer fade-to-lit.
 float shadowCascade(
-  sampler2DShadow map, mat4 lightViewProj, vec3 world, vec3 n,
-  float slope, float texel, float bias, out float edge
+  sampler2DShadow map, mat4 lightViewProj, vec3 world, vec3 g,
+  float sinTheta, float texel, float bias, out float edge
 ) {
-  // Normal offset: nudge the lookup off the surface by roughly one shadow
-  // texel, widened as the surface turns away from the light. This kills slope
-  // acne without the big constant depth bias that detaches contact shadows.
-  // Scaled per cascade, so the sharp one keeps a sharp contact point.
-  vec3 p = world + n * (texel * (1.0 + 3.0 * slope));
+  // Normal offset: lift the lookup off the surface along the FACE normal by
+  // half a texel, plus up to one more as the face turns edge-on to the sun.
+  // The depth pass's slope-scaled polygon offset already covers the PCF
+  // footprint on a flat receiver, so this only has to clear the map's own
+  // surface. It used to be one to four texels along the smooth shading
+  // normal: on rolling ground that dragged the lookup around with the vertex
+  // normals, so shadow edges bent to follow the bumps and lit blotches opened
+  // inside the shade — and on the far cascade, whose texels run to half a
+  // unit and more, it pushed the shadow clean off the foot of every cliff.
+  vec3 p = world + g * (texel * (0.5 + sinTheta));
   vec4 lp = lightViewProj * vec4(p, 1.0);
   vec3 uvz = lp.xyz / lp.w * 0.5 + 0.5;
   vec2 e = abs(uvz.xy - 0.5) * 2.0;
@@ -405,11 +410,21 @@ float shadowCascade(
 // as a ~16% dip. The smoothstep ramp keeps the physical part: a surface almost
 // edge-on to the sun had little to lose, so it barely darkens.
 float sunShadow(vec3 world, vec3 n, float ndl) {
+  // Face normal from the position derivatives: constant across a triangle,
+  // unlike the interpolated shading normal, so the lookup offset does not
+  // wobble with the vertex normals. Taken before any branch — derivatives
+  // are only defined in uniform control flow. FFXI winds faces either way,
+  // so it is flipped onto the shading normal's side.
+  vec3 g = cross(dFdx(world), dFdy(world));
   if (uShadowParams.x < 0.5 || ndl <= 0.0) return 1.0;
-  float slope = clamp(1.0 - ndl, 0.0, 1.0);
+  float g2 = dot(g, g);
+  g = g2 > 1e-20 ? g * inversesqrt(g2) : n;
+  if (dot(g, n) < 0.0) g = -g;
+  float gdl = clamp(dot(g, uSunDir), 0.0, 1.0);
+  float sinTheta = sqrt(1.0 - gdl * gdl);
 
   float e0;
-  float near = shadowCascade(uShadowMap0, uLightViewProj0, world, n, slope,
+  float near = shadowCascade(uShadowMap0, uLightViewProj0, world, g, sinTheta,
                              uShadowParams.z, uShadowParams.w, e0);
   // Weight of the near cascade: full until blendStart, gone at its border.
   float w0 = near < 0.0 ? 0.0 : 1.0 - smoothstep(uShadowParams1.z, 1.0, e0);
@@ -421,7 +436,7 @@ float sunShadow(vec3 world, vec3 n, float ndl) {
     float far = 1.0;
     if (uShadowParams1.w > 0.5) {
       float e1;
-      float v = shadowCascade(uShadowMap1, uLightViewProj1, world, n, slope,
+      float v = shadowCascade(uShadowMap1, uLightViewProj1, world, g, sinTheta,
                               uShadowParams1.x, uShadowParams1.y, e1);
       // Past the last cascade there is no information, so fade to lit rather
       // than ending the shadows on a hard ring.
@@ -429,7 +444,12 @@ float sunShadow(vec3 world, vec3 n, float ndl) {
     }
     lit = near < 0.0 ? far : mix(far, near, w0);
   }
-  return 1.0 - uShadowParams.y * (1.0 - lit) * smoothstep(0.0, 0.35, ndl);
+  // The ramp is narrow on purpose. Any surface the sun barely reaches is
+  // shaded by ambient alone, and ambient is what the multiply darkens — so a
+  // wide ramp made every bump in a shadow that tilted away from the sun glow
+  // against the ground around it. With a low sun (level ground at ndl ~0.4)
+  // the old 0.35 ramp caught nearly every undulation.
+  return 1.0 - uShadowParams.y * (1.0 - lit) * smoothstep(0.0, 0.12, ndl);
 }
 `;
 
@@ -4071,11 +4091,12 @@ export class Renderer {
       return {
         lvp: mat4Multiply(mat4Ortho(cx - R, cx + R, cy - R, cy + R, near, far), view),
         texel,
-        // Constant bias in normalized depth. The normal offset does most of the
-        // work; this only has to cover depth quantization, so keep it small or
-        // contact shadows visibly detach from their caster. Per cascade, so the
-        // sharp one isn't paying for the coarse one's slop.
-        bias: Math.max(texel * 0.5, R * 0.002) / depth,
+        // Constant bias in normalized depth: half a texel along the light. The
+        // depth pass's polygon offset and the receiver's normal offset do the
+        // real work; this only covers quantization. It used to carry an
+        // R * 0.002 floor too, which at any real draw distance was several
+        // times the texel and detached every shadow from its caster.
+        bias: (texel * 0.5) / depth,
         // Caster culling: the light-space x/y axes and this window's centre.
         // A zone is ~10k submeshes and a cascade covers a fraction of it, so
         // testing each bounding sphere against these two slabs is the
