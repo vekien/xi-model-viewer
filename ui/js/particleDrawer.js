@@ -281,6 +281,13 @@ function buildProgram(gl, vsSrc, fsSrc) {
 const DISPLAY_ROT = new Mat4();
 DISPLAY_ROT.m[0] = -1; DISPLAY_ROT.m[5] = -1; DISPLAY_ROT.m[10] = 1;
 
+/** Determinant of a column-major matrix's 3x3 part (negative = mirrored). */
+function det3(m) {
+  return m[0] * (m[5] * m[10] - m[6] * m[9])
+    - m[4] * (m[1] * m[10] - m[2] * m[9])
+    + m[8] * (m[1] * m[6] - m[2] * m[5]);
+}
+
 /**
  * xim draws flare sprites at screenSize/32 pixels per sprite unit. Converting to
  * NDC: pixels / (screenSize / 2) = unit * 2 / 32, i.e. 1/16 — resolution
@@ -771,6 +778,25 @@ export class ParticleDrawer {
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
     gl.disable(gl.CULL_FACE);
+    gl.cullFace(gl.BACK);
+    // Sprites, rings and particle meshes are double-sided. Zone meshes drawn
+    // by a generator (0x2E via linkedDataType 11 — Xarcabard's `entr/t0NN`
+    // cave mouths re-draw `x_cave_*` on top of the static placement) keep the
+    // per-submesh cull flag the zone pass uses (xim GLDrawer.drawXim): those
+    // tunnels are single-sided shells, and drawn double-sided their ceiling
+    // and walls overdraw the snow above them as a dark see-through arch.
+    let curCull = false;
+    let curFront = null;
+    const setCull = (on, front) => {
+      if (on !== curCull) {
+        if (on) gl.enable(gl.CULL_FACE); else gl.disable(gl.CULL_FACE);
+        curCull = on;
+      }
+      if (on && front !== curFront) {
+        gl.frontFace(front);
+        curFront = front;
+      }
+    };
 
     const projMat = new Float32Array(proj);
     const baseProj14 = projMat[14];
@@ -807,11 +833,15 @@ export class ParticleDrawer {
       const lit = config.lightingEnabled && lighting;
       gl.uniform1f(this.u.computeLighting, lit ? 1 : 0);
       if (lit) {
-        gl.uniform4f(this.u.ambient, lighting.ambient[0], lighting.ambient[1], lighting.ambient[2], 1);
+        // Viewer light gain (zone shader: lit * uLightGain). Folded into the
+        // light colours here; the vertex clamp makes it equivalent for the
+        // gain range the UI allows.
+        const g = Number.isFinite(lighting.gain) ? Math.max(0, lighting.gain) : 1;
+        gl.uniform4f(this.u.ambient, lighting.ambient[0] * g, lighting.ambient[1] * g, lighting.ambient[2] * g, 1);
         gl.uniform3fv(this.u.light0Dir, lighting.sunDir);
-        gl.uniform4f(this.u.light0Color, lighting.sunColor[0], lighting.sunColor[1], lighting.sunColor[2], 1);
+        gl.uniform4f(this.u.light0Color, lighting.sunColor[0] * g, lighting.sunColor[1] * g, lighting.sunColor[2] * g, 1);
         gl.uniform3fv(this.u.light1Dir, lighting.moonDir);
-        gl.uniform4f(this.u.light1Color, lighting.moonColor[0], lighting.moonColor[1], lighting.moonColor[2], 1);
+        gl.uniform4f(this.u.light1Color, lighting.moonColor[0] * g, lighting.moonColor[1] * g, lighting.moonColor[2] * g, 1);
       }
 
       // Additive particles fog toward black, otherwise the fog colour would be
@@ -831,11 +861,17 @@ export class ParticleDrawer {
         ? cmd.subParticles.map((s) => s.position)
         : [null];
 
+      // Zone meshes keep their authored winding under the display rotation
+      // (det +1); a mirrored generator transform flips it, as in xim.
+      const zoneMesh = p.meshProvider?.isParticleMesh === false;
+      const front = zoneMesh && det3(cmd.model.m) < 0 ? gl.CCW : gl.CW;
+
       for (const offset of offsets) {
         const mv = offset ? this.#offsetModelView(cmd.modelView, viewMat, offset) : cmd.modelView;
         gl.uniformMatrix4fv(this.u.modelView, false, mv.m);
 
         for (const mesh of cmd.meshes) {
+          setCull(zoneMesh && !mesh.noCull, front);
           const entry = this.#upload(mesh);
           gl.bindTexture(gl.TEXTURE_2D, showTextures ? this.#texture(entry) : this.defaultTexture);
           gl.bindVertexArray(entry.vao);
@@ -845,6 +881,7 @@ export class ParticleDrawer {
       }
     }
 
+    setCull(false, null);
     projMat[14] = baseProj14;
     gl.bindVertexArray(null);
     gl.depthMask(true);

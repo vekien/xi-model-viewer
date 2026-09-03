@@ -4610,7 +4610,10 @@ export class Renderer {
       view: this.camera.viewMatrix(),
       // Must be the same projection the zone pass used, Explorer offset and all.
       proj: this.projMatrix,
-      lighting: this._zoneLightUniforms(),
+      // Same light gain the zone pass applies, so a generator-drawn zone mesh
+      // (Xarcabard's cave mouths re-draw x_cave_* over the placement) matches
+      // the static geometry it sits on.
+      lighting: { ...this._zoneLightUniforms(), gain: this.lightGain ?? 1 },
       fog: this.fog,
       showTextures: this.showTextures,
       canvasWidth: this.gl.drawingBufferWidth,

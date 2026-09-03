@@ -2247,6 +2247,10 @@ export default function App({ launch = null }) {
     const zoneCount = system.registerZoneEffects();
     if (warnings.length) console.debug(`[particles] ${warnings.length} parse warnings`);
     console.debug(`[particles] registered ${zoneCount} zone effects`);
+    // Keep ROM/0/0.DAT textures on the system. We must not stash an incomplete
+    // globalEffectsRef (no routines), but zone generators still sample shared
+    // atlases (torc → torch torch1) that the zone DAT does not carry.
+    system.sharedTextures = zoneGlobalTextures ?? new Map();
     return system;
   }, []);
 
@@ -3099,9 +3103,12 @@ export default function App({ launch = null }) {
       stepLoad('Uploading to GPU…');
       if (!stillCurrent()) { releaseOverlay(); return; }
       // Shared-effect textures live in ROM/0/0.DAT, not the zone; fold them in
-      // so particles linking to them have something to sample.
-      for (const [name, tex] of globalEffectsRef.current?.textures ?? []) {
-        if (!model.textures.has(name)) model.textures.set(name, tex);
+      // so particles linking to them have something to sample. Prefer the map
+      // buildParticleSystem already parsed — globalEffectsRef is only filled
+      // after the Effects view loads, so using it here left zone VFX untextured.
+      const sharedTex = particleSystem?.sharedTextures ?? globalEffectsRef.current?.textures;
+      for (const tex of sharedTex?.values() ?? []) {
+        if (tex?.name && !model.textures.has(tex.name)) model.textures.set(tex.name, tex);
       }
       modelRef.current = model;
       const renderer = rendererRef.current;
