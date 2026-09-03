@@ -253,12 +253,18 @@ export class DaylightBasedColorApplier extends Updater {
 
 // ── distance-based visibility ──────────────────────────────────────────────
 
+function distanceScale(runtime) {
+  const s = runtime?.effectDistanceScale;
+  return Number.isFinite(s) && s > 0 ? s : 1;
+}
+
 /** 0x2E — fade out with distance, and cull entirely past `far`. */
 export class DrawDistanceUpdater extends Updater {
   read(r) { this.near = r.nextFloat(); this.far = r.nextFloat(); r.next32(); }
   apply(elapsed, particle) {
     const distance = Vec3.distance(particle.runtime.camera.getPosition(), particle.getWorldSpacePosition());
-    const multiplier = fallOff(distance, this.near, this.far);
+    const s = distanceScale(particle.runtime);
+    const multiplier = fallOff(distance, this.near * s, this.far * s);
     particle.drawDistanceCulled = multiplier === 0;
     particle.colorMultiplier.multiplyAlphaInPlace(multiplier);
   }
@@ -274,7 +280,9 @@ export class DoubleRangeDrawDistanceUpdater extends Updater {
   apply(elapsed, particle) {
     const distance = Vec3.distance(particle.runtime.camera.getPosition(), particle.getWorldSpacePosition())
       + 1.15 * Math.abs(particle.scale.x);
-    const multiplier = doubleRangeWeight(distance, this.nearRange, this.farRange);
+    const s = distanceScale(particle.runtime);
+    const farRange = s === 1 ? this.farRange : [this.farRange[0] * s, this.farRange[1] * s];
+    const multiplier = doubleRangeWeight(distance, this.nearRange, farRange);
     particle.drawDistanceCulled = multiplier === 0;
     particle.colorMultiplier.multiplyAlphaInPlace(multiplier);
   }

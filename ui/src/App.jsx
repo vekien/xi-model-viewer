@@ -898,6 +898,11 @@ export default function App({ launch = null }) {
   });
   const renderDistanceRef = useRef(renderDistance);
   renderDistanceRef.current = renderDistance;
+  // Graphics › Effects Distance — multiplier on DAT-authored VFX cull/fade.
+  const [effectDistanceScale, setEffectDistanceScaleState] = useState(() => {
+    const saved = Number(localStorage.getItem('effectDistanceScale'));
+    return Number.isFinite(saved) && saved >= 1 && saved <= 20 ? saved : 1;
+  });
   const [showNavmesh, setShowNavmesh] = useState(false);
   // Sky, clouds and weather shells are on unless the user turned them off —
   // a zone without its weather isn't what the zone looks like.
@@ -1368,6 +1373,7 @@ export default function App({ launch = null }) {
     renderer.setLightGain(lightGain);
     renderer.camera.fovDegrees = fov;
     renderer.camera.renderDistance = renderDistance;
+    renderer.effectDistanceScale = effectDistanceScale;
     {
       const id = normalizeBgId(localStorage.getItem('bgImage') || 'none');
       const url = resolveBgUrl(id);
@@ -6762,6 +6768,19 @@ export default function App({ launch = null }) {
     if (camera) camera.renderDistance = d;
   }, []);
 
+  const setEffectDistanceScale = useCallback((v) => {
+    const s = Math.min(20, Math.max(1, Math.round(Number(v) || 1)));
+    setEffectDistanceScaleState(s);
+    try { localStorage.setItem('effectDistanceScale', String(s)); } catch { /* quota */ }
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    renderer.effectDistanceScale = s;
+    if (renderer.particleSystem) renderer.particleSystem.effectDistanceScale = s;
+    for (const actor of renderer.actors ?? []) {
+      if (actor.fx?.system) actor.fx.system.effectDistanceScale = s;
+    }
+  }, []);
+
   // Ambient/weather SFX volume. Kept in a ref as well so a zone loading later
   // can apply it without waiting for a re-render.
   const [sfxVolume, setSfxVolumeState] = useState(() => {
@@ -8205,6 +8224,8 @@ export default function App({ launch = null }) {
         onFov={setFov}
         renderDistance={renderDistance}
         onRenderDistance={setRenderDistance}
+        effectDistanceScale={effectDistanceScale}
+        onEffectDistanceScale={setEffectDistanceScale}
         sequencerOpen={sequencerOpen}
         bgColor={settings?.bgColor ?? DEFAULT_BG}
         onBgColor={setBg}

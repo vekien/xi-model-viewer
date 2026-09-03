@@ -89,6 +89,7 @@ export function MenuBar({
   renderHeight = 0, onRenderHeight, bufferSize = null,
   fpsCap = 0, onFpsCap, onGraphicsOpenChange,
   renderDistance = 5000, onRenderDistance,
+  effectDistanceScale = 1, onEffectDistanceScale,
 }) {
   const [active, setActive] = useState(null);   // { label, left, top } | null
   const [scene, setScene] = useState(null);     // { left, top } | null
@@ -352,6 +353,8 @@ export function MenuBar({
               onFov={onFov}
               renderDistance={renderDistance}
               onRenderDistance={onRenderDistance}
+              effectDistanceScale={effectDistanceScale}
+              onEffectDistanceScale={onEffectDistanceScale}
             />
           </div>,
           document.body,

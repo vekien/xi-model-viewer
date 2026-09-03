@@ -3143,7 +3143,8 @@ input[type='color'] {
   font-size: 12px;
   box-sizing: border-box;
 }
-.gfx-slider { width: 100%; margin: 0; }
+.gfx-slider { flex: none; width: 100%; height: 5px; margin: 0; }
+.tool-pop-body .vol-slider { flex: none; }
 .gfx-slider:disabled { opacity: 0.35; }
 .tool-pop .vol-slider { width: 100%; }
 .gfx-help {

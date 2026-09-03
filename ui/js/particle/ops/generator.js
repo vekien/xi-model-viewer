@@ -70,7 +70,9 @@ export class GeneratorCullUpdater extends GeneratorUpdater {
     if (!Number.isFinite(gen.def.framesPerEmission) || this.maxEmitDistance === 0) return;
     const emitterPosition = gen.def.particleConfiguration?.basePosition ?? Vec3.ZERO;
     const viewer = gen.runtime.getCullReferencePosition();
-    gen.emitCulled = Vec3.distance(viewer, emitterPosition) > this.maxEmitDistance;
+    const s = gen.runtime?.effectDistanceScale;
+    const max = (Number.isFinite(s) && s > 0) ? this.maxEmitDistance * s : this.maxEmitDistance;
+    gen.emitCulled = Vec3.distance(viewer, emitterPosition) > max;
   }
 }
 

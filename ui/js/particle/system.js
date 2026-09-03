@@ -298,6 +298,8 @@ export class ParticleSystem {
 
     this.audioBackend = null;    // set by the host to enable weather/particle audio
     this.floorQuery = null;      // set by the host for decal / ground projection
+    // Graphics › Effects Distance. 1 = DAT-authored 0x0A / 0x2E / 0x48 ranges.
+    this.effectDistanceScale = 1;
 
     // Standalone spell/ability effect playback (see playEffectRoutine).
     this._effect = null;

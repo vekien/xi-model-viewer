@@ -1138,6 +1138,8 @@ export class Renderer {
     this.showSkybox = false;
     /** Draw 0x2E meshes with no 0x1C placement (at origin). Off by default. */
     this.showUnplaced = false;
+    /** Scale DAT-authored particle draw/cull distances. 1 = game default. */
+    this.effectDistanceScale = 1;
     this.collisionOpacity = 0.45;
     this.navmeshOpacity = 0.40;
 
@@ -3644,6 +3646,7 @@ export class Renderer {
       if (t) this.textures.set(tex.name, t);
     }
     system.camera = this._particleCameraAdapter();
+    system.effectDistanceScale = this.effectDistanceScale ?? 1;
     system.floorQuery = () => null;
     system.getActorAttachPosition = (jointRef, attach) => this._actorAttachPosition(actor, jointRef, attach);
     system.getActorAttachTransform = (jointRef, attach) => this._actorAttachTransform(actor, jointRef, attach);
@@ -4502,6 +4505,7 @@ export class Renderer {
     this.particleSystem = system;
     this.particleEnvironment = environment;
     if (!system) return;
+    system.effectDistanceScale = this.effectDistanceScale ?? 1;
 
     const self = this;
     system.getActorAttachPosition = (jointRef, attach) => self.getActorAttachPosition(jointRef, attach);
