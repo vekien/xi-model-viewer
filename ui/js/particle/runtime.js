@@ -24,6 +24,18 @@ const TARGET_ATTACH = new Set([
   AttachType.TargetToSourceBasis,
 ]);
 
+/**
+ * Source-side attachments ride the caster's joint every frame: a breath or a
+ * beam keeps streaming from the mouth or hand as the head or arm moves. The
+ * target side stays a world point sampled once (see ParticleGenerator.update).
+ */
+const SOURCE_FOLLOW = new Set([
+  AttachType.SourceActor,
+  AttachType.SourceActorTargetFacing,
+  AttachType.SourceToTargetBasis,
+  AttachType.SourceActorWeapon,
+]);
+
 /** Spell/ability gens authored against an actor (not sun/moon/zone). */
 function isActorAttach(attach) {
   return attach === AttachType.SourceActor
@@ -481,12 +493,13 @@ export class ParticleGenerator {
       this.activeParticles = [];
       return;
     }
-    // Freeze actor attach on first sample — spawn at the character, do not ride
-    // the animation (TargetActor in-game is a world point, not a bone follow).
-    // The exception is a held tool (SourceActorWeapon): that IS a bone follow,
-    // re-sampled every frame so the hatchet swings with the hand.
+    // Target-side actor attachments freeze on the first sample — the hit lands
+    // where the target stood, a world point, not a bone follow. Source-side
+    // ones re-sample every frame so the emitter stays on the caster's joint
+    // (a breath streams from the mouth as the head swings, the hatchet swings
+    // with the hand).
     const attach = this.def.attachType;
-    if (isActorAttach(attach) && (!this._actorAttachFrozen || attach === AttachType.SourceActorWeapon)) {
+    if (isActorAttach(attach) && (!this._actorAttachFrozen || SOURCE_FOLLOW.has(attach))) {
       this.updateAssociatedPosition(elapsedFrames);
     }
     this.emit(elapsedFrames);
@@ -565,6 +578,12 @@ export class ParticleGenerator {
 
   updateAssociatedPosition(elapsedFrames) {
     const attach = this.def.attachType;
+    // Where "the actor" is for this system. The main viewport keeps its model
+    // at the origin, so unattached generators can sit at (0,0,0); a zone actor
+    // is placed somewhere in the world, so its system supplies the origin and
+    // facing (renderer.setActorEffect) and everything not pinned to a joint
+    // falls back to that instead of the world origin.
+    const origin = this.runtime.getEffectOrigin?.() ?? null;
     if (attach === AttachType.Sun) {
       this.genAssociatedPosition.copyFrom(this.runtime.getSunPosition())
         .addInPlace(this.runtime.camera.getPosition());
@@ -581,14 +600,17 @@ export class ParticleGenerator {
         this.genAssociatedPosition.copyFrom(xf.position);
         this.genAssociatedRotation.copyFrom(xf.rotation);
         this._actorAttachFrozen = true;
+      } else if (origin) {
+        this.genAssociatedPosition.copyFrom(origin);
       } else {
         this.genAssociatedPosition.set(0, 0, 0);
       }
     } else if (isActorAttach(attach)) {
-      // DAT attachFlags name a joint (joint1 = target, joint0 = source). Sample
-      // once at spawn so the FX does not ride the animation; authored
-      // basePosition / ground projection still apply on top.
-      if (this._actorAttachFrozen) return;
+      // DAT attachFlags name a joint (joint1 = target, joint0 = source). The
+      // target side is sampled once at spawn; the source side follows the
+      // joint (SOURCE_FOLLOW). Authored basePosition / ground projection still
+      // apply on top.
+      if (this._actorAttachFrozen && !SOURCE_FOLLOW.has(attach)) return;
       // Which of the two references applies is decided by the attach type, not
       // by which one happens to be non-zero (xim ParticleGeneratorAttachment):
       // source-side gens read reference 0, target-side gens read reference 1.
@@ -601,9 +623,23 @@ export class ParticleGenerator {
       if (pos) {
         this.genAssociatedPosition.copyFrom(pos);
         this._actorAttachFrozen = true;
+      } else if (origin) {
+        this.genAssociatedPosition.copyFrom(origin);
       } else {
         this.genAssociatedPosition.set(0, 0, 0);
       }
+      // A placed actor's yaw: the authored emitter frame assumes the caster's
+      // default facing (the main viewport never turns its model), so a shot
+      // flies the way the actor is turned, not down world −Z.
+      const facing = this.runtime.getEffectFacing?.();
+      if (facing) this.genAssociatedRotation.copyFrom(facing);
+    } else if (origin) {
+      // Unattached (None / Zone-style) generator in an actor's routine: ride
+      // the actor's placement and yaw, refreshed every frame so a gizmo move
+      // drags the effect along.
+      this.genAssociatedPosition.copyFrom(origin);
+      const facing = this.runtime.getEffectFacing?.();
+      if (facing) this.genAssociatedRotation.copyFrom(facing);
     }
   }
 

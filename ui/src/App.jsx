@@ -805,6 +805,7 @@ export default function App({ launch = null }) {
   // at 30 fps a state update would re-render the whole panel — and with it
   // every combo's option list — thirty times a second.
   const animTick = useRef(null);
+  const actorAnimTick = useRef(null);   // zone-actor editor's frame scrubber (see ActorEditorModal)
   const [showTex, setShowTex] = useState(true);
   const [showWireframe, setShowWireframe] = useState(false);
   // Origin axis gizmo + world grid — persisted (Settings + View menu).
@@ -1010,6 +1011,11 @@ export default function App({ launch = null }) {
   const zoneActorsRef = useRef([]);
   zoneActorsRef.current = zoneActors;
   const [actorsPanelOpen, setActorsPanelOpen] = useState(false);
+  // Pointer handlers read this through the ref: endPointerDrag is memoised
+  // without the state in its deps, so it captured `false` forever and a click
+  // never reached the actor pick.
+  const actorsPanelOpenRef = useRef(false);
+  actorsPanelOpenRef.current = actorsPanelOpen;
   // Which right-rail panel was last up in a zone ('objects' | 'actors' |
   // 'none'); a zone that loads later opens the same one.
   const rightPanelPrefRef = useRef((() => {
@@ -1043,6 +1049,7 @@ export default function App({ launch = null }) {
   actorGizmoModeRef.current = actorGizmoMode;
   const actorGizmoDragRef = useRef(null); // { id, axis, mode, lastX, lastY }
   const actorGizmoHoverRef = useRef(null);
+  const actorHoverIdRef = useRef(null);      // Actors live selection: hovered actor id
   // Saved actor sets (Manage Actor Sets): the list, and which set the stage
   // came from so a re-save updates it instead of adding another.
   const [actorSetsOpen, setActorSetsOpen] = useState(false);
@@ -1445,6 +1452,10 @@ export default function App({ launch = null }) {
         fpsWindowStart = now;
       }
       animTick.current?.(renderer.animFrame, renderer.currentAnimation?.lengthInFrames ?? 0);
+      if (actorAnimTick.current) {
+        const ea = actorEditIdRef.current != null ? renderer.getActor(actorEditIdRef.current) : null;
+        actorAnimTick.current(ea?.animFrame ?? 0, ea?.currentAnimation?.lengthInFrames ?? 0);
+      }
     };
     raf = requestAnimationFrame(frame);
 
@@ -5978,6 +5989,99 @@ export default function App({ launch = null }) {
     r.setActorPlaying(actor.id, clip ? actor.playing !== false : false);
   }, []);
 
+  /**
+   * Play Effect: the VFX the NPC's model ties to the actor's CURRENT motion —
+   * a Special's pack ships its skill's whole bundle under `main`; a plain clip
+   * or schedule is matched to the model-DAT routine whose 0x05 anim refs (or
+   * actor schedule calls) name it. Nothing names it → nothing plays. The
+   * routine is fired from frame 0 and re-fired at every loop point of the
+   * clip (renderer actor.fx.replay), the same phase lock the Characters view
+   * uses, since the routine clock (60/s) and the clip (30fps) drift apart if
+   * both free-run. `a` is the caller's fresh actor record — zoneActorsRef only
+   * catches up on the next render. Sounds stay off: a placed prop is scenery.
+   */
+  const armActorFx = useCallback(async (id, a) => {
+    const r = rendererRef.current;
+    if (!r || !a) return;
+    const gen = actorLoadGenRef.current.get(id) ?? 0;
+    const settings = settingsRef.current;
+    const model = a.model;
+    const motion = a.motion;
+    const own = a.kind === 'npc' ? a.entry?.paths?.[a.entry.paths.length - 1] : null;
+    if (!a.fx || !model || !motion?.id || !own || !settings?.gamePath) {
+      r.setActorEffect(id, null);
+      if (a.fxRoutine) updateActor(id, { fxRoutine: '' });
+      return;
+    }
+    // Same test as npcPackActive: the pack is the source only while one of ITS
+    // clips is the selected motion, not just because it was loaded once.
+    const pack = a.pack && motion.kind === 'anim'
+      ? (a.packs ?? []).find((p) => p.path === a.pack && (p.clips ?? []).some((c) => animDisplayName(c) === motion.id))
+      : null;
+    const src = pack ? pack.path : own;
+    try {
+      const rel = normRel(src);
+      const { data: buf } = await backend.readPrefer(gameCandidates(rel, settings));
+      const warnings = [];
+      await ensureGlobalEffects(settings, warnings);
+      const stale = () => actorLoadGenRef.current.get(id) !== gen || !r.getActor(id);
+      if (stale()) return;
+      const parsed = parseEffectRoutines(buf);
+      const byId = new Map(parsed.map((x) => [x.id, x]));
+      const globalById = globalEffectsRef.current?.routines ?? null;
+      const routines = parsed
+        .map((x) => ({ ...x, flat: flattenRoutine(x, byId, globalById) }))
+        .filter((x) => x.flat.commands.length > 0);
+      let routine = null;
+      if (pack) {
+        routine = routines.find((x) => x.id === 'main') ?? routines[0] ?? null;
+      } else {
+        // Raw clip ids behind the motion: a clip's body-region parts (idl0,
+        // idl1) for an anim; the resolved clip set for a schedule.
+        const allIds = model.animations.map((x) => x.id);
+        const want = new Set(motion.kind === 'sched'
+          ? ((model.schedules ?? []).find((sc) => sc.id === motion.id)?.clipIds ?? [])
+          : allIds.filter((x) => animDisplayName(x) === motion.id));
+        const names = (x) => (x.flat.anims ?? []).some((c) => matchAnimRef(c.ref, allIds).some((cid) => want.has(cid)))
+          || (motion.kind === 'sched' && (x.flat.actorCalls ?? []).some((c) => c.scheduleId === motion.id));
+        routine = routines.find(names) ?? null;
+      }
+      if (!routine) {
+        r.setActorEffect(id, null);
+        updateActor(id, { fxRoutine: '' });
+        return;
+      }
+      const tree = buildParticleTree(buf, particleParsers(false, warnings), warnings);
+      const textures = new Map(parseDatTextures(buf));
+      for (const [name, tex] of globalEffectsRef.current?.textures ?? []) {
+        if (!textures.has(name)) textures.set(name, tex);
+      }
+      const system = new ParticleSystem({
+        zoneRoot: tree,
+        globalRoot: globalEffectsRef.current?.root ?? null,
+        camera: null,
+        environment: null,
+        onWarn: (m) => console.debug('[actor fx]', m),
+      });
+      const cmds = routine.flat.commands;
+      // First pass clears the stage; loop-point re-fires overlap so a routine
+      // whose particles outlive its emit span (a landing hit) is not cut off.
+      let fired = false;
+      const replay = () => {
+        system.playEffectRoutine(cmds, { loop: false, sounds: [], overlap: fired });
+        fired = true;
+      };
+      if (stale()) return;
+      r.seekActor(id, 0);   // clip and routine start together
+      replay();
+      r.setActorEffect(id, system, textures, replay);
+      updateActor(id, { fxRoutine: routine.id });
+    } catch (err) {
+      console.warn('actor effect failed', err);
+      setStatusText(`Actor effect failed: ${err?.message ?? err}`);
+    }
+  }, [ensureGlobalEffects, updateActor]);
+
   /** Load (or reload with a borrowed pack) the model behind an actor. */
   const loadActorEntry = useCallback(async (id, kind, entry, packPath = null, opts = {}) => {
     const gen = (actorLoadGenRef.current.get(id) ?? 0) + 1;
@@ -6014,13 +6118,16 @@ export default function App({ launch = null }) {
       }));
       if (next) applyActorMotion(next, motion);
       else applyActorMotion({ id, model, anims, loop: true, playing: true }, motion);
+      // setActorModel dropped any running effect with the old mesh; resolve
+      // the new model's VFX for its motion (if Play Effect is on).
+      if (next && next.fx) armActorFx(id, next);
     } catch (err) {
       if (actorLoadGenRef.current.get(id) !== gen) return;
       console.warn('actor load failed', err);
       updateActor(id, { status: 'error' });
       setStatusText(`Actor load failed: ${err?.message ?? err}`);
     }
-  }, [buildActorModel, updateActor, applyActorMotion]);
+  }, [buildActorModel, updateActor, applyActorMotion, armActorFx]);
 
   const editingActor = zoneActors.find((a) => a.id === actorEditId) || null;
 
@@ -6059,6 +6166,7 @@ export default function App({ launch = null }) {
       id, name: `Actor ${id}`, kind: null, entry: null, pos: [...point], rot: null,
       visible: true, status: 'placeholder', label: '', anims: [], schedules: [], packs: [],
       pack: null, motion: null, playing: true, loop: true, model: null, selectedPath: '', scale: 1,
+      fx: false, fxRoutine: '',
     };
     r.addActor(id, point);
     setZoneActors((prev) => [...prev, actor]);
@@ -6140,7 +6248,18 @@ export default function App({ launch = null }) {
     const motion = { kind, id: key };
     updateActor(id, { motion, playing: true });
     applyActorMotion({ ...a, playing: true }, motion);
-  }, [updateActor, applyActorMotion, loadActorEntry]);
+    // The effect follows the motion: re-resolve it for the new clip.
+    if (a.fx) armActorFx(id, { ...a, motion, playing: true });
+  }, [updateActor, applyActorMotion, loadActorEntry, armActorFx]);
+
+  /** Actor editor › Options › Play Effect: fire (or drop) the motion's VFX. */
+  const setActorFx = useCallback((id, on) => {
+    const a = zoneActorsRef.current.find((x) => x.id === id);
+    if (!a) return;
+    updateActor(id, { fx: !!on, ...(on ? {} : { fxRoutine: '' }) });
+    if (!on) rendererRef.current?.setActorEffect(id, null);
+    else armActorFx(id, { ...a, fx: true });
+  }, [updateActor, armActorFx]);
 
   /** Select an actor (or null): keeps the renderer's gizmo on it. */
   const selectActor = useCallback((id) => {
@@ -6157,7 +6276,11 @@ export default function App({ launch = null }) {
     const next = !actorPickRef.current;
     actorPickRef.current = next;
     setActorPick(next);
-    if (!next) selectActor(null);
+    if (!next) {
+      selectActor(null);
+      actorHoverIdRef.current = null;
+      rendererRef.current?.setActorHover?.(null);
+    }
   }, [selectActor]);
 
   // Panel closed → nothing selected, no gizmo.
@@ -6238,6 +6361,7 @@ export default function App({ launch = null }) {
       anims: [], schedules: [], packs: sa.entry?.animPacks ?? [],
       pack: sa.pack ?? null, motion: sa.motion ?? null, playing: sa.playing !== false,
       loop: sa.loop !== false, model: null, selectedPath: sa.entry?.key ?? '', pcState: sa.pcState ?? null,
+      fx: !!sa.fx, fxRoutine: '',
     };
     setZoneActors((prev) => [...prev, a]);
     if (a.entry && a.kind !== 'light') {
@@ -7583,10 +7707,12 @@ export default function App({ launch = null }) {
     }
 
     // Actors live selection: pick the actor under the cursor.
-    if (fromCanvasClick && wasClick && actorPickRef.current && modelRef.current?.kind === 'zone') {
+    if (fromCanvasClick && wasClick && actorPickRef.current && actorsPanelOpenRef.current && modelRef.current?.kind === 'zone') {
       const hit = pickActorAt(rendererRef.current, clientX, clientY);
       if (hit) {
+        // Select AND open its editor, like the row's edit button.
         selectActor(hit.actor.id);
+        setActorEditId(hit.actor.id);
         setStatusText(`${zoneActorsRef.current.find((a) => a.id === hit.actor.id)?.name ?? 'Actor'} selected — 1 move · 2 rotate · 3 scale`);
       } else if (actorSelectedIdRef.current != null) {
         selectActor(null);
@@ -7858,10 +7984,26 @@ export default function App({ launch = null }) {
         if (canvas) {
           canvas.style.cursor = axis
             ? (axis.startsWith('r') ? 'grab' : axis === 'u' || axis === 'y' ? 'ns-resize' : 'ew-resize')
-            : ((actorPickRef.current && actorsPanelOpen) || liveSelectionRef.current ? 'crosshair' : '');
+            : ((actorPickRef.current && actorsPanelOpenRef.current) || liveSelectionRef.current ? 'crosshair' : '');
         }
         if (axis) return;
       }
+    }
+    // Actors live selection: highlight the actor under the cursor.
+    if (model?.kind === 'zone' && actorPickRef.current && actorsPanelOpenRef.current && !actorPlacingRef.current) {
+      const r0 = rendererRef.current;
+      const hit = pickActorAt(r0, e.clientX, e.clientY);
+      const id = hit ? hit.actor.id : null;
+      if (id !== actorHoverIdRef.current) {
+        actorHoverIdRef.current = id;
+        r0?.setActorHover?.(id);
+      }
+      const canvas = canvasRef.current;
+      if (canvas) canvas.style.cursor = id != null ? 'pointer' : 'crosshair';
+      if (id != null) return;
+    } else if (actorHoverIdRef.current != null) {
+      actorHoverIdRef.current = null;
+      rendererRef.current?.setActorHover?.(null);
     }
     if (model?.kind === 'zone') {
       const r = rendererRef.current;
@@ -7927,6 +8069,10 @@ export default function App({ launch = null }) {
         if (actorGizmoHoverRef.current) {
           actorGizmoHoverRef.current = null;
           rendererRef.current?.setActorGizmoHover?.(null);
+        }
+        if (actorHoverIdRef.current != null) {
+          actorHoverIdRef.current = null;
+          rendererRef.current?.setActorHover?.(null);
         }
         if (gizmoHoverRef.current) {
           gizmoHoverRef.current = null;
@@ -8364,6 +8510,9 @@ export default function App({ launch = null }) {
             if (ra) ra.loop = loop;
             updateActor(editingActor.id, { loop });
           }}
+          frameSink={actorAnimTick}
+          onSeek={(f) => rendererRef.current?.seekActor(editingActor.id, f)}
+          onFx={(on) => setActorFx(editingActor.id, on)}
           onLight={(patch) => updateActorLight(editingActor.id, patch)}
           gizmoMode={actorGizmoMode}
           onGizmoMode={(mode) => {

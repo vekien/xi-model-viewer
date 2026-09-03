@@ -622,6 +622,10 @@ export class BlendFuncInitializer extends Initializer {
     if (this.alphaOverride != null && particle.isZoneAssociated()
         && particle.config.linkedDataType !== LinkedDataType.WeightedMesh) {
       particle.config.ignoreTextureAlpha = true;
+      particle.runtime.warn(
+        `[${particle.datId}] blend=${this.blendFunc} alphaOverride=${this.alphaOverride} `
+        + 'ignoreTextureAlpha=true (zone-associated, alpha-override bit set)',
+      );
     }
   }
 }

@@ -78,7 +78,7 @@ export function ActorSetsModal({
                 </button>
               </Tooltip>
               <button type="button" className="dbf-btn" disabled={!canSave} onClick={() => onSave(name.trim(), null)}>
-                Save as new
+                Save New
               </button>
             </>
           ) : (

@@ -4,7 +4,7 @@
  *
  * A set: { id, name, zone: { name, path }, savedAt, actors: [SavedActor] }
  * SavedActor: { name, kind, entry, pack, pos, rot, scale, motion, playing,
- *               loop, visible, pcState } — `entry` is the NPC-list / character
+ *               loop, visible, fx, pcState } — `entry` is the NPC-list / character
  *               composer entry the actor was loaded from (paths etc.).
  */
 
@@ -43,6 +43,7 @@ export function serializeActor(a) {
     playing: a.playing !== false,
     loop: a.loop !== false,
     visible: a.visible !== false,
+    fx: !!a.fx,
     pcState: a.pcState ? JSON.parse(JSON.stringify(a.pcState)) : null,
     light: a.light ? { ...a.light } : null,
   };

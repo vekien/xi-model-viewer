@@ -5463,6 +5463,9 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .node.selected > .row .actor-sub { color: rgba(0, 0, 0, 0.5); }
 
 .actor-modal { width: min(480px, 92vw); max-height: min(86vh, 760px); display: flex; flex-direction: column; }
+/* Actor editor: two columns, picker (35%) | options (65%). A fixed height lets
+   the NPC list fill its column instead of growing the window to its content. */
+.actor-editor-modal { width: min(880px, 94vw); height: min(86vh, 700px); max-height: min(86vh, 700px); }
 .actor-modal .modal-header { flex: 0 0 auto; }
 .actor-name-input {
   flex: 1 1 auto; min-width: 0;
@@ -5476,7 +5479,25 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .actor-name-input:hover { border-color: var(--ring); }
 .actor-name-input:focus { border-color: var(--accent); background: var(--gray-900); }
 .actor-modal-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 10px; }
-.actor-npc-list { height: 280px; max-height: 280px; }
+.actor-editor-modal .actor-modal-body {
+  overflow: hidden;
+  display: grid; grid-template-columns: minmax(0, 35fr) minmax(0, 65fr); column-gap: 14px;
+}
+.actor-col { min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.actor-col-pick { padding-right: 14px; border-right: 1px solid var(--ring); }
+.actor-col-opts { overflow: auto; padding-right: 2px; }
+.actor-col-opts .actor-section:first-child { margin-top: 0; }
+.actor-npc-list { flex: 1 1 auto; min-height: 0; height: auto; max-height: none; }
+.actor-col-pick .actor-pc, .actor-col-pick .actor-light { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.actor-frame-row { display: flex; align-items: center; gap: 8px; }
+.actor-frame-label { flex: 0 0 auto; font-size: 11px; color: var(--muted); min-width: 36px; }
+.actor-frame-slider { flex: 1 1 auto; min-width: 0; margin: 0; }
+.actor-frame-slider:disabled { opacity: 0.4; cursor: default; }
+.actor-opt-row { display: flex; align-items: center; gap: 8px; }
+.actor-opt-label { flex: 0 0 auto; font-size: 12px; color: var(--gray-300); min-width: 72px; }
+.actor-opt-row .seg-tab:disabled { opacity: 0.4; cursor: default; }
+.actor-fx-state { flex: 1 1 auto; min-width: 0; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.actor-fx-state.on { color: var(--accent); }
 .actor-pc { display: flex; flex-direction: column; gap: 8px; }
 .actor-section {
   margin-top: 4px;
@@ -5497,6 +5518,8 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .actors-sets-btn { flex: 0 0 auto; min-height: 32px; white-space: nowrap; }
 .actor-sets-save { display: flex; gap: 6px; align-items: center; }
 .actor-sets-save input { flex: 1 1 auto; min-width: 0; }
+.actor-sets-save .dbf-btn { flex: 0 0 auto; white-space: nowrap; }
+.actor-editor-modal .seg-tabs[role="tablist"] .seg-tab { white-space: nowrap; }
 .actor-sets-list { display: flex; flex-direction: column; gap: 4px; }
 .actor-set-row {
   display: flex; align-items: center; gap: 8px;

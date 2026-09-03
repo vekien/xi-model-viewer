@@ -6,13 +6,32 @@ import { EffectPcStrip } from './EffectActorsPanel.jsx';
 import { Tooltip } from './Tooltip.jsx';
 import { DEFAULT_LIGHT, kelvinToRgb01, rgb01ToHex } from '../js/lightUtil.js';
 
+// Where the editor was last dragged to — it unmounts on close, so the
+// position lives in localStorage and the next open lands in the same place.
+const POS_KEY = 'actorEditorPos';
+function loadSavedPos() {
+  try {
+    const p = JSON.parse(localStorage.getItem(POS_KEY) || 'null');
+    if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
+    // Keep it on screen if the window shrank since.
+    return { x: Math.min(Math.max(p.x, 0), Math.max(window.innerWidth - 200, 0)), y: Math.min(Math.max(p.y, 0), Math.max(window.innerHeight - 120, 0)) };
+  } catch {
+    return null;
+  }
+}
+function savePos(p) {
+  try { localStorage.setItem(POS_KEY, JSON.stringify(p)); } catch { /* quota */ }
+}
+
 /**
- * Draggable editor for one zone actor: NPC | Character picker, motion
- * (clips, schedules, borrowed packs), facing, and placement.
+ * Draggable editor for one zone actor. Two columns: the picker (NPC list |
+ * character composer | light form) on the left, the selected actor's options
+ * — motion, frame, effect, gizmo — on the right.
  */
 export function ActorEditorModal({
   actor, pc, onClose, onFocus, zIndex = 2100, initialPos = null,
   onRename, onKind, onSelectNpc, onMotion, onPlaying, onLoop,
+  frameSink = null, onSeek, onFx,
   gizmoMode = 'move', onGizmoMode, onResetTransform, onLight,
 }) {
   const panelRef = useRef(null);
@@ -20,7 +39,7 @@ export function ActorEditorModal({
   const [pos, setPos] = useState(() => (
     initialPos && Number.isFinite(initialPos.x) && Number.isFinite(initialPos.y)
       ? { x: initialPos.x, y: initialPos.y }
-      : null
+      : loadSavedPos()
   ));
   const [name, setName] = useState(actor?.name ?? '');
   useEffect(() => { setName(actor?.name ?? ''); }, [actor?.id, actor?.name]);
@@ -77,16 +96,21 @@ export function ActorEditorModal({
       y: Math.min(Math.max(e.clientY - dragState.current.dy, 0), Math.max(window.innerHeight - h, 0)),
     });
   };
-  const endDrag = () => { dragState.current = null; };
+  const endDrag = () => {
+    if (dragState.current && pos) savePos(pos);
+    dragState.current = null;
+  };
 
   const style = pos
     ? { position: 'fixed', left: pos.x, top: pos.y, transform: 'none', zIndex }
     : { position: 'fixed', left: 'calc(50% - 40px)', top: '50%', transform: 'translate(-50%, -50%)', zIndex };
 
   const kind = actor.kind || 'npc';
+  const fxOn = !!actor.fx;
+  const fxAvailable = kind === 'npc';
 
   return (
-    <div className="zdef-modal datatable-modal actor-modal" ref={panelRef} style={style} onPointerDown={onFocus}>
+    <div className="zdef-modal datatable-modal actor-modal actor-editor-modal" ref={panelRef} style={style} onPointerDown={onFocus}>
       <div
         className="modal-header"
         onPointerDown={startDrag}
@@ -111,102 +135,209 @@ export function ActorEditorModal({
       </div>
 
       <div className="actor-modal-body">
-        <div className="seg-tabs" role="tablist" aria-label="Actor type">
-          {[['npc', 'NPC', 'pets'], ['pc', 'Character', 'person'], ['light', 'Light Source', 'lightbulb']].map(([id, label, icon]) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={kind === id}
-              className={`seg-tab${kind === id ? ' on' : ''}`}
-              onClick={() => onKind?.(id)}
-            >
-              <span className="icon">{icon}</span>
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {kind === 'npc' && (
-          <div className="fx-actor-npc plc-list-shell actor-npc-list">
-            <NpcList onSelectEntry={onSelectNpc} selectedPath={actor.selectedPath || ''} />
-          </div>
-        )}
-        {kind === 'pc' && (
-          <div className="actor-pc">
-            {pc?.races ? <EffectPcStrip pc={pc} gearsetsFirst /> : <div className="side-note">Loading character lists…</div>}
-          </div>
-        )}
-        {kind === 'light' && <LightForm light={actor.light || DEFAULT_LIGHT} onChange={onLight} />}
-
-        {kind !== 'light' && (
-          <>
-        <div className="actor-section">Animation</div>
-        <div className="actor-motion-row">
-          <Combo
-            value={motionValue}
-            items={motionItems}
-            onChange={(id) => onMotion?.(id ?? '')}
-            className="actor-motion"
-          />
-          <Tooltip content={actor.playing ? 'Pause' : 'Play'} placement="top">
-            <button
-              type="button"
-              className="icon-btn"
-              aria-label={actor.playing ? 'Pause' : 'Play'}
-              disabled={!actor.motion}
-              onClick={() => onPlaying?.(!actor.playing)}
-            >
-              <span className="icon">{actor.playing ? 'pause' : 'play_arrow'}</span>
-            </button>
-          </Tooltip>
-          <Tooltip content={actor.loop ? 'Looping — click to play once' : 'Play once — click to loop'} placement="top">
-            <button
-              type="button"
-              className={`icon-btn${actor.loop ? ' on' : ''}`}
-              aria-label="Loop"
-              onClick={() => onLoop?.(!actor.loop)}
-            >
-              <span className="icon">{actor.loop ? 'repeat' : 'repeat_one'}</span>
-            </button>
-          </Tooltip>
-        </div>
-        {!actor.model && kind === 'npc' && (
-          <div className="form-hint">Pick an NPC above to load its model and motions.</div>
-        )}
-          </>
-        )}
-
-        <div className="actor-transform-row">
-          <div className="actor-pills" role="radiogroup" aria-label="Gizmo">
-            {[['move', '1', 'Move', 'open_with'], ['rotate', '2', 'Rotate', 'rotate_right'], ['scale', '3', 'Scale', 'zoom_out_map']].map(([id, key, label, icon]) => (
-              <Tooltip key={id} content={`${label} gizmo on this actor (key ${key})`} placement="top">
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={gizmoMode === id}
-                  className={`actor-pill${gizmoMode === id ? ' on' : ''}`}
-                  onClick={() => onGizmoMode?.(id)}
-                >
-                  <span className="icon">{icon}</span>
-                  <span className="actor-pill-key mono">{key}</span>
-                  {label}
-                </button>
-              </Tooltip>
+        {/* Left: what the actor is. */}
+        <div className="actor-col actor-col-pick">
+          <div className="seg-tabs" role="tablist" aria-label="Actor type">
+            {[['npc', 'NPC', 'pets'], ['pc', 'Character', 'person'], ['light', 'Lighting', 'lightbulb']].map(([id, label, icon]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={kind === id}
+                className={`seg-tab${kind === id ? ' on' : ''}`}
+                onClick={() => onKind?.(id)}
+              >
+                <span className="icon">{icon}</span>
+                {label}
+              </button>
             ))}
           </div>
-          <Tooltip content="Reset rotation and scale" placement="top">
-            <button type="button" className="dbf-btn actor-reset" onClick={onResetTransform}>
-              <span className="icon">restart_alt</span>
-              Reset
-            </button>
-          </Tooltip>
+
+          {kind === 'npc' && (
+            <div className="fx-actor-npc plc-list-shell actor-npc-list">
+              <NpcList onSelectEntry={onSelectNpc} selectedPath={actor.selectedPath || ''} />
+            </div>
+          )}
+          {kind === 'pc' && (
+            <div className="actor-pc">
+              {pc?.races ? <EffectPcStrip pc={pc} gearsetsFirst /> : <div className="side-note">Loading character lists…</div>}
+            </div>
+          )}
+          {kind === 'light' && <LightForm light={actor.light || DEFAULT_LIGHT} onChange={onLight} />}
         </div>
-        <div className="actor-pos mono">
-          x {actor.pos[0].toFixed(2)} &nbsp; y {actor.pos[1].toFixed(2)} &nbsp; z {actor.pos[2].toFixed(2)}
-          &nbsp; · &nbsp; {(actor.scale ?? 1).toFixed(2)}×
+
+        {/* Right: how it plays and where it sits. */}
+        <div className="actor-col actor-col-opts">
+          {kind !== 'light' && (
+            <>
+              <div className="actor-section">Animation</div>
+              <div className="actor-motion-row">
+                <Combo
+                  value={motionValue}
+                  items={motionItems}
+                  onChange={(id) => onMotion?.(id ?? '')}
+                  className="actor-motion"
+                />
+                <Tooltip content={actor.playing ? 'Pause' : 'Play'} placement="top">
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label={actor.playing ? 'Pause' : 'Play'}
+                    disabled={!actor.motion}
+                    onClick={() => onPlaying?.(!actor.playing)}
+                  >
+                    <span className="icon">{actor.playing ? 'pause' : 'play_arrow'}</span>
+                  </button>
+                </Tooltip>
+                <Tooltip content={actor.loop ? 'Looping — click to play once' : 'Play once — click to loop'} placement="top">
+                  <button
+                    type="button"
+                    className={`icon-btn${actor.loop ? ' on' : ''}`}
+                    aria-label="Loop"
+                    onClick={() => onLoop?.(!actor.loop)}
+                  >
+                    <span className="icon">{actor.loop ? 'repeat' : 'repeat_one'}</span>
+                  </button>
+                </Tooltip>
+              </div>
+              <FrameRow
+                frameSink={frameSink}
+                onSeek={onSeek}
+                playing={!!actor.playing}
+                onPause={() => onPlaying?.(false)}
+              />
+              {!actor.model && kind === 'npc' && (
+                <div className="form-hint">Pick an NPC on the left to load its model and motions.</div>
+              )}
+
+              <div className="actor-section">Options</div>
+              <div className="actor-opt-row">
+                <span className="actor-opt-label">Play Effect</span>
+                <div className="seg-tabs actor-seg" role="radiogroup" aria-label="Play effect">
+                  {[[false, 'Off'], [true, 'On']].map(([on, text]) => (
+                    <button
+                      key={text}
+                      type="button"
+                      role="radio"
+                      aria-checked={fxOn === on}
+                      className={`seg-tab${fxOn === on ? ' on' : ''}`}
+                      disabled={on && !fxAvailable}
+                      onClick={() => onFx?.(on)}
+                    >
+                      {text}
+                    </button>
+                  ))}
+                </div>
+                <span className={`actor-fx-state mono${fxOn && actor.fxRoutine ? ' on' : ''}`}>
+                  {!fxOn ? '' : actor.fxRoutine ? `routine ${actor.fxRoutine}` : actor.motion ? 'no effect for this motion' : 'pick a motion'}
+                </span>
+              </div>
+              <div className="form-hint">
+                {kind !== 'npc'
+                  ? 'Effects come from an NPC\'s own model; characters have none here.'
+                  : 'Plays the VFX the NPC\'s model ties to the selected motion (a Special\'s bundle, or the routine that names this clip), in step with the clip and re-fired at every loop.'}
+              </div>
+            </>
+          )}
+
+          <div className="actor-section">Transform</div>
+          <div className="actor-transform-row">
+            <div className="actor-pills" role="radiogroup" aria-label="Gizmo">
+              {[['move', '1', 'Move', 'open_with'], ['rotate', '2', 'Rotate', 'rotate_right'], ['scale', '3', 'Scale', 'zoom_out_map']].map(([id, key, label, icon]) => (
+                <Tooltip key={id} content={`${label} gizmo on this actor (key ${key})`} placement="top">
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={gizmoMode === id}
+                    className={`actor-pill${gizmoMode === id ? ' on' : ''}`}
+                    onClick={() => onGizmoMode?.(id)}
+                  >
+                    <span className="icon">{icon}</span>
+                    <span className="actor-pill-key mono">{key}</span>
+                    {label}
+                  </button>
+                </Tooltip>
+              ))}
+            </div>
+            <Tooltip content="Reset rotation and scale" placement="top">
+              <button type="button" className="dbf-btn actor-reset" onClick={onResetTransform}>
+                <span className="icon">restart_alt</span>
+                Reset
+              </button>
+            </Tooltip>
+          </div>
+          <div className="actor-pos mono">
+            x {actor.pos[0].toFixed(2)} &nbsp; y {actor.pos[1].toFixed(2)} &nbsp; z {actor.pos[2].toFixed(2)}
+            &nbsp; · &nbsp; {(actor.scale ?? 1).toFixed(2)}×
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Frame scrubber for the actor's running clip. Uncontrolled, like the
+ * Animation panel's: the render loop pushes the playhead through `frameSink`
+ * and this writes the thumb straight to the DOM — 30 React updates a second
+ * would rebuild the motion combo each time. Only the clip length is state.
+ * Grabbing the thumb pauses the clip, so the frame you land on sticks.
+ */
+function FrameRow({ frameSink, onSeek, playing, onPause }) {
+  const slider = useRef(null);
+  const readout = useRef(null);
+  const dragging = useRef(false);
+  const [last, setLast] = useState(0);
+
+  useEffect(() => {
+    if (!frameSink) return undefined;
+    frameSink.current = (frame, len) => {
+      // lengthInFrames lands a hair under the whole number it means
+      // (59.9999991 for a 60-frame clip); round before it reaches the scale.
+      const end = Math.max(Math.round(len) - 1, 0);
+      setLast((prev) => (prev === end ? prev : end));
+      if (dragging.current || !slider.current) return;
+      const f = Math.min(Math.floor(frame), end);
+      slider.current.value = f;
+      slider.current.style.setProperty('--fill', end > 0 ? `${(f / end) * 100}%` : '0%');
+      if (readout.current) readout.current.textContent = `${f}/${end}`;
+    };
+    return () => { frameSink.current = null; };
+  }, [frameSink]);
+
+  const grab = () => {
+    dragging.current = true;
+    if (playing) onPause?.();
+  };
+  const drag = (e) => {
+    dragging.current = true;
+    const f = +e.target.value;
+    onSeek?.(f);
+    e.target.style.setProperty('--fill', last > 0 ? `${(f / last) * 100}%` : '0%');
+    if (readout.current) readout.current.textContent = `${f}/${last}`;
+  };
+  const drop = () => { dragging.current = false; };
+
+  return (
+    <div className="actor-frame-row">
+      <span className="actor-frame-label">Frame</span>
+      <input
+        ref={slider}
+        type="range"
+        className="vol-slider actor-frame-slider"
+        min="0"
+        max={last}
+        defaultValue={0}
+        disabled={last <= 0}
+        aria-label="Animation frame"
+        title="Drag to set the frame (pauses playback)"
+        onPointerDown={grab}
+        onInput={drag}
+        onPointerUp={drop}
+        onPointerCancel={drop}
+        onBlur={drop}
+      />
+      <span ref={readout} className="mono pc-frame-num">0/0</span>
     </div>
   );
 }

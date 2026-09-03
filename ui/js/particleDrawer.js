@@ -340,6 +340,7 @@ export class ParticleDrawer {
 
     this.meshCache = new Map();     // mesh descriptor -> { vao, vbo, count, texName }
     this.textures = new Map();      // texture name -> GLTexture
+    this._missingTexWarned = new Set();   // texName already logged this session
     this.lastStats = { drawn: 0, particles: 0 };
 
     this.shadowProgram = buildProgram(gl, SHADOW_VERTEX_SHADER, SHADOW_FRAGMENT_SHADER);
@@ -640,6 +641,10 @@ export class ParticleDrawer {
     if (entry.texResolved === undefined) {
       const key = entry.texName ? resolveTexture(entry.texName, this.textures) : null;
       entry.texResolved = key ? this.textures.get(key) : null;
+      if (!entry.texResolved && entry.texName && !this._missingTexWarned.has(entry.texName)) {
+        this._missingTexWarned.add(entry.texName);
+        console.warn(`[particles] texture not found, drawing untextured: ${entry.texName}`);
+      }
     }
     return entry.texResolved ?? this.defaultTexture;
   }

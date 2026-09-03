@@ -6,6 +6,7 @@ import { OrbitCamera, mat4Multiply, mat4LookAt, mat4Ortho } from './camera.js';
 import { SkeletonPose, qRotate } from './pose.js';
 import { ParticleDrawer } from './particleDrawer.js';
 import { Vec3, Mat4 } from './particle/math.js';
+import { AttachType } from './particle/types.js';
 import { buildSolidGizmoMeshes, gizmoSize } from './zoneGizmo.js';
 import { bakeSpinnerDraws } from './zoneModel.js';
 
@@ -1107,6 +1108,7 @@ export class Renderer {
     this.collisionOverlay = null; // { vao, vbo, count }
     this.navmeshOverlay = null;
     this.zonePickOverlay = null; // live-selection hover/selected AABB wireframes
+    this.actorHoverId = null;    // Actors live selection: actor under the cursor
     this.zoneGizmo = null;       // { pos, size, activeAxis } selected-object XYZ grabber
     this.gizmoMesh = null;       // solid unit gizmo (triangles)
     this.zoneMoveProxy = [];     // temporary zone batches while dragging a placement
@@ -2228,6 +2230,21 @@ export class Renderer {
       const b = toEntityPt(bounds.max);
       min = [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.min(a[2], b[2])];
       max = [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.max(a[2], b[2])];
+      // Entities frame around the ORIGIN, not the mesh box centre: the look-at
+      // lands on the axis gizmo (the orbit pivot, see getOrbitPivot) at screen
+      // centre, and only the distance comes from the bounds — far enough that
+      // the whole box fits, measured from the origin to its farthest corner
+      // so a model that stands entirely above its feet is not cut off.
+      let reach = 0;
+      for (const x of [min[0], max[0]]) {
+        for (const y of [min[1], max[1]]) {
+          for (const z of [min[2], max[2]]) reach = Math.max(reach, Math.hypot(x, y, z));
+        }
+      }
+      reach = Math.max(reach, 0.5);
+      this.camera.fit([-reach, -reach, -reach], [reach, reach, reach], { distance: reach * 2.4 });
+      this.snapFloorToFeet();
+      return;
     }
     const canvas = this.canvas;
     const aspect = canvas?.clientWidth > 0 && canvas?.clientHeight > 0
@@ -2256,24 +2273,22 @@ export class Renderer {
   }
 
   /**
-   * Display-space point the entity/effect should orbit around after a pan
-   * (model bounds centre, or the origin for a bare effect). Zones return null
-   * — free pan+orbit around an arbitrary look-at stays as-is there.
+   * Display-space point an entity or effect orbits around: ALWAYS the world
+   * origin, where the axis gizmo sits. Zones return null — free tumble about
+   * the look-at stays as-is there.
+   *
+   * This used to be the rest-bounds centre, and that is the pivot that kept
+   * "wandering" between NPC loads: a wyrm with its wings spread and tail out
+   * has a mesh box whose centre is nowhere near its body, a gear swap or a
+   * borrowed pack re-derives it from a different box, and the box itself
+   * depends on which pose computeBounds last saw. The DAT origin is the one
+   * fixed point every model shares (its feet/root), so a drag turns the model
+   * about the axes on screen and the same spot every time.
    */
   getOrbitPivot() {
     if (this.effectMode) return [0, 0, 0];
     if (!this.model || this.model.kind === 'zone') return null;
-    // Rest bounds for the same reason as fitCamera: an orbit centre that drifts
-    // with the animation makes the model swim under the cursor while dragging.
-    const bounds = this.restBounds() ?? this.computeBounds();
-    if (!bounds) return [0, 0, 0];
-    const a = toEntityPt(bounds.min);
-    const b = toEntityPt(bounds.max);
-    return [
-      (a[0] + b[0]) * 0.5,
-      (a[1] + b[1]) * 0.5,
-      (a[2] + b[2]) * 0.5,
-    ];
+    return [0, 0, 0];
   }
 
   /**
@@ -2931,6 +2946,7 @@ export class Renderer {
       this._drawOverlay(viewProj, this.showNavmesh ? this.navmeshOverlay : null, this.navmeshOpacity);
       if (!this.camera?.sequenceLock) {
         this._drawZonePickOverlay(viewProj);
+        this._drawActorHover(viewProj);
         this._drawActorGizmo(viewProj);
       }
       if (this.showSoundMarkers) this._drawSoundMarkers(viewProj);
@@ -3138,6 +3154,7 @@ export class Renderer {
       placeholder: null,
       color: [0.42, 0.72, 1.0],
       modelMatrix: new Float32Array(16),
+      fx: null,   // { system } — the NPC's own effect routine, see setActorEffect
     };
     this._syncActorTransform(actor);
     this.actors.push(actor);
@@ -3173,6 +3190,8 @@ export class Renderer {
     actor.textures.clear();
     this._freeOverlay(actor.placeholder);
     actor.placeholder = null;
+    actor.fx?.system?.clearEffect();
+    actor.fx = null;
   }
 
   _syncActorTransform(actor) {
@@ -3466,6 +3485,63 @@ export class Renderer {
     if (actor) actor.visible = !!visible;
   }
 
+  /** Actors live selection: the actor under the cursor gets a wire box. */
+  setActorHover(id) {
+    this.actorHoverId = id ?? null;
+  }
+
+  /**
+   * Wire box round the hovered actor. Rebuilt every frame from the live pose
+   * bounds (an idle sways, a breath swings the head), which is 24 vertices —
+   * cheaper than tracking dirtiness.
+   */
+  _drawActorHover(viewProj) {
+    if (this.actorHoverId == null) return;
+    const actor = this.getActor(this.actorHoverId);
+    if (!actor || !actor.visible) return;
+    const b = this.actorBoundsDisplay(actor);
+    if (!b?.min || !b?.max) return;
+    const [x0, y0, z0] = b.min;
+    const [x1, y1, z1] = b.max;
+    const c = [
+      [x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0],
+      [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1],
+    ];
+    const edges = [
+      [0, 1], [1, 2], [2, 3], [3, 0],
+      [4, 5], [5, 6], [6, 7], [7, 4],
+      [0, 4], [1, 5], [2, 6], [3, 7],
+    ];
+    const rgb = [0.35, 0.85, 1.0];   // same cyan as the zone live-selection hover
+    const verts = [];
+    for (const [a, bi] of edges) {
+      verts.push(...c[a], ...rgb, ...c[bi], ...rgb);
+    }
+    const gl = this.gl;
+    const data = new Float32Array(verts);
+    const vbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STREAM_DRAW);
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0);
+    gl.enableVertexAttribArray(1);
+    gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+    gl.useProgram(this.overlayProgram);
+    gl.uniformMatrix4fv(this.overlayUniforms.viewProj, false, viewProj);
+    gl.uniform1f(this.overlayUniforms.opacity, 1);
+    gl.disable(gl.BLEND);
+    gl.disable(gl.DEPTH_TEST);   // always readable, even through terrain
+    gl.depthMask(false);
+    gl.drawArrays(gl.LINES, 0, verts.length / 6);
+    gl.bindVertexArray(null);
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthMask(true);
+    gl.deleteVertexArray(vao);
+    gl.deleteBuffer(vbo);
+  }
+
   /**
    * Give an actor a parsed entity model (same shape setModel takes), or null
    * to go back to the placeholder. Textures and batches are owned by the actor.
@@ -3517,6 +3593,142 @@ export class Renderer {
     if (actor) actor.playing = !!playing;
   }
 
+  /** Scrub an actor's clip to a game-frame (clamped). Leaves play state alone. */
+  seekActor(id, frame) {
+    const actor = this.getActor(id);
+    if (!actor || !actor.currentAnimation || !actor.pose) return;
+    const len = actor.currentAnimation.lengthInFrames ?? 0;
+    actor.animFrame = Math.min(Math.max(+frame || 0, 0), len);
+    actor.pose.evaluate(actor.currentAnimation, actor.animFrame);
+    actor.poseDirty = true;
+  }
+
+  /**
+   * Play an NPC's own effect routine on a zone actor: `system` is a
+   * ParticleSystem armed via playEffectRoutine (or null to stop), `textures`
+   * the effect DAT's images. Each actor owns its system, ticked in
+   * _advanceActors and drawn after the zone's weather pass, with its
+   * actor-attached generators anchored to THIS actor's joints and placement
+   * rather than the main entity (there is none in a zone).
+   */
+  setActorEffect(id, system, textures = null, replay = null) {
+    const actor = this.getActor(id);
+    if (!actor) return;
+    if (actor.fx?.system && actor.fx.system !== system) actor.fx.system.clearEffect();
+    if (!system) { actor.fx = null; return; }
+    for (const tex of textures?.values() ?? []) {
+      // The registry is shared with the zone and every other actor: keep the
+      // incumbent on a name clash (the shared ROM/0/0 sheets are identical).
+      if (this.textures.has(tex.name)) continue;
+      const t = this.createTexture(tex);
+      if (t) this.textures.set(tex.name, t);
+    }
+    system.camera = this._particleCameraAdapter();
+    system.floorQuery = () => null;
+    system.getActorAttachPosition = (jointRef, attach) => this._actorAttachPosition(actor, jointRef, attach);
+    system.getActorAttachTransform = (jointRef, attach) => this._actorAttachTransform(actor, jointRef, attach);
+    // Unattached generators (most of a routine's ground rings, bursts and
+    // flashes) sit at the actor's feet and turn with it — see
+    // ParticleGenerator.updateAssociatedPosition. Particle space is display
+    // space through toDat = diag(-1,-1,1), its own inverse, so a display yaw R
+    // becomes toDat * R * toDat there.
+    system.getEffectOrigin = () => new Vec3(-actor.pos[0], -actor.pos[1], actor.pos[2]);
+    system.getEffectFacing = () => {
+      const R = actor.rot;
+      if (!R) return null;
+      const m = new Mat4(new Float32Array([
+        R[0], R[1], R[2], 0,
+        R[3], R[4], R[5], 0,
+        R[6], R[7], R[8], 0,
+        0, 0, 0, 1,
+      ]));
+      const d = new Mat4().scaleInPlace(new Vec3(-1, -1, 1));
+      d.multiply(m, m);
+      m.multiply(d, m);
+      return m;
+    };
+    // `replay` re-fires the routine at the clip's loop point (see _advanceActors).
+    actor.fx = { system, replay };
+  }
+
+  /** A joint reference as a point in the actor's own DAT frame (current pose). */
+  _actorRefLocal(actor, idx) {
+    const ref = actor.model?.skeleton?.references?.[idx];
+    if (!ref || !actor.pose) return null;
+    const j = ref.index | 0;
+    const tr = actor.pose.trans?.[j];
+    if (!tr) return null;
+    const off = ref.offset ?? [0, 0, 0];
+    const sc = actor.pose.scale?.[j] ?? [1, 1, 1];
+    const q = actor.pose.rot?.[j];
+    const local = [off[0] * sc[0], off[1] * sc[1], off[2] * sc[2]];
+    const rot = q ? qRotate(q, local) : local;
+    return [tr[0] + rot[0], tr[1] + rot[1], tr[2] + rot[2]];
+  }
+
+  /**
+   * Zone-actor twin of getActorAttachPosition: the joint in the actor's raw DAT
+   * frame, through its model matrix (ENTITY_ROT · scale · yaw · place) into
+   * display space, then into particle space (toDat = diag(-1,-1,1)).
+   *
+   * Target-side references resolve on a VIRTUAL target standing in front of
+   * the actor, not on the actor itself. A monster's TP move is authored for
+   * two actors — the shot leaves the source's mouth (reference 24 on a wyvern)
+   * and the hit lands on the target's body references — and with one actor on
+   * stage those target points sat on the caster's own chest, so a breath
+   * attack looked like it fired at its own feet. The stand-in is the front
+   * slot of the skeleton's attack ring (reference 13, where an attacker stands
+   * in game), so it is model-sized: a few units ahead of a wyvern, one step
+   * ahead of a goblin. Target references keep their own height and lateral
+   * offset; only the ground point moves.
+   */
+  _actorAttachPosition(actor, jointRef = 0, attach = null) {
+    if (!actor.model || !actor.pose) return null;
+    let idx = jointRef | 0;
+    if (idx >= 49 && idx <= 51) idx = RING_REF_START;
+    const d = this._actorRefLocal(actor, idx);
+    if (!d) return null;
+    const isTarget = attach === AttachType.TargetActor
+      || attach === AttachType.TargetActorSourceFacing
+      || attach === AttachType.TargetToSourceBasis;
+    if (isTarget) {
+      const front = this._actorRefLocal(actor, RING_REF_START);
+      const root = this._actorRefLocal(actor, 0) ?? [0, 0, 0];
+      if (front) { d[0] += front[0] - root[0]; d[2] += front[2] - root[2]; }
+    }
+    const m = actor.modelMatrix;
+    const wx = m[0] * d[0] + m[4] * d[1] + m[8] * d[2] + m[12];
+    const wy = m[1] * d[0] + m[5] * d[1] + m[9] * d[2] + m[13];
+    const wz = m[2] * d[0] + m[6] * d[1] + m[10] * d[2] + m[14];
+    return new Vec3(-wx, -wy, wz);
+  }
+
+  /** Joint frame for a weapon-attached generator: R' = toDat * M3(actor) * Rq. */
+  _actorAttachTransform(actor, jointRef = 0, attach = null) {
+    const position = this._actorAttachPosition(actor, jointRef, attach);
+    if (!position) return null;
+    const refs = actor.model.skeleton?.references ?? [];
+    let idx = jointRef | 0;
+    if (idx >= 49 && idx <= 51) idx = RING_REF_START;
+    const q = actor.pose.rot?.[refs[idx]?.index | 0];
+    const rotation = new Mat4();
+    if (q) {
+      rotation.setRotationFromQuaternionInPlace(q[0], q[1], q[2], q[3]);
+      const m = actor.modelMatrix;
+      const k = actor.scale > 0 ? actor.scale : 1;
+      const basis = new Mat4(new Float32Array([
+        m[0] / k, m[1] / k, m[2] / k, 0,
+        m[4] / k, m[5] / k, m[6] / k, 0,
+        m[8] / k, m[9] / k, m[10] / k, 0,
+        0, 0, 0, 1,
+      ]));
+      const toDat = new Mat4().scaleInPlace(new Vec3(-1, -1, 1));
+      toDat.multiply(basis, basis);
+      basis.multiply(rotation, rotation);
+    }
+    return { position, rotation };
+  }
+
   _advanceActors(dtSeconds) {
     for (const actor of this.actors) {
       if (!actor.playing || !actor.currentAnimation || !actor.pose) continue;
@@ -3526,10 +3738,24 @@ export class Renderer {
       if (!(len > 0)) actor.animFrame = 0;
       else if (actor.animFrame > len) {
         if (actor.loop === false) { actor.animFrame = len; actor.playing = false; }
-        else actor.animFrame %= len;
+        else {
+          actor.animFrame %= len;
+          actor.fx?.replay?.();   // keep the motion's VFX in phase with the clip
+        }
       }
       actor.pose.evaluate(clip, actor.animFrame);
       actor.poseDirty = true;
+    }
+    // Per-actor effect routines run on the effect engine's 60/s clock (same
+    // clamp as _updateEnvironment). Hidden, or paused mid-clip (scrubbing),
+    // the effect freezes with the actor; a clip that ran out lets its
+    // trailing particles finish.
+    const fxFrames = Math.min(8, Math.max(0, (dtSeconds || 1 / 60) * 60));
+    for (const actor of this.actors) {
+      if (!actor.fx?.system || !actor.visible) continue;
+      const len = actor.currentAnimation?.lengthInFrames ?? 0;
+      const pausedMidClip = !actor.playing && actor.currentAnimation && actor.animFrame < len - 1e-3;
+      if (!pausedMidClip) actor.fx.system.update(fxFrames);
     }
   }
 
@@ -4256,7 +4482,6 @@ export class Renderer {
     this.particleEnvironment = environment;
     if (!system) return;
 
-    const toDat = (v) => new Vec3(-v.x, -v.y, v.z);
     const self = this;
     system.getActorAttachPosition = (jointRef, attach) => self.getActorAttachPosition(jointRef, attach);
     system.getActorAttachTransform = (jointRef, attach) => self.getActorAttachTransform(jointRef, attach);
@@ -4267,7 +4492,14 @@ export class Renderer {
       if (self.model && self.pose && self.floorY != null) return self.floorY;
       return 0;
     };
-    system.camera = {
+    system.camera = this._particleCameraAdapter();
+  }
+
+  /** The particle engine's view of the live camera (see setParticleSystem). */
+  _particleCameraAdapter() {
+    const toDat = (v) => new Vec3(-v.x, -v.y, v.z);
+    const self = this;
+    return {
       getPosition() {
         const e = self.camera.eye;
         return toDat(new Vec3(e[0], e[1], e[2]));
@@ -4345,13 +4577,15 @@ export class Renderer {
   _drawParticles() {
     // Not gated on showSkybox: water, spray and fountains are world effects, and
     // hiding the sky shouldn't drain the sea. View > Toggle Effects hides them.
+    if (this.showEffects === false) return;
     const system = this.particleSystem;
-    if (!system || this.showEffects === false) return;
+    const actorFx = this.actors.filter((a) => a.visible && a.fx?.system);
+    if (!system && !actorFx.length) return;
     if (!this.particleDrawer) this.particleDrawer = new ParticleDrawer(this.gl);
     this.particleDrawer.setTextures(this.textures);
 
-    this.particleDrawer.draw({
-      system,
+    const drawSystem = (sys) => this.particleDrawer.draw({
+      system: sys,
       view: this.camera.viewMatrix(),
       // Must be the same projection the zone pass used, Explorer offset and all.
       proj: this.projMatrix,
@@ -4361,7 +4595,22 @@ export class Renderer {
       canvasWidth: this.gl.drawingBufferWidth,
       canvasHeight: this.gl.drawingBufferHeight,
     });
-    this.particleDrawer.drawScreenFlashes(system.getScreenFlashes());
+    let stats = null;
+    if (system) {
+      drawSystem(system);
+      stats = this.particleDrawer.lastStats;
+    }
+    // Zone actors' own routines, composited after the weather pass. Their
+    // screen flashes are skipped: a flash is a full-screen event, not a prop.
+    for (const a of actorFx) {
+      drawSystem(a.fx.system);
+      if (stats) {
+        stats.drawn += this.particleDrawer.lastStats.drawn;
+        stats.particles += this.particleDrawer.lastStats.particles;
+      }
+    }
+    if (stats) this.particleDrawer.lastStats = stats;
+    if (system) this.particleDrawer.drawScreenFlashes(system.getScreenFlashes());
   }
 
   getParticleStats() {
