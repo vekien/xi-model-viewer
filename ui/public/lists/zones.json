@@ -1925,19 +1925,19 @@
     "fileId": 570
   },
   {
-    "name": "dn00",
+    "name": "San d'Oria Mog House (rental)",
     "path": "game/ROM/1/21.DAT",
     "group": "Rooms",
     "fileId": 357
   },
   {
-    "name": "dn00",
+    "name": "Bastok Mog House (rental)",
     "path": "game/ROM/1/22.DAT",
     "group": "Rooms",
     "fileId": 358
   },
   {
-    "name": "dn00",
+    "name": "San d'Oria Mog House",
     "path": "game/ROM/1/45.DAT",
     "group": "Rooms",
     "fileId": 389
@@ -2003,7 +2003,7 @@
     "fileId": 564
   },
   {
-    "name": "ran0",
+    "name": "Bastok Mog House",
     "path": "game/ROM/1/46.DAT",
     "group": "Rooms",
     "fileId": 390
@@ -2159,13 +2159,13 @@
     "fileId": 455
   },
   {
-    "name": "ROM/1/20",
+    "name": "Jeuno Mog House",
     "path": "game/ROM/1/20.DAT",
     "group": "Rooms",
     "fileId": 356
   },
   {
-    "name": "ROM/1/47",
+    "name": "Windurst Mog House",
     "path": "game/ROM/1/47.DAT",
     "group": "Rooms",
     "fileId": 391
@@ -3503,7 +3503,7 @@
     "fileId": 693
   },
   {
-    "name": "sh-u",
+    "name": "Windurst Mog House (rental)",
     "path": "game/ROM/1/23.DAT",
     "group": "Rooms",
     "fileId": 388
