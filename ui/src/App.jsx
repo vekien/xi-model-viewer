@@ -6069,7 +6069,7 @@ export default function App({ launch = null }) {
     const r = rendererRef.current;
     if (!r) return;
     const clip = actorClipFor(actor, motion);
-    r.setActorAnimation(actor.id, clip, { loop: actor.loop !== false });
+    r.setActorAnimation(actor.id, clip, { loop: actor.loop !== false, frame: actor.frame ?? 0 });
     r.setActorPlaying(actor.id, clip ? actor.playing !== false : false);
   }, []);
 
@@ -6191,20 +6191,24 @@ export default function App({ launch = null }) {
         (want.kind === 'anim' && anims.some((g) => g.id === want.id))
         || (want.kind === 'sched' && schedules.some((sc) => sc.id === want.id)));
       const motion = wantOk ? { kind: want.kind, id: want.id } : (pick ? { kind: 'anim', id: pick.id } : null);
-      let next = null;
-      setZoneActors((prev) => prev.map((a) => {
-        if (a.id !== id) return a;
-        next = {
-          ...a, model, anims, schedules, motion, status: 'ready', label: entry.name || a.label,
-          playing: opts.playing ?? a.playing, loop: opts.loop ?? a.loop,
-        };
-        return next;
-      }));
-      if (next) applyActorMotion(next, motion);
-      else applyActorMotion({ id, model, anims, loop: true, playing: true }, motion);
-      // setActorModel dropped any running effect with the old mesh; resolve
-      // the new model's VFX for its motion (if Play Effect is on).
-      if (next && next.fx) armActorFx(id, next);
+      // Build the ready actor from the last rendered one rather than inside
+      // the state updater: React only runs an updater eagerly when nothing
+      // else is pending on this component, and with several actors landing
+      // (a set load) it usually isn't — the value assigned in there was null
+      // by the time it was read, and the saved frame / paused state fell
+      // through to "play from 0".
+      const base = zoneActorsRef.current.find((a) => a.id === id) ?? { id, loop: true, playing: true };
+      const patch = {
+        model, anims, schedules, motion, status: 'ready', label: entry.name || base.label,
+        playing: opts.playing ?? base.playing, loop: opts.loop ?? base.loop,
+        frame: opts.frame ?? 0,
+      };
+      updateActor(id, patch);
+      const next = { ...base, ...patch };
+      applyActorMotion(next, motion);
+      if (next.fx) await armActorFx(id, next);
+      if (next.frame) rendererRef.current?.seekActor(id, next.frame);
+      if (!next.playing) rendererRef.current?.setActorPlaying(id, false);
     } catch (err) {
       if (actorLoadGenRef.current.get(id) !== gen) return;
       console.warn('actor load failed', err);
@@ -6226,12 +6230,18 @@ export default function App({ launch = null }) {
       if (id == null) return;
       loadActorEntry(id, 'pc', entry);
       const pcNow = actorPcRef.current;
-      if (pcNow) updateActor(id, { pcState: { race: pcNow.race, gear: pcNow.sel } });
+      if (pcNow) updateActor(id, { pcState: pcNow.snapshot?.() ?? { race: pcNow.race, gear: pcNow.sel } });
     },
     onError: (msg) => setStatusText(msg),
   });
   const actorPcRef = useRef(actorPc);
   actorPcRef.current = actorPc;
+
+  useEffect(() => {
+    const a = zoneActorsRef.current.find((x) => x.id === actorEditId);
+    if (!a || a.kind !== 'pc' || !a.pcState?.race) return;
+    if (actorPc.races) actorPc.applyGearSet(a.pcState);
+  }, [actorEditId, actorPc.races]);
 
   /** Put a new actor (or the one being moved) at a ground point. */
   const placeActorAt = useCallback((point) => {
@@ -6414,7 +6424,14 @@ export default function App({ launch = null }) {
       const zone = modelInfo?.zone
         ? { name: modelInfo.zone.name || modelInfo.name || '', path: modelInfo.zone.path || '' }
         : null;
-      const set = saveActorSet({ id: setId, name, zone, actors: zoneActorsRef.current });
+      const pcNow = actorPcRef.current;
+      const actors = zoneActorsRef.current.map((a) => {
+        const ra = rendererRef.current?.getActor(a.id);
+        const snap = (a.kind === 'pc' && a.id === actorEditIdRef.current && pcNow?.snapshot)
+          ? pcNow.snapshot() : a.pcState;
+        return { ...a, frame: ra?.animFrame ?? a.frame ?? 0, pcState: snap ?? a.pcState };
+      });
+      const set = saveActorSet({ id: setId, name, zone, actors });
       setActorSets(loadActorSets());
       setCurrentActorSet({ id: set.id, name: set.name });
       setStatusText(`${setId ? 'Updated' : 'Saved'} actor set “${set.name}” (${set.actors.length})`);
@@ -6444,12 +6461,15 @@ export default function App({ launch = null }) {
       light: sa.kind === 'light' && sa.light ? { ...DEFAULT_LIGHT, ...sa.light } : null,
       anims: [], schedules: [], packs: sa.entry?.animPacks ?? [],
       pack: sa.pack ?? null, motion: sa.motion ?? null, playing: sa.playing !== false,
+      frame: sa.frame ?? 0,
       loop: sa.loop !== false, model: null, selectedPath: sa.entry?.key ?? '', pcState: sa.pcState ?? null,
       fx: !!sa.fx, fxRoutine: '',
     };
     setZoneActors((prev) => [...prev, a]);
     if (a.entry && a.kind !== 'light') {
-      loadActorEntry(a.id, a.kind, a.entry, a.pack, { motion: a.motion, playing: a.playing, loop: a.loop });
+      loadActorEntry(a.id, a.kind, a.entry, a.pack, {
+        motion: a.motion, playing: a.playing, loop: a.loop, frame: a.frame,
+      });
     }
     return a;
   }, [loadActorEntry]);
@@ -8597,6 +8617,13 @@ export default function App({ launch = null }) {
           pc={actorPc}
           zIndex={2150}
           onClose={() => setActorEditId(null)}
+          currentSet={currentActorSet}
+          onSaveSet={() => {
+            // Title-bar save: update the loaded set in place; with nothing
+            // loaded, hand over to Manage Actor Sets so the stage gets a name.
+            if (currentActorSet) saveCurrentActorSet(currentActorSet.name, currentActorSet.id);
+            else { setActorSets(loadActorSets()); setActorSetsOpen(true); }
+          }}
           onRename={(name) => updateActor(editingActor.id, { name })}
           onKind={(kind) => setActorKind(editingActor.id, kind)}
           onSelectNpc={(entry) => loadActorEntry(editingActor.id, 'npc', entry)}

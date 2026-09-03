@@ -4,8 +4,8 @@
  *
  * A set: { id, name, zone: { name, path }, savedAt, actors: [SavedActor] }
  * SavedActor: { name, kind, entry, pack, pos, rot, scale, motion, playing,
- *               loop, visible, fx, pcState } — `entry` is the NPC-list / character
- *               composer entry the actor was loaded from (paths etc.).
+ *               frame, loop, visible, fx, pcState } — `entry` is the NPC-list /
+ *               character composer entry the actor was loaded from (paths etc.).
  */
 
 const KEY = 'zoneActorSets';
@@ -41,6 +41,7 @@ export function serializeActor(a) {
     scale: a.scale ?? 1,
     motion: a.motion ? { kind: a.motion.kind, id: a.motion.id } : null,
     playing: a.playing !== false,
+    frame: Number.isFinite(a.frame) ? a.frame : 0,
     loop: a.loop !== false,
     visible: a.visible !== false,
     fx: !!a.fx,

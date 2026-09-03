@@ -348,8 +348,12 @@ body:has(#img-sprites) #placements {
 
 /* Universal tool-pop row label (alias: cam-label) */
 .gfx-lab,
-.cam-label {
+.cam-label,
+.pc-ctrl-label,
+.actor-frame-label,
+.actor-opt-label {
   color: var(--muted);
+  font-weight: 500;
   font-size: 12px;
   line-height: 1.2;
   white-space: nowrap;
@@ -683,10 +687,13 @@ input[type='text'].list-search::placeholder {
 .pc-ctrl { display: flex; align-items: center; gap: 10px; }
 /* min-width:0 beats the automatic minimum size on flex items — without it a
    label wider than the basis pushes its control out of the column. */
-.pc-ctrl-label {
-  color: var(--muted); font-weight: 500;
-  flex: 0 0 56px; min-width: 0;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.pc-ctrl-label,
+.actor-frame-label,
+.actor-opt-label {
+  flex: 0 0 56px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .pc-ctrl .combo-input { flex: 1 1 auto; width: auto; min-width: 0; }
 /* Per-slot mesh isolation — bare icon, blue when active. */
@@ -3086,8 +3093,8 @@ button.settings-tab.on .icon { color: var(--accent); }
 .modal-header:active { cursor: grabbing; }
 .modal-header > .icon { color: var(--gray-400); font-size: 18px; }
 .modal-title { flex: 1 1 auto; font-weight: 600; }
-.modal-close { width: 26px; height: 26px; min-height: 0; background: transparent; border: none; box-shadow: none; }
-.modal-close:hover { background: rgba(255, 255, 255, 0.1); }
+.modal-close, .modal-tool { width: 26px; height: 26px; min-height: 0; background: transparent; border: none; box-shadow: none; }
+.modal-close:hover, .modal-tool:hover { background: rgba(255, 255, 255, 0.1); }
 
 .modal-body { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
 .form-row { display: flex; flex-direction: column; gap: 6px; }
@@ -5520,6 +5527,7 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 /* Actor editor: two columns, picker (35%) | options (65%). A fixed height lets
    the NPC list fill its column instead of growing the window to its content. */
 .actor-editor-modal { width: min(880px, 94vw); height: min(86vh, 700px); max-height: min(86vh, 700px); }
+.actor-editor-modal.is-fit { height: auto; }
 .actor-modal .modal-header { flex: 0 0 auto; }
 .actor-name-input {
   flex: 1 1 auto; min-width: 0;
@@ -5543,12 +5551,25 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .actor-col-opts .actor-section:first-child { margin-top: 0; }
 .actor-npc-list { flex: 1 1 auto; min-height: 0; height: auto; max-height: none; }
 .actor-col-pick .actor-pc, .actor-col-pick .actor-light { flex: 1 1 auto; min-height: 0; overflow: auto; }
-.actor-frame-row { display: flex; align-items: center; gap: 8px; }
-.actor-frame-label { flex: 0 0 auto; font-size: 11px; color: var(--muted); min-width: 36px; }
+.actor-col-opts .pc-ctrl,
+.actor-motion-row,
+.actor-frame-row,
+.actor-opt-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.actor-col-opts .pc-ctrl-label {
+  flex: 0 0 76px;
+  width: 76px;
+}
+.actor-col-opts .combo-input {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
 .actor-frame-slider { flex: 1 1 auto; min-width: 0; margin: 0; }
 .actor-frame-slider:disabled { opacity: 0.4; cursor: default; }
-.actor-opt-row { display: flex; align-items: center; gap: 8px; }
-.actor-opt-label { flex: 0 0 auto; font-size: 12px; color: var(--gray-300); min-width: 72px; }
 .actor-opt-row .seg-tab:disabled { opacity: 0.4; cursor: default; }
 .actor-fx-state { flex: 1 1 auto; min-width: 0; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .actor-fx-state.on { color: var(--accent); }
@@ -5559,7 +5580,12 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
   text-transform: uppercase; letter-spacing: 0.06em;
   color: var(--gray-500);
 }
+.actor-anim-row { display: flex; align-items: center; gap: 8px; }
+.actor-anim-row > :last-child { flex: 1 1 auto; min-width: 0; }
 .actor-motion-row { display: flex; align-items: center; gap: 6px; }
+/* Match the 10px label gap of the Category/Action rows above so all three
+   combos share one left edge; the play/loop buttons keep the tighter 6px. */
+.actor-motion-row .pc-ctrl-label { margin-right: 4px; }
 .actor-motion-row .actor-motion { flex: 1 1 auto; min-width: 0; }
 .actor-motion-row .icon-btn.on { color: var(--accent); }
 .actor-pos { font-size: 11px; color: var(--muted); }
@@ -5610,6 +5636,7 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .actor-reset { flex: 0 0 auto; min-height: 26px; padding: 0 10px; }
 
 .actor-light { display: flex; flex-direction: column; gap: 8px; }
+.actor-light .vol-slider { flex: none; height: 5px; }
 .actor-light .gfx-line { grid-template-columns: 92px minmax(0, 1fr); }
 .actor-seg { flex: 0 0 auto; justify-self: start; }
 .actor-light .gfx-ctrl { justify-self: start; }

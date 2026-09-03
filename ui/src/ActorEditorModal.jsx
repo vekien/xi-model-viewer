@@ -30,6 +30,7 @@ function savePos(p) {
  */
 export function ActorEditorModal({
   actor, pc, onClose, onFocus, zIndex = 2100, initialPos = null,
+  currentSet = null, onSaveSet = null,
   onRename, onKind, onSelectNpc, onMotion, onPlaying, onLoop,
   frameSink = null, onSeek, onFx,
   gizmoMode = 'move', onGizmoMode, onResetTransform, onLight,
@@ -110,7 +111,7 @@ export function ActorEditorModal({
   const fxAvailable = kind === 'npc';
 
   return (
-    <div className="zdef-modal datatable-modal actor-modal actor-editor-modal" ref={panelRef} style={style} onPointerDown={onFocus}>
+    <div className={`zdef-modal datatable-modal actor-modal actor-editor-modal${kind === 'light' ? ' is-fit' : ''}`} ref={panelRef} style={style} onPointerDown={onFocus}>
       <div
         className="modal-header"
         onPointerDown={startDrag}
@@ -129,6 +130,16 @@ export function ActorEditorModal({
           onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
         />
         <span className="route-count mono">{actor.status === 'loading' ? 'loading…' : actor.label || ''}</span>
+        {onSaveSet && (
+          <Tooltip
+            content={currentSet ? `Save actor set “${currentSet.name}”` : 'No actor set loaded — save the stage as a new set'}
+            placement="bottom"
+          >
+            <button type="button" className="icon-btn modal-tool" onClick={onSaveSet} aria-label="Save actor set">
+              <span className="icon">save</span>
+            </button>
+          </Tooltip>
+        )}
         <Button type="button" className="icon-btn modal-close" onClick={onClose} aria-label="Close">
           <span className="icon">close</span>
         </Button>
@@ -163,15 +174,38 @@ export function ActorEditorModal({
               {pc?.races ? <EffectPcStrip pc={pc} gearsetsFirst /> : <div className="side-note">Loading character lists…</div>}
             </div>
           )}
-          {kind === 'light' && <LightForm light={actor.light || DEFAULT_LIGHT} onChange={onLight} />}
+          {kind === 'light' && <LightForm light={actor.light || DEFAULT_LIGHT} onChange={onLight} fields="type" />}
         </div>
 
         {/* Right: how it plays and where it sits. */}
         <div className="actor-col actor-col-opts">
+          {kind === 'light' && <LightForm light={actor.light || DEFAULT_LIGHT} onChange={onLight} fields="settings" />}
           {kind !== 'light' && (
             <>
               <div className="actor-section">Animation</div>
+              {kind === 'pc' && pc?.actionGroups?.length > 0 && (
+                <>
+                  <div className="pc-ctrl">
+                    <label className="pc-ctrl-label">Category</label>
+                    <Combo
+                      value={pc.actionGroup}
+                      items={pc.actionGroupItems}
+                      onChange={pc.setActionGroup}
+                    />
+                  </div>
+                  <div className="pc-ctrl">
+                    <label className="pc-ctrl-label">Action</label>
+                    <Combo
+                      value={pc.action}
+                      items={pc.actionEntries}
+                      onChange={pc.setAction}
+                      placeholder="— none —"
+                    />
+                  </div>
+                </>
+              )}
               <div className="actor-motion-row">
+                <label className="pc-ctrl-label">Motion</label>
                 <Combo
                   value={motionValue}
                   items={motionItems}
@@ -212,7 +246,7 @@ export function ActorEditorModal({
 
               <div className="actor-section">Options</div>
               <div className="actor-opt-row">
-                <span className="actor-opt-label">Play Effect</span>
+                <label className="pc-ctrl-label">Play Effect</label>
                 <div className="seg-tabs actor-seg" role="radiogroup" aria-label="Play effect">
                   {[[false, 'Off'], [true, 'On']].map(([on, text]) => (
                     <button
@@ -320,7 +354,7 @@ function FrameRow({ frameSink, onSeek, playing, onPause }) {
 
   return (
     <div className="actor-frame-row">
-      <span className="actor-frame-label">Frame</span>
+      <label className="pc-ctrl-label">Frame</label>
       <input
         ref={slider}
         type="range"
@@ -343,7 +377,7 @@ function FrameRow({ frameSink, onSeek, playing, onPause }) {
 }
 
 /** Point / ambient light settings: colour or temperature, intensity, radius. */
-function LightForm({ light, onChange }) {
+function LightForm({ light, onChange, fields = 'all' }) {
   const L = { ...DEFAULT_LIGHT, ...(light || {}) };
   const tempHex = rgb01ToHex(kelvinToRgb01(L.temperature));
   const seg = (value, items, onPick, label) => (
@@ -362,20 +396,22 @@ function LightForm({ light, onChange }) {
       ))}
     </div>
   );
-  return (
-    <div className="actor-light">
+  const typeBlock = (
+    <div className="gfx-line">
+      <label className="pc-ctrl-label">Type</label>
+      {seg(L.type, [['point', 'Point'], ['spot', 'Spot'], ['ambient', 'Ambient']], (type) => onChange?.({ type }), 'Light type')}
+    </div>
+  );
+  const settingsBlock = (
+    <>
       <div className="gfx-line">
-        <span className="gfx-lab">Type</span>
-        {seg(L.type, [['point', 'Point'], ['spot', 'Spot'], ['ambient', 'Ambient']], (type) => onChange?.({ type }), 'Light type')}
-      </div>
-      <div className="gfx-line">
-        <span className="gfx-lab">Colour</span>
+        <label className="pc-ctrl-label">Colour</label>
         {seg(L.useTemperature ? 'temp' : 'rgb', [['rgb', 'Colour'], ['temp', 'Temperature']], (m) => onChange?.({ useTemperature: m === 'temp' }), 'Colour mode')}
       </div>
       {L.useTemperature ? (
         <>
           <div className="gfx-line">
-            <span className="gfx-lab">Temperature &nbsp; • &nbsp; <strong>{L.temperature} K</strong></span>
+            <label className="pc-ctrl-label">Temperature &nbsp; • &nbsp; <strong>{L.temperature} K</strong></label>
             <span className="actor-light-swatch" style={{ background: tempHex }} />
           </div>
           <input
@@ -391,7 +427,7 @@ function LightForm({ light, onChange }) {
         </>
       ) : (
         <div className="gfx-line">
-          <span className="gfx-lab">Light colour</span>
+          <label className="pc-ctrl-label">Light colour</label>
           <div className="gfx-ctrl">
             <input
               type="color"
@@ -404,7 +440,7 @@ function LightForm({ light, onChange }) {
         </div>
       )}
       <div className="gfx-line">
-        <span className="gfx-lab">Intensity &nbsp; • &nbsp; <strong>{Number(L.intensity).toFixed(2)}</strong></span>
+        <label className="pc-ctrl-label">Intensity &nbsp; • &nbsp; <strong>{Number(L.intensity).toFixed(2)}</strong></label>
       </div>
       <input
         type="range"
@@ -419,7 +455,7 @@ function LightForm({ light, onChange }) {
       {L.type !== 'ambient' && (
         <>
           <div className="gfx-line">
-            <span className="gfx-lab">Radius &nbsp; • &nbsp; <strong>{Math.round(L.radius)}</strong></span>
+            <label className="pc-ctrl-label">Radius &nbsp; • &nbsp; <strong>{Math.round(L.radius)}</strong></label>
           </div>
           <input
             type="range"
@@ -436,7 +472,7 @@ function LightForm({ light, onChange }) {
       {L.type === 'spot' && (
         <>
           <div className="gfx-line">
-            <span className="gfx-lab">Cone &nbsp; • &nbsp; <strong>{Math.round(L.cone ?? 35)}°</strong></span>
+            <label className="pc-ctrl-label">Cone &nbsp; • &nbsp; <strong>{Math.round(L.cone ?? 35)}°</strong></label>
           </div>
           <input
             type="range"
@@ -458,6 +494,12 @@ function LightForm({ light, onChange }) {
             : 'Adds to the whole zone\'s ambient light.'}
         {' '}Lamps do not cast their own shadows.
       </div>
+    </>
+  );
+  return (
+    <div className="actor-light">
+      {(fields === 'all' || fields === 'type') && typeBlock}
+      {(fields === 'all' || fields === 'settings') && settingsBlock}
     </div>
   );
 }
