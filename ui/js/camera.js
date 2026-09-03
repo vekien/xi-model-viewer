@@ -485,6 +485,7 @@ export class OrbitCamera {
       pitch: this.pitch,
       distance: this.distance,
       flySpeed: this.flySpeed,
+      roll: this.roll,
     };
   }
 
@@ -501,6 +502,7 @@ export class OrbitCamera {
     if (Number.isFinite(snap.flySpeed)) {
       this.flySpeed = Math.min(FLY_SPEED_MAX, Math.max(FLY_SPEED_MIN, snap.flySpeed));
     }
+    if (Number.isFinite(snap.roll)) this.roll = snap.roll;
     // Assign mode directly — setMode() would re-derive eye/look from the old pose.
     this.mode = snap.mode === 'fly' ? 'fly' : 'orbit';
   }

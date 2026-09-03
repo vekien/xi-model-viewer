@@ -3183,7 +3183,7 @@ input[type='color'] {
   position: fixed;
   top: 62px; left: 360px;
   width: 940px;
-  height: 320px;
+  height: 348px;
   min-width: 940px;
   padding: 0;
   z-index: 28;
@@ -3265,7 +3265,7 @@ input[type='color'] {
 .cseq-tl {
   display: flex;
   flex: 0 0 auto;
-  height: 110px;
+  height: 135px;
   padding-right: 15px;
   border: none;
   border-radius: 8px;
@@ -3277,7 +3277,7 @@ input[type='color'] {
   box-sizing: border-box;
 }
 .cseq-tl-labels {
-  flex: 0 0 58px;
+  flex: 0 0 68px;
   display: flex; flex-direction: column;
   border-right: 1px solid var(--ring);
   z-index: 1;
@@ -3320,7 +3320,20 @@ input[type='color'] {
   border-right: 1px solid var(--ring);
 }
 .cseq-tl-track * { user-select: none; -webkit-user-select: none; }
-.cseq-zoom { margin-left: 4px; }
+/* Zoom sits at the far right of the length row, clear of the length controls. */
+.cseq-zoom { margin-left: auto; }
+/* Place / Move Lock Actor — a labelled button with a leading icon. */
+.cseq-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px 0 8px;
+  white-space: nowrap;
+}
+.cseq-lock .icon { font-size: 15px; color: #ffb648; }
+.cseq-lock:disabled .icon { color: var(--gray-600); }
+.cseq-lock.placing { color: var(--accent); border-color: var(--accent); }
+.cseq-lock.placing .icon { color: var(--accent); }
 .cseq-ruler { position: relative; height: 22px; border-bottom: 1px solid var(--ring); }
 .cseq-tick {
   position: absolute; top: 0; bottom: 0;
@@ -3346,6 +3359,8 @@ input[type='color'] {
 }
 .cseq-dot:active { cursor: grabbing; }
 .cseq-dot.cam { background: #ffb648; }
+/* Rotation keys: same round marker, its own colour, so the two camera lanes read apart. */
+.cseq-dot.rot { background: #7ee0a6; }
 /* Scene keyframes are cuts, not a path through anything — a diamond says so. */
 .cseq-dot.scn { background: #6fc7ff; border-radius: 2px; transform: translate(-50%, -50%) rotate(45deg); width: 8px; height: 8px; }
 /* Time-of-day keys lerp the clock — round like camera. */

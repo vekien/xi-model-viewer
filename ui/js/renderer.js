@@ -3251,6 +3251,43 @@ export class Renderer {
     this._syncActorTransform(actor);
   }
 
+  /** Placeholder figure colour ([r,g,b] 0–1); moot once a mesh is set. */
+  setActorColor(id, rgb) {
+    const actor = this.getActor(id);
+    if (!actor || !rgb) return;
+    actor.color = [rgb[0], rgb[1], rgb[2]];
+    this._syncActorTransform(actor);
+  }
+
+  /**
+   * Display-space point a camera should aim at to frame this actor: `joint`
+   * (2 = the pelvis, the Camera Sequencer's LOCK_JOINT) through the placement
+   * matrix for a posed model, else a body-height point above the feet.
+   */
+  getActorAimPoint(id, joint = 2) {
+    const actor = this.getActor(id);
+    if (!actor) return null;
+    const pose = actor.pose;
+    const n = pose?.skeleton?.joints?.length ?? 0;
+    if (actor.model && pose && n > joint) {
+      if (actor.poseDirty) {
+        pose.pack(actor.rotArray, actor.transArray, actor.scaleArray);
+        actor.poseDirty = false;
+      }
+      const m = actor.modelMatrix;
+      const x = actor.transArray[joint * 4];
+      const y = actor.transArray[joint * 4 + 1];
+      const z = actor.transArray[joint * 4 + 2];
+      return [
+        m[0] * x + m[4] * y + m[8] * z + m[12],
+        m[1] * x + m[5] * y + m[9] * z + m[13],
+        m[2] * x + m[6] * y + m[10] * z + m[14],
+      ];
+    }
+    const s = actor.scale ?? 1;
+    return [actor.pos[0], actor.pos[1] + 1.0 * s, actor.pos[2]];
+  }
+
   /** Rotate an actor about a WORLD axis (the rotate-gizmo rings). */
   rotateActorWorld(id, axis, angle) {
     const actor = this.getActor(id);

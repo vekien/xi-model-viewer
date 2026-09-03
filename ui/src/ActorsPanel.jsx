@@ -46,9 +46,11 @@ export function ActorsPanel({
           <div className="actors-placing" role="status">
             <span className="icon">ads_click</span>
             <span>
-              {placing.forId != null
-                ? 'Click on the zone where the actor should stand.'
-                : 'Click on the zone where you want the actor to appear.'}
+              {placing.lock
+                ? `Click on the zone where the camera lock actor should ${placing.forId != null ? 'move to' : 'stand'}.`
+                : placing.forId != null
+                  ? 'Click on the zone where the actor should stand.'
+                  : 'Click on the zone where you want the actor to appear.'}
             </span>
             <button type="button" className="dbf-btn" onClick={onCancelPlace}>Cancel</button>
           </div>
@@ -76,11 +78,11 @@ export function ActorsPanel({
           {actors.map((a) => {
             const sub = a.status === 'loading' ? 'loading…'
               : a.status === 'error' ? 'failed'
-                : a.label || (a.kind ? '' : 'placeholder');
+                : a.label || (a.kind ? '' : (a.lockTarget ? 'camera lock' : 'placeholder'));
             return (
               <div key={a.id} className={`node actor-row${editingId === a.id || selectedId === a.id ? ' selected' : ''}${a.visible ? '' : ' actor-hidden'}`}>
                 <div className="row" onClick={() => onEdit(a.id)}>
-                  <span className="kind icon">{KIND_ICON[a.kind] || 'person_outline'}</span>
+                  <span className="kind icon">{KIND_ICON[a.kind] || (a.lockTarget ? 'my_location' : 'person_outline')}</span>
                   <span className="actor-name">{a.name}</span>
                   {sub && <span className="mono-small actor-sub">{sub}</span>}
                   <Tooltip content={a.visible ? 'Hide actor' : 'Show actor'} placement="left">

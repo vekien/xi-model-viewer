@@ -45,6 +45,8 @@ export function serializeActor(a) {
     loop: a.loop !== false,
     visible: a.visible !== false,
     fx: !!a.fx,
+    // Camera Sequencer's Lock to Actor target (Place Lock Actor).
+    lockTarget: !!a.lockTarget,
     pcState: a.pcState ? JSON.parse(JSON.stringify(a.pcState)) : null,
     light: a.light ? { ...a.light } : null,
   };

@@ -103,6 +103,10 @@ import { loadZoneNavmesh } from '../js/navmesh.js';
 import { launchZoneRel } from '../js/launch.js';
 import { normalizeBgId, resolveBgUrl } from './bgs.js';
 
+// Placeholder colour of the Camera Sequencer's lock actor — the camera-path
+// orange, so it reads as part of the shot rather than as another cast member.
+const LOCK_ACTOR_COLOR = [1.0, 0.70, 0.26];
+
 const DEFAULT_DAT_SUFFIX = 'ROM\\5\\3.DAT';
 const DEFAULT_BG = '#303438';
 const LAST_DAT_KEY = 'lastDat';
@@ -1028,6 +1032,10 @@ export default function App({ launch = null }) {
   const [zoneActors, setZoneActors] = useState([]);
   const zoneActorsRef = useRef([]);
   zoneActorsRef.current = zoneActors;
+  // Camera Sequencer › Place Lock Actor: the one placed actor flagged as the
+  // point Lock to Actor aims at in a zone. Lives with the actors (not the
+  // sequencer draft) so it survives the panel closing and goes with the zone.
+  const camLockActorId = zoneActors.find((a) => a.lockTarget)?.id ?? null;
   const [actorsPanelOpen, setActorsPanelOpen] = useState(false);
   // Pointer handlers read this through the ref: endPointerDrag is memoised
   // without the state in its deps, so it captured `false` forever and a click
@@ -6252,19 +6260,28 @@ export default function App({ launch = null }) {
       r.setActorTransform(placing.forId, point, null);
       updateActor(placing.forId, { pos: [...point] });
       setActorPlacing(null);
-      setStatusText('Actor moved.');
+      setStatusText(placing.lock ? 'Lock actor moved.' : 'Actor moved.');
       return;
     }
     const id = actorSeqRef.current++;
+    // Camera Sequencer › Place Lock Actor: an ordinary placed actor flagged as
+    // the point Lock to Actor aims at. It can be given a model, moved with
+    // the gizmo, saved in a set and removed like any other.
+    const lock = !!placing.lock;
     const actor = {
-      id, name: `Actor ${id}`, kind: null, entry: null, pos: [...point], rot: null,
+      id, name: lock ? 'Lock Actor' : `Actor ${id}`, kind: null, entry: null, pos: [...point], rot: null,
       visible: true, status: 'placeholder', label: '', anims: [], schedules: [], packs: [],
       pack: null, motion: null, playing: true, loop: true, model: null, selectedPath: '', scale: 1,
-      fx: false, fxRoutine: '',
+      fx: false, fxRoutine: '', lockTarget: lock,
     };
     r.addActor(id, point);
+    if (lock) r.setActorColor?.(id, LOCK_ACTOR_COLOR);
     setZoneActors((prev) => [...prev, actor]);
     setActorPlacing(null);
+    if (lock) {
+      setStatusText('Lock actor placed — Lock to Actor aims at it. Move or remove it from the sequencer or the Actors panel.');
+      return;
+    }
     setActorEditId(id);
     setStatusText(`${actor.name} placed — pick an NPC or build a character.`);
   }, [updateActor]);
@@ -6452,6 +6469,7 @@ export default function App({ launch = null }) {
     r.addActor(id, sa.pos, Array.isArray(sa.rot) && sa.rot.length === 9 ? sa.rot : null);
     r.setActorTransform(id, null, null, sa.scale ?? 1);
     r.setActorVisible(id, sa.visible !== false);
+    if (sa.lockTarget) r.setActorColor?.(id, LOCK_ACTOR_COLOR);
     if (sa.kind === 'light' && sa.light) r.setActorLight(id, rendererLight({ ...DEFAULT_LIGHT, ...sa.light }));
     const a = {
       id, name: sa.name || `Actor ${id}`, kind: sa.kind ?? null, entry: sa.entry ?? null,
@@ -6463,7 +6481,7 @@ export default function App({ launch = null }) {
       pack: sa.pack ?? null, motion: sa.motion ?? null, playing: sa.playing !== false,
       frame: sa.frame ?? 0,
       loop: sa.loop !== false, model: null, selectedPath: sa.entry?.key ?? '', pcState: sa.pcState ?? null,
-      fx: !!sa.fx, fxRoutine: '',
+      fx: !!sa.fx, fxRoutine: '', lockTarget: !!sa.lockTarget,
     };
     setZoneActors((prev) => [...prev, a]);
     if (a.entry && a.kind !== 'light') {
@@ -6506,6 +6524,8 @@ export default function App({ launch = null }) {
       ...clip,
       name: /copy$/i.test(clip.name) ? clip.name : `${clip.name} copy`,
       pos: [clip.pos[0] + 1.2, clip.pos[1], clip.pos[2] + 1.2],
+      // There is one lock actor; a copy of it is just another actor.
+      lockTarget: false,
     };
     const a = spawnActorFromSaved(sa);
     if (!a) return false;
@@ -8360,6 +8380,21 @@ export default function App({ launch = null }) {
           onScene={applyWeatherTime}
           onStopClock={() => setTodPlaying(false)}
           restingMode={wasd ? 'fly' : 'orbit'}
+          zoneLoaded={!!modelInfo?.zone}
+          lockActorId={camLockActorId}
+          lockActorPlacing={!!actorPlacing?.lock}
+          onPlaceLockActor={() => {
+            if (modelRef.current?.kind !== 'zone') return;
+            // Same terrain-click flow as Actors › Add Actor; with a lock actor
+            // already down, the click moves it instead.
+            setActorEditId(null);
+            setActorPlacing({ forId: camLockActorId, lock: true });
+          }}
+          onCancelLockActor={() => setActorPlacing((cur) => (cur?.lock ? null : cur))}
+          onRemoveLockActor={() => { if (camLockActorId != null) removeActor(camLockActorId); }}
+          lockTarget={() => (camLockActorId != null
+            ? (rendererRef.current?.getActorAimPoint?.(camLockActorId) ?? null)
+            : null)}
           onPlayActorOnce={(seqFrame = 0, seqFps = 30) => {
             const r = rendererRef.current;
             // Only when a skinned actor clip is loaded (NPC / PC / creation).

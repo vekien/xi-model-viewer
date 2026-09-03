@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
-import { aimPoseAt, CameraSequence, driveCamera, poseFromCamera, sampleScene, sampleTod } from '../js/camseq.js';
+import {
+  aimPoseAt, CameraSequence, completePose, driveCamera, poseFromCamera, sampleScene, sampleTod,
+} from '../js/camseq.js';
 
 // Working draft is intentionally NOT restored on open — a leftover camSeq used
 // to auto-paint the last flythrough on the zone whenever the panel mounted.
@@ -17,14 +19,16 @@ const MAX_FRAMES = 36000;           // 20 minutes at 30fps — a sanity bound, n
 const SCENE_HZ = 10;                // weather/time re-apply rate; see applyScene
 const MIN_W = 940;
 const DEFAULT_W = 940;
-const PANEL_H = 320;
+const PANEL_H = 348;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 const EMPTY_DOC = {
   name: '', totalFrames: 300, fps: 30, curve: true, loop: false, cine: true, snap: false,
   lockActor: false, linearRotation: false,
-  camera: [], scene: [], tod: [],
+  // One take records onto both camera tracks; each key can be removed alone.
+  camPos: [], camRot: [], scene: [], tod: [],
 };
+const TRACKS = ['camPos', 'camRot', 'scene', 'tod'];
 // Joint Lock to Actor aims at. FFXI skeletons carry no names — a joint is an
 // index — and index 2 is `bone0002` in the Skeleton panel's numbering: the
 // pelvis, which is the actor's centre of mass through a jump or a lunge.
@@ -60,14 +64,30 @@ function toDoc(raw) {
         timeMinutes: Math.round(k.timeMinutes),
       }));
   }
+  // Pre-split docs kept one `camera` track of { eye, forward } keys (`keys`
+  // before the timeline) — fan it out onto the position and rotation tracks.
+  let camPos = Array.isArray(raw.camPos) ? raw.camPos : null;
+  let camRot = Array.isArray(raw.camRot) ? raw.camRot : null;
+  if (!camPos && !camRot) {
+    const legacy = Array.isArray(raw.camera) ? raw.camera : (Array.isArray(raw.keys) ? raw.keys : []);
+    camPos = legacy
+      .filter((k) => Array.isArray(k.eye))
+      .map((k, i) => ({ id: k.id ?? i, frame: k.frame, eye: k.eye }));
+    camRot = legacy
+      .filter((k) => Array.isArray(k.forward))
+      .map((k, i) => ({ id: (k.id ?? i) + 2_000_000, frame: k.frame, forward: k.forward, roll: k.roll ?? 0 }));
+  }
+  const rest = { ...raw };
+  delete rest.camera;
+  delete rest.keys;
   return {
     ...EMPTY_DOC,
-    ...raw,
+    ...rest,
     curve: !!curve,
     lockActor: !!raw.lockActor,
     linearRotation: !!raw.linearRotation,
-    // `keys` is the pre-timeline field name — carry an old saved sequence over.
-    camera: Array.isArray(raw.camera) ? raw.camera : (Array.isArray(raw.keys) ? raw.keys : []),
+    camPos: camPos ?? [],
+    camRot: camRot ?? [],
     scene,
     tod,
     totalFrames: clamp(Math.round(raw.totalFrames ?? 300), MIN_FRAMES, MAX_FRAMES),
@@ -88,7 +108,8 @@ function rulerTicks(totalFrames, fps, zoom = 1) {
 }
 
 /**
- * Camera Sequencer: a two-track timeline you scrub, record onto, and fly.
+ * Camera Sequencer: a multi-track timeline you scrub, record onto, and fly.
+ * Camera position and rotation are separate tracks (one take records both).
  *
  * A floating panel rather than a modal — the camera has to stay flyable between
  * takes, so this must never put a backdrop over the viewport. It owns its own
@@ -114,6 +135,15 @@ export function CameraSequencer({
   restingMode = 'orbit',
   /** Restore normal loop prefs when the sequence stops. */
   onStopActor,
+  /** Zone lock actor (Place Lock Actor): see actorTarget. */
+  zoneLoaded = false,
+  lockActorId = null,
+  lockActorPlacing = false,
+  onPlaceLockActor,
+  onCancelLockActor,
+  onRemoveLockActor,
+  /** () => world point of the placed lock actor, or null. */
+  lockTarget,
 }) {
   // The panel unmounts when it is closed, so the working document is kept in
   // storage rather than in component state alone: closing it to reach a control
@@ -144,16 +174,18 @@ export function CameraSequencer({
   const { totalFrames, fps, curve, loop, cine, snap, lockActor, linearRotation } = doc;
 
   /**
-   * World point "the actor" means in the current view — the orbit pivot, which
-   * is the loaded model's rest-pose centre (and the origin for a standalone
-   * effect). Null in a zone, where there is no single actor: Lock to Actor then
-   * has nothing to aim at and leaves the recorded rotation alone.
+   * World point "the actor" means in the current view. In a zone it is the
+   * placed lock actor (Place Lock Actor), or nothing — Lock to Actor then has
+   * no aim and leaves the recorded rotation alone. For a loaded model it is
+   * bone0002, which travels with the actor so a leap or a step stays framed
+   * (the bounds centre is rest-pose and would let them walk out of shot);
+   * anything without a skeleton (a bare effect) falls back to the orbit pivot.
    */
+  const lockTargetRef = useRef(lockTarget);
+  lockTargetRef.current = lockTarget;
   const actorTarget = () => {
     const r = rendererRef.current;
-    // bone0002 travels with the actor, so a leap or a step stays framed; the
-    // bounds centre is rest-pose and would let them walk out of shot. Falls
-    // back to that centre for anything without a skeleton (a bare effect).
+    if (r?.model?.kind === 'zone') return lockTargetRef.current?.() ?? null;
     return r?.getJointPosition?.(LOCK_JOINT) ?? r?.getOrbitPivot?.() ?? null;
   };
   // Read through a ref inside the rAF loop, which closes over its own scope.
@@ -172,7 +204,7 @@ export function CameraSequencer({
   const dragRef = useRef(null);
   const kfDragRef = useRef(null);
   const idRef = useRef(
-    [...doc.camera, ...doc.scene, ...doc.tod].reduce((m, k) => Math.max(m, k.id ?? 0), 0) + 1,
+    TRACKS.flatMap((t) => doc[t]).reduce((m, k) => Math.max(m, k.id ?? 0), 0) + 1,
   );
   // Playback reads these from inside the rAF tick, where React state is stale.
   const playingRef = useRef(false);
@@ -195,10 +227,10 @@ export function CameraSequencer({
   docRef.current = doc;
 
   const seq = useMemo(
-    () => new CameraSequence(doc.camera, {
+    () => new CameraSequence({ pos: doc.camPos, rot: doc.camRot }, {
       totalFrames, curve: curve ? 'spline' : 'linear', rotation: linearRotation ? 'linear' : 'spline',
     }),
-    [doc.camera, totalFrames, curve, linearRotation],
+    [doc.camPos, doc.camRot, totalFrames, curve, linearRotation],
   );
   seqRef.current = seq;
 
@@ -214,10 +246,15 @@ export function CameraSequencer({
   useEffect(() => {
     const r = rendererRef.current;
     if (!r?.setCameraPath) return undefined;
-    if (hidden || !doc.camera.length) r.setCameraPath(null);
-    else r.setCameraPath({ points: seq.path(160), keys: doc.camera });
+    if (hidden || !doc.camPos.length) r.setCameraPath(null);
+    else {
+      // A marker per position key, with an aim stub from wherever the
+      // rotation track points at that frame.
+      const keys = doc.camPos.map((k) => ({ eye: k.eye, forward: seq.at(k.frame).forward }));
+      r.setCameraPath({ points: seq.path(160), keys });
+    }
     return () => r.setCameraPath?.(null);
-  }, [seq, doc.camera, hidden, rendererRef]);
+  }, [seq, doc.camPos, hidden, rendererRef]);
 
   // --- cinematic (hide everything but the render) ---------------------------
 
@@ -295,7 +332,8 @@ export function CameraSequencer({
       // Scrubbing leaves the viewport in the mode the user drives in, rather
       // than stranding it in the fly mode playback needs.
       const asOrbit = restingMode !== 'fly';
-      driveCamera(cam, lockActor ? aimPoseAt(pose, t) : pose,
+      const full = completePose(cam, pose);
+      driveCamera(cam, lockActor ? aimPoseAt(full, t) : full,
         { orbit: asOrbit, orbitTarget: (asOrbit && lockActor) ? t : null });
     }
     sceneApplyRef.current(easedF, true);
@@ -303,7 +341,7 @@ export function CameraSequencer({
 
   const play = () => {
     const cam = camera();
-    const hasCam = doc.camera.length >= 2;
+    const hasCam = seq.length >= 2;
     const hasTod = doc.tod.length >= 2 || doc.scene.length >= 1;
     if (!cam || (!hasCam && !hasTod)) return;
     if (hasCam) markRestore();
@@ -367,7 +405,7 @@ export function CameraSequencer({
       }
       frameRef.current = f;
       if (hasCam) {
-        const pose = s.sample(f);
+        const pose = completePose(cam, s.sample(f));
         // Solved per frame, not interpolated: see aimPoseAt.
         const aimed = (pose && lockActorRef.current)
           ? aimPoseAt(pose, actorTarget())
@@ -455,8 +493,11 @@ export function CameraSequencer({
 
   // --- keyframes ------------------------------------------------------------
 
-  /** Record onto `track` at the playhead, replacing whatever is already there. */
-  const recordAt = (track, payload) => {
+  /**
+   * Record onto `track` at the playhead, replacing whatever is already there.
+   * Returns the { track, id } of the key written.
+   */
+  const recordAt = (track, payload, { select = true } = {}) => {
     const at = snapFrame(frameRef.current);
     // Reuse the id when overwriting so the row stays the selected one.
     const id = docRef.current[track].find((k) => k.frame === at)?.id ?? idRef.current++;
@@ -465,12 +506,19 @@ export function CameraSequencer({
       [track]: [...d[track].filter((k) => k.frame !== at), { id, frame: at, ...payload }]
         .sort((a, b) => a.frame - b.frame),
     }));
-    setSelected([{ track, id }]);
+    const hit = { track, id };
+    if (select) setSelected([hit]);
+    return hit;
   };
 
+  /** One take lands a key on both camera tracks; either can be deleted alone. */
   const recordCamera = () => {
     const cam = camera();
-    if (cam) recordAt('camera', poseFromCamera(cam, lockActor ? actorTarget() : null));
+    if (!cam) return;
+    const { eye, forward, roll } = poseFromCamera(cam, lockActor ? actorTarget() : null);
+    const p = recordAt('camPos', { eye }, { select: false });
+    const q = recordAt('camRot', { forward, roll }, { select: false });
+    setSelected([p, q]);
   };
 
   const recordScene = () => recordAt('scene', { weather });
@@ -481,12 +529,11 @@ export function CameraSequencer({
   const removeKeys = (pairs) => {
     if (!pairs?.length) return;
     const drop = new Set(pairs.map((p) => selKey(p.track, p.id)));
-    setDoc((d) => ({
-      ...d,
-      camera: d.camera.filter((k) => !drop.has(selKey('camera', k.id))),
-      scene: d.scene.filter((k) => !drop.has(selKey('scene', k.id))),
-      tod: d.tod.filter((k) => !drop.has(selKey('tod', k.id))),
-    }));
+    setDoc((d) => {
+      const next = { ...d };
+      for (const t of TRACKS) next[t] = d[t].filter((k) => !drop.has(selKey(t, k.id)));
+      return next;
+    });
     setSelected((s) => s.filter((x) => !drop.has(selKey(x.track, x.id))));
   };
 
@@ -515,12 +562,12 @@ export function CameraSequencer({
     const dMax = Math.min(...items.map((it) => totalFrames - it.frame0));
     const d = clamp(Math.round(delta), dMin, dMax);
     setDoc((doc0) => {
-      const byTrack = { camera: new Map(), scene: new Map(), tod: new Map() };
+      const byTrack = Object.fromEntries(TRACKS.map((t) => [t, new Map()]));
       for (const it of items) {
         byTrack[it.track].set(it.id, it.frame0 + d);
       }
       const next = { ...doc0 };
-      for (const track of ['camera', 'scene', 'tod']) {
+      for (const track of TRACKS) {
         const moves = byTrack[track];
         if (!moves.size) continue;
         const land = new Set(moves.values());
@@ -777,7 +824,14 @@ export function CameraSequencer({
   const seconds = (totalFrames / fps).toFixed(1);
   const shown = Math.round(frame);
   const canRecordScene = weathers.length > 0;
-  const canPlay = doc.camera.length >= 2 || doc.tod.length >= 2 || doc.scene.length >= 1;
+  const canPlay = seq.length >= 2 || doc.tod.length >= 2 || doc.scene.length >= 1;
+  const lockTip = !zoneLoaded
+    ? 'Load a zone first — outside a zone, Lock to Actor aims at the loaded model'
+    : lockActorPlacing
+      ? 'Click on the zone terrain to place the lock actor'
+      : lockActorId != null
+        ? 'Click on the zone to move the lock actor — Lock to Actor aims at it'
+        : 'Place an actor on the zone for Lock to Actor to aim at';
   const style = {
     width,
     ...(pos ? { left: pos.x, top: pos.y, right: 'auto' } : null),
@@ -790,6 +844,14 @@ export function CameraSequencer({
     return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
   };
 
+  const deg = (r) => `${Math.round((r * 180) / Math.PI)}°`;
+  const fmtRot = (k) => {
+    const f = k.forward;
+    const yaw = Math.atan2(f[0], f[2]);
+    const pitch = Math.atan2(f[1], Math.hypot(f[0], f[2]) || 1e-6);
+    return `yaw ${deg(yaw)} · pitch ${deg(pitch)} · roll ${deg(k.roll ?? 0)}`;
+  };
+
   const dot = (track, k, cls) => {
     const past = k.frame > totalFrames;
     const sel = selectedSet.has(selKey(track, k.id));
@@ -798,6 +860,7 @@ export function CameraSequencer({
       : `Frame ${k.frame} · ${(k.frame / fps).toFixed(2)}s · Shift+click multi · Del to remove`;
     if (track === 'tod' && k.timeMinutes != null) tip = `${fmtTod(k.timeMinutes)} · ${tip}`;
     if (track === 'scene' && k.weather) tip = `${k.weather} · ${tip}`;
+    if (track === 'camRot' && k.forward) tip = `${fmtRot(k)} · ${tip}`;
     return (
       <Tooltip key={k.id} content={tip} placement="top">
         <span
@@ -891,6 +954,32 @@ export function CameraSequencer({
             {FPS_CHOICES.map((f) => <option key={f} value={f}>{f}</option>)}
           </select>
           <span className="cseq-secs mono">{seconds}s</span>
+          <div className="cseq-bar-sep" />
+          <div className="cseq-bar-group">
+            <Tooltip content={lockTip} placement="top">
+              <button
+                type="button"
+                className={`cseq-btn cseq-lock${lockActorPlacing ? ' placing' : ''}`}
+                disabled={!zoneLoaded}
+                onClick={() => (lockActorPlacing ? onCancelLockActor?.() : onPlaceLockActor?.())}
+              >
+                <span className="icon">{lockActorPlacing ? 'close' : 'my_location'}</span>
+                {lockActorPlacing ? 'Cancel' : (lockActorId != null ? 'Move Lock Actor' : 'Place Lock Actor')}
+              </button>
+            </Tooltip>
+            {lockActorId != null && !lockActorPlacing && (
+              <Tooltip content="Remove the lock actor" placement="top">
+                <button
+                  type="button"
+                  className="icon-btn cseq-icon cseq-del"
+                  aria-label="Remove lock actor"
+                  onClick={() => onRemoveLockActor?.()}
+                >
+                  <span className="icon">delete</span>
+                </button>
+              </Tooltip>
+            )}
+          </div>
           <div className="cseq-bar-group cseq-zoom">
             <Tooltip content="Zoom out" placement="top">
               <button
@@ -921,7 +1010,8 @@ export function CameraSequencer({
         <div className="cseq-tl">
           <div className="cseq-tl-labels">
             <div className="cseq-tl-spacer" />
-            <div className="cseq-tl-label">Camera</div>
+            <div className="cseq-tl-label">Cam Pos</div>
+            <div className="cseq-tl-label">Cam Rot</div>
             <div className="cseq-tl-label">Scene</div>
             <div className="cseq-tl-label">Time</div>
           </div>
@@ -943,7 +1033,8 @@ export function CameraSequencer({
                   </span>
                 ))}
               </div>
-              <div className="cseq-lane">{doc.camera.map((k) => dot('camera', k, 'cam'))}</div>
+              <div className="cseq-lane">{doc.camPos.map((k) => dot('camPos', k, 'cam'))}</div>
+              <div className="cseq-lane">{doc.camRot.map((k) => dot('camRot', k, 'rot'))}</div>
               <div className="cseq-lane">{doc.scene.map((k) => dot('scene', k, 'scn'))}</div>
               <div className="cseq-lane">{doc.tod.map((k) => dot('tod', k, 'tod'))}</div>
               <div
@@ -982,7 +1073,7 @@ export function CameraSequencer({
           <div className="cseq-bar-sep" />
 
           <div className="cseq-bar-group">
-            <Tooltip content="Record camera at playhead" placement="top">
+            <Tooltip content="Record camera at playhead — a position key and a rotation key (yaw, pitch, roll)" placement="top">
               <button type="button" className="cseq-record" onClick={recordCamera}>
                 <span className="icon fill">radio_button_checked</span>
                 Camera
@@ -1050,7 +1141,7 @@ export function CameraSequencer({
                 type="button"
                 className="icon-btn cseq-icon cseq-del"
                 aria-label="Clear all keyframes"
-                disabled={!doc.camera.length && !doc.scene.length && !doc.tod.length}
+                disabled={!TRACKS.some((t) => doc[t].length)}
                 onClick={clearAll}
               >
                 <span className="icon">layers_clear</span>
@@ -1082,7 +1173,7 @@ export function CameraSequencer({
                 <span className="cseq-switch-label">Linear rotation</span>
               </label>
             </Tooltip>
-            <Tooltip content="Keep the camera pointed at the actor — keyframes record facing it, and playback re-aims every frame" placement="top">
+            <Tooltip content="Keep the camera pointed at the actor (in a zone: the placed lock actor) — keyframes record facing it, and playback re-aims every frame" placement="top">
               <label className="switch cseq-switch">
                 <input
                   type="checkbox"
