@@ -217,6 +217,182 @@ function forwardOf(r) {
   return [cp * Math.sin(r.yaw), Math.sin(r.pitch), cp * Math.cos(r.yaw)];
 }
 
+/**
+ * A 3-vector channel (`field` of each sorted key) at frame `f`: clamped to
+ * the end keys, linear or centripetal Catmull-Rom between them. Null with no
+ * keys. Shared by the camera eye and the actor position tracks.
+ */
+function samplePoint(keys, field, f, curve) {
+  const k = keys;
+  if (!k.length) return null;
+  if (k.length === 1 || f <= k[0].frame) return k[0][field];
+  const last = k[k.length - 1];
+  if (f >= last.frame) return last[field];
+  const [i, u] = segmentAt(k, f);
+  const a = k[i];
+  const b = k[i + 1];
+  if (curve === 'linear') return lerp3(a[field], b[field], u);
+  const p0 = k[Math.max(0, i - 1)];
+  const p3 = k[Math.min(k.length - 1, i + 2)];
+  return catmull3(p0[field], a[field], b[field], p3[field], u);
+}
+
+// --- quaternions for the actor rotation track -------------------------------
+//
+// Actor placement rotation is a column-major 3x3 (renderer.js actorModelMatrix,
+// rotateActorWorld). Between two keys the facing is slerped as a quaternion so
+// a turn goes the short way round its own axis instead of squashing through
+// a lerped matrix.
+
+/** Column-major 3x3 rotation → unit quaternion [x, y, z, w]. */
+export function mat3ToQuat(M) {
+  const m = (r, c) => M[c * 3 + r];
+  const tr = m(0, 0) + m(1, 1) + m(2, 2);
+  let x, y, z, w;
+  if (tr > 0) {
+    const s = Math.sqrt(tr + 1) * 2;
+    w = 0.25 * s;
+    x = (m(2, 1) - m(1, 2)) / s;
+    y = (m(0, 2) - m(2, 0)) / s;
+    z = (m(1, 0) - m(0, 1)) / s;
+  } else if (m(0, 0) > m(1, 1) && m(0, 0) > m(2, 2)) {
+    const s = Math.sqrt(1 + m(0, 0) - m(1, 1) - m(2, 2)) * 2;
+    w = (m(2, 1) - m(1, 2)) / s;
+    x = 0.25 * s;
+    y = (m(0, 1) + m(1, 0)) / s;
+    z = (m(0, 2) + m(2, 0)) / s;
+  } else if (m(1, 1) > m(2, 2)) {
+    const s = Math.sqrt(1 + m(1, 1) - m(0, 0) - m(2, 2)) * 2;
+    w = (m(0, 2) - m(2, 0)) / s;
+    x = (m(0, 1) + m(1, 0)) / s;
+    y = 0.25 * s;
+    z = (m(1, 2) + m(2, 1)) / s;
+  } else {
+    const s = Math.sqrt(1 + m(2, 2) - m(0, 0) - m(1, 1)) * 2;
+    w = (m(1, 0) - m(0, 1)) / s;
+    x = (m(0, 2) + m(2, 0)) / s;
+    y = (m(1, 2) + m(2, 1)) / s;
+    z = 0.25 * s;
+  }
+  const n = Math.hypot(x, y, z, w) || 1;
+  return [x / n, y / n, z / n, w / n];
+}
+
+/** Unit quaternion [x, y, z, w] → column-major 3x3 rotation (plain array). */
+export function quatToMat3([x, y, z, w]) {
+  const xx = x * x, yy = y * y, zz = z * z;
+  const xy = x * y, xz = x * z, yz = y * z;
+  const wx = w * x, wy = w * y, wz = w * z;
+  // [m00, m10, m20,  m01, m11, m21,  m02, m12, m22]
+  return [
+    1 - 2 * (yy + zz), 2 * (xy + wz), 2 * (xz - wy),
+    2 * (xy - wz), 1 - 2 * (xx + zz), 2 * (yz + wx),
+    2 * (xz + wy), 2 * (yz - wx), 1 - 2 * (xx + yy),
+  ];
+}
+
+/** Spherical lerp a→b by u, taking the short arc; nlerp when nearly parallel. */
+export function quatSlerp(a, b, u) {
+  let bx = b[0], by = b[1], bz = b[2], bw = b[3];
+  let dot = a[0] * bx + a[1] * by + a[2] * bz + a[3] * bw;
+  if (dot < 0) { dot = -dot; bx = -bx; by = -by; bz = -bz; bw = -bw; }
+  let ka, kb;
+  if (dot > 0.9995) {
+    ka = 1 - u;
+    kb = u;
+  } else {
+    const th = Math.acos(Math.min(1, dot));
+    const s = Math.sin(th);
+    ka = Math.sin((1 - u) * th) / s;
+    kb = Math.sin(u * th) / s;
+  }
+  const x = a[0] * ka + bx * kb;
+  const y = a[1] * ka + by * kb;
+  const z = a[2] * ka + bz * kb;
+  const w = a[3] * ka + bw * kb;
+  const n = Math.hypot(x, y, z, w) || 1;
+  return [x / n, y / n, z / n, w / n];
+}
+
+const MAT3_ID = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+
+/**
+ * A zone actor's movement track: { frame, pos: [x,y,z], rot: 3x3 } keys.
+ * Position follows the same clamped spline / straight segments as the camera
+ * eye; rotation slerps between neighbouring keys. Either half of a key may be
+ * missing (older keys, a partial record), in which case that channel takes
+ * the nearest key that has it — so a track of positions alone moves the
+ * actor without touching how it faces.
+ */
+export class ActorTrack {
+  constructor(keys, { curve = 'spline' } = {}) {
+    this.curve = curve === 'linear' ? 'linear' : 'spline';
+    const sorted = (keys ?? []).slice().sort(byFrame);
+    this.pos = sorted
+      .filter((k) => Array.isArray(k.pos) && k.pos.length === 3)
+      .map((k) => ({ frame: k.frame, pos: k.pos }));
+    this.rot = sorted
+      .filter((k) => k.rot && k.rot.length === 9)
+      .map((k) => ({ frame: k.frame, q: mat3ToQuat(k.rot), rot: Array.from(k.rot) }));
+  }
+
+  get length() { return Math.max(this.pos.length, this.rot.length); }
+
+  /** [x, y, z] at `f`; null with no position keys. */
+  posAt(f) {
+    return samplePoint(this.pos, 'pos', f, this.curve);
+  }
+
+  /** Column-major 3x3 at `f`; null with no rotation keys. */
+  rotAt(f) {
+    const k = this.rot;
+    if (!k.length) return null;
+    if (k.length === 1 || f <= k[0].frame) return k[0].rot;
+    const last = k[k.length - 1];
+    if (f >= last.frame) return last.rot;
+    const [i, u] = segmentAt(k, f);
+    // Land exactly on the recorded matrix at a key so a scrub-to-key
+    // round-trips what was recorded rather than a re-derived equivalent.
+    if (u <= 0) return k[i].rot;
+    if (u >= 1) return k[i + 1].rot;
+    return quatToMat3(quatSlerp(k[i].q, k[i + 1].q, u));
+  }
+
+  /** { pos, rot } at `f`, each null when its channel has no keys. */
+  at(f) {
+    return { pos: this.posAt(f), rot: this.rotAt(f) };
+  }
+
+  /** Ground path through the position keys, for the viewport overlay. */
+  path(steps = 96) {
+    const k = this.pos;
+    if (k.length < 2) return [];
+    const from = k[0].frame;
+    const span = k[k.length - 1].frame - from;
+    const out = [];
+    for (let i = 0; i <= steps; i++) out.push(this.posAt(from + (span * i) / steps));
+    return out;
+  }
+}
+
+/**
+ * Animation track: [{ frame, motion, pack }] → the key in force at `f` — the
+ * latest key at or before it — or null before the first key. Motion is a
+ * clip id; there is nothing to blend between "walk" and "idle" here, the
+ * actor simply switches clip when the playhead crosses a key. The caller
+ * offsets the clip by (f − key.frame) so a key starts its clip from 0.
+ */
+export function sampleAnim(keys, f) {
+  if (!keys?.length) return null;
+  let hit = null;
+  for (const k of keys) {
+    if (k.frame <= f && (!hit || k.frame >= hit.frame)) hit = k;
+  }
+  return hit;
+}
+
+export { MAT3_ID as ACTOR_IDENTITY_ROT };
+
 export class CameraSequence {
   /**
    * `tracks` — { pos: [{ frame, eye }], rot: [{ frame, forward, roll }] } in
@@ -295,18 +471,7 @@ export class CameraSequence {
 
   /** Eye position at `f` from the position track; null with no keys. */
   eyeAt(f) {
-    const k = this.pos;
-    if (!k.length) return null;
-    if (k.length === 1 || f <= k[0].frame) return k[0].eye;
-    const last = k[k.length - 1];
-    if (f >= last.frame) return last.eye;
-    const [i, u] = segmentAt(k, f);
-    const a = k[i];
-    const b = k[i + 1];
-    if (this.curve === 'linear') return lerp3(a.eye, b.eye, u);
-    const p0 = k[Math.max(0, i - 1)];
-    const p3 = k[Math.min(k.length - 1, i + 2)];
-    return catmull3(p0.eye, a.eye, b.eye, p3.eye, u);
+    return samplePoint(this.pos, 'eye', f, this.curve);
   }
 
   /** { yaw, pitch, roll } at `f` from the rotation track; null with no keys. */

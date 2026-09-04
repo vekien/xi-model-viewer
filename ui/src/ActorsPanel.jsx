@@ -11,7 +11,16 @@ const KIND_ICON = { npc: 'pets', pc: 'person', light: 'lightbulb' };
 export function ActorsPanel({
   actors, placing, onAddActor, onCancelPlace, onEdit, onRemove, onToggleVisible,
   editingId, selectedId, liveSelection, onToggleLiveSelection, onManageSets, onClose,
+  /** Camera Sequencer: add the selected actor as a keyframe track pair. */
+  onAddToSequence,
 }) {
+  // The selected actor is the one with the gizmo, or failing that the one
+  // whose editor is open — the same pair of rows the list highlights.
+  const seqTargetId = selectedId ?? editingId ?? null;
+  const seqTarget = seqTargetId != null ? actors.find((a) => a.id === seqTargetId) : null;
+  const seqTip = !seqTarget
+    ? 'Select an actor first — click it in the zone or in this list'
+    : `Add ${seqTarget.name} to the Camera Sequencer: record where it stands and which motion it plays along the timeline`;
   return (
     <div id="actors" className="panel">
       <div className="plc-header">
@@ -67,6 +76,19 @@ export function ActorsPanel({
               </button>
             </Tooltip>
           </div>
+        )}
+        {!placing && onAddToSequence && (
+          <Tooltip content={seqTip} placement="top">
+            <button
+              type="button"
+              className="dbf-btn actors-seq-btn"
+              disabled={!seqTarget}
+              onClick={() => { if (seqTarget) onAddToSequence(seqTarget.id); }}
+            >
+              <span className="icon">movie</span>
+              Add to Camera Sequence
+            </button>
+          </Tooltip>
         )}
       </div>
 

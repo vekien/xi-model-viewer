@@ -3282,6 +3282,43 @@ input[type='color'] {
   border-right: 1px solid var(--ring);
   z-index: 1;
 }
+/* Sequenced actors get a wider label column for their names. */
+.cseq-tl.has-actors .cseq-tl-labels { flex-basis: 128px; }
+.cseq-tl-actor {
+  gap: 4px;
+  padding-right: 2px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.cseq-tl-actor.sub { border-top: none; padding-left: 22px; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+.cseq-tl-actor.on { background: rgba(255, 255, 255, 0.06); }
+.cseq-tl-actor.on .cseq-actor-name, .cseq-tl-actor.on.sub { color: var(--text); }
+.cseq-tl-actor.missing .cseq-actor-name { color: var(--gray-600); font-style: italic; }
+.cseq-actor-pick {
+  flex: 1 1 auto; min-width: 0;
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 22px; padding: 0 4px; margin: 0;
+  background: transparent; border: none; box-shadow: none; border-radius: 4px;
+  color: inherit; font: inherit; text-align: left;
+  cursor: pointer;
+}
+.cseq-actor-pick:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+.cseq-actor-pick:disabled { cursor: default; }
+.cseq-actor-swatch {
+  flex: 0 0 auto;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--actor, #fff);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+.cseq-actor-name {
+  flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--gray-300); font-weight: 600;
+}
+.cseq-actor-x { width: 22px; height: 22px; min-height: 22px; flex: 0 0 auto; }
+.cseq-actor-x .icon { font-size: 14px; }
 .cseq-tl-spacer { height: 22px; flex: 0 0 auto; }
 .cseq-tl-label {
   height: 25px; flex: 0 0 auto;
@@ -3349,6 +3386,9 @@ input[type='color'] {
   height: 1px; background: rgba(255, 255, 255, 0.07);
 }
 .cseq-lane + .cseq-lane { border-top: none; }
+/* Actor lanes: a faint divider before each actor's pair, a tint on the Anim lane. */
+.cseq-lane-actor:not(.sub) { border-top: 1px solid rgba(255, 255, 255, 0.06); box-sizing: border-box; }
+.cseq-lane-actor.sub { background: rgba(255, 255, 255, 0.02); }
 .cseq-dot {
   position: absolute; top: 50%; left: 0;
   width: 10px; height: 10px;
@@ -3365,6 +3405,10 @@ input[type='color'] {
 .cseq-dot.scn { background: #6fc7ff; border-radius: 2px; transform: translate(-50%, -50%) rotate(45deg); width: 8px; height: 8px; }
 /* Time-of-day keys lerp the clock — round like camera. */
 .cseq-dot.tod { background: #c4a1ff; }
+/* Actor placement keys are path points (round, in the actor's colour); an
+   animation key is a cut to another clip, so it takes the scene diamond. */
+.cseq-dot.act { background: #fa739e; }
+.cseq-dot.anm { background: #fa739e; border-radius: 2px; transform: translate(-50%, -50%) rotate(45deg); width: 8px; height: 8px; }
 .cseq-dot.sel { box-shadow: 0 0 0 2px #fff, 0 0 6px rgba(0, 0, 0, 0.6); }
 .cseq-dot.past { opacity: 0.35; }
 .cseq-playhead {
@@ -3442,6 +3486,10 @@ input[type='color'] {
 .cseq-record .icon { font-size: 15px; color: #ff6b6b; }
 .cseq-record-scene .icon { color: #6fc7ff; }
 .cseq-record-tod .icon { color: #c4a1ff; }
+/* Actor / Anim record onto the selected zone actor; narrower so five record
+   buttons still share the bar. */
+.cseq-record-actor, .cseq-record-anim { width: 80px; }
+.cseq-record-actor .icon, .cseq-record-anim .icon { color: #fa739e; }
 .cseq-record:disabled .icon { color: var(--gray-600); }
 
 .cseq-bar .cseq-toggles {
@@ -5611,6 +5659,17 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .actors-toolbar-row { display: flex; gap: 6px; }
 .actors-toolbar-row .actors-add { flex: 1 1 auto; }
 .actors-sets-btn { flex: 0 0 auto; min-height: 32px; white-space: nowrap; }
+/* Add to Camera Sequence — a full-width row under the placement buttons,
+   live only while an actor is selected. */
+.actors-seq-btn {
+  width: 100%;
+  justify-content: center;
+  min-height: 32px;
+  margin-top: 6px;
+  white-space: nowrap;
+}
+.actors-seq-btn .icon { color: var(--accent); }
+.actors-seq-btn:disabled .icon { color: var(--gray-600); }
 .actor-sets-save { display: flex; gap: 6px; align-items: center; }
 .actor-sets-save input { flex: 1 1 auto; min-width: 0; }
 .actor-sets-save .dbf-btn { flex: 0 0 auto; white-space: nowrap; }

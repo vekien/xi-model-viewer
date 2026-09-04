@@ -72,6 +72,17 @@ function actorModelMatrix(pos, rot, out = new Float32Array(16), scale = 1) {
 
 const MAT3_IDENTITY = new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
 
+// Camera Sequencer actor tracks, one colour per actor in sequence order (the
+// timeline lanes use the same palette, see app.css .cseq-dot.act-N).
+const ACTOR_PATH_COLORS = [
+  [0.98, 0.45, 0.62],  // pink
+  [0.55, 0.85, 0.98],  // sky
+  [0.98, 0.80, 0.40],  // amber
+  [0.62, 0.92, 0.62],  // mint
+  [0.80, 0.65, 0.98],  // lilac
+  [0.98, 0.65, 0.42],  // peach
+];
+
 /** Column-major 3x3 rotation about a world axis ('x' | 'y' | 'z'). */
 function mat3AxisRotation(axis, angle) {
   const c = Math.cos(angle);
@@ -1998,11 +2009,14 @@ export class Renderer {
    * and a short look-direction stub at every keyframe. Built here rather than
    * per frame — the panel calls this only when the sequence changes.
    *
-   * `route` is { points: [[x,y,z]…], keys: [{ eye, forward }…] }, or null to
-   * clear it.
+   * `route` is { points: [[x,y,z]…], keys: [{ eye, forward }…], actors? },
+   * or null to clear it. `actors` is the sequencer's actor movement tracks,
+   * [{ points: [[x,y,z]…], keys: [{ pos, rot }…] }]: each draws in its own
+   * colour as a ground path with a flag at every key — a short mast with a
+   * facing stub along the key's +Z (the way the model looks).
    */
   setCameraPath(route) {
-    if (!route || !(route.points?.length || route.keys?.length)) {
+    if (!route || !(route.points?.length || route.keys?.length || route.actors?.some((a) => a?.keys?.length))) {
       this.cameraPath = null;
       return;
     }
@@ -2026,6 +2040,31 @@ export class Renderer {
       const f = k.forward;
       if (f) push(e, AIM), push([e[0] + f[0] * stub, e[1] + f[1] * stub, e[2] + f[2] * stub], AIM);
     }
+    // Actor tracks: a lifted polyline (so it reads over the ground it follows)
+    // and a mast + facing stub at each key.
+    const lift = arm * 0.1;
+    const mast = arm * 0.8;
+    (route.actors ?? []).forEach((track, i) => {
+      const c = ACTOR_PATH_COLORS[i % ACTOR_PATH_COLORS.length];
+      const apts = track?.points ?? [];
+      for (let j = 1; j < apts.length; j++) {
+        push([apts[j - 1][0], apts[j - 1][1] + lift, apts[j - 1][2]], c);
+        push([apts[j][0], apts[j][1] + lift, apts[j][2]], c);
+      }
+      for (const k of track?.keys ?? []) {
+        const p = k.pos;
+        if (!p) continue;
+        push(p, KEY); push([p[0], p[1] + mast, p[2]], KEY);
+        const R = k.rot;
+        if (R && R.length === 9) {
+          // Column 2 of the placement rotation is the model's forward (+Z),
+          // mirrored by ENTITY_ROT like actorModelMatrix does.
+          const fwd = [-R[6], -R[7], -R[8]];
+          const top = [p[0], p[1] + mast, p[2]];
+          push(top, c); push([top[0] + fwd[0] * stub * 0.5, top[1] + fwd[1] * stub * 0.5, top[2] + fwd[2] * stub * 0.5], c);
+        }
+      }
+    });
     this.cameraPath = { data: new Float32Array(v), count: v.length / 6, dirty: true };
   }
 

@@ -41,11 +41,15 @@ notice until the next release.
   summons, weapon skills) on an empty stage *or on a loaded character or NPC* —
   attached to the joints the DAT names, with the caster's own cast animation, a
   Play / Pause / Rewind / Loop transport, playback speed and the effect's sound.
-- **Camera Sequencer** — a two-track timeline (Camera + Scene): record keyframes
-  at the playhead, scrub, curve the path between them, and lerp time-of-day
-  across a shot. **Lock to Actor** keeps a moving subject framed by tracking the
-  pelvis, effects and sound play back with the take, and sequences can be named
-  and saved.
+- **Camera Sequencer** — a multi-track timeline (camera position and rotation,
+  weather, time of day): record keyframes at the playhead, scrub, curve the
+  path between them, and lerp time-of-day across a shot. **Lock to Actor**
+  keeps a moving subject framed by tracking the pelvis, effects and sound play
+  back with the take, and sequences can be named and saved. Placed zone actors
+  join the timeline too — **Add to Camera Sequence** in the Actors panel gives
+  an actor a movement track and an animation track, so you can record where it
+  stands, move it and record again for a path, and record which motion its
+  editor is playing (walk here, idle there) to switch clips as the take plays.
 - **Images** — browse every UI, map and cutscene texture DAT with a filter,
   per-set list and zoom, plus a **sprite panel** that lists every sprite in a
   title/lobby layout, filtered to the atlas you have selected.
@@ -91,7 +95,8 @@ notice until the next release.
 - **Camera** — WASD fly camera with roll (Alt+Q / Alt+E), fly speed in steps
   of 5, a render-distance slider, and a keyframe Camera Sequencer with a spline
   path, separate position and rotation tracks (roll included), a linear-rotation
-  option and time-of-day / weather tracks.
+  option, time-of-day / weather tracks and per-actor movement and animation
+  tracks.
 - **Throughout** — type-to-filter dropdowns, search on every asset list,
   arrow-key list navigation, pinned favourite zones and files, reveal-any-DAT in
   the system file manager, wireframe / unlit / collision / navmesh / skybox

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@headlessui/react';
 import { backend } from '../js/backend.js';
 import { gameCandidates, normRel, pathKey, relFromAbs } from '../js/gamePath.js';
@@ -6383,6 +6383,130 @@ export default function App({ launch = null }) {
     actorGizmoHoverRef.current = null;
   }, []);
 
+  // ── Camera Sequencer › actor tracks ────────────────────────────────────────
+  //
+  // Actors › Add to Camera Sequence hands an actor to the sequencer as a
+  // request: the panel is mounted only while open, so the request opens it
+  // and the sequencer picks the actor up (once) on mount / on change.
+  const [seqActorAdd, setSeqActorAdd] = useState(null);   // { id, nonce } | null
+  const addActorToSequence = useCallback((id) => {
+    const a = zoneActorsRef.current.find((x) => x.id === id);
+    if (!a) return;
+    setSequencerOpen(true);
+    setSeqActorAdd({ id, nonce: Date.now() });
+    setStatusText(`${a.name} added to the Camera Sequencer — park the playhead and record its keyframes.`);
+  }, []);
+
+  /**
+   * How the sequencer reads and drives placed actors. It goes through here
+   * rather than into the renderer directly so the actor list, the editor
+   * readout and saved sets stay in step with what a sequence moves, and so
+   * a motion key takes the same path as the editor's Motion picker (pack
+   * reloads, effect re-arm and all).
+   */
+  const actorSeqApi = useMemo(() => {
+    const live = (id) => zoneActorsRef.current.find((x) => x.id === id) ?? null;
+    const api = {
+      /**
+       * Live actor for a sequenced { id, name }. Ids restart every launch and
+       * a reloaded set hands them out afresh, so an id that now belongs to a
+       * differently named actor loses to the actor carrying the name; an id
+       * whose name merely changed (renamed in the editor) still wins when no
+       * actor has the old name.
+       */
+      resolve: (id, name) => {
+        const byId = live(id);
+        if (byId && (!name || byId.name === name)) return byId;
+        const byName = name ? zoneActorsRef.current.find((a) => a.name === name) ?? null : null;
+        return byName ?? byId ?? null;
+      },
+      select: (id) => selectActor(id),
+      /** Placement straight from the renderer: the gizmo writes there first. */
+      transform: (id) => {
+        const ra = rendererRef.current?.getActor(id);
+        if (!ra) return null;
+        return { pos: [ra.pos[0], ra.pos[1], ra.pos[2]], rot: Array.from(ra.rot ?? [1, 0, 0, 0, 1, 0, 0, 0, 1]) };
+      },
+      /** Move / turn an actor; `sync` also writes the state record (the caller throttles it during playback). */
+      setTransform: (id, pos, rot, sync = true) => {
+        const r = rendererRef.current;
+        if (!r?.getActor(id)) return;
+        r.setActorTransform(id, pos, rot, null);
+        if (!sync) return;
+        const patch = {};
+        if (pos) patch.pos = [pos[0], pos[1], pos[2]];
+        if (rot) patch.rot = Array.from(rot);
+        if (pos || rot) updateActor(id, patch);
+      },
+      /** What the actor's editor plays right now — an animation key's payload. */
+      motion: (id) => {
+        const a = live(id);
+        if (!a || a.kind === 'light') return null;
+        const motion = a.motion ? { kind: a.motion.kind, id: a.motion.id } : null;
+        const pack = (a.pack && motion?.kind === 'anim' && (a.packs ?? []).some((p) => p.path === a.pack)) ? a.pack : null;
+        const g = motion?.kind === 'anim' ? (a.anims ?? []).find((x) => x.id === motion.id) : null;
+        const label = !motion ? 'bind pose' : (g?.label ?? motion.id);
+        return { motion, pack, label };
+      },
+      /** Switch an actor to a key's motion, `clipFrame` game-frames into the clip. */
+      applyMotion: (id, key, clipFrame = 0) => {
+        const a = live(id);
+        if (!a || a.kind === 'light') return;
+        const motion = key?.motion ? { kind: key.motion.kind, id: key.motion.id } : null;
+        const pack = key?.pack ?? null;
+        const frame = Math.max(0, +clipFrame || 0);
+        // A Special's clip lives in a borrowed pack: reload the entry with it,
+        // motion and offset riding along; nothing to do until the model is back.
+        if (pack !== (a.pack ?? null) && a.entry && a.kind) {
+          loadActorEntry(id, a.kind, a.entry, pack, { motion, playing: true, loop: a.loop !== false, frame });
+          return;
+        }
+        if (!a.model) { updateActor(id, { motion }); return; }
+        updateActor(id, { motion, playing: !!motion });
+        applyActorMotion({ ...a, playing: true, frame }, motion);
+        if (a.fx) armActorFx(id, { ...a, motion, playing: true });
+      },
+      /** Scrub the running clip to a game-frame without restarting it. */
+      seekMotion: (id, clipFrame) => {
+        const r = rendererRef.current;
+        const ra = r?.getActor(id);
+        const len = ra?.currentAnimation?.lengthInFrames ?? 0;
+        if (!ra || !(len > 0)) return;
+        const f = Math.max(0, +clipFrame || 0);
+        r.seekActor(id, ra.loop === false ? Math.min(f, len) : f % len);
+      },
+      /** Where the actor stands and what it plays, to put back after a take. */
+      snapshot: (id) => {
+        const a = live(id);
+        const ra = rendererRef.current?.getActor(id);
+        if (!a || !ra) return null;
+        return {
+          pos: [ra.pos[0], ra.pos[1], ra.pos[2]],
+          rot: Array.from(ra.rot ?? [1, 0, 0, 0, 1, 0, 0, 0, 1]),
+          motion: a.motion ? { kind: a.motion.kind, id: a.motion.id } : null,
+          pack: a.pack ?? null,
+          playing: a.playing !== false,
+          frame: ra.animFrame ?? 0,
+        };
+      },
+      restore: (id, snap) => {
+        const r = rendererRef.current;
+        const a = live(id);
+        if (!snap || !a || !r?.getActor(id)) return;
+        api.setTransform(id, snap.pos, snap.rot, true);
+        if (a.kind === 'light') return;
+        const same = (a.pack ?? null) === (snap.pack ?? null)
+          && (a.motion?.kind ?? null) === (snap.motion?.kind ?? null)
+          && (a.motion?.id ?? null) === (snap.motion?.id ?? null);
+        if (!same) api.applyMotion(id, { motion: snap.motion, pack: snap.pack }, snap.frame);
+        else r.seekActor(id, snap.frame);
+        r.setActorPlaying(id, snap.playing);
+        updateActor(id, { playing: snap.playing });
+      },
+    };
+    return api;
+  }, [selectActor, updateActor, applyActorMotion, loadActorEntry, armActorFx]);
+
   const toggleActorPick = useCallback(() => {
     const next = !actorPickRef.current;
     actorPickRef.current = next;
@@ -8395,6 +8519,11 @@ export default function App({ launch = null }) {
           lockTarget={() => (camLockActorId != null
             ? (rendererRef.current?.getActorAimPoint?.(camLockActorId) ?? null)
             : null)}
+          actors={zoneActors}
+          selectedActorId={actorSelectedId ?? actorEditId}
+          actorApi={actorSeqApi}
+          addActor={seqActorAdd}
+          onAddActorDone={() => setSeqActorAdd(null)}
           onPlayActorOnce={(seqFrame = 0, seqFps = 30) => {
             const r = rendererRef.current;
             // Only when a skinned actor clip is loaded (NPC / PC / creation).
@@ -8635,6 +8764,7 @@ export default function App({ launch = null }) {
           onAddActor={() => { setActorEditId(null); setActorPlacing({ forId: null }); }}
           onCancelPlace={() => setActorPlacing(null)}
           onManageSets={() => { setActorSets(loadActorSets()); setActorSetsOpen(true); }}
+          onAddToSequence={addActorToSequence}
           onEdit={(id) => { selectActor(id); setActorEditId(id); }}
           onRemove={removeActor}
           onToggleVisible={(id) => {

@@ -8,6 +8,14 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ---
 
+## [Unreleased]
+
+### Camera Sequencer
+- **Actors on the timeline** — a new **Add to Camera Sequence** button in the Actors panel (with an actor selected) gives that actor two tracks of its own. **Actor** records where it stands at the playhead (position and rotation — move it with the gizmo and record again for a path, splined or straight like the camera), and **Anim** records the motion its editor is playing, so a take can walk an actor across the zone and switch it from "walk" to "idle" where you say. The route is drawn on the terrain in the actor's lane colour, Stop puts the actor back where it was, and actors come back to a saved sequence by name
+- Sequenced actors' lanes select the actor when clicked; × drops it from the sequence
+
+---
+
 ## [1.1.0] — 2026-09-01
 
 [Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.0.12...v1.1.0)
