@@ -32,7 +32,7 @@ const EMPTY_DOC = {
   lockActor: false, linearRotation: false,
   // One take records onto both camera tracks; each key can be removed alone.
   camPos: [], camRot: [], scene: [], tod: [],
-  // Placed zone actors added from Actors › Add to Camera Sequence, each with
+  // Placed zone actors added from the actor editor's Add to Camera Sequence, each with
   // a movement track (xf: { frame, pos, rot }) and an animation track (anim:
   // { frame, motion, pack, label }). `actorId` is the stage id; ids restart
   // every launch, so `name` is how a saved sequence finds its actor again.
@@ -204,11 +204,11 @@ export function CameraSequencer({
   lockTarget,
   /** Placed zone actors (App's zoneActors) — read for names and liveness. */
   actors = [],
-  /** The actor with the gizmo / open editor: Actor and Anim record onto it. */
+  /** The actor with the gizmo / open editor: Actor and Animation record onto it. */
   selectedActorId = null,
   /** App's actorSeqApi: resolve / select / transform / motion / apply / restore. */
   actorApi = null,
-  /** Actors › Add to Camera Sequence request: { id, nonce }; acked with onAddActorDone. */
+  /** Actor editor › Add to Camera Sequence request: { id, nonce }; acked with onAddActorDone. */
   addActor = null,
   onAddActorDone,
 }) {
@@ -301,11 +301,12 @@ export function CameraSequencer({
   );
   seqRef.current = seq;
 
-  // One sampler per sequenced actor; the movement path follows the Curve
-  // toggle like the camera eye does.
+  // One sampler per sequenced actor. Actors walk straight lines between
+  // their keys whatever the camera's Curve toggle says — a spline through a
+  // few placement keys swings wide of where they were put.
   const actorSeqs = useMemo(
-    () => doc.actors.map((a) => ({ ...a, track: new ActorTrack(a.xf, { curve: curve ? 'spline' : 'linear' }) })),
-    [doc.actors, curve],
+    () => doc.actors.map((a) => ({ ...a, track: new ActorTrack(a.xf, { curve: 'linear' }) })),
+    [doc.actors],
   );
   const actorSeqsRef = useRef(actorSeqs);
   actorSeqsRef.current = actorSeqs;
@@ -334,7 +335,7 @@ export function CameraSequencer({
   /** Live stage actor for a sequenced one (by id, then by name), or null. */
   const liveActor = (sa) => actorApiRef.current?.resolve?.(sa.actorId, sa.name) ?? null;
 
-  // Actors › Add to Camera Sequence. Adding twice is a no-op; the request is
+  // Actor editor › Add to Camera Sequence. Adding twice is a no-op; the request is
   // acked either way so App can clear it.
   const onAddActorDoneRef = useRef(onAddActorDone);
   onAddActorDoneRef.current = onAddActorDone;
@@ -1090,7 +1091,7 @@ export function CameraSequencer({
   const canRecordScene = weathers.length > 0;
   const hasActorKeys = doc.actors.some(actorHasKeys);
   const canPlay = seq.length >= 2 || doc.tod.length >= 2 || doc.scene.length >= 1 || hasActorKeys;
-  // Actor / Anim record onto the selected actor, once it is in the sequence.
+  // Actor / Animation record onto the selected actor, once it is in the sequence.
   const selLive = selectedActorId != null ? (actorApi?.resolve?.(selectedActorId, null) ?? null) : null;
   const selInSeq = !!selLive && doc.actors.some((a) => a.actorId === selLive.id);
   const selMotion = selInSeq ? actorApi?.motion?.(selLive.id) : null;
@@ -1099,16 +1100,16 @@ export function CameraSequencer({
   const actorTip = !zoneLoaded
     ? 'Load a zone and place actors first'
     : !selLive
-      ? 'Select an actor (click it in the zone or in the Actors panel)'
+      ? 'Select an actor (click it in the zone or in the Scenes panel)'
       : !selInSeq
-        ? `${selLive.name} is not in the sequence — Actors › Add to Camera Sequence`
+        ? `${selLive.name} is not in the sequence — open its editor and press Add to Camera Sequence`
         : `Record where ${selLive.name} stands at the playhead — position and rotation. Move it with the gizmo and record again for a path`;
   const animTip = !zoneLoaded
     ? 'Load a zone and place actors first'
     : !selLive
-      ? 'Select an actor (click it in the zone or in the Actors panel)'
+      ? 'Select an actor (click it in the zone or in the Scenes panel)'
       : !selInSeq
-        ? `${selLive.name} is not in the sequence — Actors › Add to Camera Sequence`
+        ? `${selLive.name} is not in the sequence — open its editor and press Add to Camera Sequence`
         : !selMotion
           ? 'Lights have no motion to record'
           : `Record the motion ${selLive.name}'s editor is playing (${selMotion.label}) at the playhead — it switches to it when the playhead gets there`;
@@ -1178,17 +1179,17 @@ export function CameraSequencer({
     );
   };
 
-  /** Label column entry for a sequenced actor: name row (click selects) + Anim row. */
+  /** Label column entry for a sequenced actor: name row (click selects) + Animation row. */
   const actorLabels = (sa, i) => {
     const live = liveActor(sa);
     const name = live?.name || sa.name || `Actor ${sa.actorId}`;
     const isSel = !!live && live.id === selectedActorId;
     const color = actorColor(i);
     const tip = !live
-      ? `${name} is not on the stage — load the actor set it belongs to, or remove it from the sequence`
+      ? `${name} is not on the stage — open the scene it belongs to, or remove it from the sequence`
       : isSel
-        ? `${name} — selected: Actor and Anim record onto it`
-        : `Select ${name} in the zone so Actor and Anim record onto it`;
+        ? `${name} — selected: Actor and Animation record onto it`
+        : `Select ${name} in the zone so Actor and Animation record onto it`;
     return [
       <div
         key={`${sa.actorId}:xf`}
@@ -1218,7 +1219,7 @@ export function CameraSequencer({
         </Tooltip>
       </div>,
       <div key={`${sa.actorId}:anim`} className={`cseq-tl-label cseq-tl-actor sub${isSel ? ' on' : ''}`}>
-        Anim
+        Animation
       </div>,
     ];
   };
@@ -1279,8 +1280,8 @@ export function CameraSequencer({
           </Tooltip>
         </div>
 
-        {/* Length */}
-        <div className="cseq-row">
+        {/* Length, frame stepping, keyframe delete and the playback toggles */}
+        <div className="cseq-row cseq-settings">
           <span className="cseq-label">Length</span>
           <input
             type="text"
@@ -1305,192 +1306,6 @@ export function CameraSequencer({
             {FPS_CHOICES.map((f) => <option key={f} value={f}>{f}</option>)}
           </select>
           <span className="cseq-secs mono">{seconds}s</span>
-          <div className="cseq-bar-sep" />
-          <div className="cseq-bar-group">
-            <Tooltip content={lockTip} placement="top">
-              <button
-                type="button"
-                className={`cseq-btn cseq-lock${lockActorPlacing ? ' placing' : ''}`}
-                disabled={!zoneLoaded}
-                onClick={() => (lockActorPlacing ? onCancelLockActor?.() : onPlaceLockActor?.())}
-              >
-                <span className="icon">{lockActorPlacing ? 'close' : 'my_location'}</span>
-                {lockActorPlacing ? 'Cancel' : (lockActorId != null ? 'Move Lock Actor' : 'Place Lock Actor')}
-              </button>
-            </Tooltip>
-            {lockActorId != null && !lockActorPlacing && (
-              <Tooltip content="Remove the lock actor" placement="top">
-                <button
-                  type="button"
-                  className="icon-btn cseq-icon cseq-del"
-                  aria-label="Remove lock actor"
-                  onClick={() => onRemoveLockActor?.()}
-                >
-                  <span className="icon">delete</span>
-                </button>
-              </Tooltip>
-            )}
-          </div>
-          <div className="cseq-bar-group cseq-zoom">
-            <Tooltip content="Zoom out" placement="top">
-              <button
-                type="button"
-                className="icon-btn cseq-icon"
-                aria-label="Zoom out"
-                disabled={zoom <= MIN_ZOOM + 1e-6}
-                onClick={zoomOut}
-              >
-                <span className="icon">zoom_out</span>
-              </button>
-            </Tooltip>
-            <Tooltip content="Zoom in" placement="top">
-              <button
-                type="button"
-                className="icon-btn cseq-icon"
-                aria-label="Zoom in"
-                disabled={zoom >= MAX_ZOOM - 1e-6}
-                onClick={zoomIn}
-              >
-                <span className="icon">zoom_in</span>
-              </button>
-            </Tooltip>
-          </div>
-        </div>
-
-        {/* Timeline — zoom widens the track; wheel pans horizontally */}
-        <div className={`cseq-tl${doc.actors.length ? ' has-actors' : ''}`} style={{ height: tlHeight }}>
-          <div className="cseq-tl-labels">
-            <div className="cseq-tl-spacer" />
-            <div className="cseq-tl-label">Cam Pos</div>
-            <div className="cseq-tl-label">Cam Rot</div>
-            <div className="cseq-tl-label">Scene</div>
-            <div className="cseq-tl-label">Time</div>
-            {doc.actors.map(actorLabels)}
-          </div>
-          <div className="cseq-tl-scroll" ref={scrollRef}>
-            <div
-              className="cseq-tl-track"
-              ref={bodyRef}
-              style={{ width: `${zoom * 100}%` }}
-              onPointerDown={onBodyDown}
-              onPointerMove={onBodyMove}
-              onPointerUp={onBodyUp}
-              onPointerCancel={onBodyUp}
-            >
-              <div className="cseq-ruler">
-                {ticks.map((t) => (
-                  <span className="cseq-tick" key={t.t} style={{ left: `${t.x}%` }}>
-                    <i />
-                    <span>{t.t < 10 ? t.t.toFixed(1) : t.t.toFixed(0)}s</span>
-                  </span>
-                ))}
-              </div>
-              <div className="cseq-lane">{doc.camPos.map((k) => dot('camPos', k, 'cam'))}</div>
-              <div className="cseq-lane">{doc.camRot.map((k) => dot('camRot', k, 'rot'))}</div>
-              <div className="cseq-lane">{doc.scene.map((k) => dot('scene', k, 'scn'))}</div>
-              <div className="cseq-lane">{doc.tod.map((k) => dot('tod', k, 'tod'))}</div>
-              {doc.actors.map((sa, i) => [
-                <div key={`${sa.actorId}:xf`} className="cseq-lane cseq-lane-actor">
-                  {sa.xf.map((k) => dot(actorTrack('xf', sa.actorId), k, 'act', actorColor(i)))}
-                </div>,
-                <div key={`${sa.actorId}:anim`} className="cseq-lane cseq-lane-actor sub">
-                  {sa.anim.map((k) => dot(actorTrack('anim', sa.actorId), k, 'anm', actorColor(i)))}
-                </div>,
-              ])}
-              <div
-                className="cseq-playhead"
-                ref={playheadRef}
-                style={{ left: `${(shown / totalFrames) * 100}%` }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Compact toolbar: transport | record | step | toggles | frame */}
-        <div className="cseq-bar">
-          <div className="cseq-bar-group">
-            <Tooltip content={playing ? 'Pause (Space)' : 'Play (Space)'} placement="top">
-              <button
-                type="button"
-                className={`cseq-play${playing ? ' playing' : ''}`}
-                disabled={!canPlay}
-                onClick={() => (playing ? stop(false) : play())}
-              >
-                <span className="icon fill">{playing ? 'pause' : 'play_arrow'}</span>
-              </button>
-            </Tooltip>
-            <Tooltip content="Stop and restore camera" placement="top">
-              <button
-                type="button"
-                className="cseq-stop"
-                onClick={() => { stop(true); frameRef.current = 0; setFrame(0); }}
-              >
-                <span className="icon fill">stop</span>
-              </button>
-            </Tooltip>
-          </div>
-
-          <div className="cseq-bar-sep" />
-
-          <div className="cseq-bar-group">
-            <Tooltip content="Record camera at playhead — a position key and a rotation key (yaw, pitch, roll)" placement="top">
-              <button type="button" className="cseq-record" onClick={recordCamera}>
-                <span className="icon fill">radio_button_checked</span>
-                Camera
-              </button>
-            </Tooltip>
-            <Tooltip
-              content={canRecordScene ? 'Record weather at playhead' : 'Load a zone with a sky first'}
-              placement="top"
-            >
-              <button
-                type="button"
-                className="cseq-record cseq-record-scene"
-                disabled={!canRecordScene}
-                onClick={recordScene}
-              >
-                <span className="icon fill">radio_button_checked</span>
-                Scene
-              </button>
-            </Tooltip>
-            <Tooltip
-              content={canRecordScene ? 'Record time of day at playhead (lerps between keys)' : 'Load a zone with a sky first'}
-              placement="top"
-            >
-              <button
-                type="button"
-                className="cseq-record cseq-record-tod"
-                disabled={!canRecordScene}
-                onClick={recordTod}
-              >
-                <span className="icon fill">radio_button_checked</span>
-                Time
-              </button>
-            </Tooltip>
-            <Tooltip content={actorTip} placement="top">
-              <button
-                type="button"
-                className="cseq-record cseq-record-actor"
-                disabled={!canRecordActor}
-                onClick={recordActor}
-              >
-                <span className="icon fill">radio_button_checked</span>
-                Actor
-              </button>
-            </Tooltip>
-            <Tooltip content={animTip} placement="top">
-              <button
-                type="button"
-                className="cseq-record cseq-record-anim"
-                disabled={!canRecordAnim}
-                onClick={recordAnim}
-              >
-                <span className="icon fill">radio_button_checked</span>
-                Anim
-              </button>
-            </Tooltip>
-          </div>
-
           <div className="cseq-bar-sep" />
 
           <div className="cseq-bar-group">
@@ -1541,7 +1356,7 @@ export function CameraSequencer({
                 <span className="cseq-switch-label">Loop</span>
               </label>
             </Tooltip>
-            <Tooltip content="Spline path through keys (off = straight lines)" placement="top">
+            <Tooltip content="Spline camera path through keys (off = straight lines). Actors always move in straight lines" placement="top">
               <label className="switch cseq-switch">
                 <input type="checkbox" checked={!!curve} onChange={(e) => patch({ curve: e.target.checked })} />
                 <span className="track" />
@@ -1580,6 +1395,193 @@ export function CameraSequencer({
                 <span className="cseq-switch-label">Snap</span>
               </label>
             </Tooltip>
+          </div>
+          <div className="cseq-bar-group cseq-zoom">
+            <Tooltip content="Zoom out" placement="top">
+              <button
+                type="button"
+                className="icon-btn cseq-icon"
+                aria-label="Zoom out"
+                disabled={zoom <= MIN_ZOOM + 1e-6}
+                onClick={zoomOut}
+              >
+                <span className="icon">zoom_out</span>
+              </button>
+            </Tooltip>
+            <Tooltip content="Zoom in" placement="top">
+              <button
+                type="button"
+                className="icon-btn cseq-icon"
+                aria-label="Zoom in"
+                disabled={zoom >= MAX_ZOOM - 1e-6}
+                onClick={zoomIn}
+              >
+                <span className="icon">zoom_in</span>
+              </button>
+            </Tooltip>
+          </div>
+        </div>
+
+        {/* Timeline — zoom widens the track; wheel pans horizontally */}
+        <div className={`cseq-tl${doc.actors.length ? ' has-actors' : ''}`} style={{ height: tlHeight }}>
+          <div className="cseq-tl-labels">
+            <div className="cseq-tl-spacer" />
+            <div className="cseq-tl-label">Camera Position</div>
+            <div className="cseq-tl-label">Camera Rotation</div>
+            <div className="cseq-tl-label">Weather</div>
+            <div className="cseq-tl-label">Time</div>
+            {doc.actors.map(actorLabels)}
+          </div>
+          <div className="cseq-tl-scroll" ref={scrollRef}>
+            <div
+              className="cseq-tl-track"
+              ref={bodyRef}
+              style={{ width: `${zoom * 100}%` }}
+              onPointerDown={onBodyDown}
+              onPointerMove={onBodyMove}
+              onPointerUp={onBodyUp}
+              onPointerCancel={onBodyUp}
+            >
+              <div className="cseq-ruler">
+                {ticks.map((t) => (
+                  <span className="cseq-tick" key={t.t} style={{ left: `${t.x}%` }}>
+                    <i />
+                    <span>{t.t < 10 ? t.t.toFixed(1) : t.t.toFixed(0)}s</span>
+                  </span>
+                ))}
+              </div>
+              <div className="cseq-lane">{doc.camPos.map((k) => dot('camPos', k, 'cam'))}</div>
+              <div className="cseq-lane">{doc.camRot.map((k) => dot('camRot', k, 'rot'))}</div>
+              <div className="cseq-lane">{doc.scene.map((k) => dot('scene', k, 'scn'))}</div>
+              <div className="cseq-lane">{doc.tod.map((k) => dot('tod', k, 'tod'))}</div>
+              {doc.actors.map((sa, i) => [
+                <div key={`${sa.actorId}:xf`} className="cseq-lane cseq-lane-actor">
+                  {sa.xf.map((k) => dot(actorTrack('xf', sa.actorId), k, 'act', actorColor(i)))}
+                </div>,
+                <div key={`${sa.actorId}:anim`} className="cseq-lane cseq-lane-actor sub">
+                  {sa.anim.map((k) => dot(actorTrack('anim', sa.actorId), k, 'anm', actorColor(i)))}
+                </div>,
+              ])}
+              <div
+                className="cseq-playhead"
+                ref={playheadRef}
+                style={{ left: `${(shown / totalFrames) * 100}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Compact toolbar: transport | record | lock actor | frame */}
+        <div className="cseq-bar">
+          <div className="cseq-bar-group">
+            <Tooltip content={playing ? 'Pause (Space)' : 'Play (Space)'} placement="top">
+              <button
+                type="button"
+                className={`cseq-play${playing ? ' playing' : ''}`}
+                disabled={!canPlay}
+                onClick={() => (playing ? stop(false) : play())}
+              >
+                <span className="icon fill">{playing ? 'pause' : 'play_arrow'}</span>
+              </button>
+            </Tooltip>
+            <Tooltip content="Stop and restore camera" placement="top">
+              <button
+                type="button"
+                className="cseq-stop"
+                onClick={() => { stop(true); frameRef.current = 0; setFrame(0); }}
+              >
+                <span className="icon fill">stop</span>
+              </button>
+            </Tooltip>
+          </div>
+
+          <div className="cseq-bar-sep" />
+
+          <div className="cseq-bar-group">
+            <Tooltip content="Record camera at playhead — a position key and a rotation key (yaw, pitch, roll)" placement="top">
+              <button type="button" className="cseq-record" onClick={recordCamera}>
+                <span className="icon fill">radio_button_checked</span>
+                Camera
+              </button>
+            </Tooltip>
+            <Tooltip
+              content={canRecordScene ? 'Record weather at playhead' : 'Load a zone with a sky first'}
+              placement="top"
+            >
+              <button
+                type="button"
+                className="cseq-record cseq-record-scene"
+                disabled={!canRecordScene}
+                onClick={recordScene}
+              >
+                <span className="icon fill">radio_button_checked</span>
+                Weather
+              </button>
+            </Tooltip>
+            <Tooltip
+              content={canRecordScene ? 'Record time of day at playhead (lerps between keys)' : 'Load a zone with a sky first'}
+              placement="top"
+            >
+              <button
+                type="button"
+                className="cseq-record cseq-record-tod"
+                disabled={!canRecordScene}
+                onClick={recordTod}
+              >
+                <span className="icon fill">radio_button_checked</span>
+                Time
+              </button>
+            </Tooltip>
+            <Tooltip content={actorTip} placement="top">
+              <button
+                type="button"
+                className="cseq-record cseq-record-actor"
+                disabled={!canRecordActor}
+                onClick={recordActor}
+              >
+                <span className="icon fill">radio_button_checked</span>
+                Actor
+              </button>
+            </Tooltip>
+            <Tooltip content={animTip} placement="top">
+              <button
+                type="button"
+                className="cseq-record cseq-record-anim"
+                disabled={!canRecordAnim}
+                onClick={recordAnim}
+              >
+                <span className="icon fill">radio_button_checked</span>
+                Animation
+              </button>
+            </Tooltip>
+          </div>
+
+          <div className="cseq-bar-sep" />
+
+          <div className="cseq-bar-group">
+            <Tooltip content={lockTip} placement="top">
+              <button
+                type="button"
+                className={`cseq-btn cseq-lock${lockActorPlacing ? ' placing' : ''}`}
+                disabled={!zoneLoaded}
+                onClick={() => (lockActorPlacing ? onCancelLockActor?.() : onPlaceLockActor?.())}
+              >
+                <span className="icon">{lockActorPlacing ? 'close' : 'my_location'}</span>
+                {lockActorPlacing ? 'Cancel' : (lockActorId != null ? 'Move Lock Actor' : 'Place Lock Actor')}
+              </button>
+            </Tooltip>
+            {lockActorId != null && !lockActorPlacing && (
+              <Tooltip content="Remove the lock actor" placement="top">
+                <button
+                  type="button"
+                  className="icon-btn cseq-icon cseq-del"
+                  aria-label="Remove lock actor"
+                  onClick={() => onRemoveLockActor?.()}
+                >
+                  <span className="icon">delete</span>
+                </button>
+              </Tooltip>
+            )}
           </div>
 
           <span className="cseq-frame mono">

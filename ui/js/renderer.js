@@ -1169,7 +1169,7 @@ export class Renderer {
     // each with its own batches, textures, pose and clip. See addActor().
     this.actors = [];
     // { actorId, mode: 'move'|'rotate'|'scale', hoverAxis, activeAxis } — the
-    // transform grabber on the selected actor (Actors panel live selection).
+    // transform grabber on the selected actor (Scenes panel live selection).
     this.actorGizmo = null;
     this.pose = null;
     this.batches = [];

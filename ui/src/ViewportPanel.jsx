@@ -28,10 +28,10 @@ async function loadFloors() {
 }
 
 /**
- * Compact scene controls (toolbar popover): background colour / image,
+ * Compact viewport controls (toolbar popover): background colour / image,
  * clear floor, and a short floor picker.
  */
-export function ScenePanel({
+export function ViewportPanel({
   bgColor = '#1a1a24',
   onBg,
   bgImage = 'none',
@@ -68,7 +68,7 @@ export function ScenePanel({
 
   return (
     <div className="tool-pop-body">
-      <h3>SCENE SETTINGS</h3>
+      <h3>VIEWPORT SETTINGS</h3>
 
       <div className="gfx-line">
         <span className="gfx-lab">Background Colour</span>

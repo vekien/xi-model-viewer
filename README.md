@@ -46,8 +46,8 @@ notice until the next release.
   path between them, and lerp time-of-day across a shot. **Lock to Actor**
   keeps a moving subject framed by tracking the pelvis, effects and sound play
   back with the take, and sequences can be named and saved. Placed zone actors
-  join the timeline too — **Add to Camera Sequence** in the Actors panel gives
-  an actor a movement track and an animation track, so you can record where it
+  join the timeline too — **Add to Camera Sequence** in an actor's editor gives
+  it a movement track and an animation track, so you can record where it
   stands, move it and record again for a path, and record which motion its
   editor is playing (walk here, idle there) to switch clips as the take plays.
 - **Images** — browse every UI, map and cutscene texture DAT with a filter,
@@ -73,18 +73,20 @@ notice until the next release.
   `%LOCALAPPDATA%\XiModelViewer\notes.json` you can edit outside the app. The
   file tree shows each note as a tooltip, so a folder of numbered DATs stops
   being anonymous.
-- **Scene** — background images, a flat floor with a colour picker, floor repeat
+- **Viewport** — background images, a flat floor with a colour picker, floor repeat
   and a radial edge fade, plus a trackball gizmo for aiming the sun that casts
   the model's shadow.
-- **Zone actors** — place NPCs, composed characters and light sources on any
-  zone's terrain (click to place with a ground line-trace), then select them in
-  the viewport and move / rotate / scale with a gizmo (keys 1 / 2 / 3, Esc to
-  drop the selection, F to frame). Each actor plays its own motion, schedule or
-  borrowed pack with its own effect routines and frame scrubber, casts and
-  receives the sun shadows, and duplicates with Ctrl+C / Ctrl+V. Point, spot
-  and ambient lights take colour or temperature, intensity and radius and light
-  the terrain, props and actors around them.
-  Whole arrangements save and load as named actor sets.
+- **Scenes** — named arrangements of actors on a zone. The Scenes panel lists
+  every saved scene; **New Scene** starts an empty one, and opening a scene puts
+  its actors on the stage, where you place NPCs, composed characters and light
+  sources on the terrain (click to place with a ground line-trace), then select
+  them in the viewport and move / rotate / scale with a gizmo (keys 1 / 2 / 3,
+  Esc to drop the selection, F to frame). Each actor plays its own motion,
+  schedule or borrowed pack with its own effect routines and frame scrubber,
+  casts and receives the sun shadows, and duplicates with Ctrl+C / Ctrl+V.
+  Point, spot and ambient lights take colour or temperature, intensity and
+  radius and light the terrain, props and actors around them. Save writes the
+  stage back into the scene, so flipping between scenes swaps whole casts.
 - **Database** — the client's record DATs as searchable, sortable tables: items
   (with decoded stats, jobs, slots, icons), quests, missions, key items,
   titles, spells, abilities and the other d_msg string tables, in English or

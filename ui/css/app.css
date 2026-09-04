@@ -1066,7 +1066,7 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
 #effect-actors,
 #weather,
 #placements,
-#actors,
+#scenes,
 #details,
 #skeleton {
   box-sizing: border-box;
@@ -1694,7 +1694,7 @@ button.cli-output-stop:hover {
    WeatherPanel measures itself into --wx-h rather than us guessing a constant.
    The fallback matches a typical outdoor panel. */
 body:has(#weather) #placements,
-body:has(#weather) #actors {
+body:has(#weather) #scenes {
   top: calc(var(--wx-h, 286px) + 24px);
   max-height: calc(100vh - var(--wx-h, 286px) - 94px);
 }
@@ -3215,6 +3215,9 @@ input[type='color'] {
   overflow: auto;
 }
 .cseq-row { display: flex; align-items: center; gap: 8px; }
+/* Length row also carries frame stepping, keyframe delete and the toggles;
+   it wraps rather than overflow when the panel is narrow. */
+.cseq-settings { flex-wrap: wrap; row-gap: 6px; }
 .cseq-label { color: var(--muted); font-size: 12px; flex: 0 0 auto; }
 
 .cseq-icon {
@@ -3277,13 +3280,11 @@ input[type='color'] {
   box-sizing: border-box;
 }
 .cseq-tl-labels {
-  flex: 0 0 68px;
+  flex: 0 0 132px;
   display: flex; flex-direction: column;
   border-right: 1px solid var(--ring);
   z-index: 1;
 }
-/* Sequenced actors get a wider label column for their names. */
-.cseq-tl.has-actors .cseq-tl-labels { flex-basis: 128px; }
 .cseq-tl-actor {
   gap: 4px;
   padding-right: 2px;
@@ -3292,6 +3293,7 @@ input[type='color'] {
   font-size: 11px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
+/* The Animation row lines up with the actor's name: 8px label pad, 8px swatch, 6px gap. */
 .cseq-tl-actor.sub { border-top: none; padding-left: 22px; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.05em; }
 .cseq-tl-actor.on { background: rgba(255, 255, 255, 0.06); }
 .cseq-tl-actor.on .cseq-actor-name, .cseq-tl-actor.on.sub { color: var(--text); }
@@ -3299,7 +3301,7 @@ input[type='color'] {
 .cseq-actor-pick {
   flex: 1 1 auto; min-width: 0;
   display: inline-flex; align-items: center; gap: 6px;
-  height: 22px; padding: 0 4px; margin: 0;
+  height: 22px; padding: 0 4px; margin: 0 0 0 -4px;   /* swatch sits on the label pad like the other rows' text */
   background: transparent; border: none; box-shadow: none; border-radius: 4px;
   color: inherit; font: inherit; text-align: left;
   cursor: pointer;
@@ -3475,7 +3477,8 @@ input[type='color'] {
 
 .cseq-record {
   flex: 0 0 auto;
-  width: 96px;
+  width: auto;
+  min-width: 88px;
   gap: 5px;
   height: 30px;
   min-height: 30px;
@@ -3486,13 +3489,11 @@ input[type='color'] {
 .cseq-record .icon { font-size: 15px; color: #ff6b6b; }
 .cseq-record-scene .icon { color: #6fc7ff; }
 .cseq-record-tod .icon { color: #c4a1ff; }
-/* Actor / Anim record onto the selected zone actor; narrower so five record
-   buttons still share the bar. */
-.cseq-record-actor, .cseq-record-anim { width: 80px; }
+/* Actor / Animation record onto the selected zone actor. */
 .cseq-record-actor .icon, .cseq-record-anim .icon { color: #fa739e; }
 .cseq-record:disabled .icon { color: var(--gray-600); }
 
-.cseq-bar .cseq-toggles {
+.cseq-toggles {
   gap: 10px;
   flex-wrap: nowrap;
 }
@@ -5541,16 +5542,27 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 }
 .scene-note .icon { font-size: 15px; color: #7fc4a0; flex: 0 0 auto; }
 
-/* --- Zone actors (bottom-right › Actors) ---------------------------------- */
-#actors {
+/* --- Zone scenes (bottom-right › Scenes) ---------------------------------- */
+#scenes {
   top: 12px; right: 12px;
   height: 440px;
   max-height: calc(100vh - 80px);
   z-index: 26;
   overflow: hidden;
 }
-#actors .plc-header { display: flex; align-items: center; gap: 8px; }
-#actors .plc-count { margin-left: auto; color: var(--muted); font-size: 11px; }
+#scenes .plc-header { display: flex; align-items: center; gap: 8px; }
+#scenes .plc-count { margin-left: auto; color: var(--muted); font-size: 11px; }
+#scenes .plc-spacer { flex: 1 1 auto; }
+/* Actor view title: back arrow, the scene's name (edited in place), Save. */
+#scenes .scene-back { width: 24px; height: 24px; min-height: 0; flex: 0 0 auto; margin-left: -4px; }
+#scenes .scene-name-input { flex: 1 1 auto; min-width: 0; font: 600 12px/1.2 var(--font-ui); }
+#scenes .scene-name-input:not(:focus):not(:hover) { background: transparent; }
+#scenes .scene-save.dirty { color: var(--accent); background: rgba(100, 180, 255, 0.14); }
+#scenes .scene-save.dirty:hover { background: rgba(100, 180, 255, 0.22); }
+/* Scene list rows: just the name (details in the tip); the one on stage is highlighted. */
+.scene-row .actor-name { display: flex; align-items: center; gap: 5px; }
+.scene-dirty { color: var(--accent); font-size: 16px; line-height: 1; }
+.node.selected > .row .scene-dirty { color: rgba(0, 0, 0, 0.6); }
 .actors-toolbar { flex: 0 0 auto; }
 .actors-add { width: 100%; justify-content: center; min-height: 32px; }
 .actors-placing {
@@ -5570,8 +5582,7 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .actor-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .actor-sub { flex: 0 1 auto; color: var(--muted); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .actor-hidden .actor-name { opacity: 0.5; }
-.actors-list .actor-btn,
-.actor-set-row .actor-btn {
+.actors-list .actor-btn {
   flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center;
   width: 20px; height: 20px; min-height: 0; padding: 0; margin: 0;
@@ -5579,8 +5590,7 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
   color: var(--muted); opacity: 0.6; cursor: pointer;
 }
 .actor-btn .icon { font-size: 14px; }
-.actors-list .actor-btn:hover,
-.actor-set-row .actor-btn:hover { opacity: 1; color: var(--text); background: rgba(255, 255, 255, 0.08) !important; }
+.actors-list .actor-btn:hover { opacity: 1; color: var(--text); background: rgba(255, 255, 255, 0.08) !important; }
 .actor-btn.off { color: var(--gray-600); }
 .actor-btn.danger:hover { color: #f0a3a3; }
 .node.selected > .row .actor-btn { color: rgba(0, 0, 0, 0.55); }
@@ -5656,36 +5666,11 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .dbf-btn.danger:hover:not(:disabled) { color: #f0a3a3; border-color: rgba(240, 90, 90, 0.4); }
 
 
-.actors-toolbar-row { display: flex; gap: 6px; }
-.actors-toolbar-row .actors-add { flex: 1 1 auto; }
-.actors-sets-btn { flex: 0 0 auto; min-height: 32px; white-space: nowrap; }
-/* Add to Camera Sequence — a full-width row under the placement buttons,
-   live only while an actor is selected. */
-.actors-seq-btn {
-  width: 100%;
-  justify-content: center;
-  min-height: 32px;
-  margin-top: 6px;
-  white-space: nowrap;
-}
-.actors-seq-btn .icon { color: var(--accent); }
-.actors-seq-btn:disabled .icon { color: var(--gray-600); }
-.actor-sets-save { display: flex; gap: 6px; align-items: center; }
-.actor-sets-save input { flex: 1 1 auto; min-width: 0; }
-.actor-sets-save .dbf-btn { flex: 0 0 auto; white-space: nowrap; }
 .actor-editor-modal .seg-tabs[role="tablist"] .seg-tab { white-space: nowrap; }
-.actor-sets-list { display: flex; flex-direction: column; gap: 4px; }
-.actor-set-row {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 8px;
-  border: 1px solid var(--ring); border-radius: 7px;
-  background: rgba(255, 255, 255, 0.03);
-}
-.actor-set-row.current { border-color: rgba(77, 163, 255, 0.45); background: rgba(77, 163, 255, 0.08); }
-.actor-set-main { flex: 1 1 auto; min-width: 0; }
-.actor-set-name { font-size: 12px; color: var(--gray-100); display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.actor-set-badge { font: 600 9px/1.4 var(--font-mono); padding: 0 5px; border-radius: 999px; color: #0b1420; background: var(--accent); }
-.actor-set-meta { font-size: 10px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Actor editor title-bar Save lights up while the scene has unsaved changes
+   (or the actors belong to no scene yet). */
+.actor-editor-modal .modal-tool.attention { color: var(--accent); background: rgba(100, 180, 255, 0.14); }
+.actor-editor-modal .modal-tool.attention:hover { background: rgba(100, 180, 255, 0.22); }
 
 .actor-transform-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .actor-pills { display: flex; gap: 4px; flex: 1 1 auto; }

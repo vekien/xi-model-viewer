@@ -325,7 +325,7 @@ const MAT3_ID = [1, 0, 0, 0, 1, 0, 0, 0, 1];
  * actor without touching how it faces.
  */
 export class ActorTrack {
-  constructor(keys, { curve = 'spline' } = {}) {
+  constructor(keys, { curve = 'linear' } = {}) {
     this.curve = curve === 'linear' ? 'linear' : 'spline';
     const sorted = (keys ?? []).slice().sort(byFrame);
     this.pos = sorted

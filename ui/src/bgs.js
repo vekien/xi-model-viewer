@@ -1,6 +1,6 @@
 /**
  * Viewport background images — drop a file in `ui/bgs/` and it appears in the
- * Scene dropdown; nothing else needs touching.
+ * Viewport popover; nothing else needs touching.
  *
  * Bundled through this glob rather than served from `public/`: Vite emits each
  * one under a content hash, so a changed image can't be served stale, and only

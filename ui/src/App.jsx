@@ -9,10 +9,11 @@ import { FileTree } from './FileTree.jsx';
 import { DatabaseList } from './DatabaseList.jsx';
 import { DatabaseViewer, invalidateDbCache, dbDataDir, importDbFolder } from './DatabaseViewer.jsx';
 import { DatabaseManagerModal } from './DatabaseManagerModal.jsx';
-import { ActorsPanel } from './ActorsPanel.jsx';
+import { ScenesPanel } from './ScenesPanel.jsx';
 import { ActorEditorModal } from './ActorEditorModal.jsx';
-import { ActorSetsModal } from './ActorSetsModal.jsx';
-import { loadActorSets, saveActorSet, deleteActorSet, serializeActor } from '../js/actorSets.js';
+import {
+  loadScenes, saveScene, renameScene, deleteScene, nextSceneName, actorsFingerprint, serializeActor,
+} from '../js/scenes.js';
 import { DEFAULT_LIGHT, lightRgb } from '../js/lightUtil.js';
 import { findDbTable } from '../js/database.js';
 import { MenuBar } from './MenuBar.jsx';
@@ -755,13 +756,13 @@ export default function App({ launch = null }) {
   const [fxPreview, setFxPreview] = useState(null); // { genId, title, note, error, ownsScene }
   const fxPreviewTokenRef = useRef(0);
   const [selectedFloor, setSelectedFloor] = useState('');
-  // Scene > Floor Repeat: multiplier on the floor texture's tiling. Persisted,
+  // Viewport > Floor Repeat: multiplier on the floor texture's tiling. Persisted,
   // and re-applied by the renderer whenever a new floor texture is loaded.
   const [floorTileScale, setFloorTileScaleState] = useState(() => {
     const v = parseFloat(localStorage.getItem('floorTileScale'));
     return Number.isFinite(v) ? Math.min(4, Math.max(0.25, v)) : 1;
   });
-  // Scene > Floor Radius / Fade Radius — disc size and soft-edge width.
+  // Viewport > Floor Radius / Fade Radius — disc size and soft-edge width.
   const [floorRadius, setFloorRadiusState] = useState(() => {
     const v = parseFloat(localStorage.getItem('floorRadius'));
     return Number.isFinite(v) ? Math.min(200, Math.max(2, v)) : 42;
@@ -770,7 +771,7 @@ export default function App({ launch = null }) {
     const v = parseFloat(localStorage.getItem('floorFadeRadius'));
     return Number.isFinite(v) ? Math.min(200, Math.max(0, v)) : 30;
   });
-  // Scene > Flat Floor: a plain untextured ground plane, and its colour. Both
+  // Viewport > Flat Floor: a plain untextured ground plane, and its colour. Both
   // persisted; the renderer re-applies them on boot and on every model load.
   const [flatFloor, setFlatFloorState] = useState(
     () => localStorage.getItem('flatFloor') === '1',
@@ -1027,7 +1028,7 @@ export default function App({ launch = null }) {
   const [todPlaying, setTodPlaying] = useState(false);
   const [plcSelected, setPlcSelected] = useState('');       // 'mesh:…' | 'inst:…'
   const [plcOpen, setPlcOpen] = useState(false);
-  // Zone actors (bottom-right › Actors): NPCs / characters placed on the
+  // Zone actors (bottom-right › Scenes): NPCs / characters placed on the
   // terrain. Definitions live here; geometry lives in the renderer (addActor).
   const [zoneActors, setZoneActors] = useState([]);
   const zoneActorsRef = useRef([]);
@@ -1036,13 +1037,13 @@ export default function App({ launch = null }) {
   // point Lock to Actor aims at in a zone. Lives with the actors (not the
   // sequencer draft) so it survives the panel closing and goes with the zone.
   const camLockActorId = zoneActors.find((a) => a.lockTarget)?.id ?? null;
-  const [actorsPanelOpen, setActorsPanelOpen] = useState(false);
+  const [scenesPanelOpen, setScenesPanelOpen] = useState(false);
   // Pointer handlers read this through the ref: endPointerDrag is memoised
   // without the state in its deps, so it captured `false` forever and a click
   // never reached the actor pick.
-  const actorsPanelOpenRef = useRef(false);
-  actorsPanelOpenRef.current = actorsPanelOpen;
-  // Which right-rail panel was last up in a zone ('objects' | 'actors' |
+  const scenesPanelOpenRef = useRef(false);
+  scenesPanelOpenRef.current = scenesPanelOpen;
+  // Which right-rail panel was last up in a zone ('objects' | 'scenes' |
   // 'none'); a zone that loads later in the session opens the same one. Every
   // launch starts at 'none' — both panels stay down until asked for.
   const rightPanelPrefRef = useRef('none');
@@ -1072,11 +1073,12 @@ export default function App({ launch = null }) {
   const actorGizmoDragRef = useRef(null); // { id, axis, mode, lastX, lastY }
   const actorGizmoHoverRef = useRef(null);
   const actorHoverIdRef = useRef(null);      // Actors live selection: hovered actor id
-  // Saved actor sets (Manage Actor Sets): the list, and which set the stage
-  // came from so a re-save updates it instead of adding another.
-  const [actorSetsOpen, setActorSetsOpen] = useState(false);
-  const [actorSets, setActorSets] = useState([]);
-  const [currentActorSet, setCurrentActorSet] = useState(null);
+  // Saved scenes (Zone › Scenes): the list, which one the stage came from
+  // (so Save updates it instead of adding another), and whether the panel
+  // shows the scene list or the open scene's actors.
+  const [scenes, setScenes] = useState(() => loadScenes());
+  const [currentScene, setCurrentScene] = useState(null);
+  const [sceneView, setSceneView] = useState('list');   // 'list' | 'actors'
   // Ctrl+C / Ctrl+V: a copy of the selected actor's definition. The key
   // handler is declared before the paste logic, so it goes through refs.
   const actorClipboardRef = useRef(null);
@@ -4582,7 +4584,7 @@ export default function App({ launch = null }) {
     setSettings((s) => (s ? { ...s, bgColor: hex } : s));
   }, []);
 
-  // Scene > Background Image — store bare filename or 'none'.
+  // Viewport > Background Image — store bare filename or 'none'.
   const [bgImage, setBgImageState] = useState(() => (
     normalizeBgId(localStorage.getItem('bgImage') || 'none')
   ));
@@ -6279,7 +6281,7 @@ export default function App({ launch = null }) {
     setZoneActors((prev) => [...prev, actor]);
     setActorPlacing(null);
     if (lock) {
-      setStatusText('Lock actor placed — Lock to Actor aims at it. Move or remove it from the sequencer or the Actors panel.');
+      setStatusText('Lock actor placed — Lock to Actor aims at it. Move or remove it from the sequencer or the Scenes panel.');
       return;
     }
     setActorEditId(id);
@@ -6385,7 +6387,7 @@ export default function App({ launch = null }) {
 
   // ── Camera Sequencer › actor tracks ────────────────────────────────────────
   //
-  // Actors › Add to Camera Sequence hands an actor to the sequencer as a
+  // The actor editor's Add to Camera Sequence hands an actor to the sequencer as a
   // request: the panel is mounted only while open, so the request opens it
   // and the sequencer picks the actor up (once) on mount / on change.
   const [seqActorAdd, setSeqActorAdd] = useState(null);   // { id, nonce } | null
@@ -6520,8 +6522,8 @@ export default function App({ launch = null }) {
 
   // Panel closed → nothing selected, no gizmo.
   useEffect(() => {
-    if (!actorsPanelOpen) selectActor(null);
-  }, [actorsPanelOpen, selectActor]);
+    if (!scenesPanelOpen) selectActor(null);
+  }, [scenesPanelOpen, selectActor]);
 
   // 1 / 2 / 3: move / rotate / scale gizmo on the selected actor.
   useEffect(() => {
@@ -6534,13 +6536,12 @@ export default function App({ launch = null }) {
         if (k === 'v' && pasteActorRef.current?.()) { e.preventDefault(); return; }
       }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      // Esc: close the actor editor / sets window and drop the selection. A
-      // field inside the editor just loses focus first.
+      // Esc: close the actor editor and drop the selection. A field inside
+      // the editor just loses focus first.
       if (e.key === 'Escape') {
         if (typing) { t.blur?.(); return; }
         let handled = false;
         if (actorEditIdRef.current != null) { setActorEditId(null); handled = true; }
-        setActorSetsOpen((open) => { if (open) handled = true; return false; });
         if (actorSelectedIdRef.current != null) { selectActor(null); handled = true; }
         if (handled) setStatusText('');
         return;
@@ -6559,8 +6560,11 @@ export default function App({ launch = null }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [selectActor]);
 
-  /** Manage Actor Sets › Save / Update: snapshot the stage under `name`. */
-  const saveCurrentActorSet = useCallback((name, setId) => {
+  /**
+   * Scenes › Save (and the actor editor's title-bar save): snapshot the
+   * stage into the scene `setId` under `name`; no id → a new scene.
+   */
+  const saveCurrentScene = useCallback((name, setId) => {
     try {
       const zone = modelInfo?.zone
         ? { name: modelInfo.zone.name || modelInfo.name || '', path: modelInfo.zone.path || '' }
@@ -6570,19 +6574,23 @@ export default function App({ launch = null }) {
         const ra = rendererRef.current?.getActor(a.id);
         const snap = (a.kind === 'pc' && a.id === actorEditIdRef.current && pcNow?.snapshot)
           ? pcNow.snapshot() : a.pcState;
+        // Keep the state record's composer snapshot in step with what was
+        // written, so the unsaved-changes check compares like with like.
+        if (snap && snap !== a.pcState) updateActor(a.id, { pcState: snap });
         return { ...a, frame: ra?.animFrame ?? a.frame ?? 0, pcState: snap ?? a.pcState };
       });
-      const set = saveActorSet({ id: setId, name, zone, actors });
-      setActorSets(loadActorSets());
-      setCurrentActorSet({ id: set.id, name: set.name });
-      setStatusText(`${setId ? 'Updated' : 'Saved'} actor set “${set.name}” (${set.actors.length})`);
+      const set = saveScene({ id: setId, name, zone, actors });
+      setScenes(loadScenes());
+      setCurrentScene({ id: set.id, name: set.name });
+      setSceneView('actors');
+      setStatusText(`${setId ? 'Saved' : 'Created'} scene “${set.name}” (${set.actors.length} actor${set.actors.length === 1 ? '' : 's'})`);
     } catch (e) {
-      setStatusText(`Could not save actor set: ${e?.message ?? e}`);
+      setStatusText(`Could not save scene: ${e?.message ?? e}`);
     }
-  }, [modelInfo?.zone, modelInfo?.name]);
+  }, [modelInfo?.zone, modelInfo?.name, updateActor]);
 
   /**
-   * Bring a saved actor definition (actorSets.js shape) onto the stage: the
+   * Bring a saved actor definition (scenes.js shape) onto the stage: the
    * renderer record, the state record, and the model load if it has one.
    * Returns the new state record, or null for a malformed entry.
    */
@@ -6616,22 +6624,92 @@ export default function App({ launch = null }) {
     return a;
   }, [loadActorEntry]);
 
-  /** Manage Actor Sets › Load: replace the stage with a saved set. */
-  const loadActorSet = useCallback((set) => {
-    const r = rendererRef.current;
-    if (!r || !set) return;
-    r.clearActors();
+  /** Clear the stage: every placed actor, the selection, the editor. */
+  const clearStageActors = useCallback(() => {
+    rendererRef.current?.clearActors();
     actorLoadGenRef.current.clear();
     actorSelectedIdRef.current = null;
     setActorSelectedId(null);
     setActorEditId(null);
     setActorPlacing(null);
     setZoneActors([]);
+    // The ref only catches up on the next render; a save in the same tick
+    // (New Scene) must not snapshot the actors that were just cleared.
+    zoneActorsRef.current = [];
+  }, []);
+
+  /** Scenes › click a scene: replace the stage with its actors. */
+  const loadSceneActors = useCallback((set) => {
+    const r = rendererRef.current;
+    if (!r || !set) return;
+    clearStageActors();
     let n = 0;
     for (const sa of set.actors) if (spawnActorFromSaved(sa)) n++;
-    setCurrentActorSet({ id: set.id, name: set.name });
-    setStatusText(`Loaded actor set “${set.name}” (${n} actor${n === 1 ? '' : 's'})`);
-  }, [spawnActorFromSaved]);
+    setCurrentScene({ id: set.id, name: set.name });
+    setSceneView('actors');
+    setStatusText(`Opened scene “${set.name}” (${n} actor${n === 1 ? '' : 's'})`);
+  }, [spawnActorFromSaved, clearStageActors]);
+
+  /**
+   * Scenes › a row: the scene on stage just goes back to its actors (the
+   * stage is left alone, unsaved edits included); any other scene replaces
+   * the stage. Unsaved changes to the previous scene are dropped — the row's
+   * dot and the Save button flag them before that happens.
+   */
+  const openScene = useCallback((set) => {
+    if (!set) return;
+    if (currentScene?.id === set.id) { setSceneView('actors'); return; }
+    loadSceneActors(set);
+  }, [currentScene?.id, loadSceneActors]);
+
+  /**
+   * Scenes › New Scene: an empty scene, saved straight away so it is in the
+   * list, then its (empty) actor view. Actors that belong to no scene — a
+   * lock actor placed from the sequencer, a paste — are adopted rather than
+   * thrown away; with a scene open the stage starts clean.
+   */
+  const newScene = useCallback(() => {
+    if (currentScene) clearStageActors();
+    saveCurrentScene(nextSceneName(loadScenes()), null);
+  }, [currentScene, clearStageActors, saveCurrentScene]);
+
+  /** Scenes › delete a row. Deleting the scene on stage clears the stage too. */
+  const removeScene = useCallback((set) => {
+    if (!set) return;
+    setScenes(deleteScene(set.id));
+    if (currentScene?.id === set.id) {
+      clearStageActors();
+      setCurrentScene(null);
+      setSceneView('list');
+    }
+    setStatusText(`Deleted scene “${set.name}”`);
+  }, [currentScene?.id, clearStageActors]);
+
+  /** Scenes › close the open scene: take its actors off the stage, keep the scene. */
+  const closeScene = useCallback(() => {
+    const cur = currentScene;
+    if (!cur) return;
+    clearStageActors();
+    setCurrentScene(null);
+    setSceneView('list');
+    setStatusText(`Closed scene “${cur.name}”`);
+  }, [currentScene, clearStageActors]);
+
+  /** Scenes › the name in the actor view's title: rename in place. */
+  const renameCurrentScene = useCallback((name) => {
+    if (!currentScene) return;
+    setScenes(renameScene(currentScene.id, name));
+    setCurrentScene({ id: currentScene.id, name });
+  }, [currentScene]);
+
+  // Unsaved changes: the stage against the scene it came from. The
+  // animation frame is left out — it moves on its own while a clip plays.
+  const sceneDirty = useMemo(() => {
+    if (!currentScene) return false;
+    const saved = scenes.find((s) => s.id === currentScene.id);
+    if (!saved) return zoneActors.length > 0;
+    return actorsFingerprint(zoneActors) !== actorsFingerprint(saved.actors);
+  }, [zoneActors, scenes, currentScene]);
 
   /** Ctrl+C: remember the selected actor; Ctrl+V: place a copy just beside it. */
   const copySelectedActor = useCallback(() => {
@@ -6674,15 +6752,15 @@ export default function App({ launch = null }) {
     actorSelectedIdRef.current = null;
     setActorSelectedId(null);
     actorLoadGenRef.current.clear();
-    setCurrentActorSet(null);
-    setActorSetsOpen(false);
+    setCurrentScene(null);
+    setSceneView('list');
     // A (re)loaded zone puts up whichever panel the user had last time in
     // this session — nothing on a fresh launch.
-    if (zoneActorKey && rightPanelPrefRef.current === 'actors') {
+    if (zoneActorKey && rightPanelPrefRef.current === 'scenes') {
       setPlcOpen(false);
-      setActorsPanelOpen(true);
+      setScenesPanelOpen(true);
     } else {
-      setActorsPanelOpen(false);
+      setScenesPanelOpen(false);
       if (zoneActorKey && rightPanelPrefRef.current === 'none') setPlcOpen(false);
     }
   }, [zoneActorKey]);
@@ -7968,7 +8046,7 @@ export default function App({ launch = null }) {
     }
 
     // Actors live selection: pick the actor under the cursor.
-    if (fromCanvasClick && wasClick && actorPickRef.current && actorsPanelOpenRef.current && modelRef.current?.kind === 'zone') {
+    if (fromCanvasClick && wasClick && actorPickRef.current && scenesPanelOpenRef.current && modelRef.current?.kind === 'zone') {
       const hit = pickActorAt(rendererRef.current, clientX, clientY);
       if (hit) {
         // Select AND open its editor, like the row's edit button.
@@ -8245,13 +8323,13 @@ export default function App({ launch = null }) {
         if (canvas) {
           canvas.style.cursor = axis
             ? (axis.startsWith('r') ? 'grab' : axis === 'u' || axis === 'y' ? 'ns-resize' : 'ew-resize')
-            : ((actorPickRef.current && actorsPanelOpenRef.current) || liveSelectionRef.current ? 'crosshair' : '');
+            : ((actorPickRef.current && scenesPanelOpenRef.current) || liveSelectionRef.current ? 'crosshair' : '');
         }
         if (axis) return;
       }
     }
     // Actors live selection: highlight the actor under the cursor.
-    if (model?.kind === 'zone' && actorPickRef.current && actorsPanelOpenRef.current && !actorPlacingRef.current) {
+    if (model?.kind === 'zone' && actorPickRef.current && scenesPanelOpenRef.current && !actorPlacingRef.current) {
       const r0 = rendererRef.current;
       const hit = pickActorAt(r0, e.clientX, e.clientY);
       const id = hit ? hit.actor.id : null;
@@ -8322,7 +8400,7 @@ export default function App({ launch = null }) {
     <canvas
       id="canvas"
       ref={canvasRef}
-      className={(actorPlacing || (actorPick && actorsPanelOpen) || (liveSelection && (leftView === 'zones' || browserKind === 'zone'))) ? 'live-pick' : undefined}
+      className={(actorPlacing || (actorPick && scenesPanelOpen) || (liveSelection && (leftView === 'zones' || browserKind === 'zone'))) ? 'live-pick' : undefined}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       onPointerMove={onPointerMove}
@@ -8753,8 +8831,20 @@ export default function App({ launch = null }) {
           so taking the panel over would pull the controls out from under it. */}
       {!dataStructOpen && (leftView === 'zones' || browserKind === 'zone') && zonePanel}
 
-      {!dataStructOpen && actorsPanelOpen && modelInfo?.zone && (
-        <ActorsPanel
+      {!dataStructOpen && scenesPanelOpen && modelInfo?.zone && (
+        <ScenesPanel
+          scenes={scenes}
+          current={currentScene}
+          view={sceneView}
+          dirty={sceneDirty}
+          zoneName={modelInfo.zone.name || modelInfo.name || ''}
+          onNewScene={newScene}
+          onOpenScene={openScene}
+          onCloseScene={closeScene}
+          onDeleteScene={removeScene}
+          onBack={() => { setSceneView('list'); setActorPlacing(null); }}
+          onSave={() => { if (currentScene) saveCurrentScene(currentScene.name, currentScene.id); }}
+          onRename={renameCurrentScene}
           actors={zoneActors}
           placing={actorPlacing}
           editingId={actorEditId}
@@ -8763,8 +8853,6 @@ export default function App({ launch = null }) {
           onToggleLiveSelection={toggleActorPick}
           onAddActor={() => { setActorEditId(null); setActorPlacing({ forId: null }); }}
           onCancelPlace={() => setActorPlacing(null)}
-          onManageSets={() => { setActorSets(loadActorSets()); setActorSetsOpen(true); }}
-          onAddToSequence={addActorToSequence}
           onEdit={(id) => { selectActor(id); setActorEditId(id); }}
           onRemove={removeActor}
           onToggleVisible={(id) => {
@@ -8773,7 +8861,7 @@ export default function App({ launch = null }) {
             rendererRef.current?.setActorVisible(id, !a.visible);
             updateActor(id, { visible: !a.visible });
           }}
-          onClose={() => { setActorsPanelOpen(false); setActorPlacing(null); rememberRightPanel('none'); }}
+          onClose={() => { setScenesPanelOpen(false); setActorPlacing(null); rememberRightPanel('none'); }}
         />
       )}
       {editingActor && modelInfo?.zone && (
@@ -8782,13 +8870,15 @@ export default function App({ launch = null }) {
           pc={actorPc}
           zIndex={2150}
           onClose={() => setActorEditId(null)}
-          currentSet={currentActorSet}
+          currentSet={currentScene}
+          sceneDirty={sceneDirty}
           onSaveSet={() => {
-            // Title-bar save: update the loaded set in place; with nothing
-            // loaded, hand over to Manage Actor Sets so the stage gets a name.
-            if (currentActorSet) saveCurrentActorSet(currentActorSet.name, currentActorSet.id);
-            else { setActorSets(loadActorSets()); setActorSetsOpen(true); }
+            // Title-bar save: write the stage into the open scene; actors
+            // that belong to no scene yet (a pasted one, a lock actor placed
+            // from the sequencer) become a new scene.
+            saveCurrentScene(currentScene?.name ?? nextSceneName(scenes), currentScene?.id ?? null);
           }}
+          onAddToSequence={() => addActorToSequence(editingActor.id)}
           onRename={(name) => updateActor(editingActor.id, { name })}
           onKind={(kind) => setActorKind(editingActor.id, kind)}
           onSelectNpc={(entry) => loadActorEntry(editingActor.id, 'npc', entry)}
@@ -8828,22 +8918,6 @@ export default function App({ launch = null }) {
           onUpdate={runDatabaseUpdate}
           onImport={importDatabase}
           onClose={() => setDbManagerOpen(false)}
-        />
-      )}
-      {actorSetsOpen && modelInfo?.zone && (
-        <ActorSetsModal
-          sets={actorSets}
-          current={currentActorSet}
-          actorCount={zoneActors.length}
-          zoneName={modelInfo.zone.name || modelInfo.name || ''}
-          onClose={() => setActorSetsOpen(false)}
-          onSave={saveCurrentActorSet}
-          onLoad={loadActorSet}
-          onDelete={(set) => {
-            setActorSets(deleteActorSet(set.id));
-            if (currentActorSet?.id === set.id) setCurrentActorSet(null);
-            setStatusText(`Deleted actor set “${set.name}”`);
-          }}
         />
       )}
 
@@ -8993,7 +9067,7 @@ export default function App({ launch = null }) {
               {objectGroups && (
                 <>
                   <span className="status-sep">·</span>
-                  <button className="status-link" onClick={() => { setActorsPanelOpen(false); setPlcOpen((v) => { rememberRightPanel(v ? 'none' : 'objects'); return !v; }); }}>
+                  <button className="status-link" onClick={() => { setScenesPanelOpen(false); setPlcOpen((v) => { rememberRightPanel(v ? 'none' : 'objects'); return !v; }); }}>
                     {plcOpen ? 'Hide objects' : 'Objects'}
                   </button>
                 </>
@@ -9004,15 +9078,15 @@ export default function App({ launch = null }) {
                   <button
                     className="status-link"
                     onClick={() => {
-                      setActorsPanelOpen((v) => {
+                      setScenesPanelOpen((v) => {
                         if (!v) setPlcOpen(false);
                         else { setActorPlacing(null); }
-                        rememberRightPanel(v ? 'none' : 'actors');
+                        rememberRightPanel(v ? 'none' : 'scenes');
                         return !v;
                       });
                     }}
                   >
-                    {actorsPanelOpen ? 'Hide actors' : 'Actors'}
+                    {scenesPanelOpen ? 'Hide scenes' : 'Scenes'}
                   </button>
                 </>
               )}
@@ -9057,7 +9131,7 @@ export default function App({ launch = null }) {
               {objectGroups && (
                 <>
                   <span className="status-sep">·</span>
-                  <button className="status-link" onClick={() => { setActorsPanelOpen(false); setPlcOpen((v) => { rememberRightPanel(v ? 'none' : 'objects'); return !v; }); }}>
+                  <button className="status-link" onClick={() => { setScenesPanelOpen(false); setPlcOpen((v) => { rememberRightPanel(v ? 'none' : 'objects'); return !v; }); }}>
                     {plcOpen ? 'Hide objects' : 'Objects'}
                   </button>
                 </>
@@ -9068,15 +9142,15 @@ export default function App({ launch = null }) {
                   <button
                     className="status-link"
                     onClick={() => {
-                      setActorsPanelOpen((v) => {
+                      setScenesPanelOpen((v) => {
                         if (!v) setPlcOpen(false);
                         else { setActorPlacing(null); }
-                        rememberRightPanel(v ? 'none' : 'actors');
+                        rememberRightPanel(v ? 'none' : 'scenes');
                         return !v;
                       });
                     }}
                   >
-                    {actorsPanelOpen ? 'Hide actors' : 'Actors'}
+                    {scenesPanelOpen ? 'Hide scenes' : 'Scenes'}
                   </button>
                 </>
               )}

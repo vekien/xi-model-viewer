@@ -145,8 +145,8 @@ export function WeatherPanel({
         )}
 
         <div className="wx-row wx-bg-row">
-          <span className="wx-bg-label">Scene Background Colour</span>
-          <Tooltip content="Scene background colour" placement="left">
+          <span className="wx-bg-label">Viewport Background Colour</span>
+          <Tooltip content="Viewport background colour" placement="left">
             <input
               type="color"
               className="wx-bg-swatch"

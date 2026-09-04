@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Tooltip } from './Tooltip.jsx';
-import { ScenePanel } from './ScenePanel.jsx';
+import { ViewportPanel } from './ViewportPanel.jsx';
 import { GraphicsPanel } from './GraphicsPanel.jsx';
 
 const MENUS = [
@@ -92,11 +92,11 @@ export function MenuBar({
   effectDistanceScale = 1, onEffectDistanceScale,
 }) {
   const [active, setActive] = useState(null);   // { label, left, top } | null
-  const [scene, setScene] = useState(null);     // { left, top } | null
+  const [viewport, setViewport] = useState(null);     // { left, top } | null
   const [graphics, setGraphics] = useState(null); // { left, top } | null
   const barRef = useRef(null);
   const panelRef = useRef(null);
-  const sceneRef = useRef(null);
+  const viewportRef = useRef(null);
   const gfxRef = useRef(null);
 
   useEffect(() => {
@@ -123,14 +123,14 @@ export function MenuBar({
   );
 
   useEffect(() => {
-    if (!scene) return;
+    if (!viewport) return;
     const close = (e) => {
       if (barRef.current?.contains(e.target)) return;
-      if (sceneRef.current?.contains(e.target)) return;
+      if (viewportRef.current?.contains(e.target)) return;
       if (isComboPortalClick(e.target)) return;
-      setScene(null);
+      setViewport(null);
     };
-    const onKey = (e) => e.key === 'Escape' && setScene(null);
+    const onKey = (e) => e.key === 'Escape' && setViewport(null);
     // pointerdown bubbles before Listbox selects — use capture:false and skip portals
     document.addEventListener('pointerdown', close);
     document.addEventListener('keydown', onKey);
@@ -138,7 +138,7 @@ export function MenuBar({
       document.removeEventListener('pointerdown', close);
       document.removeEventListener('keydown', onKey);
     };
-  }, [scene]);
+  }, [viewport]);
 
   useEffect(() => {
     if (!graphics) return;
@@ -164,19 +164,19 @@ export function MenuBar({
 
   const openMenu = (label, target) => {
     const rect = target.getBoundingClientRect();
-    setScene(null);
+    setViewport(null);
     setGraphics(null);
     onGraphicsOpenChange?.(false);
     setActive({ label, left: rect.left, top: rect.bottom + 10 });
   };
 
-  const toggleScene = (target) => {
-    if (scene) { setScene(null); return; }
+  const toggleViewport = (target) => {
+    if (viewport) { setViewport(null); return; }
     const rect = target.getBoundingClientRect();
     setActive(null);
     setGraphics(null);
     onGraphicsOpenChange?.(false);
-    setScene({ left: rect.left, top: rect.bottom + 10 });
+    setViewport({ left: rect.left, top: rect.bottom + 10 });
   };
 
   const toggleGraphics = (target) => {
@@ -187,7 +187,7 @@ export function MenuBar({
     }
     const rect = target.getBoundingClientRect();
     setActive(null);
-    setScene(null);
+    setViewport(null);
     setGraphics({ left: rect.left, top: rect.bottom + 10 });
     onGraphicsOpenChange?.(true);
   };
@@ -248,7 +248,7 @@ export function MenuBar({
             className="view-tool"
             aria-label="Reload DAT"
             onClick={() => {
-              setActive(null); setScene(null);
+              setActive(null); setViewport(null);
               setGraphics(null); onGraphicsOpenChange?.(false);
               onAction('reload-dat', 'Reload DAT');
             }}
@@ -268,13 +268,13 @@ export function MenuBar({
             <span className="icon">display_settings</span>
           </button>
         </Tooltip>
-        <Tooltip content="Scene — background & floor" placement="bottom">
+        <Tooltip content="Viewport — background & floor" placement="bottom">
           <button
             type="button"
-            className={`view-tool${scene ? ' on' : ''}`}
-            aria-label="Scene"
-            aria-expanded={!!scene}
-            onClick={(e) => toggleScene(e.currentTarget)}
+            className={`view-tool${viewport ? ' on' : ''}`}
+            aria-label="Viewport"
+            aria-expanded={!!viewport}
+            onClick={(e) => toggleViewport(e.currentTarget)}
           >
             <span className="icon">grass</span>
           </button>
@@ -286,7 +286,7 @@ export function MenuBar({
             aria-label="Camera Sequencer"
             aria-expanded={sequencerOpen}
             onClick={() => {
-              setActive(null); setScene(null);
+              setActive(null); setViewport(null);
               setGraphics(null); onGraphicsOpenChange?.(false);
               onAction('camera-sequencer', 'Camera Sequencer');
             }}
@@ -303,14 +303,14 @@ export function MenuBar({
         </Tooltip>
       </div>
 
-      {scene &&
+      {viewport &&
         createPortal(
           <div
             className="menu-panel tool-pop"
-            ref={sceneRef}
-            style={{ position: 'fixed', left: scene.left, top: scene.top }}
+            ref={viewportRef}
+            style={{ position: 'fixed', left: viewport.left, top: viewport.top }}
           >
-            <ScenePanel
+            <ViewportPanel
               bgColor={bgColor}
               onBg={onBgColor}
               bgImage={bgImage}

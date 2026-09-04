@@ -30,7 +30,10 @@ function savePos(p) {
  */
 export function ActorEditorModal({
   actor, pc, onClose, onFocus, zIndex = 2100, initialPos = null,
-  currentSet = null, onSaveSet = null,
+  /** The scene the stage came from (Zone › Scenes); its title-bar Save writes the stage into it. */
+  currentSet = null, sceneDirty = false, onSaveSet = null,
+  /** Camera Sequencer: give this actor a movement track and an animation track. */
+  onAddToSequence = null,
   onRename, onKind, onSelectNpc, onMotion, onPlaying, onLoop,
   frameSink = null, onSeek, onFx,
   gizmoMode = 'move', onGizmoMode, onResetTransform, onLight,
@@ -132,11 +135,28 @@ export function ActorEditorModal({
         <span className="route-count mono">{actor.status === 'loading' ? 'loading…' : actor.label || ''}</span>
         {onSaveSet && (
           <Tooltip
-            content={currentSet ? `Save actor set “${currentSet.name}”` : 'No actor set loaded — save the stage as a new set'}
+            content={currentSet
+              ? `Save scene “${currentSet.name}”${sceneDirty ? ' — there are unsaved changes' : ''}`
+              : 'These actors belong to no scene yet — save them as a new scene'}
             placement="bottom"
           >
-            <button type="button" className="icon-btn modal-tool" onClick={onSaveSet} aria-label="Save actor set">
+            <button
+              type="button"
+              className={`icon-btn modal-tool${sceneDirty || !currentSet ? ' attention' : ''}`}
+              onClick={onSaveSet}
+              aria-label="Save scene"
+            >
               <span className="icon">save</span>
+            </button>
+          </Tooltip>
+        )}
+        {onAddToSequence && (
+          <Tooltip
+            content={`Add ${actor.name} to the Camera Sequencer: record where it stands and which motion it plays along the timeline`}
+            placement="bottom"
+          >
+            <button type="button" className="icon-btn modal-tool" onClick={onAddToSequence} aria-label="Add to Camera Sequence">
+              <span className="icon">movie</span>
             </button>
           </Tooltip>
         )}

@@ -10,9 +10,17 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ## [Unreleased]
 
+### Scenes
+- The Actors panel is now **Scenes** (Zone › Scenes / Hide Scenes). It lists every saved scene; **New Scene** starts an empty one, clicking a scene puts its actors on the stage and opens its actor list, and Save (in the panel title, or in an actor's editor) writes the stage back into it. Rename in place, close (take its actors off the stage) or delete from the list; a dot on the scene and a lit Save button mean unsaved changes. Existing actor sets carry over as scenes
+- **Add to Camera Sequence** moved from the panel into the actor's editor, next to Save in its title bar
+- The Scene popover (background & floor) is now **Viewport**, and the sequencer's weather track is labelled **Weather**, so "scene" only ever means a cast of actors
+
 ### Camera Sequencer
-- **Actors on the timeline** — a new **Add to Camera Sequence** button in the Actors panel (with an actor selected) gives that actor two tracks of its own. **Actor** records where it stands at the playhead (position and rotation — move it with the gizmo and record again for a path, splined or straight like the camera), and **Anim** records the motion its editor is playing, so a take can walk an actor across the zone and switch it from "walk" to "idle" where you say. The route is drawn on the terrain in the actor's lane colour, Stop puts the actor back where it was, and actors come back to a saved sequence by name
+- **Actors on the timeline** — a new **Add to Camera Sequence** button in an actor's editor gives that actor two tracks of its own. **Actor** records where it stands at the playhead (position and rotation — move it with the gizmo and record again for a path, splined or straight like the camera), and **Anim** records the motion its editor is playing, so a take can walk an actor across the zone and switch it from "walk" to "idle" where you say. The route is drawn on the terrain in the actor's lane colour, Stop puts the actor back where it was, and actors come back to a saved sequence by name
 - Sequenced actors' lanes select the actor when clicked; × drops it from the sequence
+- Actors always walk straight lines between their keys; Curve now only shapes the camera path
+- Timeline lanes are labelled in full (Camera Position, Camera Rotation, Animation) and an actor's Animation row lines up under its name
+- Toolbar reshuffle: frame stepping, keyframe delete / clear and the Loop, Curve, Linear rotation, Lock to Actor, Hide UI and Snap toggles sit in the Length row; Place Lock Actor joins the record buttons below the timeline
 
 ---
 
