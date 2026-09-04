@@ -409,25 +409,30 @@ float shadowCascade(
   return shadowPcf(map, vec3(uvz.xy, uvz.z - bias));
 }
 
-// Multiplier to apply to the FINAL lit colour: 1.0 lit, (1 - strength) fully
-// shadowed. \`n\` must be normalized and \`ndl\` is dot(n, sunDir) *unclamped* —
-// back-facing fragments get no sun to begin with, so they return early and
-// never sample a map.
+// How far to pull this fragment from its sun-lit colour towards its colour
+// with the sun removed: 0 lit, 1 fully shadowed (strength already applied).
+// Callers do \`mix(litColour, colourWithoutSun, shade)\`. \`n\` must be
+// normalized and \`ndl\` is dot(n, sunDir) *unclamped* — back-facing fragments
+// get no sun to begin with, so they return early and never sample a map.
 //
-// This deliberately multiplies the finished colour instead of subtracting the
-// sun term before xim's clamp(amb + sun + moon, 0, 1). Outdoor zones author
-// ambient ~0.56 with a full-white sun, so lit terrain saturates at 1.0 and a
-// subtracted sun term mostly vanishes into the clamp — a 60% shadow showed up
-// as a ~16% dip. The smoothstep ramp keeps the physical part: a surface almost
-// edge-on to the sun had little to lose, so it barely darkens.
-float sunShadow(vec3 world, vec3 n, float ndl) {
+// It used to be a multiplier on the FINISHED colour (ambient included), chosen
+// because xim's clamp(amb + sun + moon, 0, 1) saturates lit terrain at 1.0 and
+// hides a partial sun cut. That made a shadowed sun-facing fragment DARKER than
+// the same surface turned away from the sun (which keeps its full ambient), so
+// every terminator — the far side of each fold in a snow bank, the bend of a
+// cliff top — grew a near-black band between the lit face and the ambient-lit
+// back face, cut into wedges by the facets. The n·l ramp that tried to hide it
+// only narrowed the band. Blending towards the sun-less colour instead is
+// continuous through the terminator by construction: as n·l reaches zero both
+// ends of the mix are the same colour.
+float sunShade(vec3 world, vec3 n, float ndl) {
   // Face normal from the position derivatives: constant across a triangle,
   // unlike the interpolated shading normal, so the lookup offset does not
   // wobble with the vertex normals. Taken before any branch — derivatives
   // are only defined in uniform control flow. FFXI winds faces either way,
   // so it is flipped onto the shading normal's side.
   vec3 g = cross(dFdx(world), dFdy(world));
-  if (uShadowParams.x < 0.5 || ndl <= 0.0) return 1.0;
+  if (uShadowParams.x < 0.5 || ndl <= 0.0) return 0.0;
   float g2 = dot(g, g);
   g = g2 > 1e-20 ? g * inversesqrt(g2) : n;
   if (dot(g, n) < 0.0) g = -g;
@@ -455,12 +460,7 @@ float sunShadow(vec3 world, vec3 n, float ndl) {
     }
     lit = near < 0.0 ? far : mix(far, near, w0);
   }
-  // The ramp is narrow on purpose. Any surface the sun barely reaches is
-  // shaded by ambient alone, and ambient is what the multiply darkens — so a
-  // wide ramp made every bump in a shadow that tilted away from the sun glow
-  // against the ground around it. With a low sun (level ground at ndl ~0.4)
-  // the old 0.35 ramp caught nearly every undulation.
-  return 1.0 - uShadowParams.y * (1.0 - lit) * smoothstep(0.0, 0.12, ndl);
+  return uShadowParams.y * (1.0 - lit);
 }
 `;
 
@@ -537,7 +537,9 @@ void main() {
     vec3 amb = vColor.rgb * uAmbient;
     vec3 df0 = vColor.rgb * clamp(ndl, 0.0, 1.0) * uSunColor;
     vec3 df1 = vColor.rgb * clamp(dot(n, uMoonDir), 0.0, 1.0) * uMoonColor;
-    litRgb = clamp(amb + df0 + df1, 0.0, 1.0) * sunShadow(vWorld, n, ndl);
+    // Cast shadow: pull towards the colour with the sun term removed.
+    litRgb = mix(clamp(amb + df0 + df1, 0.0, 1.0), clamp(amb + df1, 0.0, 1.0),
+                 sunShade(vWorld, n, ndl));
     litRgb = clamp(litRgb + pointLighting(vWorld, n, vColor.rgb), 0.0, 1.0) * gain;
   } else if (uSunLit > 0.5) {
     // Shadows on: one directional key from the sun's angle. The camera light
@@ -548,8 +550,9 @@ void main() {
     float ndl = dot(n, uSunDir);
     // Same 0.5..1.15 range as the camera key below, so toggling shadows changes
     // where the light comes from without changing how bright the model reads.
-    float lit = (0.5 + 0.65 * clamp(ndl, 0.0, 1.0)) * gain;
-    litRgb = vColor.rgb * lit * sunShadow(vWorld, n, ndl);
+    // In shadow the key term goes, leaving the 0.5 fill.
+    float lit = 0.5 + 0.65 * clamp(ndl, 0.0, 1.0) * (1.0 - sunShade(vWorld, n, ndl));
+    litRgb = vColor.rgb * lit * gain;
   } else {
     // Entity: camera-relative key light (legacy).
     float nl = length(vNormal);
@@ -635,9 +638,10 @@ void main() {
   vec3 amb = vColor.rgb * uAmbient;
   vec3 df0 = vColor.rgb * clamp(ndl, 0.0, 1.0) * uSunColor;
   vec3 df1 = vColor.rgb * clamp(dot(n, uMoonDir), 0.0, 1.0) * uMoonColor;
-  // Sun shadow only darkens the sun/moon/ambient share; lamps still light
-  // a shadowed patch, which is what makes them worth placing.
-  vec3 lit = clamp(amb + df0 + df1, 0.0, 1.0) * sunShadow(vWorld, n, ndl);
+  // Cast shadow removes the sun term only; ambient and moon stay, and lamps
+  // still light a shadowed patch, which is what makes them worth placing.
+  vec3 lit = mix(clamp(amb + df0 + df1, 0.0, 1.0), clamp(amb + df1, 0.0, 1.0),
+                 sunShade(vWorld, n, ndl));
   lit = clamp(lit + pointLighting(vWorld, n, vColor.rgb), 0.0, 1.0) * max(uLightGain, 0.0);
 
   float alpha = 4.0 * vColor.a * tex.a;
@@ -686,9 +690,10 @@ void main() {
   if (alpha <= 0.002) discard;
 
   // The floor is unlit, so the shadow is the only lighting it has. Its normal
-  // is constant: entity models are raw Y-DOWN DAT space, so "up" is −Y.
+  // is constant: entity models are raw Y-DOWN DAT space, so "up" is −Y. A full
+  // shadow takes it to 40%: the floor has no ambient of its own to fall back to.
   const vec3 n = vec3(0.0, -1.0, 0.0);
-  vec3 rgb = texture(uTexture, vUV).rgb * sunShadow(vWorld, n, dot(n, uSunDir));
+  vec3 rgb = texture(uTexture, vUV).rgb * (1.0 - 0.6 * sunShade(vWorld, n, dot(n, uSunDir)));
   outColor = vec4(rgb, alpha);
 ${FOG_APPLY}
 }
@@ -1011,7 +1016,9 @@ export class Renderer {
     };
     this.showShadows = false;
     this.shadowMapSize = 2048;
-    this.shadowStrength = 0.6;     // how dark a fully shadowed sun term goes
+    // How much of the sun term a full shadow removes. 1 = all of it, so a
+    // shadowed surface matches the same surface turned away from the sun.
+    this.shadowStrength = 1.0;
     // Zone shadow draw distance: the cascade's half-extent in world units, i.e.
     // how far from the camera terrain still receives. Graphics Settings owns it.
     // Entity/creation views ignore it and fit the model's own bounds instead.
