@@ -293,6 +293,20 @@ export const backend = {
     try {
       const buf = await this.readFile(path);
       const bytes = buf instanceof ArrayBuffer ? new Uint8Array(buf) : new Uint8Array(buf);
+  /**
+   * The user's Pictures folder (`C:\\Users\\<you>\\Pictures`). Tauri only —
+   * browser dev has no such notion and returns null.
+   */
+  async picturesDir() {
+    if (!isTauri()) return null;
+    try {
+      const dir = await window.__TAURI__.path.pictureDir();
+      return dir ? String(dir) : null;
+    } catch {
+      return null;
+    }
+  },
+
       return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
     } catch {
       return null;

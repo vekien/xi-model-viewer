@@ -22,6 +22,8 @@ const MENUS = [
   {
     label: 'View',
     items: [
+      { id: 'hide-ui', label: 'Hide UI', icon: 'visibility_off' },
+      { sep: true },
       { id: 'reset-camera', label: 'Reset Camera', icon: 'recenter' },
       { id: 'toggle-explorer', label: 'Toggle Explorer', icon: 'list_alt', check: 'explorer' },
       { id: 'toggle-wasd', label: 'Toggle WASD', icon: 'keyboard', check: 'wasd' },
@@ -292,6 +294,20 @@ export function MenuBar({
             }}
           >
             <span className="icon">movie</span>
+          </button>
+        </Tooltip>
+        <Tooltip content="Screenshot — save the viewport as a PNG" placement="bottom">
+          <button
+            type="button"
+            className="view-tool"
+            aria-label="Screenshot"
+            onClick={() => {
+              setActive(null); setViewport(null);
+              setGraphics(null); onGraphicsOpenChange?.(false);
+              onAction('screenshot', 'Screenshot');
+            }}
+          >
+            <span className="icon">photo_camera</span>
           </button>
         </Tooltip>
         <Tooltip content="Fly speed — scroll the viewport with WASD on to change" placement="bottom">

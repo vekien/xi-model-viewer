@@ -3542,7 +3542,9 @@ input[type='color'] {
    HMR/crash is cleared on Esc or on the window regaining focus (see
    exitCinematicIfStuck), so the recovery never depended on the label. */
 body.cinematic #root > *:not(#canvas),
-body.cinematic > *:not(#root) { display: none !important; }
+body.cinematic > *:not(#root),
+body.ui-hidden #root > *:not(#canvas),
+body.ui-hidden > *:not(#root) { display: none !important; }
 body.cinematic #canvas { cursor: none; }
 
 /* --- Help / About ---------------------------------------------------------- */
@@ -3560,6 +3562,8 @@ body.cinematic #canvas { cursor: none; }
   box-shadow: none;
 }
 .help-title { font-size: 17px; font-weight: 650; letter-spacing: 0.01em; margin: 5px 0; }
+/* View › Hide UI: same blackout as cinematic but the cursor stays (you still
+   orbit/fly), only Esc brings the UI back — never a focus change. */
 .help-badges {
   display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
   margin: 6px 0 8px;

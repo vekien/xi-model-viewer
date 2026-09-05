@@ -541,6 +541,9 @@ export default function App({ launch = null }) {
   const rendererRef = useRef(null);
   const modelRef = useRef(null);
   // Entity (NPC/PC) still on stage after Effects — restore path UI when leaving.
+  // Set by the toolbar Screenshot button; consumed by the render loop right
+  // after the next draw (see frame()).
+  const screenshotPendingRef = useRef(false);
   const lastEntityRef = useRef(null);
   const loadGenRef = useRef(0);       // drop stale async load results
   const overlayGenRef = useRef(0);    // which load gen owns the loading overlay
@@ -703,6 +706,33 @@ export default function App({ launch = null }) {
   const [statusText, setStatusText] = useState('');       // secondary detail/stats
   const [modelPath, setModelPath] = useState('');         // primary path of the loaded model
   const [anims, setAnims] = useState([]);        // grouped: [{ id, clip }]
+
+  /**
+   * Toolbar Screenshot: encode the freshly drawn canvas as PNG and drop it in
+   * `<Pictures>\\xi-model-viewer\\xi-YYYYMMDD-HHMMSS.png` (browser dev, which has
+   * no Pictures folder: `<user data>\\screenshots`). Called from the render loop so
+   * the backbuffer is still populated.
+   */
+  const saveScreenshot = useCallback((canvas) => {
+    if (!canvas) return;
+    const stamp = (() => {
+      const d = new Date();
+      const p2 = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`;
+    })();
+    canvas.toBlob(async (blob) => {
+      if (!blob) { setStatusText('Screenshot failed — could not read the viewport.'); return; }
+      try {
+        const pictures = await backend.picturesDir();
+        const base = String(pictures ?? await backend.userDataDir()).replace(/[\\/]+$/, '');
+        const path = `${base}\\${pictures ? 'xi-model-viewer' : 'screenshots'}\\xi-${stamp}.png`;
+        await backend.writeFile(path, await blob.arrayBuffer());
+        setStatusText(`Screenshot saved — ${path}`);
+      } catch (err) {
+        setStatusText(`Screenshot failed — ${err?.message ?? err}`);
+      }
+    }, 'image/png');
+  }, []);
   const [currentAnim, setCurrentAnim] = useState('');
   // Last picked animation/schedule — restored on launch and kept across gear
   // swaps (the actor reloads, the user's choice shouldn't reset to idle).
@@ -1369,7 +1399,7 @@ export default function App({ launch = null }) {
 
   useEffect(() => {
     // Sequencer HMR / crash can leave body.cinematic on and hide the whole UI.
-    document.body.classList.remove('cinematic');
+    document.body.classList.remove('cinematic', 'ui-hidden');
     const canvas = canvasRef.current;
     // Recover from a runaway backing store (seen at 33M×33M — freezes the tab).
     if (canvas && (canvas.width > 8192 || canvas.height > 8192)) {
@@ -1463,6 +1493,13 @@ export default function App({ launch = null }) {
       renderer.render(dt);
       // The camera owns fly speed and changes it from the wheel, from zone vs
       // entity range presets and from localStorage, so mirror it here rather
+      // Screenshot: the context has no preserveDrawingBuffer, so the pixels
+      // must be read in the same task as the draw — toBlob copies the bitmap
+      // synchronously even though the encode is async.
+      if (screenshotPendingRef.current) {
+        screenshotPendingRef.current = false;
+        saveScreenshot(canvas);
+      }
       // than trying to catch every writer. Only on a change of the rounded
       // value, so this is a handful of updates, not one per frame.
       const speed = Math.round(renderer.camera.flySpeed);
@@ -4154,9 +4191,16 @@ export default function App({ launch = null }) {
       if (uiMenuWindows.length > 0) {
         setUiMenuWindows((prev) => prev.slice(0, -1));
         e.preventDefault();
+    // View › Hide UI: Esc is the only way back (a focus change must not undo it).
+    const exitHiddenUi = () => {
+      if (!document.body.classList.contains('ui-hidden')) return false;
+      document.body.classList.remove('ui-hidden');
+      return true;
+    };
         return;
       }
       if (routeWindows.length > 0) {
+      if (exitHiddenUi()) { e.preventDefault(); return; }
         setRouteWindows((prev) => prev.slice(0, -1));
         e.preventDefault();
         return;
@@ -7576,6 +7620,12 @@ export default function App({ launch = null }) {
           const next = !v;
           try { localStorage.setItem('regionCull', next ? '1' : '0'); } catch { /* quota */ }
           return next;
+      case 'screenshot':
+        screenshotPendingRef.current = true;
+        break;
+      case 'hide-ui':
+        document.body.classList.add('ui-hidden');
+        break;
         });
         break;
       case 'toggle-axes':
