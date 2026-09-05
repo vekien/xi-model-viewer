@@ -95,10 +95,10 @@ export function ImageSpritePanel({
 
       {!minimized && (
         <>
-          <div className="plc-search">
-            <span className="icon">search</span>
+          <div className="list-search-wrap plc-search">
             <input
-              type="search"
+              type="text"
+              className="list-search"
               placeholder="Filter owner / header / offset…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -106,27 +106,29 @@ export function ImageSpritePanel({
             />
           </div>
 
-          <div
-            className="plc-body"
-            tabIndex={0}
-            onMouseDown={(e) => e.currentTarget.focus({ preventScroll: true })}
-            onKeyDown={listArrowHandler(rows, selectedIdx, (s) => onSelect?.(s))}
-          >
-            {rows.length === 0 && (
-              <div className="side-note">
-                {onlySelected && texName
-                  ? `No sprites owned by “${texName}”.`
-                  : 'No sprites match.'}
-              </div>
-            )}
-            {rows.map((s) => (
-              <SpriteRow
-                key={`${s.offset}-${s.index}`}
-                sprite={s}
-                selected={!!selectedSprite && selectedSprite.offset === s.offset}
-                onSelect={onSelect}
-              />
-            ))}
+          <div className="plc-list-shell">
+            <div
+              className="plc-body"
+              tabIndex={0}
+              onMouseDown={(e) => e.currentTarget.focus({ preventScroll: true })}
+              onKeyDown={listArrowHandler(rows, selectedIdx, (s) => onSelect?.(s))}
+            >
+              {rows.length === 0 && (
+                <div className="side-note">
+                  {onlySelected && texName
+                    ? `No sprites owned by “${texName}”.`
+                    : 'No sprites match.'}
+                </div>
+              )}
+              {rows.map((s) => (
+                <SpriteRow
+                  key={`${s.offset}-${s.index}`}
+                  sprite={s}
+                  selected={!!selectedSprite && selectedSprite.offset === s.offset}
+                  onSelect={onSelect}
+                />
+              ))}
+            </div>
           </div>
 
           <div className="side-note plc-foot img-sprite-detail">

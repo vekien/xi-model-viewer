@@ -54,10 +54,10 @@ export function ImageSetPanel({
 
       {!minimized && (
         <>
-          <div className="plc-search">
-            <span className="icon">search</span>
+          <div className="list-search-wrap plc-search">
             <input
-              type="search"
+              type="text"
+              className="list-search"
               placeholder="Filter image set / texture…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -65,48 +65,50 @@ export function ImageSetPanel({
             />
           </div>
 
-          <div
-            className="plc-body"
-            tabIndex={0}
-            onMouseDown={(e) => e.currentTarget.focus({ preventScroll: true })}
-            onKeyDown={listArrowHandler(flat, selectedIdx, (s) => onSelect?.(s))}
-          >
-            {!file && <div className="side-note">No image selected.</div>}
-            {file && sets.length === 0 && <div className="side-note">No image sets in this file.</div>}
-            {sets.length > 0 && flat.length === 0 && (
-              <div className="side-note">No matches for “{query}”.</div>
-            )}
+          <div className="plc-list-shell">
+            <div
+              className="plc-body"
+              tabIndex={0}
+              onMouseDown={(e) => e.currentTarget.focus({ preventScroll: true })}
+              onKeyDown={listArrowHandler(flat, selectedIdx, (s) => onSelect?.(s))}
+            >
+              {!file && <div className="side-note">No image selected.</div>}
+              {file && sets.length === 0 && <div className="side-note">No image sets in this file.</div>}
+              {sets.length > 0 && flat.length === 0 && (
+                <div className="side-note">No matches for “{query}”.</div>
+              )}
 
-            {setRows.length > 0 && (
-              <>
-                <div className="img-section-label">Image sets</div>
-                {setRows.map((s) => (
-                  <SetRow
-                    key={s.raw}
-                    set={s}
-                    selected={!!selected && selected.raw === s.raw}
-                    onSelect={onSelect}
-                  />
-                ))}
-              </>
-            )}
+              {setRows.length > 0 && (
+                <>
+                  <div className="img-section-label">Image sets</div>
+                  {setRows.map((s) => (
+                    <SetRow
+                      key={s.raw}
+                      set={s}
+                      selected={!!selected && selected.raw === s.raw}
+                      onSelect={onSelect}
+                    />
+                  ))}
+                </>
+              )}
 
-            {texRows.length > 0 && (
-              <>
-                <div className="img-section-label">
-                  Textures
-                  <span className="mono-small img-section-meta">in this DAT</span>
-                </div>
-                {texRows.map((s) => (
-                  <SetRow
-                    key={s.raw}
-                    set={s}
-                    selected={!!selected && selected.raw === s.raw}
-                    onSelect={onSelect}
-                  />
-                ))}
-              </>
-            )}
+              {texRows.length > 0 && (
+                <>
+                  <div className="img-section-label">
+                    Textures
+                    <span className="mono-small img-section-meta">in this DAT</span>
+                  </div>
+                  {texRows.map((s) => (
+                    <SetRow
+                      key={s.raw}
+                      set={s}
+                      selected={!!selected && selected.raw === s.raw}
+                      onSelect={onSelect}
+                    />
+                  ))}
+                </>
+              )}
+            </div>
           </div>
 
           <div className="side-note plc-foot">

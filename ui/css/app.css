@@ -261,9 +261,6 @@
   width: 320px;
   height: min(520px, 52vh);
   max-height: calc(100vh - min(340px, 34vh) - 88px);
-  display: flex;
-  flex-direction: column;
-  padding: 0;
   z-index: 26;
   overflow: hidden;
 }
@@ -275,7 +272,9 @@ body:has(#img-sprites) #placements {
   height: min(340px, 34vh);
   max-height: min(340px, 34vh);
 }
-.plc-foot { border-top: 1px solid var(--ring); }
+/* Footer line under the list well; pull it up so the 12px rail gap doesn't
+   double with its own top padding. */
+.plc-foot { flex: 0 0 auto; margin-top: -4px; padding: 0; border-top: none; }
 
 /* Camera group: the icon opens the FOV popover, the number beside it is the
    live fly speed (the same value the status bar reports on a scroll). */
@@ -1066,6 +1065,7 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
 #effect-actors,
 #weather,
 #placements,
+#img-sprites,
 #scenes,
 #details,
 #skeleton {
@@ -1098,6 +1098,7 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
 /* Title rows that also hold tools (weather / objects / details / skeleton) */
 #weather .wx-header,
 #placements .plc-header,
+#img-sprites .plc-header,
 #details .details-header,
 #skeleton .details-header,
 #effect-actors .details-header {
@@ -1111,6 +1112,7 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
 }
 #weather .wx-header > .icon,
 #placements .plc-header > .icon,
+#img-sprites .plc-header > .icon,
 #details .details-header > .icon,
 #skeleton .details-header > .icon,
 #effect-actors .details-header > .icon {
@@ -1136,11 +1138,13 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
   overflow-y: auto;
 }
 /* Objects list shell fills the panel; inner body scrolls. */
-#placements .plc-list-shell {
+#placements .plc-list-shell,
+#img-sprites .plc-list-shell {
   flex: 1 1 auto;
   min-height: 0;
 }
-#placements .plc-body {
+#placements .plc-body,
+#img-sprites .plc-body {
   margin: 0;
   padding: 2px 0 4px !important;
   min-height: 0;
@@ -1797,7 +1801,8 @@ body:has(#weather) #scenes {
 .plc-idx.on-air { color: #5ec8c8; }
 
 /* Objects search reuses .list-search-wrap; no bottom rule (list shell is below). */
-#placements .plc-search {
+#placements .plc-search,
+#img-sprites .plc-search {
   padding: 0;
   border-bottom: none;
 }
