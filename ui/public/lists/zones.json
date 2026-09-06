@@ -3729,13 +3729,15 @@
   {
     "id": 403,
     "name": "403 — Dev Castle Town (Sunny)",
-    "path": "game/ROM10/2/12.DAT",
-    "group": "Dev / XI Modified"
+    "path": "game/ROM10/100/12.DAT",
+    "group": "Dev / XI Modified",
+    "fileId": 84038
   },
   {
     "id": 404,
     "name": "404 — Dev Town — windmill + bridge (Sunny)",
-    "path": "game/ROM10/2/16.DAT",
-    "group": "Dev / XI Modified"
+    "path": "game/ROM10/100/32.DAT",
+    "group": "Dev / XI Modified",
+    "fileId": 84039
   }
 ]
