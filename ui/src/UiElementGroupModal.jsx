@@ -231,13 +231,17 @@ export function UiElementGroupModal({
                 label="Dest BR"
                 tip="Destination bottom-right on screen. With Dest TL, defines the on-screen quad (move/scale without changing the texture crop)."
               />
+              <ThTip
+                label="Dest W×H"
+                tip="On-screen size of the drawn quad: Dest BR − Dest TL. Differs from Src W×H when the sprite is scaled."
+              />
               <ThTip label="Offset" tip="Byte offset of this sprite record in the DAT." />
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={9} className="zdef-empty">No sprites match</td>
+                <td colSpan={10} className="zdef-empty">No sprites match</td>
               </tr>
             )}
             {rows.map((s) => (
@@ -247,9 +251,10 @@ export function UiElementGroupModal({
                 <td className="mono">{s.header}</td>
                 <td className="mono">{s.parent || '—'}</td>
                 <td className="mono">{s.src.w}×{s.src.h}</td>
-                <td className="mono">({s.src.x},{s.src.y})</td>
-                <td className="mono">({s.dest.x0},{s.dest.y0})</td>
-                <td className="mono">({s.dest.x3},{s.dest.y3})</td>
+                <td className="mono">{s.src.x}, {s.src.y}</td>
+                <td className="mono">{s.dest.x0}, {s.dest.y0}</td>
+                <td className="mono">{s.dest.x3}, {s.dest.y3}</td>
+                <td className="mono">{s.dest.x3 - s.dest.x0}×{s.dest.y3 - s.dest.y0}</td>
                 <td className="mono">0x{(s.offset >>> 0).toString(16)}</td>
               </tr>
             ))}

@@ -84,6 +84,7 @@
   --muted: var(--gray-400);
   --accent: #4da3ff;
   --accent-deep: #2f7fdb;
+  --yellow: #e8c34a;
 
   --panel: rgba(22, 24, 27, 0.82);
   --ring: rgba(255, 255, 255, 0.09);

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@headlessui/react';
 import { backend } from '../js/backend.js';
+import { clampUiScale } from '../js/uiScale.js';
 import { gameCandidates, normRel, pathKey, relFromAbs } from '../js/gamePath.js';
 import { battleSkirtPath } from '../js/pclists.js';
 import { animDisplayName, groupAnimations, matchAnimRef, mergeModels, parseEntity, resolveScheduleClip } from '../js/dat.js';
@@ -358,6 +359,7 @@ const loadSettings = (gamePath) => {
     autoFocusZoneObject: localStorage.getItem('autoFocusZoneObject') !== '0',
     closeDatNotesOnSave: localStorage.getItem('closeDatNotesOnSave') === '1',
     dayLength: clampDayLength(localStorage.getItem('dayLength')),
+    uiScale: clampUiScale(localStorage.getItem('uiScale')),
     reframeOnSelect: localStorage.getItem('reframeOnSelect') === '1',
     showXiConsole: localStorage.getItem('showXiConsole') !== '0',
     autoCloseXiConsole: localStorage.getItem('autoCloseXiConsole') === '1',
@@ -539,11 +541,16 @@ export default function App({ launch = null }) {
 
   const canvasRef = useRef(null);
   const rendererRef = useRef(null);
-  const modelRef = useRef(null);
-  // Entity (NPC/PC) still on stage after Effects — restore path UI when leaving.
   // Set by the toolbar Screenshot button; consumed by the render loop right
   // after the next draw (see frame()).
   const screenshotPendingRef = useRef(false);
+  // Bumps once per shot; keys the edge-flash overlay so a fresh one animates.
+  const [shotFlash, setShotFlash] = useState(0);
+  // Last saved screenshot path; the status bar shows it as a link that reveals
+  // the file in Explorer for as long as the saved message is still up.
+  const [shotSaved, setShotSaved] = useState('');
+  const modelRef = useRef(null);
+  // Entity (NPC/PC) still on stage after Effects — restore path UI when leaving.
   const lastEntityRef = useRef(null);
   const loadGenRef = useRef(0);       // drop stale async load results
   const overlayGenRef = useRef(0);    // which load gen owns the loading overlay
@@ -704,8 +711,6 @@ export default function App({ launch = null }) {
   // Left explorer panel (zones/files/…); toolbar toggle, persisted.
   const [explorerOpen, setExplorerOpen] = useState(() => localStorage.getItem('explorer') !== '0');
   const [statusText, setStatusText] = useState('');       // secondary detail/stats
-  const [modelPath, setModelPath] = useState('');         // primary path of the loaded model
-  const [anims, setAnims] = useState([]);        // grouped: [{ id, clip }]
 
   /**
    * Toolbar Screenshot: encode the freshly drawn canvas as PNG and drop it in
@@ -727,12 +732,15 @@ export default function App({ launch = null }) {
         const base = String(pictures ?? await backend.userDataDir()).replace(/[\\/]+$/, '');
         const path = `${base}\\${pictures ? 'xi-model-viewer' : 'screenshots'}\\xi-${stamp}.png`;
         await backend.writeFile(path, await blob.arrayBuffer());
+        setShotSaved(path);
         setStatusText(`Screenshot saved — ${path}`);
       } catch (err) {
         setStatusText(`Screenshot failed — ${err?.message ?? err}`);
       }
     }, 'image/png');
   }, []);
+  const [modelPath, setModelPath] = useState('');         // primary path of the loaded model
+  const [anims, setAnims] = useState([]);        // grouped: [{ id, clip }]
   const [currentAnim, setCurrentAnim] = useState('');
   // Last picked animation/schedule — restored on launch and kept across gear
   // swaps (the actor reloads, the user's choice shouldn't reset to idle).
@@ -1491,8 +1499,6 @@ export default function App({ launch = null }) {
       if (!renderer.camera.sequenceLock) renderer.camera.rollUpdate?.(dt, heldKeys.current);
       if (now - lastRegionCheck > 150) { lastRegionCheck = now; updateRegions(); }
       renderer.render(dt);
-      // The camera owns fly speed and changes it from the wheel, from zone vs
-      // entity range presets and from localStorage, so mirror it here rather
       // Screenshot: the context has no preserveDrawingBuffer, so the pixels
       // must be read in the same task as the draw — toBlob copies the bitmap
       // synchronously even though the encode is async.
@@ -1500,6 +1506,8 @@ export default function App({ launch = null }) {
         screenshotPendingRef.current = false;
         saveScreenshot(canvas);
       }
+      // The camera owns fly speed and changes it from the wheel, from zone vs
+      // entity range presets and from localStorage, so mirror it here rather
       // than trying to catch every writer. Only on a change of the rounded
       // value, so this is a handful of updates, not one per frame.
       const speed = Math.round(renderer.camera.flySpeed);
@@ -1694,6 +1702,35 @@ export default function App({ launch = null }) {
   useEffect(() => {
     if (settings && rendererRef.current) rendererRef.current.setClearColor(settings.bgColor);
   }, [settings]);
+
+  useEffect(() => {
+    if (settings) backend.setUiScale(clampUiScale(settings.uiScale));
+  }, [settings?.uiScale]);
+
+  // Ctrl +/- / Ctrl 0 zoom the UI like a browser, writing through to the same
+  // setting the Options slider edits so the two never disagree.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      let next;
+      const cur = clampUiScale(settingsRef.current?.uiScale);
+      if (e.key === '=' || e.key === '+' || e.code === 'NumpadAdd') next = cur + 0.1;
+      else if (e.key === '-' || e.code === 'NumpadSubtract') next = cur - 0.1;
+      else if (e.key === '0' || e.code === 'Numpad0') next = 1;
+      else return;
+      e.preventDefault();
+      next = clampUiScale(next);
+      if (next === cur) return;
+      try { localStorage.setItem('uiScale', String(next)); } catch { /* quota */ }
+      setSettings((prev) => {
+        const out = { ...(prev || {}), uiScale: next };
+        settingsRef.current = out;
+        return out;
+      });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // --- model loading -------------------------------------------------------
 
@@ -4067,7 +4104,11 @@ export default function App({ launch = null }) {
         } catch { /* stale path or corrupt entry */ }
 
         if (lastZone) {
-          setLeftView('zones');
+          // A zone opened from the DAT Browser is hosted in-place there via
+          // browserKind; only send the user to Assets > Zones if that is where
+          // they were. Reloading used to yank DAT Browser sessions to Zones.
+          if (restoredView === 'files') setBrowserKind('zone');
+          else setLeftView('zones');
           await loadZone(lastZone);
           // Restoring a zone on launch puts you back in a walkable world, so
           // give the fly controls back — loadZone only auto-enables them for a
@@ -4156,9 +4197,16 @@ export default function App({ launch = null }) {
       document.body.classList.remove('cinematic');
       return true;
     };
+    // View › Hide UI: Esc is the only way back (a focus change must not undo it).
+    const exitHiddenUi = () => {
+      if (!document.body.classList.contains('ui-hidden')) return false;
+      document.body.classList.remove('ui-hidden');
+      return true;
+    };
     const onKey = (e) => {
       if (e.key !== 'Escape') return;
       if (exitCinematicIfStuck()) { e.preventDefault(); return; }
+      if (exitHiddenUi()) { e.preventDefault(); return; }
       if (batchOpen) {
         if (!batchRunningRef.current) setBatchOpen(false);
         e.preventDefault();
@@ -4191,16 +4239,9 @@ export default function App({ launch = null }) {
       if (uiMenuWindows.length > 0) {
         setUiMenuWindows((prev) => prev.slice(0, -1));
         e.preventDefault();
-    // View › Hide UI: Esc is the only way back (a focus change must not undo it).
-    const exitHiddenUi = () => {
-      if (!document.body.classList.contains('ui-hidden')) return false;
-      document.body.classList.remove('ui-hidden');
-      return true;
-    };
         return;
       }
       if (routeWindows.length > 0) {
-      if (exitHiddenUi()) { e.preventDefault(); return; }
         setRouteWindows((prev) => prev.slice(0, -1));
         e.preventDefault();
         return;
@@ -6826,6 +6867,7 @@ export default function App({ launch = null }) {
     if (!abs) return;
     pendingBrowserFileRef.current = abs;
     setLeftView('files');
+    setExplorerOpen(true);
   }, [setLeftView]);
 
   /**
@@ -7243,6 +7285,7 @@ export default function App({ launch = null }) {
       localStorage.setItem('autoFocusZoneObject', draft.autoFocusZoneObject === false ? '0' : '1');
       localStorage.setItem('closeDatNotesOnSave', draft.closeDatNotesOnSave ? '1' : '0');
       localStorage.setItem('dayLength', String(clampDayLength(draft.dayLength)));
+      localStorage.setItem('uiScale', String(clampUiScale(draft.uiScale)));
       localStorage.setItem('reframeOnSelect', draft.reframeOnSelect ? '1' : '0');
       localStorage.setItem('showXiConsole', draft.showXiConsole === false ? '0' : '1');
       localStorage.setItem('autoCloseXiConsole', draft.autoCloseXiConsole ? '1' : '0');
@@ -7267,6 +7310,7 @@ export default function App({ launch = null }) {
       autoFocusZoneObject: draft.autoFocusZoneObject !== false,
       closeDatNotesOnSave: !!draft.closeDatNotesOnSave,
       dayLength: clampDayLength(draft.dayLength),
+      uiScale: clampUiScale(draft.uiScale),
       reframeOnSelect: !!draft.reframeOnSelect,
       showXiConsole: draft.showXiConsole !== false,
       autoCloseXiConsole: !!draft.autoCloseXiConsole,
@@ -7582,6 +7626,14 @@ export default function App({ launch = null }) {
       case 'camera-sequencer':
         setSequencerOpen((v) => !v);
         break;
+      case 'screenshot':
+        screenshotPendingRef.current = true;
+        setShotFlash((n) => n + 1);
+        setStatusText('Saving screenshot…');
+        break;
+      case 'hide-ui':
+        document.body.classList.add('ui-hidden');
+        break;
       case 'toggle-explorer':
         setExplorerOpen((v) => !v);
         break;
@@ -7620,12 +7672,6 @@ export default function App({ launch = null }) {
           const next = !v;
           try { localStorage.setItem('regionCull', next ? '1' : '0'); } catch { /* quota */ }
           return next;
-      case 'screenshot':
-        screenshotPendingRef.current = true;
-        break;
-      case 'hide-ui':
-        document.body.classList.add('ui-hidden');
-        break;
         });
         break;
       case 'toggle-axes':
@@ -7642,11 +7688,15 @@ export default function App({ launch = null }) {
           return next;
         });
         break;
+      // DAT Browser and Database are driven from the explorer panel, so make
+      // sure it is showing when switching to either.
       case 'assets-files':
         setLeftView('files');
+        setExplorerOpen(true);
         break;
       case 'assets-database':
         setLeftView('database');
+        setExplorerOpen(true);
         break;
       case 'database-manager':
         setDbManagerOpen(true);
@@ -7688,6 +7738,7 @@ export default function App({ launch = null }) {
             // Switch view first so cleanup finishes, then open the file.
             pendingBrowserFileRef.current = file;
             setLeftView('files');
+            setExplorerOpen(true);
           })
           .catch((err) => setStatusText(`Open DAT failed: ${err.message ?? err}`));
         break;
@@ -8532,7 +8583,7 @@ export default function App({ launch = null }) {
         <SettingsModal
           open={settingsOpen}
           initial={{
-            ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, navmeshPath: '', bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, autoFocusZoneObject: true, closeDatNotesOnSave: false, dayLength: DAY_LENGTH_DEFAULT, reframeOnSelect: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
+            ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, navmeshPath: '', bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, autoFocusZoneObject: true, closeDatNotesOnSave: false, dayLength: DAY_LENGTH_DEFAULT, uiScale: 1, reframeOnSelect: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
             showGrid,
             showAxes,
           }}
@@ -9106,6 +9157,12 @@ export default function App({ launch = null }) {
         )}
       </div>
 
+      {/* Screenshot feedback: a brief flash around the screen edges. Keyed so a
+          second shot mid-fade restarts it; removed once the animation ends. */}
+      {shotFlash > 0 && (
+        <div key={shotFlash} className="shot-flash" aria-hidden="true" onAnimationEnd={() => setShotFlash(0)} />
+      )}
+
       {/* Right floating bar: live status + panel toggles */}
       <div id="status" className="panel mono">
         <span className="hints">
@@ -9113,7 +9170,22 @@ export default function App({ launch = null }) {
             `${player.playing ? 'playing' : 'paused'}: ${player.current.name ?? `music${player.current.num?.padStart(3, '0')}`}`
           ) : statusText ? (
             <>
-              <span>{statusText}</span>
+              {shotSaved && statusText === `Screenshot saved — ${shotSaved}` ? (
+                <span>
+                  Screenshot saved —{' '}
+                  <Tooltip content="Show in Explorer" placement="top">
+                    <button
+                      type="button"
+                      className="status-link"
+                      onClick={() => backend.revealPath(shotSaved).catch((err) => setStatusText(`Could not show in Explorer: ${err?.message ?? err}`))}
+                    >
+                      {shotSaved}
+                    </button>
+                  </Tooltip>
+                </span>
+              ) : (
+                <span>{statusText}</span>
+              )}
               {objectGroups && (
                 <>
                   <span className="status-sep">·</span>
@@ -9456,7 +9528,7 @@ export default function App({ launch = null }) {
       <SettingsModal
         open={settingsOpen}
         initial={{
-          ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, navmeshPath: '', bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, autoFocusZoneObject: true, closeDatNotesOnSave: false, dayLength: DAY_LENGTH_DEFAULT, reframeOnSelect: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
+          ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, navmeshPath: '', bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, autoFocusZoneObject: true, closeDatNotesOnSave: false, dayLength: DAY_LENGTH_DEFAULT, uiScale: 1, reframeOnSelect: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
           showGrid,
           showAxes,
         }}

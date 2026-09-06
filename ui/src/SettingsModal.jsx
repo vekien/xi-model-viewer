@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Checkbox, Field, Label } from '@headlessui/react';
 import { backend } from '../js/backend.js';
+import { clampUiScale, sliderToUiScale, uiScaleToSlider } from '../js/uiScale.js';
 import { loadNotes, notesFilePath, revealNotesFile } from '../js/notes.js';
 import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
@@ -37,6 +38,12 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
   const dragState = useRef(null);
   const setupGen = useRef(0);
   const unlistenRef = useRef([]);
+
+  // Slider previews live; Cancel/backdrop/× put the saved scale back.
+  const cancel = useCallback(() => {
+    backend.setUiScale(clampUiScale(initial?.uiScale));
+    onClose();
+  }, [initial?.uiScale, onClose]);
 
   const detachProgress = useCallback(() => {
     for (const u of unlistenRef.current) {
@@ -348,7 +355,7 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
   const toolsBadge = toolsUiBadge(tools, toolsBusy);
 
   return (
-    <div className="modal-backdrop" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="modal-backdrop" onPointerDown={(e) => { if (e.target === e.currentTarget) cancel(); }}>
       <div className="modal settings-modal" ref={panelRef} style={style}>
         <div
           className="modal-header"
@@ -359,7 +366,7 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
           <span className="icon">settings</span>
           <span className="modal-title">Settings</span>
           <Tooltip content="Close">
-            <Button className="icon-btn modal-close" onClick={onClose}>
+            <Button className="icon-btn modal-close" onClick={cancel}>
               <span className="icon">close</span>
             </Button>
           </Tooltip>
@@ -582,6 +589,37 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
                   </div>
 
                   <div className="form-row">
+                    <label className="form-label">UI Scale</label>
+                    <div className="form-inline ui-scale-row">
+                      <input
+                        type="range"
+                        className="vol-slider"
+                        min={-100}
+                        max={100}
+                        step={1}
+                        value={uiScaleToSlider(draft.uiScale)}
+                        style={{ '--fill': `${(uiScaleToSlider(draft.uiScale) + 100) / 2}%` }}
+                        aria-label="UI scale"
+                        title="Double-click to reset to 100%"
+                        onChange={(e) => setDraft({ ...draft, uiScale: sliderToUiScale(e.target.value) })}
+                        // Apply on release only — zooming mid-drag moves the
+                        // slider out from under the pointer.
+                        onPointerUp={(e) => backend.setUiScale(sliderToUiScale(e.currentTarget.value))}
+                        onKeyUp={(e) => backend.setUiScale(sliderToUiScale(e.currentTarget.value))}
+                        onDoubleClick={() => {
+                          setDraft({ ...draft, uiScale: 1 });
+                          backend.setUiScale(1);
+                        }}
+                      />
+                      <span className="mono ui-scale-num">{Math.round(clampUiScale(draft.uiScale) * 100)}%</span>
+                    </div>
+                    <div className="form-hint">
+                      Zoom the whole window, 20% – 200% in 5% steps. Centre is 100%; double-click to reset.
+                      Ctrl +/− and Ctrl 0 also work anywhere.
+                    </div>
+                  </div>
+
+                  <div className="form-row">
                     <Field className="check-field">
                       <Checkbox
                         checked={!!draft.closeDatNotesOnSave}
@@ -776,7 +814,7 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
         </div>
 
         <div className="modal-actions">
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={cancel}>Cancel</Button>
           <Button className="active" onClick={() => onSave({
             ...draft,
             // Prefer the active tools dir when the field is empty

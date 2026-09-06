@@ -12,6 +12,22 @@ async function tauriInvoke(cmd, args) {
 }
 
 export const backend = {
+  /**
+   * Scale the whole UI (1 = 100%). In Tauri this is real webview zoom — same as
+   * Ctrl+/- in a browser, so canvas hit-testing stays exact. Browser dev mode
+   * falls back to CSS zoom on the root.
+   */
+  async setUiScale(scale) {
+    const z = Number(scale) || 1;
+    if (isTauri()) {
+      const wv = window.__TAURI__?.webview?.getCurrentWebview?.();
+      if (wv?.setZoom) {
+        try { await wv.setZoom(z); return; } catch { /* fall through */ }
+      }
+    }
+    document.documentElement.style.zoom = z === 1 ? '' : String(z);
+  },
+
   async listDir(path) {
     if (isTauri()) return tauriInvoke('list_dir', { path });
     const res = await fetch(`/fs/list?path=${encodeURIComponent(path)}`);
@@ -278,6 +294,20 @@ export const backend = {
   },
 
   /**
+   * The user's Pictures folder (`C:\\Users\\<you>\\Pictures`). Tauri only —
+   * browser dev has no such notion and returns null.
+   */
+  async picturesDir() {
+    if (!isTauri()) return null;
+    try {
+      const dir = await window.__TAURI__.path.pictureDir();
+      return dir ? String(dir) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
    * Persistent user data folder (`%LOCALAPPDATA%\\XiModelViewer`).
    * Browser dev: `.user-data` at the repo root.
    */
@@ -293,20 +323,6 @@ export const backend = {
     try {
       const buf = await this.readFile(path);
       const bytes = buf instanceof ArrayBuffer ? new Uint8Array(buf) : new Uint8Array(buf);
-  /**
-   * The user's Pictures folder (`C:\\Users\\<you>\\Pictures`). Tauri only —
-   * browser dev has no such notion and returns null.
-   */
-  async picturesDir() {
-    if (!isTauri()) return null;
-    try {
-      const dir = await window.__TAURI__.path.pictureDir();
-      return dir ? String(dir) : null;
-    } catch {
-      return null;
-    }
-  },
-
       return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
     } catch {
       return null;

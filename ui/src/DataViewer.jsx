@@ -293,7 +293,6 @@ function StructureToolbar({
       )}
       {hasSearch && (
         <div className="data-struct-search">
-          <span className="icon">search</span>
           <input
             className="list-search"
             type="search"

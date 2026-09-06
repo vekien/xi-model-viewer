@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Tooltip } from './Tooltip.jsx';
 import { listArrowHandler, useScrollIntoView } from './useListArrows.js';
 import { spritesForTexture } from '../js/images.js';
@@ -177,18 +177,23 @@ function SpriteRow({ sprite: s, selected, onSelect }) {
 function formatSpriteDetail(s) {
   const d = s.dest;
   const r = s.src;
+  const rows = [
+    ['Offset', `0x${s.offset.toString(16)}`, 'offset'],
+    ['Owner', s.owner || '—'],
+    ['Parent', s.parent || '—'],
+    ['Src W×H', `${r.w}×${r.h}`],
+    ['Src pos', `${r.x}, ${r.y}`],
+    ['Dest W×H', `${d.x3 - d.x0}×${d.y3 - d.y0}`],
+    ['Dest pos', `${d.x0}, ${d.y0} – ${d.x3}, ${d.y3}`],
+  ];
   return (
-    <>
-      <div>
-        <span className="mono-small">@{`0x${s.offset.toString(16)}`}</span>
-        {' · '}owner <b>{s.owner}</b>
-        {s.parent ? <> · parent <b>{s.parent}</b></> : null}
-      </div>
-      <div className="mono-small">
-        dest ({d.x0},{d.y0})–({d.x3},{d.y3})
-        {' · '}
-        src {r.w}×{r.h} @ ({r.x},{r.y})
-      </div>
-    </>
+    <div className="img-sprite-kv">
+      {rows.map(([k, v, cls]) => (
+        <Fragment key={k}>
+          <span className="img-sprite-k">{k}</span>
+          <span className={`img-sprite-v mono-small${cls ? ` ${cls}` : ''}`}>{v}</span>
+        </Fragment>
+      ))}
+    </div>
   );
 }

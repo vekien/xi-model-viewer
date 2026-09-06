@@ -10,6 +10,7 @@
     "core:event:allow-unlisten",
     "core:event:allow-emit",
     "core:window:default",
+    "core:webview:allow-set-webview-zoom",
     "core:app:default",
     "core:path:default",
     "core:resources:default",
