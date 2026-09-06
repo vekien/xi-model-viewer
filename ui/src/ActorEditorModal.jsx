@@ -4,6 +4,7 @@ import { Combo } from './Combo.jsx';
 import { NpcList } from './NpcList.jsx';
 import { EffectPcStrip } from './EffectActorsPanel.jsx';
 import { Tooltip } from './Tooltip.jsx';
+import { animDisplayName } from '../js/dat.js';
 import { DEFAULT_LIGHT, kelvinToRgb01, rgb01ToHex } from '../js/lightUtil.js';
 
 // Where the editor was last dragged to — it unmounts on close, so the
@@ -80,7 +81,13 @@ export function ActorEditorModal({
 
   if (!actor) return null;
 
-  const motionValue = actor.pack && actor.motion?.kind === 'anim' && (actor.packs ?? []).some((p) => p.path === actor.pack)
+  // The combo shows the Special only while one of ITS clips is the motion
+  // (same test as App's armActorFx) — the pack stays loaded when the user
+  // picks a plain clip like btl, and that pick must not read back as the pack.
+  const packActive = actor.pack && actor.motion?.kind === 'anim'
+    && (actor.packs ?? []).some((p) => p.path === actor.pack
+      && (p.clips ?? []).some((c) => animDisplayName(c) === actor.motion.id));
+  const motionValue = packActive
     ? `pack:${actor.pack}`
     : actor.motion ? `${actor.motion.kind}:${actor.motion.id}` : '';
 
