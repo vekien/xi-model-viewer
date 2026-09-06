@@ -9,7 +9,12 @@ import {
 // Working draft is intentionally NOT restored on open — a leftover camSeq used
 // to auto-paint the last flythrough on the zone whenever the panel mounted.
 // Named sequences live in the library and load only via the Load control.
-const LIB_KEY = 'camSeqLibrary';    // { [name]: doc } — saved sequences
+// { [key]: doc }: saved sequences. A doc's `zone` is where it was saved
+// ({ name, path } in a zone, null outside one, absent on older saves) and the
+// Load list shows only the ones from the current place — camera paths are
+// zone-local. Keys are zone-qualified (see libKey) so the same name can be
+// reused in another zone; older saves are keyed by bare name.
+const LIB_KEY = 'camSeqLibrary';
 const POS_KEY = 'camSeqPanelPos';
 const SIZE_KEY = 'camSeqPanelSize';
 const LEGACY_DOC_KEY = 'camSeq';     // old auto-restored draft — cleared once
@@ -153,6 +158,24 @@ function toDoc(raw) {
   };
 }
 
+/** Library key for `name` saved in `zone` — zone-qualified so names can repeat across zones. */
+function libKey(zone, name) {
+  return zone ? `${zone.path || zone.name || ''}::${name}` : name;
+}
+
+/**
+ * Does a saved sequence belong in the current place? Older saves (no `zone`
+ * field) show everywhere; saves from outside a zone only outside one; zone
+ * saves match by DAT path, else by name.
+ */
+function seqZoneMatches(docZone, zone) {
+  if (docZone === undefined) return true;
+  if (!docZone) return !zone;
+  if (!zone) return false;
+  if (zone.path && docZone.path) return docZone.path === zone.path;
+  return !!zone.name && docZone.name === zone.name;
+}
+
 /** Evenly spaced second ticks across the ruler, snapped to a readable interval. */
 function rulerTicks(totalFrames, fps, zoom = 1) {
   const dur = totalFrames / fps;
@@ -195,6 +218,8 @@ export function CameraSequencer({
   onStopActor,
   /** Zone lock actor (Place Lock Actor): see actorTarget. */
   zoneLoaded = false,
+  /** The zone on stage ({ name, path }) or null — saved sequences are listed per zone. */
+  zone = null,
   lockActorId = null,
   lockActorPlacing = false,
   onPlaceLockActor,
@@ -976,10 +1001,29 @@ export function CameraSequencer({
 
   // --- saved sequences ------------------------------------------------------
 
+  // Only the sequences saved here: [{ key, name }], by name. `zone` is a fresh
+  // object every App render, so the memo keys on its fields.
+  const inZone = !!zone;
+  const zoneName = zone?.name ?? '';
+  const zonePath = zone?.path ?? '';
+  const visibleSaved = useMemo(() => {
+    const here = inZone ? { name: zoneName, path: zonePath } : null;
+    return Object.entries(library)
+      .filter(([, d]) => seqZoneMatches(d?.zone, here))
+      .map(([key, d]) => ({ key, name: String(d?.name || key) }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [library, inZone, zoneName, zonePath]);
+  const savedByName = (n) => visibleSaved.find((e) => e.name === n) ?? null;
+
   const saveAs = () => {
-    const key = name.trim();
-    if (!key) return;
-    const next = { ...library, [key]: { ...doc, name: key } };
+    const seqName = name.trim();
+    if (!seqName) return;
+    const here = zone ? { name: zone.name || '', path: zone.path || '' } : null;
+    const next = { ...library };
+    // Overwrite the one of this name shown here, whatever key it sits under.
+    const prev = savedByName(seqName);
+    if (prev) delete next[prev.key];
+    next[libKey(here, seqName)] = { ...doc, name: seqName, zone: here };
     setLibrary(next);
     writeJson(LIB_KEY, next);
   };
@@ -990,17 +1034,17 @@ export function CameraSequencer({
     if (playing) stop(true);
     const loaded = toDoc(raw);
     setDoc(loaded);
-    setName(key);
+    setName(String(raw.name || key));
     setSelected([]);
     frameRef.current = 0;
     setFrame(0);
   };
 
   const removeSaved = () => {
-    const key = name.trim();
-    if (!library[key]) return;
+    const entry = savedByName(name.trim());
+    if (!entry) return;
     const next = { ...library };
-    delete next[key];
+    delete next[entry.key];
     setLibrary(next);
     writeJson(LIB_KEY, next);
   };
@@ -1084,7 +1128,7 @@ export function CameraSequencer({
 
   // --- render ---------------------------------------------------------------
 
-  const savedNames = Object.keys(library).sort((a, b) => a.localeCompare(b));
+  const savedNames = visibleSaved.map((e) => e.name);
   const ticks = rulerTicks(totalFrames, fps, zoom);
   const seconds = (totalFrames / fps).toFixed(1);
   const shown = Math.round(frame);
@@ -1257,11 +1301,16 @@ export function CameraSequencer({
           <Tooltip content="Save under this name" placement="top">
             <button type="button" className="cseq-btn" disabled={!name.trim()} onClick={saveAs}>Save</button>
           </Tooltip>
-          <Tooltip content={savedNames.length ? 'Load a saved sequence' : 'Nothing saved yet'} placement="top">
+          <Tooltip
+            content={savedNames.length
+              ? `Load a sequence saved ${zone ? `in ${zone.name || 'this zone'}` : 'outside a zone'}`
+              : `Nothing saved ${zone ? `in ${zone.name || 'this zone'}` : 'outside a zone'} yet`}
+            placement="top"
+          >
             <div className="cseq-load">
               <Combo
-                value={savedNames.includes(name.trim()) ? name.trim() : ''}
-                items={savedNames.map((n) => ({ id: n, label: n }))}
+                value={savedByName(name.trim())?.key ?? ''}
+                items={visibleSaved.map((e) => ({ id: e.key, label: e.name }))}
                 placeholder={savedNames.length ? 'Load…' : 'None saved'}
                 onChange={load}
               />
@@ -1272,7 +1321,7 @@ export function CameraSequencer({
               type="button"
               className="icon-btn cseq-icon cseq-del"
               aria-label="Delete saved sequence"
-              disabled={!library[name.trim()]}
+              disabled={!savedByName(name.trim())}
               onClick={removeSaved}
             >
               <span className="icon">delete</span>

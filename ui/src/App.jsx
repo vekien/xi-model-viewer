@@ -14,6 +14,7 @@ import { ScenesPanel } from './ScenesPanel.jsx';
 import { ActorEditorModal } from './ActorEditorModal.jsx';
 import {
   loadScenes, saveScene, renameScene, deleteScene, nextSceneName, actorsFingerprint, serializeActor,
+  scenesForZone,
 } from '../js/scenes.js';
 import { DEFAULT_LIGHT, lightRgb } from '../js/lightUtil.js';
 import { findDbTable } from '../js/database.js';
@@ -1117,6 +1118,14 @@ export default function App({ launch = null }) {
   const [scenes, setScenes] = useState(() => loadScenes());
   const [currentScene, setCurrentScene] = useState(null);
   const [sceneView, setSceneView] = useState('list');   // 'list' | 'actors'
+  // Only the scenes created in the zone on stage — their positions are
+  // zone-local, so a scene from elsewhere would not fit anyway.
+  const sceneZoneName = modelInfo?.zone ? (modelInfo.zone.name || modelInfo.name || '') : null;
+  const sceneZonePath = modelInfo?.zone ? (modelInfo.zone.path || '') : null;
+  const zoneScenes = useMemo(
+    () => (sceneZoneName == null ? [] : scenesForZone(scenes, { name: sceneZoneName, path: sceneZonePath })),
+    [scenes, sceneZoneName, sceneZonePath],
+  );
   // Ctrl+C / Ctrl+V: a copy of the selected actor's definition. The key
   // handler is declared before the paste logic, so it goes through refs.
   const actorClipboardRef = useRef(null);
@@ -6755,8 +6764,8 @@ export default function App({ launch = null }) {
    */
   const newScene = useCallback(() => {
     if (currentScene) clearStageActors();
-    saveCurrentScene(nextSceneName(loadScenes()), null);
-  }, [currentScene, clearStageActors, saveCurrentScene]);
+    saveCurrentScene(nextSceneName(zoneScenes), null);
+  }, [currentScene, clearStageActors, saveCurrentScene, zoneScenes]);
 
   /** Scenes › delete a row. Deleting the scene on stage clears the stage too. */
   const removeScene = useCallback((set) => {
@@ -8684,6 +8693,7 @@ export default function App({ launch = null }) {
           onStopClock={() => setTodPlaying(false)}
           restingMode={wasd ? 'fly' : 'orbit'}
           zoneLoaded={!!modelInfo?.zone}
+          zone={sceneZoneName == null ? null : { name: sceneZoneName, path: sceneZonePath }}
           lockActorId={camLockActorId}
           lockActorPlacing={!!actorPlacing?.lock}
           onPlaceLockActor={() => {
@@ -8934,7 +8944,7 @@ export default function App({ launch = null }) {
 
       {!dataStructOpen && scenesPanelOpen && modelInfo?.zone && (
         <ScenesPanel
-          scenes={scenes}
+          scenes={zoneScenes}
           current={currentScene}
           view={sceneView}
           dirty={sceneDirty}

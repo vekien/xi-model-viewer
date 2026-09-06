@@ -4,6 +4,8 @@
  * the one the old "actor sets" used, so earlier saves carry over as scenes.
  *
  * A scene: { id, name, zone: { name, path }, savedAt, createdAt, actors: [SavedActor] }
+ * `zone` is the zone the scene was created in; the panel only lists scenes
+ * for the zone on stage (see scenesForZone), since positions are zone-local.
  * SavedActor: { name, kind, entry, pack, pos, rot, scale, motion, playing,
  *               frame, loop, visible, fx, pcState } — `entry` is the NPC-list /
  *               character composer entry the actor was loaded from (paths etc.).
@@ -19,6 +21,23 @@ export function loadScenes() {
   } catch {
     return [];
   }
+}
+
+/**
+ * The scenes that belong to `zone` ({ name, path }): matched by DAT path when
+ * both sides have one, else by name. Scenes with no zone recorded (very old
+ * actor-set saves) are kept everywhere rather than hidden for good.
+ */
+export function scenesForZone(sets, zone) {
+  if (!zone) return [];
+  const path = zone.path || '';
+  const name = zone.name || '';
+  return (sets || []).filter((s) => {
+    const z = s.zone;
+    if (!z || (!z.path && !z.name)) return true;
+    if (path && z.path) return z.path === path;
+    return !!name && z.name === name;
+  });
 }
 
 function writeScenes(sets) {

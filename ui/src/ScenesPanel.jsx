@@ -11,8 +11,9 @@ function fmtDate(iso) {
 /**
  * Zone Scenes panel (bottom-right strip › Scenes). Two views in one slot:
  *
- * - the scene list: every saved scene, New Scene, delete — clicking a scene
- *   puts its actors on the stage and drops into the actor view;
+ * - the scene list: the scenes saved in this zone, New Scene, delete —
+ *   clicking a scene puts its actors on the stage and drops into the actor
+ *   view;
  * - the actor view: the open scene's actors (place NPCs / characters /
  *   lights, click a row to edit) with the scene's name and Save in the title.
  *
@@ -73,22 +74,18 @@ export function ScenesPanel({
         <div className="plc-list-shell">
           <div className="plc-body actors-list scenes-list">
             {scenes.length === 0 && (
-              <div className="side-note">No scenes yet. Create one and click where its actors should stand.</div>
+              <div className="side-note">No scenes in {zoneName || 'this zone'} yet. Create one and click where its actors should stand.</div>
             )}
             {scenes.map((s) => {
               const isCurrent = current?.id === s.id;
-              const otherZone = !!(s.zone?.name && zoneName && s.zone.name !== zoneName);
               // The details left off the row live in its tip.
               const detail = [
                 `${s.actors.length} actor${s.actors.length === 1 ? '' : 's'}`,
-                s.zone?.name || '',
                 s.savedAt ? fmtDate(s.savedAt) : '',
               ].filter(Boolean).join(' · ');
               const tip = isCurrent
                 ? `On stage — ${detail}${dirty ? ' — unsaved changes' : ''}. Click to go back to its actors`
-                : otherZone
-                  ? `${detail} — saved in ${s.zone.name}, positions may not fit this zone. Click to put its actors on stage`
-                  : `${detail}. Click to put its actors on stage`;
+                : `${detail}. Click to put its actors on stage`;
               return (
                 <div key={s.id} className={`node scene-row${isCurrent ? ' selected' : ''}`}>
                   <Tooltip content={tip} placement="left">
