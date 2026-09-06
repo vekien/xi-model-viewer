@@ -177,19 +177,50 @@ export const EASINGS = {
 };
 
 /**
- * Barry–Goldman Catmull-Rom on a scalar channel with the given knots.
- * Duplicate knots (the clamped ends) collapse the blend onto the repeated
- * value rather than dividing by zero.
+ * Natural cubic spline through (xs[i], ys[i]) — the C2 curve that minimises
+ * total bending, so unlike Catmull-Rom (C1: turn rate continuous, its change
+ * not) the acceleration is continuous through every key and each key's
+ * tangent is settled by the whole track rather than its two neighbours. Used
+ * for the camera's angle channels, where a Catmull-Rom's per-key kinks read as
+ * jerks. Second derivatives M via the tridiagonal (Thomas) solve; the ends
+ * are "natural" (M = 0), so the turn eases in and out of the sequence.
+ * Returns null for fewer than 3 distinct knots (linear is exact then).
  */
-function catmullKnots(v0, v1, v2, v3, [t0, t1, t2, t3], u) {
-  const t = t1 + u * (t2 - t1);
-  const L = (a, b, ta, tb) => (tb - ta < 1e-9 ? a : a + (b - a) * ((t - ta) / (tb - ta)));
-  const A1 = L(v0, v1, t0, t1);
-  const A2 = L(v1, v2, t1, t2);
-  const A3 = L(v2, v3, t2, t3);
-  const B1 = L(A1, A2, t0, t2);
-  const B2 = L(A2, A3, t1, t3);
-  return L(B1, B2, t1, t2);
+function naturalSpline(xs, ys) {
+  const n = xs.length;
+  if (n < 3) return null;
+  const h = new Array(n - 1);
+  for (let i = 0; i < n - 1; i++) h[i] = Math.max(xs[i + 1] - xs[i], 1e-6);
+  // Tridiagonal system for M[1..n-2]; M[0] = M[n-1] = 0.
+  const a = new Array(n).fill(0);   // sub-diagonal
+  const b = new Array(n).fill(1);   // diagonal
+  const c = new Array(n).fill(0);   // super-diagonal
+  const d = new Array(n).fill(0);   // rhs
+  for (let i = 1; i < n - 1; i++) {
+    a[i] = h[i - 1];
+    b[i] = 2 * (h[i - 1] + h[i]);
+    c[i] = h[i];
+    d[i] = 6 * ((ys[i + 1] - ys[i]) / h[i] - (ys[i] - ys[i - 1]) / h[i - 1]);
+  }
+  for (let i = 2; i < n - 1; i++) {
+    const w = a[i] / b[i - 1];
+    b[i] -= w * c[i - 1];
+    d[i] -= w * d[i - 1];
+  }
+  const M = new Array(n).fill(0);
+  for (let i = n - 2; i >= 1; i--) M[i] = (d[i] - c[i] * M[i + 1]) / b[i];
+  return { xs, ys, h, M };
+}
+
+/** Natural spline value on segment i (xs[i] ≤ x ≤ xs[i+1]). */
+function evalNatural(sp, i, x) {
+  const { xs, ys, h, M } = sp;
+  const hi = h[i];
+  const t1 = xs[i + 1] - x;
+  const t0 = x - xs[i];
+  return (M[i] * t1 * t1 * t1 + M[i + 1] * t0 * t0 * t0) / (6 * hi)
+    + (ys[i] / hi - M[i] * hi / 6) * t1
+    + (ys[i + 1] / hi - M[i + 1] * hi / 6) * t0;
 }
 
 /** Unwrap an angle channel so a step across ±180° takes the short way round. */
@@ -439,6 +470,14 @@ export class CameraSequence {
     // way round the compass; likewise a roll through the inverted point.
     unwrap(this.rot, 'yaw');
     unwrap(this.rot, 'roll');
+    // Smooth rotation: one natural cubic per angle channel on frame-time
+    // knots (see naturalSpline). Null when two keys or fewer — linear then.
+    const xs = this.rot.map((k) => k.frame);
+    this.rotSpline = this.rot.length >= 3 ? {
+      yaw: naturalSpline(xs, this.rot.map((k) => k.yaw)),
+      pitch: naturalSpline(xs, this.rot.map((k) => k.pitch)),
+      roll: naturalSpline(xs, this.rot.map((k) => k.roll)),
+    } : null;
   }
 
   /** Longest track — what "the sequence has N keys" means for playability. */
@@ -487,21 +526,20 @@ export class CameraSequence {
     let yaw;
     let pitch;
     let roll;
-    if (this.curve === 'linear' || this.rotation === 'linear') {
+    if (this.curve === 'linear' || this.rotation === 'linear' || !this.rotSpline) {
       yaw = a.yaw + (b.yaw - a.yaw) * u;
       pitch = a.pitch + (b.pitch - a.pitch) * u;
       roll = a.roll + (b.roll - a.roll) * u;
     } else {
-      // Angles splined on frame-time knots. A uniform (by key index) spline
-      // would swing a short segment next to a long one through most of its
-      // turn in the first few frames — the "snap" mid-curve; timing the knots
-      // by frame keeps the turn rate proportional to the gap between keys.
-      const p0 = k[Math.max(0, i - 1)];
-      const p3 = k[Math.min(k.length - 1, i + 2)];
-      const kn = [p0.frame, a.frame, b.frame, p3.frame];
-      yaw = catmullKnots(p0.yaw, a.yaw, b.yaw, p3.yaw, kn, u);
-      pitch = catmullKnots(p0.pitch, a.pitch, b.pitch, p3.pitch, kn, u);
-      roll = catmullKnots(p0.roll, a.roll, b.roll, p3.roll, kn, u);
+      // Angles on a natural cubic over frame-time knots: timing the knots by
+      // frame keeps the turn rate proportional to the gap between keys (a
+      // by-index spline would rush a short segment), and the C2 spline keeps
+      // the turn rate's change continuous through every key, which is what
+      // stops the per-key jerk a Catmull-Rom leaves.
+      const x = a.frame + u * (b.frame - a.frame);
+      yaw = evalNatural(this.rotSpline.yaw, i, x);
+      pitch = evalNatural(this.rotSpline.pitch, i, x);
+      roll = evalNatural(this.rotSpline.roll, i, x);
     }
     // The spline can overshoot slightly on the angle channels; the fly camera
     // clamps pitch to ±1.55 anyway, so clamp here and stay in sync with it.
