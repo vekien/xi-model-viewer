@@ -896,6 +896,52 @@ export function buildPlacementDraws(model, placement) {
   return tmp.zoneDraws ?? [];
 }
 
+/**
+ * Hand meshes the zone's own particle generators draw over to the particle
+ * system. Rabao places its windmill wheel (`de_fusya02`) as static 0x1C
+ * geometry AND parks an autorun generator (`t_ri/mode/wind/f001`) on the same
+ * spot whose StaticMesh link spins that very mesh — drawn both ways it is two
+ * wheels out of phase on one hub, so the static copy is hidden (userHidden:
+ * the Objects row keeps its eye, so it can be brought back). The prototype
+ * town's live-spin companions (mill on w_mill) get the same treatment when a
+ * `mil*` generator sits on the host.
+ *
+ * `effects` is ParticleSystem.listEffects(); only zone (non-weather) entries
+ * whose resolved mesh name matches, within `radius` FFXI units in the raw
+ * frame, count. Returns how many placements/spinners were taken; the caller
+ * rebuilds the zone draws (and spinners) when it is non-zero.
+ */
+export function yieldPlacementsToEffects(model, effects, radius = 1) {
+  const owned = (effects || []).filter((e) => e.kind === 'zone' && e.name && Array.isArray(e.rawPos));
+  if (!owned.length || !model) return 0;
+  const byMesh = new Map();
+  for (const e of owned) {
+    const k = String(e.name).toLowerCase();
+    if (!byMesh.has(k)) byMesh.set(k, []);
+    byMesh.get(k).push(e.rawPos);
+  }
+  const near = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) <= radius;
+  const drawnByEffect = (mesh, rawPos) => {
+    const at = byMesh.get(String(mesh || '').toLowerCase());
+    return !!(at && rawPos && at.some((p) => near(p, rawPos)));
+  };
+  let n = 0;
+  for (const p of model.zonePlacements ?? []) {
+    if (p.kind || p.userHidden) continue;
+    if (drawnByEffect(p.mesh, p.rawPos)) {
+      p.userHidden = true;
+      p.effectOwned = true;
+      n++;
+    }
+  }
+  if (model.zoneSpinners?.length) {
+    const keep = model.zoneSpinners.filter((sp) => !drawnByEffect(sp.meshName, sp.pos));
+    n += model.zoneSpinners.length - keep.length;
+    model.zoneSpinners = keep;
+  }
+  return n;
+}
+
 /** Display pos (−x,−y,z) ↔ raw FFXI pos. */
 export function displayToRaw(dx, dy, dz) {
   return [-dx, -dy, dz];

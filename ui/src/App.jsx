@@ -58,6 +58,7 @@ import { checkForUpdate, checkForUpdateManual, dismissUpdate } from '../js/updat
 import {
   zoneDatRelPath, zoneToModel, rebuildZoneDraws, buildPlacementDraws, translatePlacementDisplay,
   clonePlacementPose, applyPlacementPose, posesEqual, pickPvsRegion, applyPvsRegion,
+  yieldPlacementsToEffects,
 } from '../js/zoneModel.js';
 import { pickZoneAt, pickZoneGroundAt, pickActorAt } from '../js/zonePick.js';
 import { loadDatTypeLists, makeDatTypeLookup } from '../js/dattypes.js';
@@ -3389,7 +3390,15 @@ export default function App({ launch = null }) {
       for (const p of model.zonePlacements ?? []) {
         if (p.kind === 'unplaced') p.userHidden = true;
       }
-      if ((model.zonePlacements ?? []).some((p) => p.kind === 'unplaced')) {
+      // Meshes a zone generator draws spinning on the same spot (Rabao's
+      // windmill wheel) come off the static layer, or they show twice.
+      const yielded = particleSystem
+        ? yieldPlacementsToEffects(model, particleSystem.listEffects()) : 0;
+      if (yielded) {
+        renderer._rebuildZoneSpinners();
+        console.debug(`[zone] ${yielded} placement(s) left to particle generators`);
+      }
+      if (yielded || (model.zonePlacements ?? []).some((p) => p.kind === 'unplaced')) {
         rebuildZoneDraws(model);
         renderer.reloadZoneBatches(model);
       }
