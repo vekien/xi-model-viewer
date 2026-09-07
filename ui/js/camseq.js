@@ -131,6 +131,16 @@ export function driveCamera(camera, pose, { orbit = false, orbitTarget = null } 
 }
 
 /**
+ * Knot spacing between two control points under the centripetal (alpha 0.5)
+ * parameterisation — the square root of the chord. Guarded, so coincident
+ * points (a clamped end, two keys recorded from one spot) still advance the
+ * knot instead of collapsing the segment to 0/0.
+ */
+function knotStep(a, b) {
+  return Math.sqrt(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])) || 1e-4;
+}
+
+/**
  * Centripetal Catmull-Rom (alpha 0.5) through p1→p2, with p0/p3 as the
  * neighbouring control points — the same evaluation the level editor uses for
  * cutscene camera routes. Knots spaced by sqrt(distance): unlike the uniform
@@ -143,11 +153,10 @@ export function driveCamera(camera, pose, { orbit = false, orbitTarget = null } 
  * but it multiplies a zero-length segment, so the result is just the point.
  */
 function catmull3(p0, p1, p2, p3, u) {
-  const knot = (a, b) => Math.sqrt(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])) || 1e-4;
   const t0 = 0;
-  const t1 = t0 + knot(p0, p1);
-  const t2 = t1 + knot(p1, p2);
-  const t3 = t2 + knot(p2, p3);
+  const t1 = t0 + knotStep(p0, p1);
+  const t2 = t1 + knotStep(p1, p2);
+  const t3 = t2 + knotStep(p2, p3);
   const t = t1 + u * (t2 - t1);
   const lerp = (a, b, s) => [
     a[0] + (b[0] - a[0]) * s,
@@ -177,50 +186,80 @@ export const EASINGS = {
 };
 
 /**
- * Natural cubic spline through (xs[i], ys[i]) — the C2 curve that minimises
- * total bending, so unlike Catmull-Rom (C1: turn rate continuous, its change
- * not) the acceleration is continuous through every key and each key's
- * tangent is settled by the whole track rather than its two neighbours. Used
- * for the camera's angle channels, where a Catmull-Rom's per-key kinks read as
- * jerks. Second derivatives M via the tridiagonal (Thomas) solve; the ends
- * are "natural" (M = 0), so the turn eases in and out of the sequence.
- * Returns null for fewer than 3 distinct knots (linear is exact then).
+ * Auto-clamped tangents for a cubic Hermite through (x, y) — Fritsch-Carlson,
+ * the shape-preserving choice an animation curve editor makes by default.
+ *
+ * `h` is the gaps between successive x, `d` the secant slopes between
+ * successive y. A key's tangent is the weighted harmonic mean of the two
+ * secants meeting there, which is bounded by them: the curve cannot bulge past
+ * the values that were keyed, and a key where the channel turns around
+ * (opposite-signed secants) gets a flat tangent instead of a swing through it.
+ *
+ * The point of using this over the C2 natural cubic is locality. A natural
+ * cubic settles every tangent from the whole track, so a turn late in the
+ * sequence leaks backwards into keys before it — the camera starts drifting
+ * round long before the key that asked for the turn, and a channel that should
+ * sit still between two equal keys wanders off and comes back. These tangents
+ * see only the neighbouring keys, so a move happens where it was keyed. The
+ * trade is C1 rather than C2: the rate is continuous through a key, its
+ * derivative is not.
+ *
+ * `flatEnds` pins the first and last tangents to zero, so the channel eases out
+ * of the start and into the end instead of opening at full rate; otherwise
+ * they take the usual one-sided quadratic estimate, clamped the same way.
  */
-function naturalSpline(xs, ys) {
-  const n = xs.length;
-  if (n < 3) return null;
-  const h = new Array(n - 1);
-  for (let i = 0; i < n - 1; i++) h[i] = Math.max(xs[i + 1] - xs[i], 1e-6);
-  // Tridiagonal system for M[1..n-2]; M[0] = M[n-1] = 0.
-  const a = new Array(n).fill(0);   // sub-diagonal
-  const b = new Array(n).fill(1);   // diagonal
-  const c = new Array(n).fill(0);   // super-diagonal
-  const d = new Array(n).fill(0);   // rhs
+function pchipSlopes(h, d, flatEnds = false) {
+  const n = h.length + 1;
+  const m = new Array(n).fill(0);
+  // Two knots is one straight segment — no neighbour to lean a tangent on.
+  if (n < 3) return m.map(() => (flatEnds ? 0 : (d[0] ?? 0)));
   for (let i = 1; i < n - 1; i++) {
-    a[i] = h[i - 1];
-    b[i] = 2 * (h[i - 1] + h[i]);
-    c[i] = h[i];
-    d[i] = 6 * ((ys[i + 1] - ys[i]) / h[i] - (ys[i] - ys[i - 1]) / h[i - 1]);
+    if (d[i - 1] * d[i] <= 0) continue;   // a turning point: flat, so no overshoot
+    const w1 = 2 * h[i] + h[i - 1];
+    const w2 = h[i] + 2 * h[i - 1];
+    m[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i]);
   }
-  for (let i = 2; i < n - 1; i++) {
-    const w = a[i] / b[i - 1];
-    b[i] -= w * c[i - 1];
-    d[i] -= w * d[i - 1];
+  if (!flatEnds) {
+    const endSlope = (dNear, dFar, hNear, hFar) => {
+      const v = ((2 * hNear + hFar) * dNear - hNear * dFar) / (hNear + hFar);
+      if (v * dNear <= 0) return 0;
+      return Math.abs(v) > 3 * Math.abs(dNear) ? 3 * dNear : v;
+    };
+    m[0] = endSlope(d[0], d[1], h[0], h[1]);
+    m[n - 1] = endSlope(d[n - 2], d[n - 3], h[n - 2], h[n - 3]);
   }
-  const M = new Array(n).fill(0);
-  for (let i = n - 2; i >= 1; i--) M[i] = (d[i] - c[i] * M[i + 1]) / b[i];
-  return { xs, ys, h, M };
+  return m;
 }
 
-/** Natural spline value on segment i (xs[i] ≤ x ≤ xs[i+1]). */
-function evalNatural(sp, i, x) {
-  const { xs, ys, h, M } = sp;
-  const hi = h[i];
-  const t1 = xs[i + 1] - x;
-  const t0 = x - xs[i];
-  return (M[i] * t1 * t1 * t1 + M[i + 1] * t0 * t0 * t0) / (6 * hi)
-    + (ys[i] / hi - M[i] * hi / 6) * t1
-    + (ys[i + 1] / hi - M[i + 1] * hi / 6) * t0;
+/** Cubic Hermite value on segment `i`, `s` of the way (0..1) across it. */
+function hermite(ys, m, h, i, s) {
+  const s2 = s * s;
+  const s3 = s2 * s;
+  return (2 * s3 - 3 * s2 + 1) * ys[i]
+    + (s3 - 2 * s2 + s) * h[i] * m[i]
+    + (3 * s2 - 2 * s3) * ys[i + 1]
+    + (s3 - s2) * h[i] * m[i + 1];
+}
+
+/**
+ * Fit one angle channel of the rotation track against frame: the values, the
+ * frame gaps, and an auto-clamped tangent per key (see pchipSlopes). The ends
+ * are flat, so the camera eases into and out of its turn the way the position
+ * path already eases out of its first key and into its last.
+ *
+ * Null below 3 keys — a single segment is a straight turn either way.
+ */
+function angleFit(keys, field) {
+  const n = keys.length;
+  if (n < 3) return null;
+  const ys = keys.map((k) => k[field]);
+  const h = new Array(n - 1);
+  const d = new Array(n - 1);
+  for (let i = 0; i < n - 1; i++) {
+    h[i] = Math.max(keys[i + 1].frame - keys[i].frame, 1e-6);
+    d[i] = (ys[i + 1] - ys[i]) / h[i];
+  }
+  return { ys, h, m: pchipSlopes(h, d, true) };
 }
 
 /** Unwrap an angle channel so a step across ±180° takes the short way round. */
@@ -249,11 +288,67 @@ function forwardOf(r) {
 }
 
 /**
+ * Timing for a splined position track: frame → the curve's own knot parameter.
+ *
+ * Speed along the path is |dP/dT| · dT/dframe. Centripetal Catmull-Rom is C1 in
+ * its knot T, so |dP/dT| carries through a key unchanged — but running each
+ * segment's frames onto its knots linearly (T climbing by one knotStep across
+ * whatever frame gap the two keys happen to have) makes dT/dframe a step
+ * function, so every key is an instant change of speed. Dragging the last keys
+ * further apart is exactly that case: the eye holds the old speed right up to
+ * the key and then drops to the slower one within a single frame.
+ *
+ * So T is fitted against frame with a Fritsch-Carlson monotone cubic instead.
+ * dT/dframe is continuous through a key, so a stretched (slower) segment is
+ * eased into across the keys either side of it rather than stepped into, and
+ * the tangents stay inside the monotone region, so the eye can never stall or
+ * run backwards along the path — which the natural (C2) cubic used for the
+ * angle channels would do here, where a stretched segment sits next to a short
+ * one. Keys still land on their exact frames: T(frame[i]) is T[i] by
+ * construction, so u is 0 and 1 exactly at the two ends of a segment.
+ *
+ * Null below 3 keys, where the fit is the straight map anyway.
+ */
+function buildTiming(keys, field) {
+  const n = keys.length;
+  if (n < 3) return null;
+  const T = new Array(n);
+  T[0] = 0;
+  for (let i = 1; i < n; i++) T[i] = T[i - 1] + knotStep(keys[i - 1][field], keys[i][field]);
+  const h = new Array(n - 1);   // frame gaps
+  const d = new Array(n - 1);   // secant slopes dT/dframe
+  for (let i = 0; i < n - 1; i++) {
+    h[i] = Math.max(keys[i + 1].frame - keys[i].frame, 1e-6);
+    d[i] = (T[i + 1] - T[i]) / h[i];
+  }
+  // T only ever climbs, so the same auto-clamped tangents the angle channels
+  // use are monotone here by construction: the eye cannot stall or double
+  // back, and beside a hold (two keys on one spot) the tangent collapses
+  // towards zero, so it eases to a stop rather than stopping dead.
+  return { T, h, m: pchipSlopes(h, d) };
+}
+
+/**
+ * How far along segment `i` (starting at frame `from`) the fitted timing has
+ * got by frame `f` — the cubic Hermite through (frame, T), rescaled back to
+ * the [0, 1] the segment's own evaluation wants.
+ */
+function timedU(tm, i, from, f) {
+  const { T, h, m } = tm;
+  const s = clamp((f - from) / h[i], 0, 1);
+  const t = hermite(T, m, h, i, s);
+  const span = T[i + 1] - T[i];
+  // A zero-length segment (a hold) has no distance to distribute; u is moot
+  // there because both control points are the same place.
+  return span > 1e-9 ? clamp((t - T[i]) / span, 0, 1) : s;
+}
+
+/**
  * A 3-vector channel (`field` of each sorted key) at frame `f`: clamped to
  * the end keys, linear or centripetal Catmull-Rom between them. Null with no
  * keys. Shared by the camera eye and the actor position tracks.
  */
-function samplePoint(keys, field, f, curve) {
+function samplePoint(keys, field, f, curve, timing = null) {
   const k = keys;
   if (!k.length) return null;
   if (k.length === 1 || f <= k[0].frame) return k[0][field];
@@ -265,7 +360,10 @@ function samplePoint(keys, field, f, curve) {
   if (curve === 'linear') return lerp3(a[field], b[field], u);
   const p0 = k[Math.max(0, i - 1)];
   const p3 = k[Math.min(k.length - 1, i + 2)];
-  return catmull3(p0[field], a[field], b[field], p3[field], u);
+  // Frame fraction, eased across the keys so the speed doesn't step at one
+  // (see buildTiming). Without a fit — two keys — it is the fraction itself.
+  const tu = timing ? timedU(timing, i, a.frame, f) : u;
+  return catmull3(p0[field], a[field], b[field], p3[field], tu);
 }
 
 // --- quaternions for the actor rotation track -------------------------------
@@ -365,13 +463,14 @@ export class ActorTrack {
     this.rot = sorted
       .filter((k) => k.rot && k.rot.length === 9)
       .map((k) => ({ frame: k.frame, q: mat3ToQuat(k.rot), rot: Array.from(k.rot) }));
+    this.posTiming = this.curve === 'linear' ? null : buildTiming(this.pos, 'pos');
   }
 
   get length() { return Math.max(this.pos.length, this.rot.length); }
 
   /** [x, y, z] at `f`; null with no position keys. */
   posAt(f) {
-    return samplePoint(this.pos, 'pos', f, this.curve);
+    return samplePoint(this.pos, 'pos', f, this.curve, this.posTiming);
   }
 
   /** Column-major 3x3 at `f`; null with no rotation keys. */
@@ -430,9 +529,11 @@ export class CameraSequence {
    *   any order. A plain array of { frame, eye, forward, roll? } keys (the
    *   pre-split format) feeds both tracks.
    * `totalFrames` — length of the whole sequence.
-   * `curve` — 'spline' (auto Catmull-Rom through keys) or 'linear' (straight
-   *   segments). Keyframes are ALWAYS hit at their exact frame times; there is
-   *   no whole-timeline ease that warps the clock.
+   * `curve` — 'spline' (auto Catmull-Rom through keys, walked at a speed that
+   *   eases from one key gap's pace into the next — see buildTiming) or
+   *   'linear' (straight segments at a constant speed each). Keyframes are
+   *   ALWAYS hit at their exact frame times either way; there is no
+   *   whole-timeline ease that warps the clock.
    * `rotation` — 'spline' or 'linear' for the facing between rotation keys.
    */
   constructor(tracks, { totalFrames = 300, curve = 'spline', ease, rotation = 'spline' } = {}) {
@@ -450,6 +551,11 @@ export class CameraSequence {
       .filter((k) => Array.isArray(k?.eye))
       .map((k) => ({ frame: k.frame, eye: k.eye }))
       .sort(byFrame);
+    // Smooth speed along the path: the eye eases between the speeds two
+    // neighbouring key gaps imply instead of changing speed at the key itself
+    // (see buildTiming). Linear keeps its constant per-leg speed — straight
+    // lines with a corner at every key are the whole point of that mode.
+    this.posTiming = this.curve === 'linear' ? null : buildTiming(this.pos, 'eye');
     this.rot = rotIn
       .filter((k) => Array.isArray(k?.forward))
       .map((k) => {
@@ -470,13 +576,12 @@ export class CameraSequence {
     // way round the compass; likewise a roll through the inverted point.
     unwrap(this.rot, 'yaw');
     unwrap(this.rot, 'roll');
-    // Smooth rotation: one natural cubic per angle channel on frame-time
-    // knots (see naturalSpline). Null when two keys or fewer — linear then.
-    const xs = this.rot.map((k) => k.frame);
+    // Smooth rotation: an auto-clamped cubic per angle channel over the keys'
+    // own frames (see angleFit). Null at two keys or fewer — linear then.
     this.rotSpline = this.rot.length >= 3 ? {
-      yaw: naturalSpline(xs, this.rot.map((k) => k.yaw)),
-      pitch: naturalSpline(xs, this.rot.map((k) => k.pitch)),
-      roll: naturalSpline(xs, this.rot.map((k) => k.roll)),
+      yaw: angleFit(this.rot, 'yaw'),
+      pitch: angleFit(this.rot, 'pitch'),
+      roll: angleFit(this.rot, 'roll'),
     } : null;
   }
 
@@ -510,7 +615,7 @@ export class CameraSequence {
 
   /** Eye position at `f` from the position track; null with no keys. */
   eyeAt(f) {
-    return samplePoint(this.pos, 'eye', f, this.curve);
+    return samplePoint(this.pos, 'eye', f, this.curve, this.posTiming);
   }
 
   /** { yaw, pitch, roll } at `f` from the rotation track; null with no keys. */
@@ -531,18 +636,17 @@ export class CameraSequence {
       pitch = a.pitch + (b.pitch - a.pitch) * u;
       roll = a.roll + (b.roll - a.roll) * u;
     } else {
-      // Angles on a natural cubic over frame-time knots: timing the knots by
-      // frame keeps the turn rate proportional to the gap between keys (a
-      // by-index spline would rush a short segment), and the C2 spline keeps
-      // the turn rate's change continuous through every key, which is what
-      // stops the per-key jerk a Catmull-Rom leaves.
-      const x = a.frame + u * (b.frame - a.frame);
-      yaw = evalNatural(this.rotSpline.yaw, i, x);
-      pitch = evalNatural(this.rotSpline.pitch, i, x);
-      roll = evalNatural(this.rotSpline.roll, i, x);
+      // Angles on an auto-clamped cubic over the keys' frames: keying the
+      // knots by frame keeps the turn rate proportional to the gap between
+      // keys (a by-index fit would rush a short segment), and the tangents
+      // come from the neighbouring keys alone, so the turn stays inside the
+      // segment it was keyed in instead of leaking into the ones before it.
+      yaw = hermite(this.rotSpline.yaw.ys, this.rotSpline.yaw.m, this.rotSpline.yaw.h, i, u);
+      pitch = hermite(this.rotSpline.pitch.ys, this.rotSpline.pitch.m, this.rotSpline.pitch.h, i, u);
+      roll = hermite(this.rotSpline.roll.ys, this.rotSpline.roll.m, this.rotSpline.roll.h, i, u);
     }
-    // The spline can overshoot slightly on the angle channels; the fly camera
-    // clamps pitch to ±1.55 anyway, so clamp here and stay in sync with it.
+    // The fit cannot overshoot the keyed angles, but the fly camera clamps
+    // pitch to ±1.55 regardless, so clamp here and stay in sync with it.
     return { yaw, pitch: clamp(pitch, -1.55, 1.55), roll };
   }
 
