@@ -409,6 +409,130 @@ function particleParsers(zoneResource, warnings) {
  */
 const CAST_BLEND_FRAMES = 9;   // 0.3s
 
+/**
+ * Effects view > Show Character Animation: the caster clips scheduled by a
+ * routine's 0x05 commands (and its `ca*`/`sh*` actor calls), resolved against
+ * THIS character's clips. A ref that doesn't resolve is dropped, which is how the
+ * weapon-skill (`wz*`) refs degrade when the motion pack holding them isn't
+ * loaded. `windup` is the routine-clock delay the effect must be shifted by so
+ * it lands on the cast's release frame. Module-level so the Schedule combo and
+ * the toggle itself can re-bake the cues without reloading the DAT.
+ */
+function buildCasterCues(actor, routine) {
+  let animCues = [];
+  let windup = 0;
+  // `actor.animations` entries ARE clips (id + jointTracks +
+  // lengthInFrames) — there is no `.clip` wrapper. That only appears once
+  // groupAnimations() buckets them for the Anim dropdown.
+  const ids = actor.animations.map((a) => a.id);
+  const clipById = new Map(actor.animations.map((a) => [a.id, a]));
+  /**
+   * A ref like `mb0?` matches SEVERAL clips — `mb00`, `mb01` — and those
+   * are body-region layers of one motion, not alternatives. Taking the
+   * first played only the half that tracked the legs. groupAnimations
+   * merges them into a single layered clip, which is what the Characters
+   * view feeds the renderer (see resolveScheduleClip).
+   */
+  const findClip = (ref) => {
+    const parts = matchAnimRef(ref, ids).map((id) => clipById.get(id)).filter(Boolean);
+    if (!parts.length) return null;
+    return groupAnimations(parts)[0]?.clip ?? null;
+  };
+  // `idl` and nothing else. `std` is a stand-UP motion, not a stance.
+  const idleClip = () => findClip('idl?') ?? pickBaseIdle(actor);
+
+  // A call the effect DAT can't satisfy is a schedule on the ACTOR — this
+  // is where the cast motions live (`shbk` black, `shnj` ninjutsu, `shwh`
+  // white). Every race ships the `sh*` schedules EMPTY while the `ca*`
+  // twin carries the ref, so read the twin's ref when the direct one is
+  // blank (verified identical on Hume/Taru/Galka/Mithra).
+  const schedById = new Map((actor.schedules ?? []).map((sc) => [sc.id, sc]));
+  const schoolRef = (id) => (schedById.get(id)?.refs ?? [])[0]
+    ?? (id.startsWith('sh') ? (schedById.get(`ca${id.slice(2)}`)?.refs ?? [])[0] : null)
+    ?? null;
+
+  /**
+   * Full cast — wind-up → hold → release — as ONE clip with `segments`,
+   * not a run of setAnimation calls. That hands the whole thing to
+   * SkeletonPose.evaluate, which already cross-fades a finished segment
+   * back to `baseClip` over `transOut` frames and rests undriven joints
+   * there instead of the bind pose. Firing separate clips could only
+   * snap.
+   *
+   * The three stages are the same clip base with the stage digit walked
+   * (`mb0?`/`mb1?`/`mb2?` for black magic), so this is derived, not a
+   * table. Segment delays are 30fps clip frames; the routine clock is
+   * 60/s, hence the doubling on the way out.
+   */
+  const buildCast = (scheduleId) => {
+    // ONLY the magic-cast schedules have the three-stage structure.
+    // `ca<school>` / `sh<school>` map to `m*0/1/2` = wind-up/hold/release.
+    // Everything else a routine can call — res0, damg, sway, gurd, pary —
+    // is a self-contained motion, and walking its stage digit invents a
+    // sequence that does not exist: `res0` refs `rx0?`, so the walk
+    // played rx0 → rx1 → rx2, i.e. Raise I then II then III.
+    if (!/^(ca|sh)/.test(scheduleId)) return null;
+    const ref = schoolRef(scheduleId);
+    if (!ref) return null;
+    const base = ref.slice(0, 2);
+    // Belt and braces: the cast families all start with `m`.
+    if (!base.startsWith('m')) return null;
+    const inC = findClip(`${base}0?`);
+    const holdC = findClip(`${base}1?`);
+    const outC = findClip(`${base}2?`);
+    if (!inC || !outC) return null;
+    const len = (c) => c.lengthInFrames ?? 0;
+    const segments = [{ clip: inC, delay: 0, transOut: CAST_BLEND_FRAMES }];
+    let at = len(inC);
+    if (holdC) {
+      segments.push({ clip: holdC, delay: at, transOut: CAST_BLEND_FRAMES });
+      at += len(holdC);
+    }
+    // The release runs its own length (~1s for most schools) and then
+    // fades out over CAST_BLEND_FRAMES rather than cutting to idle.
+    segments.push({ clip: outC, delay: at, transOut: CAST_BLEND_FRAMES });
+    return { segments, releaseFrame: at, endFrame: at + len(outC) + CAST_BLEND_FRAMES };
+  };
+
+  const cast = (routine.flat.actorCalls ?? []).map((c) => buildCast(c.scheduleId)).find(Boolean);
+  if (cast) {
+    windup = cast.releaseFrame * 2;   // the effect lands on the release
+    const jointTracks = new Map();
+    for (const s of cast.segments) for (const [j, t] of s.clip.jointTracks) jointTracks.set(j, t);
+    const idle = idleClip();
+    // TWO cues, not one. Stretching the cast clip to cover the effect
+    // can't work: the renderer loops on lengthInFrames, and an effect
+    // outlives its own emission window (particles have their own
+    // lifespans), so any length guessed from the routine wrapped early
+    // and replayed the wind-up over the still-running spell. Instead the
+    // cast runs exactly its own length, then hands over to the idle,
+    // which loops cleanly on its own until the effect re-arms and
+    // re-fires cue one.
+    animCues = [{
+      delay: 0,
+      clip: {
+        id: 'cast',
+        segments: cast.segments,
+        jointTracks,
+        lengthInFrames: cast.endFrame,
+        numFrames: Math.max(...cast.segments.map((s) => s.clip.numFrames ?? 0)),
+        keyFrameDuration: 1,
+        // Undriven joints and finished segments settle here, not bind pose.
+        baseClip: idle,
+        parts: cast.segments.map((s) => s.clip.id),
+      },
+    }];
+    // Hand over to the looping idle the frame the cast finishes.
+    if (idle) animCues.push({ delay: cast.endFrame * 2, clip: idle });
+  } else {
+    // No cast schedule: fall back to whatever 0x05 named outright.
+    animCues = (routine.flat.anims ?? [])
+      .map((a) => ({ delay: a.delay, clip: findClip(a.ref) }))
+      .filter((a) => a.clip);
+  }
+  return { animCues, windup };
+}
+
 const texLabel = (name) => String(name ?? '').trim().split(/\s+/).pop() || String(name ?? '');
 
 function buildParticleTree(buffer, parsers, warnings) {
@@ -1021,6 +1145,8 @@ export default function App({ launch = null }) {
   effectEntryRef.current = effectEntry;
   const [effectRoutines, setEffectRoutines] = useState([]); // 0x07 routines in the effect DAT
   const [effectSchedule, setEffectSchedule] = useState(''); // active routine id (AltanaViewer "Schedule")
+  const effectScheduleRef = useRef('');                     // mirror for the Show Character Animation toggle
+  effectScheduleRef.current = effectSchedule;
   // 'playing' | 'paused' | 'stopped'. Pause freezes the stage as it is; Stop
   // clears it and rewinds — the old single Play/Stop button only ever paused.
   const [effectTransport, setEffectTransport] = useState('playing');
@@ -2585,122 +2711,11 @@ export default function App({ launch = null }) {
       // character this was meant to decorate.
       if (keepActorAnim && !onActor) return;
 
-      // Caster animation: resolve each 0x05 ref against THIS character's clips.
-      // A ref that doesn't resolve is dropped, which is how the weapon-skill
-      // (`wz*`) refs degrade when the motion pack holding them isn't loaded.
-      let animCues = [];
-      let windup = 0;
-      if (onActor && showCharAnimRef.current && !keepActorAnim) {
-        // `actor.animations` entries ARE clips (id + jointTracks +
-        // lengthInFrames) — there is no `.clip` wrapper. That only appears once
-        // groupAnimations() buckets them for the Anim dropdown.
-        const ids = actor.animations.map((a) => a.id);
-        const clipById = new Map(actor.animations.map((a) => [a.id, a]));
-        /**
-         * A ref like `mb0?` matches SEVERAL clips — `mb00`, `mb01` — and those
-         * are body-region layers of one motion, not alternatives. Taking the
-         * first played only the half that tracked the legs. groupAnimations
-         * merges them into a single layered clip, which is what the Characters
-         * view feeds the renderer (see resolveScheduleClip).
-         */
-        const findClip = (ref) => {
-          const parts = matchAnimRef(ref, ids).map((id) => clipById.get(id)).filter(Boolean);
-          if (!parts.length) return null;
-          return groupAnimations(parts)[0]?.clip ?? null;
-        };
-        // `idl` and nothing else. `std` is a stand-UP motion, not a stance.
-        const idleClip = () => findClip('idl?') ?? pickBaseIdle(actor);
-
-        // A call the effect DAT can't satisfy is a schedule on the ACTOR — this
-        // is where the cast motions live (`shbk` black, `shnj` ninjutsu, `shwh`
-        // white). Every race ships the `sh*` schedules EMPTY while the `ca*`
-        // twin carries the ref, so read the twin's ref when the direct one is
-        // blank (verified identical on Hume/Taru/Galka/Mithra).
-        const schedById = new Map((actor.schedules ?? []).map((sc) => [sc.id, sc]));
-        const schoolRef = (id) => (schedById.get(id)?.refs ?? [])[0]
-          ?? (id.startsWith('sh') ? (schedById.get(`ca${id.slice(2)}`)?.refs ?? [])[0] : null)
-          ?? null;
-
-        /**
-         * Full cast — wind-up → hold → release — as ONE clip with `segments`,
-         * not a run of setAnimation calls. That hands the whole thing to
-         * SkeletonPose.evaluate, which already cross-fades a finished segment
-         * back to `baseClip` over `transOut` frames and rests undriven joints
-         * there instead of the bind pose. Firing separate clips could only
-         * snap.
-         *
-         * The three stages are the same clip base with the stage digit walked
-         * (`mb0?`/`mb1?`/`mb2?` for black magic), so this is derived, not a
-         * table. Segment delays are 30fps clip frames; the routine clock is
-         * 60/s, hence the doubling on the way out.
-         */
-        const buildCast = (scheduleId) => {
-          // ONLY the magic-cast schedules have the three-stage structure.
-          // `ca<school>` / `sh<school>` map to `m*0/1/2` = wind-up/hold/release.
-          // Everything else a routine can call — res0, damg, sway, gurd, pary —
-          // is a self-contained motion, and walking its stage digit invents a
-          // sequence that does not exist: `res0` refs `rx0?`, so the walk
-          // played rx0 → rx1 → rx2, i.e. Raise I then II then III.
-          if (!/^(ca|sh)/.test(scheduleId)) return null;
-          const ref = schoolRef(scheduleId);
-          if (!ref) return null;
-          const base = ref.slice(0, 2);
-          // Belt and braces: the cast families all start with `m`.
-          if (!base.startsWith('m')) return null;
-          const inC = findClip(`${base}0?`);
-          const holdC = findClip(`${base}1?`);
-          const outC = findClip(`${base}2?`);
-          if (!inC || !outC) return null;
-          const len = (c) => c.lengthInFrames ?? 0;
-          const segments = [{ clip: inC, delay: 0, transOut: CAST_BLEND_FRAMES }];
-          let at = len(inC);
-          if (holdC) {
-            segments.push({ clip: holdC, delay: at, transOut: CAST_BLEND_FRAMES });
-            at += len(holdC);
-          }
-          // The release runs its own length (~1s for most schools) and then
-          // fades out over CAST_BLEND_FRAMES rather than cutting to idle.
-          segments.push({ clip: outC, delay: at, transOut: CAST_BLEND_FRAMES });
-          return { segments, releaseFrame: at, endFrame: at + len(outC) + CAST_BLEND_FRAMES };
-        };
-
-        const cast = (routine.flat.actorCalls ?? []).map((c) => buildCast(c.scheduleId)).find(Boolean);
-        if (cast) {
-          windup = cast.releaseFrame * 2;   // the effect lands on the release
-          const jointTracks = new Map();
-          for (const s of cast.segments) for (const [j, t] of s.clip.jointTracks) jointTracks.set(j, t);
-          const idle = idleClip();
-          // TWO cues, not one. Stretching the cast clip to cover the effect
-          // can't work: the renderer loops on lengthInFrames, and an effect
-          // outlives its own emission window (particles have their own
-          // lifespans), so any length guessed from the routine wrapped early
-          // and replayed the wind-up over the still-running spell. Instead the
-          // cast runs exactly its own length, then hands over to the idle,
-          // which loops cleanly on its own until the effect re-arms and
-          // re-fires cue one.
-          animCues = [{
-            delay: 0,
-            clip: {
-              id: 'cast',
-              segments: cast.segments,
-              jointTracks,
-              lengthInFrames: cast.endFrame,
-              numFrames: Math.max(...cast.segments.map((s) => s.clip.numFrames ?? 0)),
-              keyFrameDuration: 1,
-              // Undriven joints and finished segments settle here, not bind pose.
-              baseClip: idle,
-              parts: cast.segments.map((s) => s.clip.id),
-            },
-          }];
-          // Hand over to the looping idle the frame the cast finishes.
-          if (idle) animCues.push({ delay: cast.endFrame * 2, clip: idle });
-        } else {
-          // No cast schedule: fall back to whatever 0x05 named outright.
-          animCues = (routine.flat.anims ?? [])
-            .map((a) => ({ delay: a.delay, clip: findClip(a.ref) }))
-            .filter((a) => a.clip);
-        }
-      }
+      // Caster animation (see buildCasterCues). The actor keeps pace with the
+      // routine's Speed control while its cues drive the clip.
+      const drivesActor = onActor && showCharAnimRef.current && !keepActorAnim;
+      const { animCues, windup } = drivesActor ? buildCasterCues(actor, routine) : { animCues: [], windup: 0 };
+      if (onActor) renderer.actorFollowsEffect = drivesActor;
       if (onActor && !showCharAnimRef.current && !keepActorAnim) {
         renderer.setAnimation(actorIdleClip());
         renderer.playing = true;
@@ -2908,19 +2923,64 @@ export default function App({ launch = null }) {
     }
   }, []);
 
+  /**
+   * Re-arm one of the loaded DAT's routines in the Effects view — the Schedule
+   * combo, and the Show Character Animation toggle. Bakes the caster cues the
+   * same way loadEffect does, so neither has to reload the DAT to pick up the
+   * toggle. Not for a PC-view pairing (pcFxReplayRef): that has its own arm.
+   */
+  const rearmEffectSchedule = useCallback((id) => {
+    const renderer = rendererRef.current;
+    const system = renderer?.particleSystem;
+    if (!system || pcFxReplayRef.current) return;
+    const routine = effectRoutinesRef.current.find((r) => r.id === id);
+    if (!routine) { system.clearEffect(); setEffectTransport('stopped'); return; }
+    const actor = modelRef.current;
+    const onActor = !!(actor && actor.kind !== 'zone' && actor.isRenderable && renderer.model === actor);
+    const drivesActor = onActor && showCharAnimRef.current;
+    const { animCues, windup } = drivesActor ? buildCasterCues(actor, routine) : { animCues: [], windup: 0 };
+    if (onActor) {
+      renderer.actorFollowsEffect = drivesActor;
+      if (!drivesActor) {
+        renderer.setAnimation(actorIdleClip());
+        renderer.playing = true;
+      }
+    }
+    const shift = (arr) => (windup ? arr.map((x) => ({ ...x, delay: x.delay + windup })) : arr);
+    system.playEffectRoutine(shift(routine.flat.commands), {
+      loop: effectLoopRef.current,
+      sounds: shift(routine.flat.sounds),
+      anims: animCues,
+      onAnim: (a) => {
+        const r = rendererRef.current;
+        if (!r || !a.clip) return;
+        r.setAnimation(a.clip);
+        r.playing = true;
+      },
+      onFinished: effectFinishedRef.current,
+    });
+    renderer.effectPaused = false;
+    if (drivesActor) renderer.playing = true;
+    setEffectTransport('playing');
+  }, [actorIdleClip]);
+
   const setShowCharAnim = useCallback((on) => {
     showCharAnimRef.current = !!on;
     setShowCharAnimState(!!on);
     try { localStorage.setItem('showCharAnim', on ? '1' : '0'); } catch { /* quota */ }
-    // Takes effect on the next effect load / schedule change — the cue list is
-    // baked when the routine is armed. Either way settle the actor on its idle
-    // rather than the bind pose, so a half-played cast is never left frozen.
+    // The cue list is baked when the routine is armed, so re-arm the current
+    // schedule with the toggle's new value — otherwise Play kept running the
+    // old cue-less routine until the effect was reloaded. Off: settle the actor
+    // on its idle rather than the bind pose, so a half-played cast is never
+    // left frozen, and hand its clock back to the Characters view's Speed.
     const r = rendererRef.current;
     if (!on && r) {
+      r.actorFollowsEffect = false;
       r.setAnimation(actorIdleClip());
       r.playing = true;
     }
-  }, [actorIdleClip]);
+    if (effectScheduleRef.current) rearmEffectSchedule(effectScheduleRef.current);
+  }, [actorIdleClip, rearmEffectSchedule]);
 
   const setAttachFx = useCallback((on) => {
     attachFxRef.current = !!on;
@@ -2985,14 +3045,9 @@ export default function App({ launch = null }) {
 
   const changeEffectSchedule = useCallback((id) => {
     setEffectSchedule(id);
-    const system = rendererRef.current?.particleSystem;
-    if (!system) return;
-    const routine = effectRoutinesRef.current.find((r) => r.id === id);
-    if (!routine) { system.clearEffect(); setEffectTransport('stopped'); return; }
-    system.playEffectRoutine(routine.flat.commands, { loop: effectLoopRef.current, sounds: routine.flat.sounds, onFinished: effectFinishedRef.current });
-    rendererRef.current.effectPaused = false;
-    setEffectTransport('playing');
-  }, []);
+    effectScheduleRef.current = id;
+    rearmEffectSchedule(id);
+  }, [rearmEffectSchedule]);
 
   /** Reset: restart the routine from frame 0 (speed reset is handled by onSpeed). */
   const restartEffect = useCallback(() => {
@@ -5923,6 +5978,7 @@ export default function App({ launch = null }) {
       if (rendererRef.current) {
         rendererRef.current.particleSystem = null;
         rendererRef.current.effectMode = false;
+        rendererRef.current.actorFollowsEffect = false;
       }
     }
     // Effects → NPC/PC with actor still on stage: put the status bar / selection

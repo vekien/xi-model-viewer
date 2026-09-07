@@ -1224,6 +1224,11 @@ export class Renderer {
     this.effectMode = false;
     this.effectPaused = false;
     this.effectSpeed = 1;
+    // Effects view > Show Character Animation: the routine's 0x05 cues drive the
+    // actor's clip, so it advances on the effect clock (effectSpeed) instead of
+    // the Characters view's playbackSpeed — otherwise a cast fired on the
+    // routine's timeline runs at a different rate than the spell it belongs to.
+    this.actorFollowsEffect = false;
     // Spell TargetActor attach at skinned AABB centre when a character is on stage.
     this.attachFxToActor = true;
 
@@ -1589,6 +1594,7 @@ export class Renderer {
   setModel(model, keepCamera = false) {
     const gl = this.gl;
     this.effectMode = false;   // any real model/zone load leaves effect mode
+    this.actorFollowsEffect = false;   // a new actor is not driven by any routine
     // Always drop isolation — caller re-applies after PC gear swaps.
     this.meshSourceFilter = null;
     // New geometry (including a gear swap) invalidates the cached rest bounds.
@@ -2861,7 +2867,10 @@ export class Renderer {
     if (this.playing && this.currentAnimation && this.pose) {
       // 30 game-frames/sec, scaled — unless the clip declares its own rate
       // (high-poly creation motions run at ~30 or ~61 depending on encoding).
-      this.animFrame += dtSeconds * (this.currentAnimation.fps ?? 30) * this.playbackSpeed;
+      // An actor driven by an effect routine keeps pace with that routine's
+      // Speed control, not the Characters view's.
+      const rate = this.actorFollowsEffect ? (this.effectSpeed ?? 1) : this.playbackSpeed;
+      this.animFrame += dtSeconds * (this.currentAnimation.fps ?? 30) * rate;
       const len = this.currentAnimation.lengthInFrames;
       // Guard the same way setAnimation and seekTo do. A clip can legitimately
       // arrive with length 0 (mergeAnimationParts over all-zero-length parts),
