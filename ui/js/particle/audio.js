@@ -249,10 +249,13 @@ export class WeatherAudio {
   }
 
   async _crossFadeTo(soundId) {
+    // The ambient bed travels with the weather it belongs to, so it uses the
+    // environment's cross-fade length (Settings > Weather Transition).
+    const fade = Number(this.environment?.weatherFadeSeconds ?? 3.33) || 0;
     const previous = this._current;
     if (previous) {
-      previous.voice.fadeTo(0, 3.33);
-      previous.voice.stopAfter(3.4);
+      previous.voice.fadeTo(0, fade);
+      previous.voice.stopAfter(fade + 0.07);
       this._fading.push(previous.voice);
     }
     this._current = null;
@@ -268,7 +271,7 @@ export class WeatherAudio {
     // Per-voice starts at 1; master bus carries the user volume so slider/mute
     // never race a fadeTo(this.volume).
     const voice = new Voice(ctx, sound, { looping: true, volume: 0, output: this._master });
-    voice.fadeTo(1, 3.33);
+    voice.fadeTo(1, fade);
     this._current = { soundId, voice };
   }
 

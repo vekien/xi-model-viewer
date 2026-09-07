@@ -542,6 +542,20 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
                     </div>
                   </Tooltip>
 
+                  <Tooltip content="A zone opens with its sky and weather running, even if you switched them off in the last one.">
+                    <div className="form-row">
+                      <Field className="check-field">
+                        <Checkbox
+                          checked={draft.autoWeatherZones !== false}
+                          onChange={(v) => setDraft({ ...draft, autoWeatherZones: v })}
+                          className="checkbox"
+                        >
+                          <span className="icon check-icon">check</span>
+                        </Checkbox>
+                        <Label className="check-label">Auto Enable Weather</Label>
+                      </Field>
+                    </div>
+                  </Tooltip>
 
                   <Tooltip content="Clicking a row in the Objects list frames the camera on it. Off = select only, camera stays put.">
                     <div className="form-row">
@@ -589,6 +603,26 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
                     <div className="form-hint">
                       Seconds of real time for one in-game day when the day/night
                       cycle is playing (Zone panel). Default 60.
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <label className="form-label">Weather Transition</label>
+                    <div className="form-inline">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        spellCheck={false}
+                        style={{ flex: '0 0 auto', width: 100 }}
+                        value={draft.weatherFadeMs ?? ''}
+                        onChange={(e) => setDraft({ ...draft, weatherFadeMs: e.target.value })}
+                      />
+                      <span className="form-suffix">ms</span>
+                    </div>
+                    <div className="form-hint">
+                      How long a weather change takes to cross-fade — sky, fog,
+                      lighting, particles and the ambient bed. Default 3330
+                      (the game's 3.33s); 0 snaps straight over.
                     </div>
                   </div>
 

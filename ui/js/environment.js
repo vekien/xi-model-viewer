@@ -343,17 +343,20 @@ const lerpEnv = (e0, e1, t) => ({
   })),
 });
 
+/** xim's weather cross-fade length. Settings > Weather Transition overrides it. */
+export const DEFAULT_WEATHER_FADE_SECONDS = 3.33;
+
 /**
  * Owns the clock, the current weather, and the cross-fade between weathers.
  *
  * Switching weather in FFXI is not a swap: the outgoing environment is captured
- * and lerped toward the incoming one over ~3.3 seconds while the two weathers'
+ * and lerped toward the incoming one over 3.33 seconds while the two weathers'
  * particle sets fade past each other. Sky colour, fog, draw distance and
  * lighting all travel together, which is what makes a storm roll in rather than
  * blink on.
  */
 export class EnvironmentManager {
-  constructor(environmentsByRoot, { particleSystem = null } = {}) {
+  constructor(environmentsByRoot, { particleSystem = null, fadeSeconds = DEFAULT_WEATHER_FADE_SECONDS } = {}) {
     this.byRoot = environmentsByRoot ?? new Map();
     this.weat = this.byRoot.get('weat') ?? new Map();
     this.particleSystem = particleSystem;
@@ -363,6 +366,8 @@ export class EnvironmentManager {
     this.moonPhase = 6;    // Full moon
     this.currentWeather = defaultWeather(this.weat);
     this.weatherTransition = null;
+    this.weatherFadeSeconds = DEFAULT_WEATHER_FADE_SECONDS;
+    this.setWeatherFadeSeconds(fadeSeconds);
 
     this._cache = new Map();
   }
@@ -375,6 +380,14 @@ export class EnvironmentManager {
   getTimeMinutes() { return this.clock.currentHour() * 60 + this.clock.currentMinuteOfHour(); }
 
   setTimeMinutes(total) { this.clock.setTotalMinutes(total); this._cache.clear(); }
+  /**
+   * How long a weather change takes to cross-fade. A running transition keeps
+   * the length it started with; the next switch uses the new one. 0 snaps.
+   */
+  setWeatherFadeSeconds(seconds) {
+    const n = Number(seconds);
+    this.weatherFadeSeconds = Number.isFinite(n) && n >= 0 ? n : DEFAULT_WEATHER_FADE_SECONDS;
+  }
   setDayOfWeek(index) { this.dayOfWeek = ((index % 8) + 8) % 8; }
   setMoonPhase(index) { this.moonPhase = ((index % MOON_PHASES) + MOON_PHASES) % MOON_PHASES; }
 
@@ -400,7 +413,7 @@ export class EnvironmentManager {
   }
 
   /** xim EnvironmentManager.switchWeather. */
-  switchWeather(newWeather, interpolationSeconds = 3.33) {
+  switchWeather(newWeather, interpolationSeconds = this.weatherFadeSeconds) {
     if (!newWeather || newWeather === this.currentWeather) return;
     if (!this.weat.has(newWeather)) return;
 

@@ -158,6 +158,17 @@ function clampDayLength(v) {
   if (!Number.isFinite(n)) return DAY_LENGTH_DEFAULT;
   return Math.min(DAY_LENGTH_MAX, Math.max(DAY_LENGTH_MIN, n));
 }
+// Milliseconds a weather change takes to cross-fade — sky, fog, lighting and
+// the two weathers' particles and ambient bed. 3330 is xim's 3.33s.
+const WEATHER_FADE_MS_DEFAULT = 3330;
+const WEATHER_FADE_MS_MIN = 0;      // 0 = snap, no cross-fade
+const WEATHER_FADE_MS_MAX = 60000;
+function clampWeatherFadeMs(v) {
+  if (v == null || v === '') return WEATHER_FADE_MS_DEFAULT;
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return WEATHER_FADE_MS_DEFAULT;
+  return Math.min(WEATHER_FADE_MS_MAX, Math.max(WEATHER_FADE_MS_MIN, n));
+}
 // Views whose actor can carry particle VFX alongside its mesh, and so get the
 // Both / Mesh / VFX control and the effect volume slider.
 const FX_VIEWS = new Set(['pc', 'npc']);
@@ -358,9 +369,11 @@ const loadSettings = (gamePath) => {
     bgColor: localStorage.getItem('bgColor') || DEFAULT_BG,
     autoPlay: localStorage.getItem('autoPlay') === '1',
     autoWasdZones: localStorage.getItem('autoWasdZones') !== '0',
+    autoWeatherZones: localStorage.getItem('autoWeatherZones') !== '0',
     autoFocusZoneObject: localStorage.getItem('autoFocusZoneObject') !== '0',
     closeDatNotesOnSave: localStorage.getItem('closeDatNotesOnSave') === '1',
     dayLength: clampDayLength(localStorage.getItem('dayLength')),
+    weatherFadeMs: clampWeatherFadeMs(localStorage.getItem('weatherFadeMs')),
     uiScale: clampUiScale(localStorage.getItem('uiScale')),
     reframeOnSelect: localStorage.getItem('reframeOnSelect') === '1',
     showXiConsole: localStorage.getItem('showXiConsole') !== '0',
@@ -3287,7 +3300,9 @@ export default function App({ launch = null }) {
       try {
         const byRoot = parseEnvironmentsByRoot(treeBuf);
         envs = byRoot.get('weat') ?? new Map();
-        environment = new EnvironmentManager(byRoot);
+        environment = new EnvironmentManager(byRoot, {
+          fadeSeconds: clampWeatherFadeMs(settingsRef.current?.weatherFadeMs) / 1000,
+        });
         environment.setTimeMinutes(time0);
         weather0 = environment.getWeather();
         terrainLit = environment.getTerrainLighting();
@@ -3432,8 +3447,13 @@ export default function App({ launch = null }) {
       setShowNavmesh(false);
       renderer.showCollision = false;
       renderer.showNavmesh = false;
-      // Restore the saved skybox preference (off if this zone has no sky).
-      setSkybox(hasSky && localStorage.getItem('skybox') !== '0');
+      // Settings › Auto Enable Weather (default on): a zone comes up with its
+      // sky and weather running even when the last one had them switched off.
+      // Loading an entity parks `skybox` at '0' (entities have no sky), so
+      // without this the preference reads as "user wants no weather" and every
+      // zone after a model view opened bare. Off = honour the saved toggle.
+      const autoWeather = settingsRef.current?.autoWeatherZones !== false;
+      setSkybox(hasSky && (autoWeather || localStorage.getItem('skybox') !== '0'));
       // Unplaced: always drawable; default hidden via per-row userHidden eyes.
       renderer.showUnplaced = true;
       for (const p of model.zonePlacements ?? []) {
@@ -7402,9 +7422,11 @@ export default function App({ launch = null }) {
       localStorage.setItem('bgColor', draft.bgColor);
       localStorage.setItem('autoPlay', draft.autoPlay ? '1' : '0');
       localStorage.setItem('autoWasdZones', draft.autoWasdZones === false ? '0' : '1');
+      localStorage.setItem('autoWeatherZones', draft.autoWeatherZones === false ? '0' : '1');
       localStorage.setItem('autoFocusZoneObject', draft.autoFocusZoneObject === false ? '0' : '1');
       localStorage.setItem('closeDatNotesOnSave', draft.closeDatNotesOnSave ? '1' : '0');
       localStorage.setItem('dayLength', String(clampDayLength(draft.dayLength)));
+      localStorage.setItem('weatherFadeMs', String(clampWeatherFadeMs(draft.weatherFadeMs)));
       localStorage.setItem('uiScale', String(clampUiScale(draft.uiScale)));
       localStorage.setItem('reframeOnSelect', draft.reframeOnSelect ? '1' : '0');
       localStorage.setItem('showXiConsole', draft.showXiConsole === false ? '0' : '1');
@@ -7427,9 +7449,11 @@ export default function App({ launch = null }) {
       navmeshPath,
       xiPath,
       autoWasdZones: draft.autoWasdZones !== false,
+      autoWeatherZones: draft.autoWeatherZones !== false,
       autoFocusZoneObject: draft.autoFocusZoneObject !== false,
       closeDatNotesOnSave: !!draft.closeDatNotesOnSave,
       dayLength: clampDayLength(draft.dayLength),
+      weatherFadeMs: clampWeatherFadeMs(draft.weatherFadeMs),
       uiScale: clampUiScale(draft.uiScale),
       reframeOnSelect: !!draft.reframeOnSelect,
       showXiConsole: draft.showXiConsole !== false,
@@ -8032,7 +8056,8 @@ export default function App({ launch = null }) {
   /**
    * Drive EnvironmentManager for weather / time of day.
    *
-   * Weather changes: full switchWeather + sky rebuild (3.33s cross-fade).
+   * Weather changes: full switchWeather + sky rebuild (cross-fade length is
+   * Settings > Weather Transition, 3330 ms by default).
    * Time-only (sequencer TOD play, day clock, slider): lighting every call so
    * the sun eases smoothly; sky dome rebuilds ~every 30 game-seconds so the
    * gradient keeps up without hitching on a GPU buffer rebuild each frame.
@@ -8124,6 +8149,12 @@ export default function App({ launch = null }) {
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [todPlaying, applyWeatherTime, settings?.dayLength]);
+
+  // Weather cross-fade length is read at switch time, so pushing it onto the
+  // live manager is all a Settings change needs — no zone reload.
+  useEffect(() => {
+    zoneEnvManagerRef.current?.setWeatherFadeSeconds(clampWeatherFadeMs(settings?.weatherFadeMs) / 1000);
+  }, [settings?.weatherFadeMs]);
 
   /**
    * Apply `--weather` / `--time` / `--clock` from the launch line. Deferred to
@@ -8703,7 +8734,7 @@ export default function App({ launch = null }) {
         <SettingsModal
           open={settingsOpen}
           initial={{
-            ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, navmeshPath: '', bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, autoFocusZoneObject: true, closeDatNotesOnSave: false, dayLength: DAY_LENGTH_DEFAULT, uiScale: 1, reframeOnSelect: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
+            ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, navmeshPath: '', bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, autoWeatherZones: true, autoFocusZoneObject: true, closeDatNotesOnSave: false, dayLength: DAY_LENGTH_DEFAULT, weatherFadeMs: WEATHER_FADE_MS_DEFAULT, uiScale: 1, reframeOnSelect: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
             showGrid,
             showAxes,
           }}
@@ -9649,7 +9680,7 @@ export default function App({ launch = null }) {
       <SettingsModal
         open={settingsOpen}
         initial={{
-          ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, navmeshPath: '', bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, autoFocusZoneObject: true, closeDatNotesOnSave: false, dayLength: DAY_LENGTH_DEFAULT, uiScale: 1, reframeOnSelect: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
+          ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, navmeshPath: '', bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, autoWeatherZones: true, autoFocusZoneObject: true, closeDatNotesOnSave: false, dayLength: DAY_LENGTH_DEFAULT, weatherFadeMs: WEATHER_FADE_MS_DEFAULT, uiScale: 1, reframeOnSelect: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
           showGrid,
           showAxes,
         }}

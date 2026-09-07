@@ -35,6 +35,9 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 - A race switch keeps the stance you were looking at by the weapon it names, not by its label or its slot in the list — neither of which means the same thing on the next race
 - Fixed: picking the **Fishing** action with the Ranged slot empty froze the app on Hume Female and Mithra. Fishing draws whatever is in Ranged, and the empty-slot placeholder made the viewer hang the character's skeleton off its own hand — a loop the pose solver could never finish. An empty slot is now left alone, and no re-parenting can wedge the solver again
 
+### Settings
+- Settings → **Weather Transition** — how long a weather change takes to cross-fade, in milliseconds (default 3330, the game's 3.33s). Sky colour, fog, lighting, both weathers' particles and the ambient bed all travel on it; 0 snaps straight over. Takes effect on the next weather change, no zone reload
+
 ---
 
 ## [1.1.0] — 2026-09-01

@@ -3121,6 +3121,7 @@ button.settings-tab.on .icon { color: var(--accent); }
 .form-inline { display: flex; align-items: center; gap: 8px; }
 .form-inline input[type='text'] { flex: 1 1 auto; min-width: 0; }
 .form-hint { color: var(--muted); font-size: 12px; }
+.form-suffix { flex: 0 0 auto; color: var(--muted); font-size: 12px; }
 .ui-scale-row .vol-slider { flex: 1 1 auto; min-width: 0; }
 .ui-scale-num { flex: 0 0 44px; text-align: right; color: var(--gray-300); }
 .check-field + .form-hint { padding-left: calc(18px + 7px); }
