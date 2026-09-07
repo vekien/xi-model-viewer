@@ -20023,6 +20023,46 @@
           "fileId": 102732
         },
         {
+          "name": "Buffalo Companion",
+          "variants": [
+            "ROM\\365\\31.DAT"
+          ],
+          "base": null,
+          "fileId": 102733
+        },
+        {
+          "name": "Wivre Companion",
+          "variants": [
+            "ROM\\368\\89.DAT"
+          ],
+          "base": null,
+          "fileId": 102734
+        },
+        {
+          "name": "Red Raptor Companion",
+          "variants": [
+            "ROM\\369\\62.DAT"
+          ],
+          "base": null,
+          "fileId": 102735
+        },
+        {
+          "name": "Iron Giant Companion",
+          "variants": [
+            "ROM\\371\\58.DAT"
+          ],
+          "base": null,
+          "fileId": 102736
+        },
+        {
+          "name": "Byakko Companion",
+          "variants": [
+            "ROM\\372\\17.DAT"
+          ],
+          "base": null,
+          "fileId": 102737
+        },
+        {
           "name": "Ixion Companion",
           "variants": [
             "ROM\\375\\105.DAT"
@@ -20095,24 +20135,6 @@
               ]
             }
           ]
-        },
-        {
-          "separator": "Buffalo Companion"
-        },
-        {
-          "separator": "Wivre Companion"
-        },
-        {
-          "separator": "Red Raptor Companion"
-        },
-        {
-          "separator": "Iron Giant Companion"
-        },
-        {
-          "separator": "Byakko Companion"
-        },
-        {
-          "separator": "Noble Chocobo Companion"
         }
       ]
     },
