@@ -40,6 +40,7 @@ import { LoadingOverlay } from './LoadingOverlay.jsx';
 import { SettingsModal } from './SettingsModal.jsx';
 import { ExportModal, xiEnvFromSpec } from './ExportModal.jsx';
 import { BatchExportModal } from './BatchExportModal.jsx';
+import { ExportToast } from './ExportToast.jsx';
 import { DetailsPanel } from './DetailsPanel.jsx';
 import { SkeletonPanel } from './SkeletonPanel.jsx';
 import { TextureModal } from './TextureModal.jsx';
@@ -785,6 +786,8 @@ export default function App({ launch = null }) {
     return () => { alive = false; };
   }, [minimal]);
   const [exportSpec, setExportSpec] = useState(null);
+  /** Finished File > Export, shown as a banner until it fades or is dismissed. */
+  const [exportDone, setExportDone] = useState(null);
   const [batchOpen, setBatchOpen] = useState(false);
   const batchRunningRef = useRef(false);
   const [leftView, setLeftViewState] = useState(() => {
@@ -9927,6 +9930,13 @@ export default function App({ launch = null }) {
           if (settingsRef.current?.showXiConsole === false) return;
           setCliOutput(log);
         }}
+        onDone={(res) => setExportDone({ ...res, at: Date.now() })}
+      />
+
+      <ExportToast
+        result={exportDone}
+        onClose={() => setExportDone(null)}
+        onStatus={(msg) => setStatusText(msg)}
       />
 
       <BatchExportModal

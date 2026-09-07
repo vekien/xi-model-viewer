@@ -9,7 +9,8 @@ import {
   EXPORT_COMMANDS, addToken, removeFlag, tokenValue, tokensToArgv,
 } from './exportArgs.js';
 
-const sanitize = (name) => name.replace(/[<>:"/\\|?*]+/g, '_').trim() || 'export';
+/** Windows-illegal characters out of a name we're about to make a filename of. */
+export const sanitizeFileName = (name) => String(name ?? '').replace(/[<>:"/\\|?*]+/g, '_').trim() || 'export';
 
 /** Per-kind export folders / formats / args persist independently. */
 const folderKey = (type) => `exportFolder_${type}`;
@@ -132,8 +133,12 @@ const stemOf = (path) => (String(path || '').split(/[\\/]/).pop() || 'export').r
  * File > Export dialog. Music/SFX export to WAV in-app; models/zones shell out
  * to `xi mesh|anim|zone export` and dump the CLI log into the bottom console
  * (same path as DAT edits). Draggable and screen-clamped like SettingsModal.
+ *
+ * `onDone` reports the finished export to the banner App puts on screen — the
+ * xi path closes this dialog the moment it starts, so a status line that scrolls
+ * past is otherwise all there is to say it worked.
  */
-export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
+export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone }) {
   const [folder, setFolder] = useState('');
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState('mesh');
@@ -230,7 +235,7 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
 
   const outExt = isXi ? kind.ext(format === 'fbx') : 'wav';
   const outStem = !isXi
-    ? sanitize(spec.outStem)
+    ? sanitizeFileName(spec.outStem)
     : (kindId === 'anim' ? `${datStem}_${animId || DEFAULT_ANIM}` : datStem);
   const headTitle = isXi
     ? `Export ${kind.label}: ${spec.name || datStem}`
@@ -243,8 +248,21 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
     if (needsGame) { onStatus?.('Set the Game path in Settings first (FFXI_DIR).'); return; }
     setBusy(true);
     const env = xiEnvFromSpec(spec);
+    // A hand-written --output wins over the folder picker, so that is where the
+    // file actually lands and where the banner's "Open folder" has to point.
+    const outDir = (isXi && tokenValue(args, '--output')) || folder;
     // Snapshot before onClose unmounts this modal (xi path closes early).
-    const snap = { xiPath: spec.xiPath, datStem, outExt, outStem };
+    const snap = {
+      xiPath: spec.xiPath,
+      datStem,
+      outExt,
+      outStem,
+      outDir,
+      kindLabel: isXi ? kind.label : spec.typeLabel,
+    };
+    const done = (extra) => onDone?.({
+      kind: snap.kindLabel, file: `${snap.outStem}.${snap.outExt}`, folder: snap.outDir, ...extra,
+    });
     try {
       if (isXi) {
         const xiArgs = buildXiArgs(catalog, activePath, folder, format, args);
@@ -273,12 +291,14 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
           });
           push('# done');
           onCliLog?.({ title: `${title} · ok`, text: lines.join('\n') });
-          onStatus?.(`Exported ${snap.outStem}.${snap.outExt} → ${folder}`);
+          onStatus?.(`Exported ${snap.outStem}.${snap.outExt} → ${snap.outDir}`);
+          done({ ok: true, path: `${snap.outDir}\\${snap.outStem}.${snap.outExt}` });
         } catch (e) {
           const msg = e?.message || String(e);
           push(msg);
           onCliLog?.({ title: `${title} · failed`, text: lines.join('\n') });
           onStatus?.(`Export failed: ${msg}`);
+          done({ ok: false, error: msg });
         }
         return;
       }
@@ -291,9 +311,12 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog }) {
         : toWav(buffer).wav;
       await backend.writeFile(outPath, wav);
       onStatus?.(`Exported ${outStem}.wav → ${folder}`);
+      done({ ok: true, path: outPath });
       onClose();
     } catch (e) {
-      onStatus?.(`Export failed: ${e.message ?? e}`);
+      const msg = e?.message ?? String(e);
+      onStatus?.(`Export failed: ${msg}`);
+      done({ ok: false, error: msg });
     } finally {
       setBusy(false);
     }

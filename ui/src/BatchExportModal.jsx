@@ -1,18 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@headlessui/react';
 import { backend } from '../js/backend.js';
+import { gameCandidates } from '../js/gamePath.js';
+import { parseAudioHeader, toWav, FMT_ATRAC3 } from '../js/audio.js';
+import {
+  SOUND_ROOTS, listSfxFiles, listSfxFolders, loadMusicNames, loadSfxMeta, musicMatches,
+  musicTrackName, rootMatches, scanMusicRoots, sfxFileMatches, sfxFileStem, sfxFileTitle,
+  sfxFolderLabel,
+} from '../js/soundLists.js';
 import { ArgsInput } from './ArgsInput.jsx';
 import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
 import { EXPORT_COMMANDS, addToken, tokenValue } from './exportArgs.js';
 import {
-  EXPORT_KINDS, buildXiArgs, loadArgs, shellQuote, xiEnvFromSpec,
+  EXPORT_KINDS, buildXiArgs, loadArgs, sanitizeFileName, shellQuote, xiEnvFromSpec,
 } from './ExportModal.jsx';
 
-// File > Batch Export. A loop around the same `xi … export` call the single
-// Export dialog makes: pick where the DAT list comes from (a baked asset list
-// or a pasted one), pick the command and its args once, then run them in
-// sequence with a line of feedback per DAT.
+// File > Batch Export. A loop around whichever single export the picked tab
+// makes: DAT tabs run the same `xi … export` call the Export dialog does, the
+// Music and Sound FX tabs decode to WAV in-app the same way it does. Pick where
+// the list comes from, narrow it (or don't — the default is everything), then
+// run it with a line of feedback per file.
 //
 // Runs strictly one at a time — xi shells out to Python (and Blender for FBX),
 // so parallel jobs would just thrash the disk, and the Rust side tracks a
@@ -24,27 +32,42 @@ const TABS = [
   { id: 'npcs', label: 'NPCs', icon: 'pets' },
   { id: 'characters', label: 'Characters', icon: 'person' },
   { id: 'zones', label: 'Zones', icon: 'map' },
+  { id: 'music', label: 'Music', icon: 'library_music' },
+  { id: 'sfx', label: 'Sound FX', icon: 'graphic_eq' },
   { id: 'custom', label: 'Custom list', icon: 'edit_note' },
 ];
+
+const isAudioTab = (tab) => tab === 'music' || tab === 'sfx';
 
 /** Feed lines kept in the DOM — a full character run is tens of thousands. */
 const FEED_CAP = 400;
 const TAIL_CAP = 8;
 
+/** `seNNN` folders sfx.json has no real name for; one bucket, not 370 entries. */
+const CAT_UNNAMED = '\u0000unnamed';
+const isPlaceholderCat = (label) => !label || /^NEW\s*-\s*se\d+$/i.test(label);
+
 const folderKey = 'exportFolder_batch';
 const optsKey = (store) => `batchOpts_${store}`;
 const argsKey = (store) => `batchArgs_${store}`;
+const namingKey = 'batchAudioNaming';
 
 const normRel = (p) => String(p || '').replace(/\//g, '\\').replace(/^[\\]+/, '');
 
 /**
- * Mirror the game's own folder layout under the export root, so `ROM\27\82.DAT`
- * and `ROM2\27\82.DAT` don't both try to write `82.glb` into one directory.
+ * The game's own folder for a file (`ROM2\27`, `sound2\win\music\data`), so
+ * `ROM\27\82.DAT` and `ROM2\27\82.DAT` don't both try to write `82.glb` into
+ * one directory.
  */
-function outDirFor(folder, rel) {
+function gameSubdir(rel) {
   const clean = normRel(rel);
   const m = clean.match(/(?:^|\\)((?:ROM\d*|sound\d*|maps)\\.*)$/i);
-  const dir = (m ? m[1] : clean).split('\\').slice(0, -1).join('\\');
+  return (m ? m[1] : clean).split('\\').slice(0, -1).join('\\');
+}
+
+/** Mirror that layout under the export root. */
+function outDirFor(folder, rel) {
+  const dir = gameSubdir(rel);
   return dir ? `${folder}\\${dir}` : folder;
 }
 
@@ -130,6 +153,87 @@ function jobsFromText(text) {
     .map((l) => ({ path: normRel(l), label: l }));
 }
 
+/**
+ * Every `seNNN` folder under every sound root, with its `.spw` files. ~520
+ * directory reads, so it is done once per game path and then filtered in
+ * memory — the live count would otherwise re-walk the disk on every keystroke.
+ */
+async function scanSfxIndex(gamePath, onProgress) {
+  const folders = [];
+  for (const { root, label } of SOUND_ROOTS) {
+    const dir = `${gamePath}\\${root}\\win\\se`;
+    // eslint-disable-next-line no-await-in-loop
+    const names = await listSfxFolders(dir);
+    for (const name of names) folders.push({ root, label, name, dir: `${dir}\\${name}` });
+  }
+  const out = [];
+  const CHUNK = 16;
+  for (let i = 0; i < folders.length; i += CHUNK) {
+    const slice = folders.slice(i, i + CHUNK);
+    // eslint-disable-next-line no-await-in-loop
+    const lists = await Promise.all(slice.map((f) => listSfxFiles(f.dir)));
+    slice.forEach((f, k) => { if (lists[k].length) out.push({ ...f, files: lists[k] }); });
+    onProgress?.(Math.min(i + CHUNK, folders.length), folders.length);
+  }
+  return out;
+}
+
+/**
+ * Cached music groups / sfx folders for one game path. Promises, not values, so
+ * two overlapping counts share the one scan instead of racing it.
+ */
+function audioCache(cache, gamePath) {
+  if (cache.gamePath !== gamePath) {
+    Object.assign(cache, { gamePath, names: null, meta: null, music: null, sfx: null });
+  }
+  return cache;
+}
+
+function jobsFromMusic(groups, { root, q }) {
+  const out = [];
+  for (const g of groups) {
+    if (root && g.root !== root) continue;
+    // Typing an expansion's name takes the whole expansion, as in the Music panel.
+    const all = !q || rootMatches(g, q);
+    for (const t of g.tracks) {
+      if (!all && !musicMatches(t, q)) continue;
+      out.push({
+        path: t.rel,
+        label: `${g.label} · ${musicTrackName(t)}`,
+        stem: t.file.replace(/\.bgw$/i, ''),
+        name: t.name,
+      });
+    }
+  }
+  return out;
+}
+
+function jobsFromSfx(index, meta, { root, category, q }) {
+  const out = [];
+  for (const f of index) {
+    if (root && f.root !== root) continue;
+    const cat = sfxFolderLabel(f.root, f.name, meta);
+    if (category) {
+      const matchesCat = category === CAT_UNNAMED ? isPlaceholderCat(cat) : cat === category;
+      if (!matchesCat) continue;
+    }
+    // A hit on the expansion, the folder id or its category takes the folder whole.
+    const all = !q || rootMatches(f, q) || f.name.toLowerCase().includes(q)
+      || (!!cat && cat.toLowerCase().includes(q));
+    for (const file of f.files) {
+      if (!all && !sfxFileMatches(file, meta, q)) continue;
+      const title = sfxFileTitle(file, meta);
+      out.push({
+        path: `${f.root}\\win\\se\\${f.name}\\${file}`,
+        label: `${f.label} · ${cat ?? f.name} · ${title ?? sfxFileStem(file)}`,
+        stem: sfxFileStem(file),
+        name: title,
+      });
+    }
+  }
+  return out;
+}
+
 /** One job per DAT — gear items share DATs across races, slots and NPC variants. */
 const dedupe = (jobs) => {
   const seen = new Set();
@@ -141,6 +245,27 @@ const dedupe = (jobs) => {
   });
 };
 
+/**
+ * Output stem per audio job. Track names are not guaranteed unique inside a
+ * folder (and sanitizing can collide two that were), so the first repeat is
+ * qualified with the game filename rather than silently overwritten.
+ */
+function nameAudioJobs(jobs, naming) {
+  const used = new Set();
+  return jobs.map((j) => {
+    const dir = gameSubdir(j.path).toLowerCase();
+    const base = (naming === 'file' || !j.name) ? j.stem : sanitizeFileName(j.name);
+    const taken = (n) => used.has(`${dir}\\${n.toLowerCase()}`);
+    let out = base;
+    if (taken(out)) {
+      out = `${base} (${j.stem})`;
+      for (let n = 2; taken(out); n += 1) out = `${base} (${j.stem}-${n})`;
+    }
+    used.add(`${dir}\\${out.toLowerCase()}`);
+    return { ...j, out };
+  });
+}
+
 export function BatchExportModal({ open, settings, onClose, onStatus, onRunning }) {
   const [tab, setTab] = useState('npcs');
   const [kindId, setKindId] = useState('mesh');
@@ -148,12 +273,19 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
   const [race, setRace] = useState('');
   const [slot, setSlot] = useState('');
   const [customText, setCustomText] = useState('');
+  const [soundRoot, setSoundRoot] = useState('');
+  const [sfxCategory, setSfxCategory] = useState('');
+  const [audioQuery, setAudioQuery] = useState('');
+  const [naming, setNaming] = useState(() => (localStorage.getItem(namingKey) === 'file' ? 'file' : 'name'));
   const [folder, setFolder] = useState('');
   const [format, setFormat] = useState('glb');
   const [args, setArgs] = useState([]);
   const [catalogs, setCatalogs] = useState({ npc: [], race: [] });
+  const [scan, setScan] = useState(null);   // { done, total } while walking win\se
+  const [sfxCats, setSfxCats] = useState([]);
   const [preview, setPreview] = useState({ count: null, loading: false, error: '' });
   const [run, setRun] = useState(null);   // { total, done, ok, fail, current, feed[], tail[] }
+  const [result, setResult] = useState(null);   // finished run: { ok, fail, stopped, folder }
   const [running, setRunning] = useState(false);
   const [pos, setPos] = useState(null);
   const panelRef = useRef(null);
@@ -163,12 +295,15 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
   runningRef.current = running;
   const feedRef = useRef(null);
   const wasOpen = useRef(false);
+  const cacheRef = useRef({ gamePath: '', names: null, meta: null, music: null, sfx: null });
 
+  const isAudio = isAudioTab(tab);
   // Zones only have `zone export`; everything else is a mesh or an animation.
   const effKind = tab === 'zones' ? 'zone' : kindId;
   const kind = EXPORT_KINDS[effKind];
   const store = kind.store;
   const catalog = kind.catalog;
+  const gamePath = settings?.gamePath || '';
 
   const hydrate = useCallback((id) => {
     const k = EXPORT_KINDS[id];
@@ -182,10 +317,11 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
     wasOpen.current = true;
     setFolder(localStorage.getItem(folderKey) || '');
     setRun(null);
+    setResult(null);
     setRunning(false);
     stopRef.current = false;
     setPos(null);
-    hydrate(tab === 'zones' ? 'zone' : kindId);
+    if (!isAudioTab(tab)) hydrate(tab === 'zones' ? 'zone' : kindId);
   }, [open, hydrate, tab, kindId]);
 
   // Category / race pickers come from the lists themselves, fetched once.
@@ -208,12 +344,41 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
     return () => { alive = false; };
   }, [open]);
 
+  /** Music groups (7 reads) or the sfx folder index (~520), cached per game path. */
+  const audioIndex = useCallback(async (which) => {
+    if (!gamePath) return null;
+    const c = audioCache(cacheRef.current, gamePath);
+    if (which === 'music') {
+      c.names ??= loadMusicNames();
+      c.music ??= c.names.then((names) => scanMusicRoots(gamePath, names));
+      return c.music;
+    }
+    c.meta ??= loadSfxMeta();
+    if (!c.sfx) {
+      setScan({ done: 0, total: 0 });
+      c.sfx = scanSfxIndex(gamePath, (done, total) => setScan({ done, total }))
+        .finally(() => setScan(null));
+    }
+    return Promise.all([c.sfx, c.meta]).then(([index, meta]) => ({ index, meta }));
+  }, [gamePath]);
+
   const buildJobs = useCallback(async () => {
     if (tab === 'npcs') return dedupe(await jobsFromNpcs(npcCategory));
     if (tab === 'characters') return dedupe(await jobsFromCharacters(race, slot));
     if (tab === 'zones') return dedupe(await jobsFromZones());
-    return dedupe(jobsFromText(customText));
-  }, [tab, npcCategory, race, slot, customText]);
+    if (tab === 'custom') return dedupe(jobsFromText(customText));
+    const q = audioQuery.trim().toLowerCase();
+    if (tab === 'music') {
+      const groups = await audioIndex('music');
+      return nameAudioJobs(dedupe(jobsFromMusic(groups ?? [], { root: soundRoot, q })), naming);
+    }
+    const sfx = await audioIndex('sfx');
+    if (!sfx) return [];
+    return nameAudioJobs(
+      dedupe(jobsFromSfx(sfx.index, sfx.meta, { root: soundRoot, category: sfxCategory, q })),
+      naming,
+    );
+  }, [tab, npcCategory, race, slot, customText, soundRoot, sfxCategory, audioQuery, naming, audioIndex]);
 
   // Live count so the size of the run is obvious before starting it.
   useEffect(() => {
@@ -228,6 +393,36 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
     return () => { alive = false; window.clearTimeout(t); };
   }, [open, buildJobs]);
 
+  // Category picker for Sound FX: the labels sfx.json actually names, plus one
+  // bucket for the `NEW - seNNN` placeholders, counted over the chosen root.
+  useEffect(() => {
+    if (!open || tab !== 'sfx') return undefined;
+    let alive = true;
+    audioIndex('sfx').then((sfx) => {
+      if (!alive || !sfx) return;
+      const counts = new Map();
+      let unnamed = 0;
+      for (const f of sfx.index) {
+        if (soundRoot && f.root !== soundRoot) continue;
+        const cat = sfxFolderLabel(f.root, f.name, sfx.meta);
+        if (isPlaceholderCat(cat)) unnamed += f.files.length;
+        else counts.set(cat, (counts.get(cat) ?? 0) + f.files.length);
+      }
+      const named = [...counts.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([label, n]) => ({ id: label, label, badge: n.toLocaleString() }));
+      setSfxCats(unnamed
+        ? [...named, { id: CAT_UNNAMED, label: 'Uncategorised (NEW - se…)', badge: unnamed.toLocaleString() }]
+        : named);
+    }).catch(() => { if (alive) setSfxCats([]); });
+    return () => { alive = false; };
+  }, [open, tab, soundRoot, audioIndex]);
+
+  // A category that the newly-picked root doesn't have would silently queue nothing.
+  useEffect(() => {
+    if (sfxCategory && sfxCats.length && !sfxCats.some((c) => c.id === sfxCategory)) setSfxCategory('');
+  }, [sfxCats, sfxCategory]);
+
   // Naming an example in the command preview shouldn't re-split a pasted list
   // of thousands on every keystroke.
   const firstCustom = useMemo(
@@ -235,10 +430,15 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
     [customText],
   );
 
+  const soundRootItems = useMemo(() => [
+    { id: '', label: 'Everything — all sound folders' },
+    ...SOUND_ROOTS.map((r) => ({ id: r.root, label: r.label, badge: r.root })),
+  ], []);
+
   // A changed selection makes the previous run's feed stale, not current.
   useEffect(() => {
-    if (!runningRef.current) setRun(null);
-  }, [tab, npcCategory, race, slot, customText]);
+    if (!runningRef.current) { setRun(null); setResult(null); }
+  }, [tab, npcCategory, race, slot, customText, soundRoot, sfxCategory, audioQuery]);
 
   // Escape and the backdrop must not close the dialog mid-run; App owns both.
   useEffect(() => { onRunning?.(running); }, [running, onRunning]);
@@ -251,14 +451,21 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
 
   if (!open) return null;
 
-  const needsXi = !settings?.xiPath;
-  const needsGame = !settings?.gamePath;
+  const needsXi = !isAudio && !settings?.xiPath;
+  const needsGame = !gamePath;
   const setFmt = (v) => { setFormat(v); saveFormat(store, v); };
   const setArgList = (next) => {
     setArgs(next);
     try { localStorage.setItem(argsKey(store), JSON.stringify(next)); } catch { /* quota */ }
   };
-  const switchTab = (id) => { setTab(id); hydrate(id === 'zones' ? 'zone' : kindId); };
+  const setNameStyle = (v) => {
+    setNaming(v);
+    try { localStorage.setItem(namingKey, v); } catch { /* quota */ }
+  };
+  const switchTab = (id) => {
+    setTab(id);
+    if (!isAudioTab(id)) hydrate(id === 'zones' ? 'zone' : kindId);
+  };
   const switchKind = (id) => { setKindId(id); hydrate(id); };
 
   const startDrag = (e) => {
@@ -284,7 +491,25 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
     (tab === 'custom' && firstCustom)
     || (tab === 'zones' ? 'ROM\\1\\41.DAT' : 'ROM\\27\\82.DAT'),
   );
-  const sampleArgs = buildXiArgs(catalog, sampleDat, outDirFor(folder || '…', sampleDat), format, args);
+  const sampleArgs = isAudio
+    ? null
+    : buildXiArgs(catalog, sampleDat, outDirFor(folder || '…', sampleDat), format, args);
+  const sampleOut = tab === 'music'
+    ? `…\\sound\\win\\music\\data\\${naming === 'file' ? 'music101' : 'Ronfaure'}.wav`
+    : `…\\sound\\win\\se\\se003\\${naming === 'file' ? 'se003022' : 'Fire'}.wav`;
+
+  /** Decode one .bgw/.spw to WAV beside its mirrored game folder. */
+  const exportAudio = async (job) => {
+    const src = await backend.resolvePrefer(gameCandidates(job.path, settings));
+    const buffer = await backend.readFile(src);
+    const header = parseAudioHeader(buffer);
+    // ATRAC3 is an MDCT codec — not hand-decodable, so it goes through vgmstream.
+    const wav = header.sampleFormat === FMT_ATRAC3
+      ? new Uint8Array(await backend.decodeVgmstream(src))
+      : toWav(buffer).wav;
+    await backend.writeFile(`${outDirFor(folder, job.path)}\\${job.out}.wav`, wav);
+    return `${job.out}.wav`;
+  };
 
   const start = async () => {
     if (!folder) { onStatus?.('Choose an export folder first.'); return; }
@@ -301,6 +526,7 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
 
     stopRef.current = false;
     setRunning(true);
+    setResult(null);
     setRun({ total: jobs.length, done: 0, ok: 0, fail: 0, current: '', feed: [], tail: [] });
 
     const env = xiEnvFromSpec(settings);
@@ -313,19 +539,24 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
       const job = jobs[i];
       const tail = [];
       setRun((r) => ({ ...r, current: `${job.label} · ${job.path}`, tail: [] }));
-      const xiArgs = buildXiArgs(catalog, job.path, outDirFor(folder, job.path), format, args);
       let status = 'ok';
       let note = '';
       try {
-        // eslint-disable-next-line no-await-in-loop
-        await backend.xiRunStream(xiArgs, xiPath, env, (line) => {
-          if (/^# exit /.test(line)) return;
-          tail.push(line);
-          if (tail.length > TAIL_CAP) tail.shift();
-          setRun((r) => (r ? { ...r, tail: [...tail] } : r));
-        });
+        if (isAudio) {
+          // eslint-disable-next-line no-await-in-loop
+          note = await exportAudio(job);
+        } else {
+          const xiArgs = buildXiArgs(catalog, job.path, outDirFor(folder, job.path), format, args);
+          // eslint-disable-next-line no-await-in-loop
+          await backend.xiRunStream(xiArgs, xiPath, env, (line) => {
+            if (/^# exit /.test(line)) return;
+            tail.push(line);
+            if (tail.length > TAIL_CAP) tail.shift();
+            setRun((r) => (r ? { ...r, tail: [...tail] } : r));
+          });
+          note = tail.filter(Boolean).slice(-1)[0] ?? '';
+        }
         ok += 1;
-        note = tail.filter(Boolean).slice(-1)[0] ?? '';
       } catch (e) {
         status = 'fail';
         fail += 1;
@@ -347,6 +578,7 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
 
     const stopped = stopRef.current;
     setRun((r) => (r ? { ...r, current: '', tail: [] } : r));
+    setResult({ ok, fail, stopped, folder });
     setRunning(false);
     onStatus?.(stopped
       ? `Batch export stopped — ${ok} exported, ${fail} failed.`
@@ -355,7 +587,9 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
 
   const stop = async () => {
     stopRef.current = true;
-    try { await backend.xiRunCancel(); } catch { /* already gone */ }
+    if (!isAudio) {
+      try { await backend.xiRunCancel(); } catch { /* already gone */ }
+    }
   };
 
   const style = pos
@@ -363,6 +597,8 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
     : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' };
 
   const pct = run?.total ? Math.round((run.done / run.total) * 100) : 0;
+  const unit = isAudio ? 'file' : 'DAT';
+  const scanning = tab === 'sfx' && !!scan;
 
   return (
     <div className="modal-backdrop" onPointerDown={(e) => {
@@ -407,7 +643,7 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
           {needsGame && !needsXi && (
             <div className="export-warn">
               <span className="icon">info</span>
-              <span>Batch export needs the <strong>Game path</strong> (FFXI_DIR). Set it in
+              <span>Batch export needs the <strong>Game path</strong>{isAudio ? '' : ' (FFXI_DIR)'}. Set it in
                 <em> File → Settings</em>.</span>
             </div>
           )}
@@ -457,6 +693,58 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
                 </div>
               )}
 
+              {isAudio && (
+                <>
+                  <div className="form-row">
+                    <label className="form-label">Sound folder</label>
+                    <Combo
+                      value={soundRoot}
+                      items={soundRootItems}
+                      onChange={setSoundRoot}
+                      className="export-select"
+                    />
+                  </div>
+
+                  {tab === 'sfx' && (
+                    <div className="form-row">
+                      <label className="form-label">Category</label>
+                      <Combo
+                        value={sfxCategory}
+                        items={[{ id: '', label: 'All categories' }, ...sfxCats]}
+                        onChange={setSfxCategory}
+                        className="export-select"
+                      />
+                    </div>
+                  )}
+
+                  <div className="form-row">
+                    <label className="form-label">Filter</label>
+                    <div className="form-inline">
+                      <input
+                        type="text"
+                        value={audioQuery}
+                        spellCheck={false}
+                        placeholder={tab === 'music' ? 'Leave empty for everything…' : 'Leave empty for everything…'}
+                        onChange={(e) => setAudioQuery(e.target.value)}
+                        disabled={running}
+                      />
+                      {audioQuery && (
+                        <Tooltip content="Clear the filter">
+                          <Button onClick={() => setAudioQuery('')} disabled={running}>
+                            <span className="icon">close</span>
+                          </Button>
+                        </Tooltip>
+                      )}
+                    </div>
+                    <div className="form-hint">
+                      {tab === 'music'
+                        ? 'Matches the same things the Music panel’s search does — track name, filename or number. Naming an expansion takes all of it.'
+                        : 'Matches the same things the Sound FX panel’s search does — sound title, id, or a seNNN folder. Naming a folder or category takes all of it.'}
+                    </div>
+                  </div>
+                </>
+              )}
+
               {tab === 'custom' && (
                 <div className="form-row">
                   <label className="form-label">DATs — one per line</label>
@@ -475,7 +763,7 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
                 </div>
               )}
 
-              {tab !== 'zones' && (
+              {!isAudio && tab !== 'zones' && (
                 <div className="form-row">
                   <label className="form-label">Export type</label>
                   <div className="radio-row" role="radiogroup" aria-label="Export type">
@@ -507,26 +795,54 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
             </div>
 
             <div className="batch-col">
-              <div className="form-row">
-                <label className="form-label">Output type</label>
-                <Combo
-                  value={format}
-                  items={[
-                    { id: 'glb', label: effKind === 'anim' ? 'glTF (.gltf + .bin)' : 'glTF (.glb)' },
-                    { id: 'fbx', label: 'FBX (needs Blender)' },
-                  ]}
-                  onChange={setFmt}
-                  className="export-select"
-                />
-              </div>
+              {isAudio ? (
+                <>
+                  <div className="export-outrow">
+                    <span className="icon">audio_file</span>
+                    <span>Every sound exports as <strong>.wav</strong></span>
+                  </div>
 
-              <div className="form-row">
-                <label className="form-label">
-                  Arguments <span className="form-label-dim">· xi {EXPORT_COMMANDS[catalog].join(' ')}</span>
-                </label>
-                <ArgsInput type={catalog} tokens={args} onChange={setArgList} />
-                <div className="args-preview mono">{sampleArgs.map(shellQuote).join(' ')}</div>
-              </div>
+                  <div className="form-row">
+                    <label className="form-label">File names</label>
+                    <Combo
+                      value={naming}
+                      items={[
+                        { id: 'name', label: tab === 'music' ? 'Track name (Ronfaure.wav)' : 'Sound title (Fire.wav)' },
+                        { id: 'file', label: tab === 'music' ? 'Game filename (music101.wav)' : 'Game filename (se003022.wav)' },
+                      ]}
+                      onChange={setNameStyle}
+                      className="export-select"
+                    />
+                    <div className="form-hint">
+                      Anything with no known name keeps its game filename, and a repeat inside one
+                      folder is qualified with it.
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="form-row">
+                    <label className="form-label">Output type</label>
+                    <Combo
+                      value={format}
+                      items={[
+                        { id: 'glb', label: effKind === 'anim' ? 'glTF (.gltf + .bin)' : 'glTF (.glb)' },
+                        { id: 'fbx', label: 'FBX (needs Blender)' },
+                      ]}
+                      onChange={setFmt}
+                      className="export-select"
+                    />
+                  </div>
+
+                  <div className="form-row">
+                    <label className="form-label">
+                      Arguments <span className="form-label-dim">· xi {EXPORT_COMMANDS[catalog].join(' ')}</span>
+                    </label>
+                    <ArgsInput type={catalog} tokens={args} onChange={setArgList} />
+                    <div className="args-preview mono">{sampleArgs.map(shellQuote).join(' ')}</div>
+                  </div>
+                </>
+              )}
 
               <div className="form-row">
                 <label className="form-label">Export folder</label>
@@ -541,9 +857,15 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
                   </Button>
                 </div>
                 <div className="form-hint">
-                  Each DAT lands under its own game folder
-                  (<span className="mono">…\ROM\27\82.{kind.ext(format === 'fbx')}</span>) so same-named
-                  files from different ROMs don't collide.
+                  {isAudio ? (
+                    <>Each sound lands under its own game folder
+                      (<span className="mono">{sampleOut}</span>) so same-named files from different
+                      expansions don&apos;t collide.</>
+                  ) : (
+                    <>Each DAT lands under its own game folder
+                      (<span className="mono">…\ROM\27\82.{kind.ext(format === 'fbx')}</span>) so
+                      same-named files from different ROMs don&apos;t collide.</>
+                  )}
                 </div>
               </div>
             </div>
@@ -562,21 +884,50 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
                 <span className="batch-counts mono">
                   {preview.error
                     ? `list unavailable — ${preview.error}`
-                    : preview.count == null
-                      ? 'counting…'
-                      : `${preview.count.toLocaleString()} DAT${preview.count === 1 ? '' : 's'} queued`}
+                    : scanning
+                      ? `scanning sound effects… ${scan.done}/${scan.total || '…'} folders`
+                      : preview.count == null
+                        ? 'counting…'
+                        : `${preview.count.toLocaleString()} ${unit}${preview.count === 1 ? '' : 's'} queued`}
                 </span>
               )}
-              {running && <span className="icon spin batch-spin">progress_activity</span>}
+              {(running || scanning) && <span className="icon spin batch-spin">progress_activity</span>}
             </div>
+
+            {result && (
+              <div className={`batch-result${result.fail ? ' warn' : ''}${result.stopped ? ' stopped' : ''}`} role="status">
+                <span className="icon batch-result-icon">
+                  {result.stopped ? 'stop_circle' : result.fail ? 'warning' : 'check_circle'}
+                </span>
+                <div className="batch-result-text">
+                  <strong>{result.stopped ? 'Stopped' : 'Export complete'}</strong>
+                  {' — '}
+                  {result.ok.toLocaleString()} exported
+                  {result.fail > 0 && `, ${result.fail.toLocaleString()} failed`}
+                  <div className="batch-result-path mono">{result.folder}</div>
+                </div>
+                <Tooltip content="Show in Explorer">
+                  <Button onClick={() => backend.revealPath(result.folder)
+                    .catch((e) => onStatus?.(`Could not show in Explorer: ${e?.message ?? e}`))}>
+                    <span className="icon">folder_open</span>Open folder
+                  </Button>
+                </Tooltip>
+              </div>
+            )}
 
             {!run && preview.count > 500 && (
               <div className="export-warn batch-warn">
                 <span className="icon">schedule</span>
                 <span>
-                  That's <strong>{preview.count.toLocaleString()}</strong> separate xi runs, one
-                  after another{format === 'fbx' ? ', each going through Blender' : ''} — this will
-                  take a while. Narrow it down above, or leave it running.
+                  {isAudio ? (
+                    <>That&apos;s <strong>{preview.count.toLocaleString()}</strong> sounds to decode, one
+                      after another — this will take a while. Narrow it down above, or leave it
+                      running.</>
+                  ) : (
+                    <>That&apos;s <strong>{preview.count.toLocaleString()}</strong> separate xi runs, one
+                      after another{format === 'fbx' ? ', each going through Blender' : ''} — this
+                      will take a while. Narrow it down above, or leave it running.</>
+                  )}
                 </span>
               </div>
             )}

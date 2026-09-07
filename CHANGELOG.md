@@ -8,6 +8,13 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ---
 
+## [Unreleased]
+
+### Export
+- **File › Batch Export** has **Music** and **Sound FX** tabs. Both decode to `.wav` in-app, the same way exporting a single track does — no xi-tools needed, only the Game path. Each narrows the same way its side panel's search does, and the default on both is everything: pick a **Sound folder** (one expansion, or all seven), and for sound effects a **Category** — the names Windower's SFXInfo gives each `seNNN` folder, counted, with the unnamed folders in one bucket rather than 370 separate entries — then a free-text **Filter** over track names, sound titles, ids and filenames. Naming an expansion, a folder or a category takes all of it. Files land under their own game folder (`…\sound2\win\music\data\`) so same-numbered sounds from different expansions don't collide, and **File names** chooses between the track's real name (`Ronfaure.wav`) and its game filename (`music101.wav`) — anything with no known name keeps its filename either way, and a repeat inside one folder is qualified with it rather than silently overwritten. The whole client is 224 tracks and ~11,900 sound effects; the folder scan behind the live count is done once and then filtered in memory
+- **File › Export** now says so when it finishes: a banner with the file it wrote, where it went, and a button to open that folder. It matters most for meshes, animations and zones — those close the dialog the moment they start so the app stays usable while xi runs, and until now the only sign the run had landed was a status line that scrolled past. Successes fade after a few seconds; failures stay, with xi's own complaint, until dismissed. Batch Export gets the same summary in the dialog, which stays open
+- A batch run of sounds can be stopped like any other — it checks between files
+
 ## [1.2.0] — 2026-09-07
 
 [Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.1.7...v1.2.0)

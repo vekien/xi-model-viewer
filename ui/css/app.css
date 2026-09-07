@@ -4375,6 +4375,78 @@ button.radio-opt:disabled { opacity: 0.45; cursor: default; }
   flex: 0 1 auto; min-width: 0;
 }
 
+/* Six tabs need two rows once the dialog is squeezed against a narrow window. */
+.batch-modal .settings-tabs { flex-wrap: wrap; }
+
+/* The run's own "that's done" line, since the dialog stays open after it. */
+.batch-result {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(77, 163, 255, 0.1);
+  border: 1px solid rgba(77, 163, 255, 0.35);
+  color: var(--gray-100);
+  font: 400 12.5px/1.4 var(--font-ui);
+}
+.batch-result.warn { background: rgba(220, 80, 70, 0.12); border-color: rgba(224, 112, 104, 0.4); }
+.batch-result.stopped { background: rgba(232, 195, 74, 0.1); border-color: rgba(232, 195, 74, 0.35); }
+.batch-result-icon { flex: 0 0 auto; font-size: 20px; color: var(--accent); }
+.batch-result.warn .batch-result-icon { color: #e07068; }
+.batch-result.stopped .batch-result-icon { color: var(--yellow); }
+.batch-result-text { flex: 1 1 auto; min-width: 0; }
+.batch-result-path {
+  color: var(--gray-400); font-size: 11px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.batch-result .headless-btn, .batch-result button { flex: 0 0 auto; }
+
+/* --- File > Export: the finished-export banner ----------------------------- */
+
+/* Above the modal layer (5100): an xi export closes its dialog as it starts,
+   and a batch run's own dialog stays open behind this. */
+.export-toast {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5200;
+  display: flex; align-items: center; gap: 12px;
+  max-width: min(620px, calc(100vw - 24px));
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(34, 52, 74, 0.97), rgba(24, 34, 48, 0.97));
+  border: 1px solid rgba(77, 163, 255, 0.45);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.45);
+  color: var(--text);
+  font: 400 13px/1.4 var(--font-ui);
+  animation: export-toast-in 0.18s ease-out;
+}
+.export-toast.fail {
+  background: linear-gradient(180deg, rgba(72, 36, 34, 0.97), rgba(48, 26, 24, 0.97));
+  border-color: rgba(224, 112, 104, 0.45);
+}
+@keyframes export-toast-in {
+  from { opacity: 0; transform: translate(-50%, -8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+.export-toast-icon { flex: 0 0 auto; font-size: 22px; color: var(--accent); }
+.export-toast.fail .export-toast-icon { color: #e07068; }
+.export-toast-text { flex: 1 1 auto; min-width: 0; }
+.export-toast-head { display: flex; align-items: baseline; gap: 8px; }
+.export-toast-head strong { color: var(--gray-100); font-weight: 600; }
+.export-toast-kind { color: var(--muted); font-size: 11.5px; }
+.export-toast-file {
+  color: var(--gray-200); font-size: 11.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.export-toast-path {
+  color: var(--gray-500); font-size: 11px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  direction: rtl; text-align: left;   /* keep the leaf folder visible when it clips */
+}
+.export-toast-open { flex: 0 0 auto; }
+.export-toast-close { flex: 0 0 auto; }
+
 /* Banner when DAT Browser opens a DAT that can't be rendered (no mesh, etc.). */
 .file-open-banner {
   position: fixed;

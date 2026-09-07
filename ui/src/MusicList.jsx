@@ -2,37 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { backend } from '../js/backend.js';
 import { gameCandidates } from '../js/gamePath.js';
 import { parseAudioHeader, toAudioBuffer, FMT_ATRAC3 } from '../js/audio.js';
+import {
+  loadMusicNames, musicMatches, musicTrackName, rootMatches, scanMusicRoots,
+} from '../js/soundLists.js';
 import { Tooltip } from './Tooltip.jsx';
-
-// FFXI ships music across seven sound roots; each aligns with an expansion.
-const ROOTS = [
-  { root: 'sound', label: 'Base Game' },
-  { root: 'sound2', label: 'Rise of the Zilart' },
-  { root: 'sound3', label: 'Chains of Promathia' },
-  { root: 'sound4', label: 'Treasures of Aht Urhgan' },
-  { root: 'sound5', label: 'Wings of the Goddess' },
-  { root: 'sound6', label: 'Abyssea' },
-  { root: 'sound9', label: 'Seekers / Rhapsodies' },
-];
-
-// music.json names are keyed by `<root>_<NNN>` (e.g. sound2_135) — filename
-// numbers are NOT globally unique (music181 differs between sound2 and sound5)
-// and don't always equal the header track id, so the key includes the root.
-async function loadNames() {
-  try {
-    const res = await fetch('lists/music.json');
-    if (res.ok) return new Map(Object.entries((await res.json()).names ?? {}));
-  } catch { /* names are optional */ }
-  return new Map();
-}
-
-function trackMatches(t, q) {
-  if ((t.name || '').toLowerCase().includes(q)) return true;
-  if ((t.file || '').toLowerCase().includes(q)) return true;
-  if ((t.num || '').includes(q)) return true;
-  if (`music${(t.num || '').padStart(3, '0')}`.includes(q)) return true;
-  return false;
-}
 
 export function MusicList({ gamePath, hdPath = '', hdEnabled = false, onError, player }) {
   const [names, setNames] = useState(null);
@@ -43,32 +16,8 @@ export function MusicList({ gamePath, hdPath = '', hdEnabled = false, onError, p
     if (!gamePath) return;
     let cancelled = false;
     (async () => {
-      const nameMap = await loadNames();
-      const found = [];
-      for (const { root, label } of ROOTS) {
-        const dir = `${gamePath}\\${root}\\win\\music\\data`;
-        const files = await backend.listFiles(dir);
-        const tracks = files
-          .filter((f) => f.toLowerCase().endsWith('.bgw'))
-          .map((f) => {
-            const raw = f.match(/(\d+)/)?.[1] ?? '0';
-            const num = String(parseInt(raw, 10));
-            return {
-              file: f,
-              path: `${dir}\\${f}`,
-              root,
-              num,
-              name: nameMap.get(`${root}_${raw.padStart(3, '0')}`) ?? null,
-            };
-          })
-          // Alphabetical by display name (ignoring leading quotes/brackets);
-          // unnamed tracks (music###) sort last.
-          .sort((a, b) => {
-            const key = (t) => (t.name ? t.name.replace(/^[^\p{L}\p{N}]+/u, '') : `￿${t.num.padStart(4, '0')}`);
-            return key(a).localeCompare(key(b), undefined, { sensitivity: 'base', numeric: true });
-          });
-        if (tracks.length) found.push({ root, label, tracks });
-      }
+      const nameMap = await loadMusicNames();
+      const found = await scanMusicRoots(gamePath, nameMap);
       if (!cancelled) { setNames(nameMap); setRoots(found); }
     })();
     return () => { cancelled = true; };
@@ -80,11 +29,9 @@ export function MusicList({ gamePath, hdPath = '', hdEnabled = false, onError, p
     if (!q) return roots;
     const out = [];
     for (const group of roots) {
-      const labelHit = (group.label || '').toLowerCase().includes(q)
-        || (group.root || '').toLowerCase().includes(q);
-      const tracks = labelHit
+      const tracks = rootMatches(group, q)
         ? group.tracks
-        : group.tracks.filter((t) => trackMatches(t, q));
+        : group.tracks.filter((t) => musicMatches(t, q));
       if (tracks.length) out.push({ ...group, tracks });
     }
     return out;
@@ -170,7 +117,7 @@ function TrackRow({ track, player, onError, settings }) {
             : <span className="icon" />}
         </span>
         <span className="kind icon">music_note</span>
-        <span className="track-name">{track.name ?? `music${track.num.padStart(3, '0')}`}</span>
+        <span className="track-name">{musicTrackName(track)}</span>
         {!track.name && <span className="mono-small track-num">#{track.num}</span>}
       </div>
     </div>
