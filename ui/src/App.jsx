@@ -1137,6 +1137,7 @@ export default function App({ launch = null }) {
   const actorGizmoModeRef = useRef('move');
   actorGizmoModeRef.current = actorGizmoMode;
   const actorGizmoDragRef = useRef(null); // { id, axis, mode, lastX, lastY }
+  const lockHoverRef = useRef(false);   // cursor is currently over the lock sphere
   const actorGizmoHoverRef = useRef(null);
   const actorHoverIdRef = useRef(null);      // Actors live selection: hovered actor id
   // Saved scenes (Zone › Scenes): the list, which one the stage came from
@@ -6517,7 +6518,10 @@ export default function App({ launch = null }) {
       fx: false, fxRoutine: '', lockTarget: lock,
     };
     r.addActor(id, point);
-    if (lock) r.setActorColor?.(id, LOCK_ACTOR_COLOR);
+    if (lock) {
+      r.setActorColor?.(id, LOCK_ACTOR_COLOR);
+      r.setActorLockTarget?.(id, true);
+    }
     setZoneActors((prev) => [...prev, actor]);
     setActorPlacing(null);
     if (lock) {
@@ -6760,9 +6764,13 @@ export default function App({ launch = null }) {
     }
   }, [selectActor]);
 
-  // Panel closed → nothing selected, no gizmo.
+  // Panel closed → nothing selected, no gizmo. The Camera Sequencer's lock
+  // target is selected from the viewport, not this panel, so its gizmo stays.
   useEffect(() => {
-    if (!scenesPanelOpen) selectActor(null);
+    if (scenesPanelOpen) return;
+    const sel = actorSelectedIdRef.current;
+    if (sel != null && rendererRef.current?.getActor?.(sel)?.lockTarget) return;
+    selectActor(null);
   }, [scenesPanelOpen, selectActor]);
 
   // 1 / 2 / 3: move / rotate / scale gizmo on the selected actor.
@@ -6841,7 +6849,10 @@ export default function App({ launch = null }) {
     r.addActor(id, sa.pos, Array.isArray(sa.rot) && sa.rot.length === 9 ? sa.rot : null);
     r.setActorTransform(id, null, null, sa.scale ?? 1);
     r.setActorVisible(id, sa.visible !== false);
-    if (sa.lockTarget) r.setActorColor?.(id, LOCK_ACTOR_COLOR);
+    if (sa.lockTarget) {
+      r.setActorColor?.(id, LOCK_ACTOR_COLOR);
+      r.setActorLockTarget?.(id, true);
+    }
     if (sa.kind === 'light' && sa.light) r.setActorLight(id, rendererLight({ ...DEFAULT_LIGHT, ...sa.light }));
     const a = {
       id, name: sa.name || `Actor ${id}`, kind: sa.kind ?? null, entry: sa.entry ?? null,
@@ -8419,6 +8430,23 @@ export default function App({ launch = null }) {
       return;
     }
 
+    // Camera Sequencer lock target: clicking the sphere selects it and puts the
+    // transform gizmo on it. It is placed from the sequencer, where the Scenes
+    // panel's actor pick is usually off, so it does not wait for that arming.
+    if (fromCanvasClick && wasClick && modelRef.current?.kind === 'zone'
+      && !(actorPickRef.current && scenesPanelOpenRef.current)) {
+      const r0 = rendererRef.current;
+      const hit = pickActorAt(r0, clientX, clientY);
+      if (hit?.actor?.lockTarget) {
+        selectActor(hit.actor.id);
+        setStatusText('Lock actor selected — drag an axis to move it · 1 move · 2 rotate · 3 scale');
+        return;
+      }
+      // Clicking off it drops the gizmo rather than leaving it on the zone.
+      const sel = actorSelectedIdRef.current;
+      if (sel != null && r0?.getActor?.(sel)?.lockTarget) selectActor(null);
+    }
+
     // Actors live selection: pick the actor under the cursor.
     if (fromCanvasClick && wasClick && actorPickRef.current && scenesPanelOpenRef.current && modelRef.current?.kind === 'zone') {
       const hit = pickActorAt(rendererRef.current, clientX, clientY);
@@ -8671,8 +8699,9 @@ export default function App({ launch = null }) {
       } else if (doPan) {
         cam.pan(dx, dy);
       } else if (drag.current.btn === 0) {
-        // Entities/effects: orbit around the model pivot so a pan is preserved
-        // (character stays put on screen). Zones keep free tumble about look-at.
+        // Orbit around the model pivot so a pan is preserved (the character —
+        // or, in a zone, the Camera Sequencer's lock target — stays put on
+        // screen). A zone with no lock target keeps free tumble about look-at.
         const pivot = rendererRef.current.getOrbitPivot?.() ?? null;
         cam.orbit(dx, dy, pivot);
       } else {
@@ -8701,6 +8730,23 @@ export default function App({ launch = null }) {
         }
         if (axis) return;
       }
+    }
+    // Lock target: a pointer cursor over the sphere so the click is
+    // discoverable, whether or not the Scenes panel is open to select actors.
+    // Nothing below resets the cursor when no branch matches, so put it back
+    // on the way out.
+    if (model?.kind === 'zone' && !actorPlacingRef.current) {
+      const r0 = rendererRef.current;
+      const hit = r0 ? pickActorAt(r0, e.clientX, e.clientY) : null;
+      const onLock = !!hit?.actor?.lockTarget;
+      if (onLock !== lockHoverRef.current) {
+        lockHoverRef.current = onLock;
+        const canvas = canvasRef.current;
+        if (canvas) canvas.style.cursor = onLock ? 'pointer' : (liveSelectionRef.current ? 'crosshair' : '');
+      }
+      if (onLock) return;
+    } else if (lockHoverRef.current) {
+      lockHoverRef.current = false;
     }
     // Actors live selection: highlight the actor under the cursor.
     if (model?.kind === 'zone' && actorPickRef.current && scenesPanelOpenRef.current && !actorPlacingRef.current) {
@@ -8779,6 +8825,7 @@ export default function App({ launch = null }) {
       onPointerUp={onPointerUp}
       onPointerMove={onPointerMove}
       onPointerLeave={() => {
+        lockHoverRef.current = false;
         if (actorGizmoHoverRef.current) {
           actorGizmoHoverRef.current = null;
           rendererRef.current?.setActorGizmoHover?.(null);

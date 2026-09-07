@@ -118,8 +118,15 @@ function buildRingMesh(rgb, r0 = 0.9, r1 = 1.0, segs = 56) {
   return new Float32Array(verts);
 }
 
-/** Small sphere (overlay triangles) marking a light-source actor. */
-function lightMarkerFigure(center, rgb, R = 0.22) {
+// Key light for a shaded sphere marker (display space, unit-ish).
+const MARKER_LIGHT = [-0.35, 0.82, 0.45];
+
+/**
+ * Small sphere of overlay triangles: light-source markers and the camera lock
+ * target. The overlay pass has no normals, so `shade` bakes a fixed key light
+ * into the vertex colours — a flat sphere reads as a disc, not a ball.
+ */
+function sphereFigure(center, rgb, R = 0.22, shade = false) {
   const positions = [];
   const colors = [];
   const SEG = 12, RINGS = 8;
@@ -132,7 +139,15 @@ function lightMarkerFigure(center, rgb, R = 0.22) {
       center[2] + R * Math.sin(th) * Math.sin(ph),
     ];
   };
-  const push = (p) => { positions.push(...p); colors.push(rgb[0], rgb[1], rgb[2]); };
+  const push = (p) => {
+    positions.push(...p);
+    if (!shade) { colors.push(rgb[0], rgb[1], rgb[2]); return; }
+    const d = ((p[0] - center[0]) * MARKER_LIGHT[0]
+      + (p[1] - center[1]) * MARKER_LIGHT[1]
+      + (p[2] - center[2]) * MARKER_LIGHT[2]) / R;
+    const k = 0.5 + 0.5 * Math.max(0, d);
+    colors.push(rgb[0] * k, rgb[1] * k, rgb[2] * k);
+  };
   for (let i = 0; i < RINGS; i++) {
     for (let j = 0; j < SEG; j++) {
       const a = pt(i, j), b = pt(i + 1, j), c = pt(i + 1, j + 1), d = pt(i, j + 1);
@@ -170,6 +185,11 @@ function spotStubFigure(c, axis, rgb, len = 0.9, w = 0.05) {
   }
   return { positions, colors };
 }
+
+// Lock-target sphere: centre height above the actor's feet (the same body
+// height getActorAimPoint uses for a model-less actor) and radius.
+const LOCK_SPHERE_Y = 1.0;
+const LOCK_SPHERE_R = 0.35;
 
 /**
  * Placeholder figure for an actor with no model yet: a body box and a head
@@ -2344,8 +2364,10 @@ export class Renderer {
 
   /**
    * Display-space point an entity or effect orbits around: ALWAYS the world
-   * origin, where the axis gizmo sits. Zones return null — free tumble about
-   * the look-at stays as-is there.
+   * origin, where the axis gizmo sits. In a zone it is the Camera Sequencer's
+   * lock target when one is placed — a drag then swings around the thing the
+   * shot is aimed at instead of tumbling the view off it — and null (free
+   * tumble about the look-at) otherwise.
    *
    * This used to be the rest-bounds centre, and that is the pivot that kept
    * "wandering" between NPC loads: a wyrm with its wings spread and tail out
@@ -2357,7 +2379,11 @@ export class Renderer {
    */
   getOrbitPivot() {
     if (this.effectMode) return [0, 0, 0];
-    if (!this.model || this.model.kind === 'zone') return null;
+    if (!this.model) return null;
+    if (this.model.kind === 'zone') {
+      const lock = this.actors.find((a) => a.lockTarget && a.visible);
+      return lock ? this.getActorAimPoint(lock.id) : null;
+    }
     return [0, 0, 0];
   }
 
@@ -3222,6 +3248,9 @@ export class Renderer {
       speed: 1,
       visible: true,
       placeholder: null,
+      // Camera Sequencer aim point (setActorLockTarget): draws as a sphere and
+      // becomes the orbit pivot. See getOrbitPivot.
+      lockTarget: false,
       color: [0.42, 0.72, 1.0],
       modelMatrix: new Float32Array(16),
       fx: null,   // { system } — the NPC's own effect routine, see setActorEffect
@@ -3278,7 +3307,7 @@ export class Renderer {
     if (actor.light) {
       // Light marker: a small sphere in the light's colour, hovering over the spot.
       this._freeOverlay(actor.placeholder);
-      const fig = lightMarkerFigure([actor.pos[0], actor.pos[1] + 0.6, actor.pos[2]], actor.light.color || [1, 1, 1]);
+      const fig = sphereFigure([actor.pos[0], actor.pos[1] + 0.6, actor.pos[2]], actor.light.color || [1, 1, 1]);
       if (actor.light.type === 'spot') {
         // A stub along the spot axis (actor -Y) so the aim is readable.
         const R = actor.rot || MAT3_IDENTITY;
@@ -3288,6 +3317,20 @@ export class Renderer {
         fig.positions.push(...stub.positions);
         fig.colors.push(...stub.colors);
       }
+      actor.placeholder = this._buildOverlay(fig.positions, fig.colors);
+      return;
+    }
+    if (!actor.model && actor.lockTarget) {
+      // Lock target: a sphere centred on the point Lock to Actor aims at
+      // (getActorAimPoint's placeholder height), on a stalk down to the feet —
+      // that is where the gizmo grabs it and where it stands on the ground.
+      this._freeOverlay(actor.placeholder);
+      const s = actor.scale ?? 1;
+      const r = LOCK_SPHERE_R * s;
+      const fig = sphereFigure([actor.pos[0], actor.pos[1] + LOCK_SPHERE_Y * s, actor.pos[2]], actor.color, r, true);
+      const stalk = spotStubFigure(actor.pos, [0, 1, 0], actor.color, Math.max(LOCK_SPHERE_Y * s - r, 0), 0.03 * s);
+      fig.positions.push(...stalk.positions);
+      fig.colors.push(...stalk.colors);
       actor.placeholder = this._buildOverlay(fig.positions, fig.colors);
       return;
     }
@@ -3305,6 +3348,18 @@ export class Renderer {
     if (pos) actor.pos = [pos[0], pos[1], pos[2]];
     if (rot && rot.length === 9) actor.rot = Float32Array.from(rot);
     if (scale != null && scale > 0) actor.scale = scale;
+    this._syncActorTransform(actor);
+  }
+
+  /**
+   * Mark an actor as the Camera Sequencer's lock target — the point Lock to
+   * Actor aims at. With no model it draws as a sphere on a stalk rather than
+   * the body placeholder, and a viewport drag orbits around it (getOrbitPivot).
+   */
+  setActorLockTarget(id, on) {
+    const actor = this.getActor(id);
+    if (!actor) return;
+    actor.lockTarget = !!on;
     this._syncActorTransform(actor);
   }
 
@@ -3342,7 +3397,7 @@ export class Renderer {
       ];
     }
     const s = actor.scale ?? 1;
-    return [actor.pos[0], actor.pos[1] + 1.0 * s, actor.pos[2]];
+    return [actor.pos[0], actor.pos[1] + LOCK_SPHERE_Y * s, actor.pos[2]];
   }
 
   /** Rotate an actor about a WORLD axis (the rotate-gizmo rings). */
@@ -3388,6 +3443,15 @@ export class Renderer {
       return {
         min: [actor.pos[0] - 0.5, actor.pos[1], actor.pos[2] - 0.5],
         max: [actor.pos[0] + 0.5, actor.pos[1] + 1.2, actor.pos[2] + 0.5],
+      };
+    }
+    if (actor.lockTarget) {
+      // The sphere and its stalk, not a body box.
+      const s = actor.scale ?? 1;
+      const r = LOCK_SPHERE_R * s * 1.3;
+      return {
+        min: [actor.pos[0] - r, actor.pos[1], actor.pos[2] - r],
+        max: [actor.pos[0] + r, actor.pos[1] + (LOCK_SPHERE_Y + LOCK_SPHERE_R) * s, actor.pos[2] + r],
       };
     }
     const hw = 0.45 * (actor.scale ?? 1);
