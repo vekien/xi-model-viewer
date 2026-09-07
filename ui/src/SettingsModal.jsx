@@ -527,47 +527,51 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
                     </Field>
                   </div>
 
-                  <div className="form-row">
-                    <Field className="check-field">
-                      <Checkbox
-                        checked={draft.autoWasdZones !== false}
-                        onChange={(v) => setDraft({ ...draft, autoWasdZones: v })}
-                        className="checkbox"
-                      >
-                        <span className="icon check-icon">check</span>
-                      </Checkbox>
-                      <Label className="check-label">Auto switch to WASD for Zones</Label>
-                    </Field>
-                    <div className="form-hint">Fly camera on zone load (WASD / QE / Shift / wheel).</div>
-                  </div>
+                  <Tooltip content="Fly camera on zone load (WASD / QE / Shift / wheel).">
+                    <div className="form-row">
+                      <Field className="check-field">
+                        <Checkbox
+                          checked={draft.autoWasdZones !== false}
+                          onChange={(v) => setDraft({ ...draft, autoWasdZones: v })}
+                          className="checkbox"
+                        >
+                          <span className="icon check-icon">check</span>
+                        </Checkbox>
+                        <Label className="check-label">Auto switch to WASD for Zones</Label>
+                      </Field>
+                    </div>
+                  </Tooltip>
 
-                  <div className="form-row">
-                    <Field className="check-field">
-                      <Checkbox
-                        checked={draft.autoFocusZoneObject !== false}
-                        onChange={(v) => setDraft({ ...draft, autoFocusZoneObject: v })}
-                        className="checkbox"
-                      >
-                        <span className="icon check-icon">check</span>
-                      </Checkbox>
-                      <Label className="check-label">Auto Focus Zone Object</Label>
-                    </Field>
-                    <div className="form-hint">Clicking a row in the Objects list frames the camera on it. Off = select only, camera stays put.</div>
-                  </div>
 
-                  <div className="form-row">
-                    <Field className="check-field">
-                      <Checkbox
-                        checked={!!draft.reframeOnSelect}
-                        onChange={(v) => setDraft({ ...draft, reframeOnSelect: v })}
-                        className="checkbox"
-                      >
-                        <span className="icon check-icon">check</span>
-                      </Checkbox>
-                      <Label className="check-label">Reframe camera on Actor Selection</Label>
-                    </Field>
-                    <div className="form-hint">Off: picking another actor keeps your view. F reframes.</div>
-                  </div>
+                  <Tooltip content="Clicking a row in the Objects list frames the camera on it. Off = select only, camera stays put.">
+                    <div className="form-row">
+                      <Field className="check-field">
+                        <Checkbox
+                          checked={draft.autoFocusZoneObject !== false}
+                          onChange={(v) => setDraft({ ...draft, autoFocusZoneObject: v })}
+                          className="checkbox"
+                        >
+                          <span className="icon check-icon">check</span>
+                        </Checkbox>
+                        <Label className="check-label">Auto Focus Zone Object</Label>
+                      </Field>
+                    </div>
+                  </Tooltip>
+
+                  <Tooltip content="Off: picking another actor keeps your view. F reframes.">
+                    <div className="form-row">
+                      <Field className="check-field">
+                        <Checkbox
+                          checked={!!draft.reframeOnSelect}
+                          onChange={(v) => setDraft({ ...draft, reframeOnSelect: v })}
+                          className="checkbox"
+                        >
+                          <span className="icon check-icon">check</span>
+                        </Checkbox>
+                        <Label className="check-label">Reframe camera on Actor Selection</Label>
+                      </Field>
+                    </div>
+                  </Tooltip>
 
                   <div className="form-row">
                     <label className="form-label">Day Length</label>
@@ -619,19 +623,20 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
                     </div>
                   </div>
 
-                  <div className="form-row">
-                    <Field className="check-field">
-                      <Checkbox
-                        checked={!!draft.closeDatNotesOnSave}
-                        onChange={(v) => setDraft({ ...draft, closeDatNotesOnSave: v })}
-                        className="checkbox"
-                      >
-                        <span className="icon check-icon">check</span>
-                      </Checkbox>
-                      <Label className="check-label">Close DAT Notes on Save</Label>
-                    </Field>
-                    <div className="form-hint">Only the whole-DAT Notes window (status bar), not UiMenu notes.</div>
-                  </div>
+                  <Tooltip content="Only the whole-DAT Notes window (status bar), not UiMenu notes.">
+                    <div className="form-row">
+                      <Field className="check-field">
+                        <Checkbox
+                          checked={!!draft.closeDatNotesOnSave}
+                          onChange={(v) => setDraft({ ...draft, closeDatNotesOnSave: v })}
+                          className="checkbox"
+                        >
+                          <span className="icon check-icon">check</span>
+                        </Checkbox>
+                        <Label className="check-label">Close DAT Notes on Save</Label>
+                      </Field>
+                    </div>
+                  </Tooltip>
                 </div>
               </section>
             </div>
