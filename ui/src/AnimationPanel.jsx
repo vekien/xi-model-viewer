@@ -4,6 +4,28 @@ import { Combo } from './Combo.jsx';
 import { animDisplayName } from '../js/dat.js';
 import { Tooltip } from './Tooltip.jsx';
 
+/**
+ * Plain-English names for the clip ids worth spelling out; everything else
+ * keeps its raw id, because guessing at `sk1` or `gc0` would read as fact.
+ *
+ * `ded` / `cor` / `std` are one sequence, which is what made "stand" wrong:
+ * the character is struck down (ded), lies there (cor), and is raised back to
+ * its feet (std) — that last one is the raise, not a standing idle.
+ */
+const CLIP_NAMES = {
+  idl: 'idle',
+  btl: 'battle stance',
+  ded: 'death',
+  cor: 'knocked out',
+  std: 'raise',
+  wlk: 'walk',
+  run: 'run',
+  mvb: 'move back',
+  mvl: 'move left',
+  mvr: 'move right',
+  jmp: 'jump',
+};
+
 /** Combo on a labelled panel row, matching the gear slots in the Characters panel. */
 function Row({ label, children }) {
   return (
@@ -110,11 +132,7 @@ export function AnimationPanel({ pc, anim }) {
       group: 'Animations',
       // btl is the battle-stance clip (not a Schedule). Schedules are
       // ati0/atb0/… attack routines that *reference* anim layers.
-      label: g.label
-        ?? (g.id === 'btl' ? 'btl — battle stance'
-          : g.id === 'idl' ? 'idl — idle'
-            : g.id === 'std' ? 'std — stand'
-              : g.id),
+      label: g.label ?? (CLIP_NAMES[g.id] ? `${g.id} — ${CLIP_NAMES[g.id]}` : g.id),
       badge: g.clip.parts?.length,
     })),
     ...schedules.map((s2) => ({

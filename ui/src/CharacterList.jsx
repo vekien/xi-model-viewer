@@ -384,6 +384,9 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
   isolatedRef.current = isolated;
   const lastKey = useRef('');
   const lastRace = useRef('');                  // race of the last onLoad (camera keep)
+  // Action of the last onLoad, as `group|label` so it survives a race switch
+  // (ids are per-race). '' before the first load — booting is not a change.
+  const lastAction = useRef('');
   const restored = useRef(false);               // saved selections applied?
   const isoCbRef = useRef(onIsolationChange);
   isoCbRef.current = onIsolationChange;
@@ -631,10 +634,21 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
     const animOnlyPaths = [...motionExtra, ...focusPaths, ...motionPaths];
 
     const unique = [...new Set(paths)];
-    // Prefix race so a shared face label never collapses two skeletons into one key.
-    const key = `${race}|${unique.join('|')}|${(rodPaths ?? []).join('|')}`;
+    // Prefix race so a shared face label never collapses two skeletons into one
+    // key, and carry the action id: two actions can share a DAT set (a Battle
+    // stance and the weapon that uses it), and switching between them still
+    // has to reload so the motion is re-picked and restarted.
+    const key = `${race}|${unique.join('|')}|${(rodPaths ?? []).join('|')}|${action}`;
     if (key === lastKey.current) return;
     lastKey.current = key;
+
+    // A deliberate action pick, as opposed to a gear swap, a race switch that
+    // carried the action over, or the first load. App restarts playback from
+    // frame 0 for one — picking a weapon skill and getting the idle it was
+    // already showing, parked, read as the click not having landed.
+    const actionKey = act ? `${act.group ?? ''}|${act.label}` : '';
+    const actionChanged = !!lastAction.current && actionKey !== lastAction.current;
+    lastAction.current = actionKey;
 
     // Determine the most informative path for the status bar. On a gear swap
     // (same race), find which slot changed and show its DAT. On a race change
@@ -672,6 +686,7 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
       rangedHandRef: rcfg?.handRef ?? null,
       rodPaths,
       keepCamera: isGearSwap,
+      actionChanged,
     });
     lastRace.current = race;
     // Re-apply current isolation against the new part paths (gear/race swap).

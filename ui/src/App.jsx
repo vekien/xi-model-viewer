@@ -1753,6 +1753,8 @@ export default function App({ launch = null }) {
    *   battleTable — race's battle-idle DATs indexed by weaponAnimationType; the
    *                 equipped weapon's own battle stance is loaded as the base pose.
    *   keepCamera  — don't re-fit the camera (gear swap on the same actor).
+   *   actionChanged — the user picked a different action: lead with its own
+   *                 routine and run it from frame 0 (see `freshAction`).
    */
   const loadModel = useCallback(async (paths, displayName, opts = {}) => {
     const {
@@ -1760,6 +1762,10 @@ export default function App({ launch = null }) {
       parts = null, displayPath = null, animOnlyPaths = null, preferAnim = null,
       rangedInUse = false, rangedHandRef = null, npcEntry = null,
       rodPaths = null,
+      // The user picked a different action (not a gear swap, a race switch
+      // that carried it over, or the first load). Camera framing is unaffected
+      // — this only governs which motion is chosen and how it starts.
+      actionChanged = false,
     } = opts;
     // Keep framing when the caller asks (gear swap) or the user has already
     // orbit/pan/zoomed on an entity — browsing successive DATs shouldn't yank
@@ -1958,7 +1964,7 @@ export default function App({ launch = null }) {
       if (!stillCurrent()) { releaseOverlay(); return; }
       const renderer = rendererRef.current;
       // Gear swap: remember progress so the same clip continues mid-cycle.
-      const resumeFrame = keepCamera ? renderer.animFrame : null;
+      const resumeFrame = (keepCamera && !actionChanged) ? renderer.animFrame : null;
       const wasPlaying = renderer.playing;
       const prevPlay = appliedPlayRef.current;
       modelRef.current = model;
@@ -2001,20 +2007,32 @@ export default function App({ launch = null }) {
       // and the Basic packs do; a tool action (Logging) ships only its clip
       // and schedule, and must not be parked on the race idle instead.
       let focusOwnsIdle = !focusPaths?.length;
+      // Does the action's own pack ship a battle stance? (A Battle: * entry.)
+      let focusOwnsStance = false;
       if (focusPaths?.length) {
         const fset = new Set(focusPaths.map((p) => pathKey(p, settingsRef.current)));
-        const fBases = new Set();   // clip display-names (body-slot digit stripped)
+        const fBases = new Set();     // clip display-names (body-slot digit stripped)
+        const fDeclared = new Set();  // ...of the clips the focus DATs ship themselves
         const fScheds = new Set();
         for (const { path, model: m } of parsed) {
           if (!fset.has(pathKey(path, settingsRef.current))) continue;
-          for (const a of m.animations) fBases.add(animDisplayName(a.id));
+          for (const a of m.animations) fDeclared.add(animDisplayName(a.id));
           for (const s of m.schedules ?? []) fScheds.add(s.id);
         }
+        for (const id of fDeclared) fBases.add(id);
         // Unconditional: if the action's own DATs are missing from this client
         // build, the lists stay empty rather than falling back to every clip.
         schedSrc = schedSrc.filter((s) => fScheds.has(s.id));
         for (const s of schedSrc) for (const c of s.clipIds) fBases.add(animDisplayName(c));
-        focusOwnsIdle = fBases.has('idl');
+        // Declared, not merely reachable. A tool's routine ends by handing back
+        // to `idl`, and its refs resolve onto `btl` too once the equipped
+        // weapon's battle pack is in the merge — neither makes the pack an idle
+        // or a stance. Reading the wider set is what parked Fishing on the race
+        // idle, and Bell Ringing in a battle stance, instead of on the routine
+        // each of them is. (`grouped` still uses the wider set: a clip the
+        // schedules play belongs on the list even when another DAT carries it.)
+        focusOwnsIdle = fDeclared.has('idl');
+        focusOwnsStance = fDeclared.has('btl');
         grouped = grouped.filter((g) => fBases.has(g.id));
       }
       // Stance clips always stay on the Anim list. `btl` lives in the weapon's
@@ -2052,6 +2070,11 @@ export default function App({ launch = null }) {
       // What to play, best first: the user's remembered pick if this actor still
       // has it, then idle, then battle stance (btl) when a weapon battle pack is
       // loaded, then 'main' / first schedule (weapon skills).
+      // "This load is the action starting" — a first load / view switch, or the
+      // user picking a different action. A gear swap is not: it must leave the
+      // running motion alone. Gates both which motion leads and, below, whether
+      // playback restarts from the top.
+      const freshAction = !keepCamera || actionChanged;
       const want = animSelRef.current ?? {};
       const pickSched = (id) => schedSrc.find((s) => s.id === id && s.clipIds.length);
       const pickAnim = (id) => grouped.find((g) => g.id === id);
@@ -2067,10 +2090,16 @@ export default function App({ launch = null }) {
         // action, so choosing Eagle Eye Shot and landing on idle reads as
         // nothing having happened. Skipped on a gear swap (keepCamera), where
         // the action has not changed and the current pick should survive.
-        || (!keepCamera && pickSched('main') && { schedule: pickSched('main') })
-        // No `main` and no idle of its own: the action is its one schedule
-        // (Logging → em00, which also spawns the hatchet), so lead with that.
-        || (!keepCamera && !focusOwnsIdle && schedSrc.find((s) => s.clipIds.length)
+        || (freshAction && pickSched('main') && { schedule: pickSched('main') })
+        // A battle-stance pack has no `main`, but it does have the stance the
+        // entry is named for. Its schedules are the attack routines (atb0,
+        // atf0, ati0, …) and the first of them alphabetically is an arbitrary
+        // place to land — "Battle: Sword" should show the sword stance.
+        || (freshAction && focusOwnsStance && pickAnim('btl') && { anim: pickAnim('btl') })
+        // No `main`, no stance and no idle of its own: the action IS its
+        // routine, so lead with the first one — Fishing → fsh0, Logging,
+        // Mining, Harvesting and Bell Ringing → em00, Chocobo → cdam.
+        || (freshAction && !focusOwnsIdle && schedSrc.find((s) => s.clipIds.length)
           && { schedule: schedSrc.find((s) => s.clipIds.length) })
         // An NPC skill pack is picked for its one clip: landing on idle reads
         // as the choice not having taken. Its `main` routine is pure VFX with
@@ -2087,10 +2116,19 @@ export default function App({ launch = null }) {
           && { schedule: pickSched('main') ?? schedSrc.find((s) => s.clipIds.length) })
         || null;
 
-      const autoPlay = settingsRef.current?.autoPlay ?? false;
+      // Settings → "Auto-play idle animation on load" speaks for loads. Picking
+      // an action is a deliberate "show me this", so it runs regardless — from
+      // frame 0, which is also where the arming hook fires its routine. A swap
+      // on the actor already on stage (keepCamera: a motion pack, gear, a race
+      // switch) that lands on a different clip is a motion change, not a load:
+      // if the character was running it keeps running, from frame 0.
+      const startPlaying = actionChanged
+        || (keepCamera && wasPlaying)
+        || (settingsRef.current?.autoPlay ?? false);
       let continued = false;
       if (chosen?.anim) {
-        const same = keepCamera && prevPlay.kind === 'anim' && prevPlay.id === chosen.anim.id;
+        const same = keepCamera && !actionChanged
+          && prevPlay.kind === 'anim' && prevPlay.id === chosen.anim.id;
         continued = same;
         // Battle btl lacks waist tracks — withBaseIdle underlays idl2 so skirts
         // don't freeze in bind pose.
@@ -2098,19 +2136,20 @@ export default function App({ launch = null }) {
           asMontage(model, withBaseIdle(model, chosen.anim.clip), baseAnimRef.current),
           same ? { frame: resumeFrame } : undefined,
         );
-        renderer.playing = same ? wasPlaying : !!autoPlay;
+        renderer.playing = same ? wasPlaying : startPlaying;
         appliedPlayRef.current = { kind: 'anim', id: chosen.anim.id };
         setCurrentAnim(chosen.anim.id);
         setCurrentSchedule('');
         setPlayingState(renderer.playing);
       } else if (chosen?.schedule) {
-        const same = keepCamera && prevPlay.kind === 'schedule' && prevPlay.id === chosen.schedule.id;
+        const same = keepCamera && !actionChanged
+          && prevPlay.kind === 'schedule' && prevPlay.id === chosen.schedule.id;
         continued = same;
         renderer.setAnimation(
           asMontage(model, scheduleClip(model, chosen.schedule), baseAnimRef.current),
           same ? { frame: resumeFrame } : undefined,
         );
-        renderer.playing = same ? wasPlaying : !!autoPlay;
+        renderer.playing = same ? wasPlaying : startPlaying;
         appliedPlayRef.current = { kind: 'schedule', id: chosen.schedule.id };
         setCurrentSchedule(chosen.schedule.id);
         setCurrentAnim('');
@@ -2272,7 +2311,7 @@ export default function App({ launch = null }) {
       setNpcPack(pack?.path ?? '');
       // What gets remembered across a reload: the list entry itself, not the
       // one-shot load flags.
-      const { keepCamera: _kc, ...persistable } = entry;
+      const { keepCamera: _kc, actionChanged: _ac, ...persistable } = entry;
       // A loaded pack rides last in `paths`, which is where the primary path
       // is read from — without a displayPath the status bar and the NPC tree
       // would point at the borrowed ROM/262 DAT instead of the NPC.
@@ -2295,6 +2334,7 @@ export default function App({ launch = null }) {
         rangedInUse: !!entry.rangedInUse,
         rangedHandRef: entry.rangedHandRef ?? null,
         rodPaths: entry.rodPaths?.map(abs) ?? null,
+        actionChanged: !!entry.actionChanged,
         npcEntry: persistable,
       });
     },
@@ -4331,36 +4371,57 @@ export default function App({ launch = null }) {
     }
   };
 
-  const handleAnimChange = (id) => {
+  /**
+   * Put a motion on the character, the way picking one from the list should:
+   * frame 0, running, with the action's effect routine restarted underneath it.
+   *
+   * The routine is otherwise only re-fired at the clip's loop point, so a pick
+   * made mid-cycle either showed the motion with no VFX until it wrapped, or
+   * left the two running out of phase. Restarting both here is the only way
+   * they line up on the frame the user asked for.
+   *
+   * `restart: false` is the restore path (coming back from the Effects view),
+   * which is re-applying a selection rather than making one: the clip is put
+   * back but the transport and the effect stage are left exactly as they are.
+   */
+  const startMotion = (clip, restart) => {
+    const r = rendererRef.current;
+    r.setAnimation(clip);          // no opts.frame — always from the top
+    if (!restart) return;
+    setPlaying(!!clip);
+    r.effectPaused = false;
+    if (clip && pcFxArmed()) {
+      r.particleSystem?.stopEffect?.();
+      pcFxReplayRef.current();
+    }
+  };
+
+  const handleAnimChange = (id, { restart = true } = {}) => {
     setCurrentAnim(id);
     setCurrentSchedule('');
     rememberAnimSel({ anim: id, schedule: '' });
     appliedPlayRef.current = { kind: 'anim', id };
     const entry = animsRef.current.find((g) => g.id === id);
     const model = modelRef.current;
-    rendererRef.current.setAnimation(
+    startMotion(
       entry ? asMontage(model, withBaseIdle(model, entry.clip), baseAnimRef.current) : null,
+      restart,
     );
   };
 
-  const handleScheduleChange = (id) => {
+  const handleScheduleChange = (id, { restart = true } = {}) => {
     setCurrentSchedule(id);
     setCurrentAnim('');
     rememberAnimSel({ anim: '', schedule: id });
     appliedPlayRef.current = { kind: 'schedule', id };
     const model = modelRef.current;
     const sched = model?.schedules.find((s) => s.id === id);
-    const clip = sched?.clipIds?.length
-      ? asMontage(model, scheduleClip(model, sched), baseAnimRef.current)
-      : null;
-    rendererRef.current.setAnimation(clip);
-    if (clip) {
-      rendererRef.current.playing = true;
-      setPlayingState(true);
-    } else {
-      rendererRef.current.playing = false;
-      setPlayingState(false);
-    }
+    startMotion(
+      sched?.clipIds?.length
+        ? asMontage(model, scheduleClip(model, sched), baseAnimRef.current)
+        : null,
+      restart,
+    );
   };
 
   const setPlaying = (p) => {
@@ -5851,8 +5912,8 @@ export default function App({ launch = null }) {
       // schedule/clip it thinks is selected, so the two disagree and the
       // character looks stuck mid-cast. Re-apply the panel's own selection.
       const sel = animSelRef.current ?? {};
-      if (sel.schedule) handleScheduleChange(sel.schedule);
-      else if (sel.anim) handleAnimChange(sel.anim);
+      if (sel.schedule) handleScheduleChange(sel.schedule, { restart: false });
+      else if (sel.anim) handleAnimChange(sel.anim, { restart: false });
       lastEntityRef.current = {
         ...(lastEntityRef.current || {}),
         view: leftView,
@@ -6170,7 +6231,25 @@ export default function App({ launch = null }) {
       groupAnimations(model.animations).filter((g) => g.clip.jointTracks.size > 0 && g.clip.numFrames > 0),
     );
     const schedules = (model.schedules ?? []).filter((sc) => sc.clipIds?.length > 0);
-    return { model, anims, schedules };
+    // Schedule ids the picked action's OWN DATs declare — a weapon skill ships
+    // exactly one, `main` (ROM/100/47 for Tachi: Enpi → main, 10 clip refs).
+    // Everything merges into `schedules`, so without this a `main` coming from
+    // the race base would read as the action's routine; the Characters viewer
+    // filters its whole list the same way (loadModel, focusPaths).
+    const focusKeys = new Set((entry.focusPaths ?? []).map((p) => pathKey(p, settings)));
+    const focusModels = focusKeys.size
+      ? parsed.filter((e) => focusKeys.has(pathKey(e.path, settings))).map((e) => e.model)
+      : null;
+    const actionSchedIds = focusModels
+      ? new Set(focusModels.flatMap((m) => (m.schedules ?? []).map((sc) => sc.id)))
+      : null;
+    // Whether the action's own DATs carry an idle. A weapon skill does; the
+    // Basic pack (ROM/27/82) is the whole race base — 67 schedules, no `main` —
+    // and leading with the first of those (`@tl0`) instead of idle is nonsense.
+    // Same test loadModel makes before it leads with a lone schedule.
+    const actionOwnsIdle = !!focusModels
+      && focusModels.some((m) => (m.animations ?? []).some((a) => animDisplayName(a.id) === 'idl'));
+    return { model, anims, schedules, actionSchedIds, actionOwnsIdle };
   }, []);
 
   /** Clip for an actor's motion selection, wrapped like the main viewport does. */
@@ -6299,21 +6378,34 @@ export default function App({ launch = null }) {
       label: entry.name || '', selectedPath: entry.key ?? (entry.paths?.[entry.paths.length - 1] ?? '').toLowerCase(),
     });
     try {
-      const { model, anims, schedules } = await buildActorModel(entry, packPath);
+      const { model, anims, schedules, actionSchedIds, actionOwnsIdle } = await buildActorModel(entry, packPath);
       if (actorLoadGenRef.current.get(id) !== gen) return;
       const r = rendererRef.current;
       if (!r || !r.getActor(id)) return;
       r.setActorModel(id, model);
-      // Default motion: the pack's own clip when a Special was picked, else idle.
+      // Default motion, best first: the pack's own clip when a Special was
+      // picked; then the action's own routine — `main` IS the action, so
+      // picking Tachi: Enpi and landing on idle reads as nothing having
+      // happened; then idle. Same order the Characters viewer plays.
       const packClip = packPath ? packs.find((p) => p.path === packPath)?.clips?.[0] : null;
       const preferId = packClip ? animDisplayName(packClip) : null;
-      const pick = (preferId && anims.find((g) => g.id === preferId))
-        || anims.find((g) => g.id === 'idl') || anims.find((g) => g.id === 'std') || anims[0] || null;
+      const packAnim = preferId ? anims.find((g) => g.id === preferId) : null;
+      const actionSched = actionSchedIds
+        ? (schedules.find((sc) => sc.id === 'main' && actionSchedIds.has(sc.id))
+          // No `main`, and no idle of its own: the action IS its one schedule
+          // (Logging → em00), so lead with that. An action that ships an idle
+          // rests on it instead.
+          ?? (actionOwnsIdle ? null : schedules.find((sc) => actionSchedIds.has(sc.id))))
+        : null;
+      const idle = anims.find((g) => g.id === 'idl') || anims.find((g) => g.id === 'std') || anims[0] || null;
+      const fallback = packAnim ? { kind: 'anim', id: packAnim.id }
+        : actionSched ? { kind: 'sched', id: actionSched.id }
+          : idle ? { kind: 'anim', id: idle.id } : null;
       const want = opts.motion;
       const wantOk = !!want && (
         (want.kind === 'anim' && anims.some((g) => g.id === want.id))
         || (want.kind === 'sched' && schedules.some((sc) => sc.id === want.id)));
-      const motion = wantOk ? { kind: want.kind, id: want.id } : (pick ? { kind: 'anim', id: pick.id } : null);
+      const motion = wantOk ? { kind: want.kind, id: want.id } : fallback;
       // Build the ready actor from the last rendered one rather than inside
       // the state updater: React only runs an updater eagerly when nothing
       // else is pending on this component, and with several actors landing
