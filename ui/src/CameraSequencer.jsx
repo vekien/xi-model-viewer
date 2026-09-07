@@ -44,10 +44,114 @@ const EMPTY_DOC = {
   actors: [],
 };
 const TRACKS = ['camPos', 'camRot', 'scene', 'tod'];
+// Curve rows: an expanded camera lane's graph (see buildCurve / .cseq-curve).
+const CURVE_H = 96;                 // height of one open curve row
+const CURVE_W = 1000;               // viewBox width; the row stretches it to the track
+const CURVE_VH = 100;               // ... and its height
+const CURVE_PAD = 12;               // breathing room above and below the lines
+const CURVE_SAMPLES = 300;
+// X/Y/Z in the usual axis colours; the rotation channels in the camera lane's
+// own green plus two that read apart from it.
+const CURVE_CHANNELS = {
+  camPos: [
+    { key: 'x', label: 'X', color: '#ff8f8f' },
+    { key: 'y', label: 'Y', color: '#9eeb9e' },
+    { key: 'z', label: 'Z', color: '#74c0fc' },
+  ],
+  camRot: [
+    { key: 'yaw', label: 'Yaw', color: '#7ee0a6' },
+    { key: 'pitch', label: 'Pitch', color: '#ffd479' },
+    { key: 'roll', label: 'Roll', color: '#c4a1ff' },
+  ],
+};
 // Lane and path colours for actors, by position in the sequence — the same
 // palette the renderer draws their routes in (ACTOR_PATH_COLORS).
 const ACTOR_COLORS = ['#fa739e', '#8cd9fa', '#facc66', '#9eeb9e', '#cca6fa', '#faa66b'];
 const actorColor = (i) => ACTOR_COLORS[i % ACTOR_COLORS.length];
+
+/**
+ * Sample a camera track into the polylines its curve row draws: one line per
+ * channel, over a filled envelope of how fast the channel group is changing.
+ *
+ * The three channels share one value scale but are each centred on their own
+ * midpoint. Absolute values are not comparable between them anyway — X and Z
+ * are world coordinates that can sit hundreds of units apart — and what the
+ * row is for is the shape of each: a channel that barely moves should read as
+ * flat beside one that swings, which a per-channel rescale would hide.
+ *
+ * The envelope is the honest thing to check timing against: speed in units a
+ * frame for the eye, and for rotation the angle the view direction actually
+ * turns through a frame (roll is a line but not part of that — it does not
+ * turn the shot). Null when the track has no keys.
+ */
+function buildCurve(seq, kind, totalFrames) {
+  const rot = kind === 'camRot';
+  const step = totalFrames / CURVE_SAMPLES;
+  const vals = [[], [], []];
+  const dirs = [];
+  for (let i = 0; i <= CURVE_SAMPLES; i++) {
+    const f = i * step;
+    if (rot) {
+      const r = seq.rotAt(f);
+      if (!r) return null;
+      vals[0].push((r.yaw * 180) / Math.PI);
+      vals[1].push((r.pitch * 180) / Math.PI);
+      vals[2].push((r.roll * 180) / Math.PI);
+      const cp = Math.cos(r.pitch);
+      dirs.push([cp * Math.sin(r.yaw), Math.sin(r.pitch), cp * Math.cos(r.yaw)]);
+    } else {
+      const e = seq.eyeAt(f);
+      if (!e) return null;
+      vals[0].push(e[0]);
+      vals[1].push(e[1]);
+      vals[2].push(e[2]);
+      dirs.push(e);
+    }
+  }
+
+  const lo = vals.map((v) => Math.min(...v));
+  const hi = vals.map((v) => Math.max(...v));
+  const span = Math.max(...hi.map((h, i) => h - lo[i]), 1e-6);
+  const usable = CURVE_VH - 2 * CURVE_PAD;
+  const x = (i) => ((i / CURVE_SAMPLES) * CURVE_W).toFixed(1);
+  const y = (v, c) => (CURVE_VH / 2 - ((v - (lo[c] + hi[c]) / 2) / span) * usable).toFixed(1);
+  const fmt = rot
+    ? (v) => `${Math.round(v)}°`
+    : (v) => (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1));
+
+  const channels = CURVE_CHANNELS[kind].map((ch, c) => ({
+    ...ch,
+    range: hi[c] - lo[c] < (rot ? 0.5 : 0.05) ? fmt(lo[c]) : `${fmt(lo[c])} → ${fmt(hi[c])}`,
+    points: vals[c].map((v, i) => `${x(i)},${y(v, c)}`).join(' '),
+  }));
+
+  // Rate per frame, sampled the same way and drawn from the floor up.
+  const rate = dirs.slice(1).map((b, i) => {
+    const a = dirs[i];
+    const d = rot
+      ? (Math.acos(clamp(a[0] * b[0] + a[1] * b[1] + a[2] * b[2], -1, 1)) * 180) / Math.PI
+      : Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+    return d / step;
+  });
+  const peak = Math.max(...rate, 1e-9);
+  const rateY = (v) => (CURVE_VH - (v / peak) * (CURVE_VH - CURVE_PAD)).toFixed(1);
+  const area = `M0,${CURVE_VH} `
+    + rate.map((v, i) => `L${x(i + 0.5)},${rateY(v)}`).join(' ')
+    + ` L${CURVE_W},${CURVE_VH} Z`;
+
+  return {
+    channels,
+    rate: {
+      label: rot ? 'Turn' : 'Speed',
+      range: rot ? `peak ${peak.toFixed(2)}°/f` : `peak ${peak.toFixed(2)}/f`,
+      area,
+    },
+    // Where the keys sit, so the curve can be read against them — the
+    // sequence's own sorted track, not the document's, so a key it dropped
+    // (no eye, no forward) does not draw a line the curve never bends at.
+    keys: seq[rot ? 'rot' : 'pos'].map((k) => ((clamp(k.frame, 0, totalFrames) / totalFrames) * CURVE_W).toFixed(1)),
+  };
+}
 
 // --- tracks -------------------------------------------------------------------
 //
@@ -262,6 +366,8 @@ export function CameraSequencer({
   /** Multi-select: { track, id }[]. Shift+click toggles; plain click replaces (or keeps if already in set). */
   const [selected, setSelected] = useState([]);
   const [zoom, setZoom] = useState(1);
+  // Which camera lanes have their curve row open (click the lane's label).
+  const [curves, setCurves] = useState({ camPos: false, camRot: false });
 
   const { totalFrames, fps, curve, loop, cine, snap, lockActor, linearRotation } = doc;
 
@@ -325,6 +431,13 @@ export function CameraSequencer({
     [doc.camPos, doc.camRot, totalFrames, curve, linearRotation],
   );
   seqRef.current = seq;
+
+  // Curve rows are sampled from the same sequence playback runs, so what the
+  // graph shows is what the camera does — Curve and Linear rotation included.
+  const curveData = useMemo(() => ({
+    camPos: curves.camPos ? buildCurve(seq, 'camPos', totalFrames) : null,
+    camRot: curves.camRot ? buildCurve(seq, 'camRot', totalFrames) : null,
+  }), [seq, curves.camPos, curves.camRot, totalFrames]);
 
   // One sampler per sequenced actor. Actors walk straight lines between
   // their keys whatever the camera's Curve toggle says — a spline through a
@@ -1164,13 +1277,14 @@ export function CameraSequencer({
       : lockActorId != null
         ? 'Click on the zone to move the lock actor — Lock to Actor aims at it'
         : 'Place an actor on the zone for Lock to Actor to aim at';
-  // Two lanes per sequenced actor grow the timeline and the panel with it;
-  // past the window the body scrolls.
   const actorLanes = doc.actors.length * 2;
-  const tlHeight = TL_BASE_H + actorLanes * LANE_H;
+  // Actor lanes and open curve rows both grow the timeline and the panel with
+  // it; past the window the body scrolls.
+  const extraH = actorLanes * LANE_H + (curves.camPos ? CURVE_H : 0) + (curves.camRot ? CURVE_H : 0);
+  const tlHeight = TL_BASE_H + extraH;
   const style = {
     width,
-    height: actorLanes ? Math.min(PANEL_H + actorLanes * LANE_H, Math.max(window.innerHeight - 70, PANEL_H)) : PANEL_H,
+    height: extraH ? Math.min(PANEL_H + extraH, Math.max(window.innerHeight - 70, PANEL_H)) : PANEL_H,
     ...(pos ? { left: pos.x, top: pos.y, right: 'auto' } : null),
   };
 
@@ -1220,6 +1334,69 @@ export function CameraSequencer({
           onPointerDown={(e) => onDotDown(e, track, k)}
         />
       </Tooltip>
+    );
+  };
+
+  /**
+   * A camera lane's label, which opens and closes that lane's curve row, and
+   * the two rows themselves — legend in the label column, graph over the
+   * track. Both are rendered at a fixed CURVE_H so the two columns stay in
+   * step, the way the 25px lanes and labels do.
+   */
+  const curveToggle = (track, label, tip) => (
+    <Tooltip key={`${track}:label`} content={tip} placement="right">
+      <button
+        type="button"
+        className={`cseq-tl-label cseq-tl-toggle${curves[track] ? ' on' : ''}`}
+        onClick={() => setCurves((c) => ({ ...c, [track]: !c[track] }))}
+      >
+        {label}
+        <span className={`icon cseq-caret${curves[track] ? ' open' : ''}`}>chevron_right</span>
+      </button>
+    </Tooltip>
+  );
+
+  const curveLegend = (track) => {
+    const c = curveData[track];
+    return (
+      <div key={`${track}:legend`} className="cseq-curve-legend" style={{ height: CURVE_H }}>
+        {c ? [...c.channels, { key: 'rate', label: c.rate.label, range: c.rate.range }].map((ch) => (
+          <div key={ch.key} className={`cseq-curve-key${ch.color ? '' : ' rate'}`}>
+            <i style={ch.color ? { background: ch.color } : null} />
+            <span className="cseq-curve-name">{ch.label}</span>
+            <span className="cseq-curve-range">{ch.range}</span>
+          </div>
+        )) : null}
+      </div>
+    );
+  };
+
+  const curveRow = (track) => {
+    const c = curveData[track];
+    return (
+      <div key={`${track}:curve`} className="cseq-curve" style={{ height: CURVE_H }}>
+        {c ? (
+          <svg viewBox={`0 0 ${CURVE_W} ${CURVE_VH}`} preserveAspectRatio="none">
+            <path className="cseq-curve-rate" d={c.rate.area} />
+            {c.keys.map((x, i) => (
+              <line
+                key={i} className="cseq-curve-keyline" vectorEffect="non-scaling-stroke"
+                x1={x} x2={x} y1="0" y2={CURVE_VH}
+              />
+            ))}
+            {c.channels.map((ch) => (
+              <polyline
+                key={ch.key} points={ch.points} fill="none" stroke={ch.color}
+                strokeWidth="1.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke"
+              />
+            ))}
+          </svg>
+        ) : (
+          <span className="cseq-curve-empty">
+            Record a camera key to see its curve
+          </span>
+        )}
+      </div>
     );
   };
 
@@ -1475,8 +1652,12 @@ export function CameraSequencer({
         <div className={`cseq-tl${doc.actors.length ? ' has-actors' : ''}`} style={{ height: tlHeight }}>
           <div className="cseq-tl-labels">
             <div className="cseq-tl-spacer" />
-            <div className="cseq-tl-label">Camera Position</div>
-            <div className="cseq-tl-label">Camera Rotation</div>
+            {curveToggle('camPos', 'Camera Position',
+              'Show the eye’s curve — X, Y and Z through the shot, over how fast it is moving')}
+            {curves.camPos ? curveLegend('camPos') : null}
+            {curveToggle('camRot', 'Camera Rotation',
+              'Show the facing’s curve — yaw, pitch and roll through the shot, over how fast it is turning')}
+            {curves.camRot ? curveLegend('camRot') : null}
             <div className="cseq-tl-label">Weather</div>
             <div className="cseq-tl-label">Time</div>
             {doc.actors.map(actorLabels)}
@@ -1500,7 +1681,9 @@ export function CameraSequencer({
                 ))}
               </div>
               <div className="cseq-lane">{doc.camPos.map((k) => dot('camPos', k, 'cam'))}</div>
+              {curves.camPos ? curveRow('camPos') : null}
               <div className="cseq-lane">{doc.camRot.map((k) => dot('camRot', k, 'rot'))}</div>
+              {curves.camRot ? curveRow('camRot') : null}
               <div className="cseq-lane">{doc.scene.map((k) => dot('scene', k, 'scn'))}</div>
               <div className="cseq-lane">{doc.tod.map((k) => dot('tod', k, 'tod'))}</div>
               {doc.actors.map((sa, i) => [
