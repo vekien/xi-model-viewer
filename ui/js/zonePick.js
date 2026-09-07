@@ -331,7 +331,8 @@ export function pickActorAt(renderer, clientX, clientY) {
   let best = null;
   let bestT = Infinity;
   for (const a of actors) {
-    if (!a.visible) continue;
+    // Server NPC placements (actor.zoneNpc) are scenery: not selectable.
+    if (!a.visible || a.zoneNpc) continue;
     const b = renderer.actorBoundsDisplay(a);
     const t = rayAabb(ray.origin, ray.dir, b.min, b.max);
     if (t != null && t < bestT) { bestT = t; best = a; }

@@ -1171,6 +1171,8 @@ export class Renderer {
     // { actorId, mode: 'move'|'rotate'|'scale', hoverAxis, activeAxis } — the
     // transform grabber on the selected actor (Scenes panel live selection).
     this.actorGizmo = null;
+    // Zone NPC placements draw only within this many display units of the eye.
+    this.npcDrawDistance = 120;
     this.pose = null;
     this.batches = [];
     this.textures = new Map();
@@ -3240,9 +3242,18 @@ export class Renderer {
     this.actors.splice(i, 1);
   }
 
-  clearActors() {
-    for (const a of this.actors) this._freeActorGeometry(a);
-    this.actors = [];
+  /**
+   * Drop every actor. `keepZoneNpcs` spares the server NPC placements
+   * (View › Toggle NPCs, actor.zoneNpc) — they belong to the zone, not to the
+   * scene being cleared; a model swap (setModel) takes them down with it.
+   */
+  clearActors({ keepZoneNpcs = false } = {}) {
+    const keep = [];
+    for (const a of this.actors) {
+      if (keepZoneNpcs && a.zoneNpc) keep.push(a);
+      else this._freeActorGeometry(a);
+    }
+    this.actors = keep;
     this.actorGizmo = null;
   }
 
@@ -3870,6 +3881,21 @@ export class Renderer {
    * entity, but placed by uModel and lit/fogged/shadowed like the terrain
    * around it (display space, zone light set, zone cascades).
    */
+  /**
+   * Zone NPC placements (View › Toggle NPCs) are a crowd — a town has a
+   * hundred of them — so those beyond npcDrawDistance of the eye are skipped
+   * in the colour and shadow passes. Placed scene actors always draw.
+   */
+  _actorInRange(actor, eye) {
+    if (!actor.zoneNpc || !eye) return true;
+    const d = this.npcDrawDistance;
+    if (!(d > 0)) return true;
+    const dx = actor.pos[0] - eye[0];
+    const dy = actor.pos[1] - eye[1];
+    const dz = actor.pos[2] - eye[2];
+    return dx * dx + dy * dy + dz * dz <= d * d;
+  }
+
   _drawActors(viewProj, eye, fogFar) {
     if (!this.actors.length) return;
     const gl = this.gl;
@@ -3893,7 +3919,7 @@ export class Renderer {
 
     if (helpersOn) this._drawLightMarkers(viewProj);
 
-    const skinned = this.actors.filter((a) => a.visible && a.model && a.pose && a.batches.length);
+    const skinned = this.actors.filter((a) => a.visible && a.model && a.pose && a.batches.length && this._actorInRange(a, eye));
     if (!skinned.length) return;
 
     gl.useProgram(this.program);
@@ -4297,7 +4323,7 @@ export class Renderer {
           }
         }
         // Placed actors cast like the main entity would, placed by uModel.
-        const casterActors = this.actors.filter((a) => a.visible && a.model && a.pose && a.batches.length);
+        const casterActors = this.actors.filter((a) => a.visible && a.model && a.pose && a.batches.length && this._actorInRange(a, eye));
         if (casterActors.length) {
           const u = this.shadowEntityUniforms;
           gl.useProgram(this.shadowEntityProgram);

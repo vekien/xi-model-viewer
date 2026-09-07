@@ -10,6 +10,9 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ## [Unreleased]
 
+### Zones
+- **View › Toggle NPCs** stands the server's NPC placements on the loaded zone: every `npc_list` row for the zone, at its position and heading, drawn with its look — a unique model for standard NPCs, or the race skeleton plus the gear its look names for equipped ones (child races best-effort). NPCs a script keeps hidden, and doors / elevators / ships, are counted in the status bar but not drawn; an NPC whose model cannot be resolved stands as an orange marker. They are scenery: not selectable, not saved with scenes, and only drawn within 120 units of the camera. The placements come from `ui/public/lists/zone_npcs.json`, baked from CatsEyeXI's `sql/npc_list.sql` by `scripts/gen_zone_npcs.py`
+
 ### Scenes
 - The Actors panel is now **Scenes** (Zone › Scenes / Hide Scenes). It lists every saved scene; **New Scene** starts an empty one, clicking a scene puts its actors on the stage and opens its actor list, and Save (in the panel title, or in an actor's editor) writes the stage back into it. Rename in place, close (take its actors off the stage) or delete from the list; a dot on the scene and a lit Save button mean unsaved changes. Existing actor sets carry over as scenes
 - **Add to Camera Sequence** moved from the panel into the actor's editor, next to Save in its title bar

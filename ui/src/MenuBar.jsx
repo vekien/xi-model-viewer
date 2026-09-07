@@ -43,6 +43,7 @@ const MENUS = [
       { id: 'toggle-skybox', label: 'Toggle Skybox', icon: 'cloud', check: 'skybox', disableWhen: 'noSkybox' },
       { id: 'toggle-region-cull', label: 'Toggle Region Culling', icon: 'visibility_lock', check: 'regionCull', disableWhen: 'noRegions' },
       { id: 'toggle-effects', label: 'Toggle Effects', icon: 'auto_awesome', check: 'effects' },
+      { id: 'toggle-npcs', label: 'Toggle NPCs (Experimental)', icon: 'groups', check: 'npcs', disableWhen: 'noZone' },
       { id: 'toggle-axes', label: 'Toggle Axes', icon: 'open_with', check: 'axes' },
       { id: 'toggle-grid', label: 'Toggle Grid', icon: 'grid_4x4', check: 'grid' },
     ],

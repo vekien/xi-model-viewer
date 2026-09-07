@@ -106,6 +106,10 @@ import { Tooltip } from './Tooltip.jsx';
 import { loadZoneNavmesh } from '../js/navmesh.js';
 import { launchZoneRel } from '../js/launch.js';
 import { normalizeBgId, resolveBgUrl } from './bgs.js';
+import {
+  npcRow, decodeLook, npcVisible, npcEntryFromLook, npcDisplayPos, npcDisplayRot,
+  loadZoneNpcData, loadCharacterData,
+} from '../js/npcLook.js';
 
 // Placeholder colour of the Camera Sequencer's lock actor — the camera-path
 // orange, so it reads as part of the shot rather than as another cast member.
@@ -882,6 +886,9 @@ export default function App({ launch = null }) {
   // Origin axis gizmo + world grid — persisted (Settings + View menu).
   const [showAxes, setShowAxes] = useState(() => localStorage.getItem('showAxes') === '1');
   const [showGrid, setShowGrid] = useState(() => localStorage.getItem('showGrid') === '1');
+  // View › Toggle NPCs: the server's NPC placements (lists/zone_npcs.json,
+  // from CatsEyeXI npc_list) standing on the loaded zone.
+  const [showNpcs, setShowNpcs] = useState(() => localStorage.getItem('showZoneNpcs') === '1');
   const [showSkeleton, setShowSkeleton] = useState(false);
   const [showAlpha, setShowAlpha] = useState(true);
   // Zone blend submeshes: LEQUAL depth (on) vs strict LESS (off). Default on.
@@ -6851,7 +6858,7 @@ export default function App({ launch = null }) {
 
   /** Clear the stage: every placed actor, the selection, the editor. */
   const clearStageActors = useCallback(() => {
-    rendererRef.current?.clearActors();
+    rendererRef.current?.clearActors({ keepZoneNpcs: true });
     actorLoadGenRef.current.clear();
     actorSelectedIdRef.current = null;
     setActorSelectedId(null);
@@ -6989,6 +6996,95 @@ export default function App({ launch = null }) {
       if (zoneActorKey && rightPanelPrefRef.current === 'none') setPlcOpen(false);
     }
   }, [zoneActorKey]);
+
+  // ── Zone NPCs (View › Toggle NPCs) ─────────────────────────────────────────
+  //
+  // The server's placements for the loaded zone, drawn as renderer actors
+  // (id `npc:<npcid>`, actor.zoneNpc) outside the Scenes system: not saved,
+  // not selectable, not in the Scenes list. Standard looks resolve through
+  // the baked model-id → DAT map, equipped looks through characters.json.
+  // Parsed models are shared between NPCs with the same look (ten Moogles
+  // parse once); each actor still gets its own GPU copy via setActorModel.
+  const zoneNpcTarget = modelInfo?.zone ?? null;   // new object per zone load
+  const zoneNpcGenRef = useRef(0);
+  const zoneNpcIdsRef = useRef([]);
+  const zoneNpcModelCacheRef = useRef(new Map());   // entry.key → Promise<{model, anims}>
+  useEffect(() => {
+    const gen = ++zoneNpcGenRef.current;
+    const r = rendererRef.current;
+    for (const id of zoneNpcIdsRef.current) r?.removeActor(id);
+    zoneNpcIdsRef.current = [];
+    if (!showNpcs) zoneNpcModelCacheRef.current.clear();
+    if (!showNpcs || !r || !zoneNpcTarget || zoneNpcTarget.id == null || modelRef.current?.kind !== 'zone') return undefined;
+    const stale = () => zoneNpcGenRef.current !== gen;
+    (async () => {
+      const [data, characters] = await Promise.all([loadZoneNpcData(), loadCharacterData()]);
+      if (stale()) return;
+      if (!data) {
+        setStatusText('NPCs: lists/zone_npcs.json is missing — run scripts/gen_zone_npcs.py.');
+        return;
+      }
+      const rows = (data.zones?.[String(zoneNpcTarget.id)] ?? []).map(npcRow);
+      const stat = { placed: 0, hidden: 0, skipped: 0, missing: 0 };
+      const jobs = [];
+      for (const npc of rows) {
+        if (!npcVisible(npc)) { stat.hidden++; continue; }
+        const look = decodeLook(npc.look);
+        if (!look || (look.size !== 0 && look.size !== 1)) { stat.skipped++; continue; }
+        const entry = npcEntryFromLook(look, npc.name, data.models, characters);
+        const id = `npc:${npc.npcid}`;
+        const actor = r.addActor(id, npcDisplayPos(npc), npcDisplayRot(npc.rot));
+        actor.zoneNpc = true;
+        actor.npc = npc;
+        zoneNpcIdsRef.current.push(id);
+        if (!entry) { stat.missing++; r.setActorColor(id, [1.0, 0.6, 0.25]); continue; }
+        stat.placed++;
+        jobs.push({ id, entry });
+      }
+      const status = (loading) => {
+        const parts = [`${stat.placed} NPC${stat.placed === 1 ? '' : 's'}${loading ? ' loading…' : ''}`];
+        if (stat.hidden) parts.push(`${stat.hidden} hidden (status)`);
+        if (stat.skipped) parts.push(`${stat.skipped} doors / ships`);
+        if (stat.missing) parts.push(`${stat.missing} without a model`);
+        setStatusText(`NPCs — ${parts.join(' · ')}`);
+      };
+      status(true);
+      const cache = zoneNpcModelCacheRef.current;
+      const build = (entry) => {
+        let p = cache.get(entry.key);
+        if (!p) {
+          p = buildActorModel(entry).catch((err) => { cache.delete(entry.key); throw err; });
+          cache.set(entry.key, p);
+        }
+        return p;
+      };
+      let next = 0;
+      const worker = async () => {
+        while (next < jobs.length && !stale()) {
+          const { id, entry } = jobs[next++];
+          try {
+            const { model, anims } = await build(entry);
+            if (stale() || !r.getActor(id)) return;
+            r.setActorModel(id, model);
+            const idle = anims.find((g) => g.id === 'idl') || anims.find((g) => g.id === 'std') || anims[0] || null;
+            if (idle) {
+              // Random phase so a crowd of the same model does not breathe in step.
+              const clip = withBaseIdle(model, idle.clip);
+              r.setActorAnimation(id, clip, { loop: true, frame: Math.random() * (clip.lengthInFrames || 1) });
+            }
+          } catch (err) {
+            if (stale()) return;
+            console.warn(`zone NPC ${entry.name}:`, err);
+            stat.placed--; stat.missing++;
+            r.setActorColor(id, [1.0, 0.6, 0.25]);
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: 4 }, worker));
+      if (!stale()) status(false);
+    })().catch((err) => { if (!stale()) console.warn('zone NPCs failed', err); });
+    return () => { zoneNpcGenRef.current++; };
+  }, [showNpcs, zoneNpcTarget, buildActorModel]);
 
   // Database Manager needs the app's db folder and whether xi-tools can run.
   useEffect(() => {
@@ -7822,6 +7918,13 @@ export default function App({ launch = null }) {
         setShowAxes((v) => {
           const next = !v;
           try { localStorage.setItem('showAxes', next ? '1' : '0'); } catch { /* quota */ }
+          return next;
+        });
+        break;
+      case 'toggle-npcs':
+        setShowNpcs((v) => {
+          const next = !v;
+          try { localStorage.setItem('showZoneNpcs', next ? '1' : '0'); } catch { /* quota */ }
           return next;
         });
         break;
@@ -8776,6 +8879,8 @@ export default function App({ launch = null }) {
           effects: showEffects,
           axes: showAxes,
           grid: showGrid,
+          npcs: showNpcs,
+          noZone: !modelInfo?.zone,
           noCollision: !hasCollision,
           noRegions: !hasRegions,
           noNavmesh: !hasNavmesh,
