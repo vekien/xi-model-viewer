@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
 import {
@@ -1238,6 +1238,50 @@ export function CameraSequencer({
     setWidth(clamp(Math.round(w0 + (e.clientX - x0)), MIN_W, maxW));
   };
   const endResize = () => { resizeRef.current = null; };
+
+  /**
+   * Keep the panel reachable. A saved position and width are only good for the
+   * window they were saved in — a new resolution, a smaller display, or a UI
+   * scale change (real webview zoom in the app, so the viewport shrinks as the
+   * scale grows) can each leave the panel parked past an edge. It is dragged by
+   * its own header, so off-screen means there is nothing left to grab and no
+   * way to get it back: fit it to the window instead, on open, on resize, and
+   * whenever the panel's own size changes (a curve row or an actor's lanes make
+   * it taller, a saved width can be wider than the display).
+   */
+  useLayoutEffect(() => {
+    const fit = () => {
+      const el = panelRef.current;
+      if (!el) return;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      // A hidden or minimised window measures zero — clamping against that
+      // would stack the panel in the corner for no reason. Whatever brings the
+      // window back fires a resize, which runs this again.
+      if (vw < 1 || vh < 1) return;
+      const rect = el.getBoundingClientRect();
+      // Screen pixels per CSS pixel the panel is positioned in: 1 under the
+      // app's real webview zoom, the CSS zoom factor in browser dev mode.
+      const k = (el.offsetWidth ? rect.width / el.offsetWidth : 1) || 1;
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      const maxW = Math.max(MIN_W, Math.round(vw / k) - 16);
+      // Too wide for the display, and the resize grip is off the right edge.
+      if (w > maxW) setWidth(maxW);
+      if (rect.left >= -0.5 && rect.top >= -0.5
+        && rect.right <= vw + 0.5 && rect.bottom <= vh + 0.5) return;
+      const x = clamp(Math.round(rect.left / k), 0, Math.max(Math.round(vw / k) - Math.min(w, maxW), 0));
+      const y = clamp(Math.round(rect.top / k), 0, Math.max(Math.round(vh / k) - h, 0));
+      setPos((prev) => (prev && prev.x === x && prev.y === y ? prev : { x, y }));
+    };
+    fit();
+    // Resize covers the lot: a window resize, a display that changed
+    // resolution under a maximised window, and a UI scale change — real
+    // webview zoom resizes the layout viewport, and the dev-mode CSS-zoom
+    // fallback announces itself (see backend.setUiScale).
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [width, curves.camPos, curves.camRot, doc.actors.length]);
 
   // --- render ---------------------------------------------------------------
 

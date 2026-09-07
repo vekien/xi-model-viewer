@@ -26,6 +26,12 @@ export const backend = {
       }
     }
     document.documentElement.style.zoom = z === 1 ? '' : String(z);
+    // Real zoom resizes the layout viewport and fires resize; CSS zoom fires
+    // nothing at all — not resize, not visualViewport, not a ResizeObserver on
+    // the root — even though every layout measurement just changed. Say so, so
+    // anything that sizes itself against the viewport (the sequencer panel
+    // fitting itself back on screen, canvases re-measuring) still hears it.
+    window.dispatchEvent(new Event('resize'));
   },
 
   async listDir(path) {
