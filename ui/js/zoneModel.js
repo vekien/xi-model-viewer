@@ -240,7 +240,7 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
       max: [dx + 1, dy + 1, dz + 1],
     };
     if (!kind) expand(bounds); // camera fit from world geometry only
-    zonePlacements.push({
+    const placement = {
       name,
       meshId: p.meshId,
       mesh: resolved,
@@ -259,7 +259,9 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
       // The exception is a far copy of geometry the base zone already places —
       // see isFarCopy.
       userHidden: kind === 'collision' || isFarCopy(resolved),
-    });
+    };
+    zonePlacements.push(placement);
+    return placement;
   };
 
   // Resolve every placement once — the fuzzy pass is not cheap and both the
@@ -443,7 +445,20 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
       );
       if (hosts.length) {
         for (const h of hosts) {
+          const placement = pushPlacement(
+            { meshId: meshName, index: -1, pos: h.pos, rot: h.rot, scale: h.scale },
+            meshName,
+            h.matrix,
+            null,
+          );
+          // The spinner pass draws this row every frame, so the static batches
+          // must not: rebuildZoneDraws re-emits every visible placement, and
+          // the fixed copy it produced sat inside the turning one as a second
+          // set of sails (the prototype town's `mill` / `mill.002`).
+          placement.spinner = true;
           // ~0.01745 rad/frame @ 30fps — same as mil* RotationVelocitySetup.
+          // Pose is read back off the placement each frame, so the Objects row
+          // still moves the wheel.
           zoneSpinners.push({
             meshName,
             prims,
@@ -451,13 +466,8 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
             rot: h.rot,
             scale: h.scale,
             spinY: 0.0174533 * 30,
+            placement,
           });
-          pushPlacement(
-            { meshId: meshName, index: -1, pos: h.pos, rot: h.rot, scale: h.scale },
-            meshName,
-            h.matrix,
-            null,
-          );
           unplacedCompanions++;
         }
         placedMeshes.add(meshName);
@@ -631,9 +641,12 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
 export function bakeSpinnerDraws(spinner, angleY = 0) {
   const prims = spinner?.prims;
   if (!prims?.length) return [];
-  const [px, py, pz] = spinner.pos || [0, 0, 0];
-  const [rx, ry0, rz] = spinner.rot || [0, 0, 0];
-  const sc = spinner.scale || [1, 1, 1];
+  // Pose comes from the Objects row when the spinner has one, so dragging the
+  // wheel there moves the turning copy and not just the drag ghost.
+  const src = spinner.placement || spinner;
+  const [px, py, pz] = src.rawPos || spinner.pos || [0, 0, 0];
+  const [rx, ry0, rz] = src.rot || [0, 0, 0];
+  const sc = src.scale || [1, 1, 1];
   const matrix = trsMatrix([px, py, pz], [rx, ry0 + angleY, rz], sc);
   const mirrored = det3(matrix) < 0;
   const order = mirrored ? [0, 2, 1] : [0, 1, 2];
@@ -839,6 +852,9 @@ export function rebuildZoneDraws(model) {
   for (const p of model.zonePlacements) {
     // Panel-only sky rows — particle system draws those, not zone batches.
     if (p.kind === 'sky') continue;
+    // Same for a mesh the spinner pass turns (the windmill wheel): a static
+    // copy here would sit inside the turning one, permanently out of phase.
+    if (p.spinner) continue;
     if (p.dragHidden || p.userHidden || p.pvsHidden) continue;
     if (!p.mesh) continue;
     const prims = meshes.get(p.mesh);

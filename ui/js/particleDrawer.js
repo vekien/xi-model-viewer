@@ -8,7 +8,7 @@
 // matrix into display space with normals still correct.
 
 import { Mat4, Vec3 } from './particle/math.js';
-import { BlendFunc, LinkedDataType } from './particle/types.js';
+import { BlendFunc, LinkedDataType, RotationTransform } from './particle/types.js';
 import { resolveTexture, isSkyName, isWaterName } from './zone.js';
 
 /** Approx local-space radius of a particle mesh (AABB half-diagonal). */
@@ -865,13 +865,24 @@ export class ParticleDrawer {
       // (det +1); a mirrored generator transform flips it, as in xim.
       const zoneMesh = p.meshProvider?.isParticleMesh === false;
       const front = zoneMesh && det3(cmd.model.m) < 0 ? gl.CCW : gl.CW;
+      // A generator that SPINS a zone prop shows both faces of it over one
+      // turn, which is why bakeSpinnerDraws draws the static windmill wheel
+      // with no cull. The prototype town's `mill` / `fu_in` and Rabao's
+      // `de_fusya02` are authored single-sided, so culled they lose every sail
+      // on the far side of the axis. Cull flags still apply to a generator that
+      // only re-draws a mesh in place (Xarcabard's cave mouths), and to the
+      // celestial shells, whose one-sidedness is what keeps a slowly turning
+      // cloud dome from compositing over itself.
+      const meshName = p.meshProvider?.meshName || '';
+      const spun = zoneMesh && !isSkyName(meshName) && !isWaterName(meshName)
+        && !!p.getDynamicByType?.(RotationTransform)?.velocity?.magnitudeSquare();
 
       for (const offset of offsets) {
         const mv = offset ? this.#offsetModelView(cmd.modelView, viewMat, offset) : cmd.modelView;
         gl.uniformMatrix4fv(this.u.modelView, false, mv.m);
 
         for (const mesh of cmd.meshes) {
-          setCull(zoneMesh && !mesh.noCull, front);
+          setCull(zoneMesh && !mesh.noCull && !spun, front);
           const entry = this.#upload(mesh);
           gl.bindTexture(gl.TEXTURE_2D, showTextures ? this.#texture(entry) : this.defaultTexture);
           gl.bindVertexArray(entry.vao);
