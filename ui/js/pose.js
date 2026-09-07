@@ -63,12 +63,43 @@ function blendSample(a, b, u) {
 
 // ---------------------------------------------------------------------------
 
+/**
+ * Drops re-parenting entries that would make a joint wait on itself.
+ *
+ * evaluate() resolves the skeleton in repeated passes, each joint held back
+ * until its parent — or, where one applies, its override target — is done. An
+ * override pointing at the joint itself or at anything below it closes that
+ * into a cycle: no pass can make progress and the loop spins forever, hanging
+ * the app. Picking Fishing with the Ranged slot empty did exactly that (see
+ * the ranged mount rule in the model composer), so the entry is dropped and
+ * the joint keeps its real parent.
+ */
+function sanitizeOverrides(skeleton, overrides) {
+  if (!overrides?.size) return overrides;
+  const joints = skeleton.joints;
+  const clean = new Map();
+  for (const [joint, target] of overrides) {
+    // Walk the target's real ancestors: reaching `joint` means the target sits
+    // below it. The hop cap guards a parent chain that is itself circular.
+    let a = target;
+    for (let hops = 0; a >= 0 && a !== joint && hops <= joints.length; hops++) {
+      a = joints[a]?.parent ?? -1;
+    }
+    if (a === joint) {
+      console.warn(`[pose] joint ${joint} -> ${target}: re-parent target is not above it, ignoring`);
+      continue;
+    }
+    clean.set(joint, target);
+  }
+  return clean.size ? clean : null;
+}
+
 export class SkeletonPose {
   constructor(skeleton, parentOverrides = null) {
     this.skeleton = skeleton;
     // jointIndex -> replacement parent joint index. Used to re-parent a drawn
     // weapon's grip joint onto the hand attach joint (xim jointParentOverrides).
-    this.parentOverrides = parentOverrides;
+    this.parentOverrides = sanitizeOverrides(skeleton, parentOverrides);
     const n = skeleton.joints.length;
     this.rot = new Array(n);      // per-joint world rotation quaternion
     this.trans = new Array(n);    // per-joint world translation
@@ -130,8 +161,13 @@ export class SkeletonPose {
       basePhase = baseLen > 0 ? (frame % baseLen) / baseLen : 0;
     }
 
+    // Local, so a stalled pass can drop the re-parenting for the rest of this
+    // evaluate without touching the model's own map (see the bail below).
+    let overrides = this.parentOverrides;
+    let progressed;
     do {
       missing = false;
+      progressed = false;
       for (let i = 0; i < n; i++) {
         if (computed[i]) continue;
 
@@ -143,7 +179,7 @@ export class SkeletonPose {
         // A reset track (negative offsets in the DAT) pins the joint to bind,
         // which for a re-parented grip is "hang off the hand" — so it does not
         // count as the clip driving the joint.
-        const override = this.parentOverrides?.get(i);
+        const override = overrides?.get(i);
         const driven = clip?.jointTracks.get(i);
         if (override !== undefined && !(driven && !driven.reset)) {
           if (!computed[override]) { missing = true; continue; }
@@ -151,6 +187,7 @@ export class SkeletonPose {
           this.trans[i] = this.trans[override];
           this.scale[i] = [1, 1, 1];
           computed[i] = true;
+          progressed = true;
           continue;
         }
 
@@ -220,6 +257,24 @@ export class SkeletonPose {
         }
 
         computed[i] = true;
+        progressed = true;
+      }
+
+      // A pass that resolved nothing can only repeat itself — the joints left
+      // are waiting on each other. sanitizeOverrides catches the cycle a single
+      // re-parent can make; this catches every other shape (two overrides
+      // pointing at each other, a corrupt parent chain) so a bad skeleton draws
+      // wrong instead of locking the tab up.
+      if (missing && !progressed) {
+        if (overrides) { overrides = null; continue; }   // real parents cannot cycle
+        console.warn('[pose] joint hierarchy does not resolve; leaving the rest at bind pose');
+        for (let i = 0; i < n; i++) {
+          if (computed[i]) continue;
+          this.rot[i] = [0, 0, 0, 1];
+          this.trans[i] = [0, 0, 0];
+          this.scale[i] = [1, 1, 1];
+        }
+        break;
       }
     } while (missing);
   }

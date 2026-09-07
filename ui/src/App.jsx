@@ -1925,6 +1925,15 @@ export default function App({ launch = null }) {
          * what the reference viewer shows for an Archery weapon skill. The
          * mount is read off the weapon's own vertex weights — lowest index in
          * the cluster is its root — so it needs no per-race table.
+         *
+         * Joint 0 is never a mount: it is the skeleton root, every other
+         * joint's ancestor. The empty Ranged slot lands on it — the "None"
+         * placeholder is three degenerate vertices, weighted to joint 0 on
+         * Hume Female (ROM/36/58) and Mithra (ROM/55/83) — and Fishing counts
+         * the ranged slot as in use, so picking that action with no rod
+         * equipped asked for the root to hang off its own hand: a cycle that
+         * spun SkeletonPose.evaluate forever and froze the app. There is
+         * nothing to draw for an empty slot anyway.
          */
         if (rangedInUse && weaponSlots.range?.length) {
           const slotSet = new Set(weaponSlots.range.map((p) => pathKey(p, settingsRef.current)));
@@ -1938,7 +1947,7 @@ export default function App({ launch = null }) {
             }
           }
           const hand = refs[rangedHandRef ?? 126];
-          if (mount != null && hand && hand.index !== mount) overrides.set(mount, hand.index);
+          if (mount > 0 && hand && hand.index !== mount) overrides.set(mount, hand.index);
         }
         if (overrides.size) model.jointOverrides = overrides;
       }
@@ -6152,7 +6161,8 @@ export default function App({ launch = null }) {
           }
         }
         const hand = refs[entry.rangedHandRef ?? 126];
-        if (mount != null && hand && hand.index !== mount) overrides.set(mount, hand.index);
+        // mount 0 is the skeleton root, not a back mount — see the composer.
+        if (mount > 0 && hand && hand.index !== mount) overrides.set(mount, hand.index);
       }
       if (overrides.size) model.jointOverrides = overrides;
     }
