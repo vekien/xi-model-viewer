@@ -191,7 +191,17 @@ export class OrbitCamera {
     const far = (this.rangeKind === 'zone' && this.renderDistance > 0)
       ? Math.max(this.renderDistance, this.near * 4)
       : Math.max(this.far, (this.mode === 'fly' ? this.flySpeed * 40 : this.distance * 8) + 50);
-    const near = Math.min(this.near, Math.max((this.mode === 'fly' ? this.flySpeed : this.distance) * 0.0005, 0.05));
+    // Depth precision is set by the near plane, not the far one: on the 24-bit
+    // default framebuffer the resolution at distance d is d²(f−n)/(f·n·2²⁴), so
+    // halving n doubles it everywhere. `min` here threw the zone's own 0.5 away
+    // — flySpeed caps at 300, so the scale term never reaches 0.15 and every
+    // zone drew at n = 0.05, ten times coarser than setRangeFor asks for. That
+    // is what makes near-coplanar geometry flicker once the camera pulls back:
+    // Bastok's `auchatal` sits 0.011–0.045 off `auc_stdl`, which collapses into
+    // one depth bucket at ~98u with n = 0.05 and ~309u with n = 0.5.
+    // Take the LARGER — the configured near, pushed further out when speed or
+    // orbit distance says nothing needs to be that close anyway.
+    const near = Math.max(this.near, (this.mode === 'fly' ? this.flySpeed : this.distance) * 0.0005);
     return mat4Perspective((this.fovDegrees * Math.PI) / 180, aspect, near, far);
   }
 
