@@ -64,6 +64,81 @@ const DEFAULT_SECTIONS = { order: [], standardLabel: 'Standard', other: null };
 const isNone = (it) => it.label?.toLowerCase() === 'none';
 /** Everyday animation categories, listed first in this order; the rest follow A-Z. */
 const PINNED_ACTION_GROUPS = ['General', 'Basic', 'Battle', 'Emote'];
+
+/**
+ * True names for the battle stances, per race, by weapon animation type.
+ *
+ * A `syn:btlN` action is battle stance N — the DAT the client picks for a
+ * weapon whose `info.weaponAnimationType` is N (see `battleByType`). That type
+ * lives in the weapon's own race-specific model, and the races do NOT agree on
+ * it: a great katana is type 6 on Hume Male, 4 on Hume Female (which gives it
+ * the great sword's stance) and 8 on Galka. So there is no one table — each row
+ * is what that race's own weapon DATs report, and reading Hume Male's row for
+ * everyone put a Hume Female great katana in the katana stance, one-handed.
+ *
+ * The baked labels were wrong in the same way (they named Hume Male's types
+ * for every race), and are corrected here rather than in characters.json,
+ * which `xi mv update` overwrites. Types absent from a row resolve to the same
+ * DAT as type 0, so the bake never emits an action for them; 10 is the empty
+ * hand everywhere. Regenerate after a client update with:
+ *
+ *   XI_GAME_DIR="…/FINAL FANTASY XI" node scripts/gen_battle_stances.mjs
+ */
+const BATTLE_STANCE_NAMES = {
+  HumeM: { 0: 'Axe / Club', 1: 'Sword', 2: 'Hand-to-Hand', 3: 'Dagger', 4: 'Great Sword', 5: 'Great Axe / Scythe / Staff', 6: 'Great Katana', 7: 'Katana', 8: 'Polearm', 10: 'Unarmed' },
+  HumeF: { 0: 'Sword / Club', 1: 'Axe / Club', 2: 'Dagger', 3: 'Hand-to-Hand', 4: 'Great Sword / Great Katana', 5: 'Great Axe / Scythe / Staff', 6: 'Katana', 7: 'Polearm', 10: 'Unarmed' },
+  ElvaanM: { 0: 'Hand-to-Hand', 1: 'Axe / Club', 2: 'Sword', 3: 'Katana', 4: 'Great Sword', 5: 'Scythe', 6: 'Great Katana', 7: 'Great Axe / Staff', 8: 'Polearm', 9: 'Dagger', 10: 'Unarmed' },
+  ElvaanF: { 0: 'Dagger / Sword / Axe / Club', 1: 'Hand-to-Hand', 2: 'Great Sword', 3: 'Polearm', 5: 'Katana', 6: 'Great Axe / Scythe / Staff', 7: 'Great Katana', 10: 'Unarmed' },
+  Tarutaru: { 0: 'Hand-to-Hand', 1: 'Dagger / Sword / Club', 2: 'Great Sword / Great Axe / Scythe / Great Katana', 3: 'Katana', 4: 'Axe / Club', 5: 'Polearm / Staff', 10: 'Unarmed' },
+  Mithra: { 0: 'Sword', 1: 'Hand-to-Hand', 2: 'Axe / Club', 3: 'Katana', 4: 'Great Sword / Great Katana', 5: 'Great Axe', 6: 'Polearm / Staff', 7: 'Scythe', 8: 'Dagger / Sword', 10: 'Unarmed' },
+  Galka: { 0: 'Hand-to-Hand', 1: 'Dagger / Sword / Club', 2: 'Axe / Club', 3: 'Great Sword', 4: 'Katana', 5: 'Polearm / Staff', 6: 'Great Axe', 7: 'Scythe', 8: 'Great Katana', 10: 'Unarmed' },
+};
+
+const BATTLE_PREFIX = 'Battle: ';
+
+/**
+ * The weapon classes a `Battle: …` label names — "Great Sword / Great Katana"
+ * → both. Used to carry a stance across a race switch: the same class sits on
+ * a different animation type per race, so neither the id nor the whole label
+ * survives, but the weapon does.
+ */
+const stanceClasses = (label) => (label?.startsWith(BATTLE_PREFIX)
+  ? label.slice(BATTLE_PREFIX.length).split(' / ')
+  : []);
+
+/**
+ * The race's Battle entries, renamed — plus the unarmed stance.
+ *
+ * `xi mv update` only walks types 0-8, so the empty-hand stance every race has
+ * at `battleByType[10]` never made the list. It is a real, distinct DAT (it is
+ * what the game shows with nothing equipped), so it is synthesised here in the
+ * same shape as the baked entries.
+ */
+function withBattleStances(actions, battleByType, raceId) {
+  const names = BATTLE_STANCE_NAMES[raceId] ?? {};
+  const out = actions.map((a) => {
+    const m = /^syn:btl(\d+)$/.exec(a.id);
+    const name = m && names[+m[1]];
+    return name ? { ...a, label: BATTLE_PREFIX + name } : a;
+  });
+  // Skipped where type 10 is just the type 0 fallback — that is not a stance
+  // of its own, and listing the same DAT twice only reads as a duplicate.
+  const unarmed = battleByType?.[10];
+  if (unarmed && unarmed !== battleByType[0] && !out.some((a) => a.id === 'syn:btl10')) {
+    // After the last baked stance; at the end if a race lists none, so the
+    // insert can never take over slot 0 (which is the default action).
+    const after = out.findLastIndex((a) => /^syn:btl\d+$/.test(a.id));
+    out.splice(after < 0 ? out.length : after + 1, 0, {
+      id: 'syn:btl10',
+      label: BATTLE_PREFIX + (names[10] ?? 'Unarmed'),
+      group: 'Battle',
+      paths: [unarmed],
+      motionPaths: [],
+    });
+  }
+  return out;
+}
+
 const collate = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
 
 function byLabel(a, b) {
@@ -415,7 +490,7 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
         defaults[s.key] = (none ?? items[0]).id;
       }
     }
-    const acts = entry.actions ?? [];
+    const acts = withBattleStances(entry.actions ?? [], entry.battleByType, race);
 
     // Restore the saved selections once, and only for the race they belong to
     // (gear lists are race-specific; a manual race switch carries by model id).
@@ -459,7 +534,18 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
       // undo the apply — only the action carries then.
       if (!fromSet) applyRefs(carry.current.gear);
       const [g, l] = (carry.current.actionKey ?? '').split('|');
-      const act = acts.find((a) => (a.group ?? '') === g && a.label === l);
+      const want = stanceClasses(l);
+      const inGroup = (match) => acts.find((a) => (a.group ?? '') === g && match(a));
+      // The same label first; then, for a battle stance, whichever one names
+      // the weapon that was showing — "Great Katana" is its own stance on Hume
+      // Male but shares the great sword's on Hume Female, so a label carries
+      // no better than the type index does. Failing both, stay in the category
+      // rather than dropping to the first action in the list.
+      const act = inGroup((a) => a.label === l)
+        ?? (want.length
+          ? inGroup((a) => stanceClasses(a.label).some((c) => want.includes(c)))
+          : undefined)
+        ?? inGroup(() => true);
       if (act) { startGroup = act.group ?? 'Other'; startAction = act.id; }
     }
 

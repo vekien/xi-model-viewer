@@ -22,6 +22,11 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 - Timeline lanes are labelled in full (Camera Position, Camera Rotation, Animation) and an actor's Animation row lines up under its name
 - Toolbar reshuffle: frame stepping, keyframe delete / clear and the Loop, Curve, Linear rotation, Lock to Actor, Hide UI and Snap toggles sit in the Length row; Place Lock Actor joins the record buttons below the timeline
 
+### Characters
+- **Battle** stances are named after the weapons that actually use them, per race, read from every weapon DAT's own animation type. The old labels named Hume Male's weapons for everyone, and the races do not agree: a great katana is its own stance on Hume Male, shares the great sword's on Hume Female and Mithra, and is a separate one again on Galka. So "Battle: Great Katana" on a Hume Female was really the katana stance, and a great katana held in it came out one-handed. Every race's row now reads its own weapons — Hume Female lists **Great Sword / Great Katana**, Galka lists both separately, and Hume Male's own labels were wrong too (**Axe / Club** was "Club / Staff", **Great Axe / Scythe / Staff** was "Axe / Scythe", **Katana** was "Kunai"). Regenerate the table after a client update with `node scripts/gen_battle_stances.mjs`
+- New **Battle: Unarmed** — the empty-hand stance every race has, which was never listed
+- A race switch keeps the stance you were looking at by the weapon it names, not by its label or its slot in the list — neither of which means the same thing on the next race
+
 ---
 
 ## [1.1.0] — 2026-09-01
