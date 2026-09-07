@@ -93,6 +93,7 @@ export function MenuBar({
   fpsCap = 0, onFpsCap, onGraphicsOpenChange,
   renderDistance = 5000, onRenderDistance,
   effectDistanceScale = 1, onEffectDistanceScale,
+  zoneLod = false, onZoneLod,
 }) {
   const [active, setActive] = useState(null);   // { label, left, top } | null
   const [viewport, setViewport] = useState(null);     // { left, top } | null
@@ -372,6 +373,8 @@ export function MenuBar({
               onRenderDistance={onRenderDistance}
               effectDistanceScale={effectDistanceScale}
               onEffectDistanceScale={onEffectDistanceScale}
+              zoneLod={zoneLod}
+              onZoneLod={onZoneLod}
             />
           </div>,
           document.body,

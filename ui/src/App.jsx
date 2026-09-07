@@ -58,7 +58,7 @@ import { checkForUpdate, checkForUpdateManual, dismissUpdate } from '../js/updat
 import {
   zoneDatRelPath, zoneToModel, rebuildZoneDraws, buildPlacementDraws, translatePlacementDisplay,
   clonePlacementPose, applyPlacementPose, posesEqual, pickPvsRegion, applyPvsRegion,
-  yieldPlacementsToEffects,
+  yieldPlacementsToEffects, setZoneLodMode,
 } from '../js/zoneModel.js';
 import { pickZoneAt, pickZoneGroundAt, pickActorAt } from '../js/zonePick.js';
 import { loadDatTypeLists, makeDatTypeLookup } from '../js/dattypes.js';
@@ -981,6 +981,12 @@ export default function App({ launch = null }) {
     const saved = Number(localStorage.getItem('effectDistanceScale'));
     return Number.isFinite(saved) && saved >= 1 && saved <= 20 ? saved : 1;
   });
+  // Graphics › Enable LOD — draw the detail variant the DAT placed instead of
+  // the highest-detail sibling. Off by default: we have no distance switching,
+  // and the low variants drop geometry (see zone.js resolveMeshName).
+  const [zoneLod, setZoneLodState] = useState(() => localStorage.getItem('zoneLod') === '1');
+  const zoneLodRef = useRef(zoneLod);
+  zoneLodRef.current = zoneLod;
   const [showNavmesh, setShowNavmesh] = useState(false);
   // Sky, clouds and weather shells are on unless the user turned them off —
   // a zone without its weather isn't what the zone looks like.
@@ -3332,6 +3338,8 @@ export default function App({ launch = null }) {
       await yieldToPaint();
       if (!stillCurrent()) { releaseOverlay(); return; }
       const model = zoneToModel(parsed, displayName);
+      // Built at highest detail; drop to the placed variants when LOD is on.
+      if (zoneLodRef.current) setZoneLodMode(model, true);
       if (!model.isRenderable) {
         releaseOverlay();
         setStatusText(`${displayName} — no renderable mesh`);
@@ -7403,6 +7411,17 @@ export default function App({ launch = null }) {
     if (camera) camera.renderDistance = d;
   }, []);
 
+  /** Graphics › Enable LOD — re-emits zone batches in place, no zone reload. */
+  const setZoneLod = useCallback((on) => {
+    const next = !!on;
+    setZoneLodState(next);
+    try { localStorage.setItem('zoneLod', next ? '1' : '0'); } catch { /* quota */ }
+    const model = modelRef.current;
+    const renderer = rendererRef.current;
+    if (!model || !renderer) return;
+    if (setZoneLodMode(model, next)) renderer.reloadZoneBatches(model);
+  }, []);
+
   const setEffectDistanceScale = useCallback((v) => {
     const s = Math.min(20, Math.max(1, Math.round(Number(v) || 1)));
     setEffectDistanceScaleState(s);
@@ -8896,6 +8915,8 @@ export default function App({ launch = null }) {
         onRenderDistance={setRenderDistance}
         effectDistanceScale={effectDistanceScale}
         onEffectDistanceScale={setEffectDistanceScale}
+        zoneLod={zoneLod}
+        onZoneLod={setZoneLod}
         sequencerOpen={sequencerOpen}
         bgColor={settings?.bgColor ?? DEFAULT_BG}
         onBgColor={setBg}

@@ -1,4 +1,5 @@
 import { Combo } from './Combo.jsx';
+import { Tooltip } from './Tooltip.jsx';
 
 const RESOLUTIONS = [
   { id: 0, label: 'Window Size' },
@@ -35,6 +36,7 @@ export function GraphicsPanel({
   fov = 45, onFov,
   renderDistance = RENDER_DIST_DEFAULT, onRenderDistance,
   effectDistanceScale = FX_DIST_DEFAULT, onEffectDistanceScale,
+  zoneLod = false, onZoneLod,
 }) {
   const dist = Math.round(shadowDistance);
   const distPct = ((dist - SHADOW_MIN) / (SHADOW_MAX - SHADOW_MIN)) * 100;
@@ -131,6 +133,22 @@ export function GraphicsPanel({
             items={FPS_CAPS}
             onChange={(id) => onFpsCap?.(Number(id) || 0)}
           />
+        </div>
+      </div>
+
+      <div className="gfx-line">
+        <span className="gfx-lab">Enable LOD</span>
+        <div className="gfx-ctrl gfx-ctrl-end">
+          <Tooltip content="Draw the detail variant each object was placed as, the way retail does at range. Off draws the highest-detail version — the low ones drop geometry, so awnings and canopies lose their underside.">
+            <label className="switch cseq-switch">
+              <input
+                type="checkbox"
+                checked={!!zoneLod}
+                onChange={(e) => onZoneLod?.(e.target.checked)}
+              />
+              <span className="track" />
+            </label>
+          </Tooltip>
         </div>
       </div>
     </div>

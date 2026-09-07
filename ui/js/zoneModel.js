@@ -229,21 +229,35 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
     if (bb.max[2] > bmaxZ) bmaxZ = bb.max[2];
   };
 
-  const pushPlacement = (p, resolved, matrix, kind = null) => {
+  const pushPlacement = (p, resolved, matrix, kind = null, lodResolved = null) => {
     const c = (nameCounts.get(p.meshId) || 0) + 1;
     nameCounts.set(p.meshId, c);
     const name = c === 1 ? p.meshId : `${p.meshId}.${String(c).padStart(3, '0')}`;
     const [dx, dy, dz] = toDisplay(p.pos[0], p.pos[1], p.pos[2]);
-    const local = localBounds.get(resolved);
-    const bounds = local ? transformBoundsDisplay(local, matrix) : {
-      min: [dx - 1, dy - 1, dz - 1],
-      max: [dx + 1, dy + 1, dz + 1],
+    const boundsFor = (mesh) => {
+      const local = localBounds.get(mesh);
+      return local ? transformBoundsDisplay(local, matrix) : {
+        min: [dx - 1, dy - 1, dz - 1],
+        max: [dx + 1, dy + 1, dz + 1],
+      };
     };
+    const bounds = boundsFor(resolved);
     if (!kind) expand(bounds); // camera fit from world geometry only
+    // Graphics › Enable LOD swaps between these live (setZoneLodMode) — both
+    // variants are already in `zoneMeshes`, so no reload. Only stored for the
+    // placements where the two resolutions actually differ, i.e. the ones whose
+    // id names a lower detail variant than the DAT ships.
+    const lodVariants = lodResolved && lodResolved !== resolved
+      ? {
+        high: { mesh: resolved, bounds },
+        low: { mesh: lodResolved, bounds: boundsFor(lodResolved) },
+      }
+      : null;
     const placement = {
       name,
       meshId: p.meshId,
       mesh: resolved,
+      lodVariants,
       index: p.index ?? -1,
       instance: c,
       pos: [dx, dy, dz],
@@ -269,6 +283,18 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
   const resolvedFor = placements.map((p) => (
     isSanePlacement(p) ? resolveMeshName(p.meshId, meshes, meshNames) : null
   ));
+
+  // The same resolution with Graphics › Enable LOD on: keep the detail variant
+  // the DAT actually placed. Derived rather than re-resolved — the two answers
+  // only differ where resolveMeshName promoted an `_l`/`_m` id to a higher
+  // sibling, and there the placed name is by definition already in `meshes`.
+  // A difference from the fuzzy pass (decorated prototype-zone names) is not a
+  // LOD choice, so it keeps the resolved name. Saves a second fuzzy pass.
+  const lodResolvedFor = resolvedFor.map((r, i) => {
+    const id = placements[i]?.meshId;
+    if (!r || r === id) return r;
+    return meshes.has(id) ? id : r;
+  });
 
   // Far copies: `m_`/`lnd_`-prefixed stand-ins for geometry the zone already
   // places at full detail. Ru'Aun Gardens carries `m_osid_fl_b_d` (405 v) over
@@ -344,7 +370,7 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
     const matrix = trsMatrix(p.pos, p.rot, p.scale);
     const drawn = kind !== 'collision' && !isFarCopy(resolved);
     if (drawn) emitMesh(resolved, matrix, 'world');
-    pushPlacement(p, resolved, matrix, kind);
+    pushPlacement(p, resolved, matrix, kind, lodResolvedFor[pi]);
     if (!kind) {
       placedWorld.push({
         meshId: p.meshId, resolved,
@@ -893,6 +919,30 @@ export function rebuildZoneDraws(model) {
     model.zoneStats.drawCount = zoneDraws.length;
   }
   return zoneDraws;
+}
+
+/**
+ * Graphics › Enable LOD. `on` draws the detail variant the DAT actually placed
+ * — what retail shows past the placement's near radius (record +0x38). Off (the
+ * default) draws the highest-detail sibling, which is what a viewer with no
+ * distance switching wants: the low variants don't just decimate, they drop
+ * geometry, so an `_m` awning has no underside. See resolveMeshName.
+ *
+ * Swaps names the build already resolved and re-emits — every variant is
+ * in `zoneMeshes`, so no reload and no re-parse. Returns the new draws, or null
+ * when nothing changed. Caller pushes them with `renderer.reloadZoneBatches`.
+ */
+export function setZoneLodMode(model, on) {
+  if (!model?.zonePlacements) return null;
+  let changed = 0;
+  for (const p of model.zonePlacements) {
+    const variant = p.lodVariants?.[on ? 'low' : 'high'];
+    if (!variant || p.mesh === variant.mesh) continue;
+    p.mesh = variant.mesh;
+    p.bounds = variant.bounds;
+    changed++;
+  }
+  return changed ? rebuildZoneDraws(model) : null;
 }
 
 /** GPU-ready draws for a single placement (move-proxy while dragging). */

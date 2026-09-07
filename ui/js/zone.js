@@ -849,11 +849,26 @@ const norm = (s) => s.replace(/ /g, '').replace(/_/g, '').toLowerCase();
  * @param {Set<string>} [meshNames] real 0x2E mesh names (parseZone `meshNames`).
  *   Pass it: without it the fuzzy pass may latch onto a section-fourcc alias.
  */
-export function resolveMeshName(meshId, meshes, meshNames = null) {
+export function resolveMeshName(meshId, meshes, meshNames = null, { lod = false } = {}) {
   if (!meshId) return null;
+  // LOD: `_l`/`_m`/`_h` are three detail variants of ONE object, all shipped in
+  // the DAT. The client resolves the whole set per placement (InitializeMeshLOD)
+  // and picks by camera distance, with the radii in the placement record at
+  // +0x38 (high) / +0x3C (mid); only the placed variant's name is stored, so a
+  // zone almost never places the `_h` copies at all (Bastok Markets: 7 of 47).
+  // We draw one mesh per placement, so by default take the highest — the low
+  // variants are not just decimated, they DROP geometry: `shp_cen_sun4_m` is a
+  // single-skinned awning (32 tris, all facing up, no 0x2000) that vanishes when
+  // you stand under it, while `shp_cen_sun4_h` models both sides (104 tris,
+  // 52 up/52 down) over the same bounds. Retail shows the two-sided one inside
+  // 120 units. `lod: true` (Graphics › Enable LOD) keeps the placed variant
+  // instead — what retail draws at range.
+  if (!lod && ['_l', '_m', '_h'].includes(meshId.slice(-2))) {
+    const base = meshId.slice(0, -2);
+    for (const suffix of ['_h', '_m', '_l']) if (meshes.has(base + suffix)) return base + suffix;
+  }
   if (meshes.has(meshId)) return meshId;
-  const base = ['_l', '_m', '_h'].includes(meshId.slice(-2)) ? meshId.slice(0, -2) : meshId;
-  for (const suffix of ['_h', '_m', '_l']) if (meshes.has(base + suffix)) return base + suffix;
+  for (const suffix of ['_h', '_m', '_l']) if (meshes.has(meshId + suffix)) return meshId + suffix;
   // Prototype zones: mesh DAT name is often "category meshid" (e.g. "twr2bai
   // ue_wallh") while placements store just "ue_wallh".
   const want = norm(meshId);
