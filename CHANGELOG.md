@@ -8,24 +8,24 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ---
 
-## [Unreleased]
+## [1.2.0] — 2026-09-07
+
+[Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.1.7...v1.2.0)
 
 ### Zones
 - **View › Toggle NPCs** stands the server's NPC placements on the loaded zone: every `npc_list` row for the zone, at its position and heading, drawn with its look — a unique model for standard NPCs, or the race skeleton plus the gear its look names for equipped ones (child races best-effort). NPCs a script keeps hidden, and doors / elevators / ships, are counted in the status bar but not drawn; an NPC whose model cannot be resolved stands as an orange marker. They are scenery: not selectable, not saved with scenes, and only drawn within 120 units of the camera. The placements come from `ui/public/lists/zone_npcs.json`, baked from CatsEyeXI's `sql/npc_list.sql` by `scripts/gen_zone_npcs.py`
 - Fixed: the prototype town drew a second, motionless windmill wheel inside each turning one
 - Fixed: windmill sails and wind vanes a zone generator spins are drawn double-sided, so the ones facing away no longer vanish as the wheel turns
 
-### Scenes
-- The Actors panel is now **Scenes** (Zone › Scenes / Hide Scenes). It lists every saved scene; **New Scene** starts an empty one, clicking a scene puts its actors on the stage and opens its actor list, and Save (in the panel title, or in an actor's editor) writes the stage back into it. Rename in place, close (take its actors off the stage) or delete from the list; a dot on the scene and a lit Save button mean unsaved changes. Existing actor sets carry over as scenes
-- **Add to Camera Sequence** moved from the panel into the actor's editor, next to Save in its title bar
-- The Scene popover (background & floor) is now **Viewport**, and the sequencer's weather track is labelled **Weather**, so "scene" only ever means a cast of actors
+### Graphics
+- Graphics › **Enable LOD** — draw each object at the detail level the zone actually placed it at, which is what retail shows at range. It is off by default, and off is the better picture: a placement names one of three variants (`_l` / `_m` / `_h`) and the client swaps between them by camera distance, so a zone rarely places the high-detail copies at all — Bastok Markets places 7 of 47. With no distance switching of our own, honouring the placed name meant drawing the low one everywhere, and the low variants do not simply decimate, they drop geometry: `shp_cen_sun4_m` is a single-skinned awning with no underside, which disappears when you stand beneath it, where `_h` models both faces over the same bounds. Toggling swaps the meshes in place, with no zone reload
+- Fixed: surfaces lying almost flat against one another flickered as the camera pulled back. Bastok's `auchatal` sits about a hundredth of a unit off `auc_stdl`, and the two fell into the same depth value from roughly 100 units away. Zones ask for a near plane ten times further out than the one they were being drawn with — depth precision is set by that plane — so the request is now honoured, which pushes the same collapse out past 300 units
 
 ### Camera Sequencer
-- **Actors on the timeline** — a new **Add to Camera Sequence** button in an actor's editor gives that actor two tracks of its own. **Actor** records where it stands at the playhead (position and rotation — move it with the gizmo and record again for a path, splined or straight like the camera), and **Anim** records the motion its editor is playing, so a take can walk an actor across the zone and switch it from "walk" to "idle" where you say. The route is drawn on the terrain in the actor's lane colour, Stop puts the actor back where it was, and actors come back to a saved sequence by name
-- Sequenced actors' lanes select the actor when clicked; × drops it from the sequence
-- Actors always walk straight lines between their keys; Curve now only shapes the camera path
-- Timeline lanes are labelled in full (Camera Position, Camera Rotation, Animation) and an actor's Animation row lines up under its name
-- Toolbar reshuffle: frame stepping, keyframe delete / clear and the Loop, Curve, Linear rotation, Lock to Actor, Hide UI and Snap toggles sit in the Length row; Place Lock Actor joins the record buttons below the timeline
+- **Curve rows** — click the Camera Position or Camera Rotation lane label to graph that track underneath it: one line per channel (X / Y / Z, or yaw / pitch / roll) over a filled envelope of how fast the camera is moving or turning. The three channels share one scale but are each centred on their own midpoint, so a channel that barely moves reads as flat beside one that swings, rather than being rescaled to look just as busy. Sampled from the same sequence playback runs, so the graph is what the camera actually does — Curve and Linear rotation included
+- Camera moves are smoother in two ways. The eye no longer changes speed abruptly at a key: the pace either side of a key is eased across it, so dragging the last keys further apart slows the shot down over the approach instead of dropping to the new speed within a single frame. And a turn now happens where it was keyed — the rotation spline used to settle every key's tangent from the whole track, so a turn late in a sequence had the camera drifting round long before the key that asked for it, and a channel that should have sat still between two equal keys wandered off and came back. Keys are still hit at their exact frames
+- The **Lock to Actor** target draws as a sphere on a stalk, centred on the point the camera actually aims at rather than somewhere inside a placeholder box. Click it in the viewport to put the transform gizmo on it — it no longer needs the Scenes panel open to be selectable — and a viewport drag in a zone now orbits around it, so the view swings around the thing the shot is aimed at instead of tumbling off it
+- Fixed: the sequencer panel could end up parked past the edge of the window after a resolution change or a UI Scale change, leaving no header to drag it back by. It now fits itself to the window on open, on resize, and whenever its own height changes
 
 ### Animation
 - Picking a **Category**, **Action** or **Motion** now always starts that motion from frame 0 and plays it, with the action's effect routine fired on the same frame. Before, anything but a race change counted as a gear swap: the pick kept whatever clip was already running, at whatever frame it was on, and often stayed paused — and because the VFX only re-fires at the clip's loop point, a pick made mid-cycle showed the motion with no effect until it wrapped. Loading a character still follows Settings → Auto-play; only a deliberate pick overrides it
@@ -40,12 +40,39 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 - A race switch keeps the stance you were looking at by the weapon it names, not by its label or its slot in the list — neither of which means the same thing on the next race
 - Fixed: picking the **Fishing** action with the Ranged slot empty froze the app on Hume Female and Mithra. Fishing draws whatever is in Ranged, and the empty-slot placeholder made the viewer hang the character's skeleton off its own hand — a loop the pose solver could never finish. An empty slot is now left alone, and no re-parenting can wedge the solver again
 
+### Effects
+- Fixed: **Show Character Animation** appeared to do nothing until the effect was reloaded. The cue list is baked when a routine is armed and the toggle did not re-arm it, so Play kept running the routine without the cast motion; it now re-arms the current schedule
+- A character driven by a routine keeps pace with the effect's own **Speed** control rather than the Characters view's, so a cast and the spell it belongs to no longer run at different rates. It hands the clock back when the toggle goes off, when another model loads, and on leaving the Effects view
+
+### NPCs
+- Buffalo, Wivre, Red Raptor, Iron Giant and Byakko Companion were list separators with no model behind them, and now load like any other NPC. Noble Chocobo Companion, which has no model at all, is gone
+
 ### Settings
 - Settings → **Weather Transition** — how long a weather change takes to cross-fade, in milliseconds (default 3330, the game's 3.33s). Sky colour, fog, lighting, both weathers' particles and the ambient bed all travel on it; 0 snaps straight over. Takes effect on the next weather change, no zone reload
+- Settings → **Auto Enable Weather** (on by default) — a zone opens with its sky and weather running even if you turned them off in the last one. Loading an entity used to switch the preference off behind your back, entities having no sky, so every zone opened bare after a model view
+- Checkboxes explain themselves on hover instead of carrying a line of text under each one, which takes the Zones tab down to about half its height
 
 ### Interface
 - **The app's own colour picker.** Clicking a colour swatch now opens ours instead of the webview's: a saturation/value square, hue slider, hex field and R/G/B boxes, in the app's own chrome. The native one had to go because the eyedropper inside it is a dead button - Chromium draws it, but WebView2 implements nothing behind it - and there was no way to put a working one in its place. Right-click still clears the background to checkerboard in the texture and image viewers
 - **A working eyedropper**, in the picker beside the hex field. Click it, move the cursor - a magnified loupe follows, showing the pixel under the crosshair and its hex code - then click to take that colour. It reads the whole desktop, not just the app window; right-click or Escape cancels. Browser dev mode falls back to the browser's own eyedropper
+
+---
+
+## [1.1.6] — 2026-09-04
+
+[Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.1.5...v1.1.6)
+
+### Scenes
+- The Actors panel is now **Scenes** (Zone › Scenes / Hide Scenes). It lists every saved scene; **New Scene** starts an empty one, clicking a scene puts its actors on the stage and opens its actor list, and Save (in the panel title, or in an actor's editor) writes the stage back into it. Rename in place, close (take its actors off the stage) or delete from the list; a dot on the scene and a lit Save button mean unsaved changes. Existing actor sets carry over as scenes
+- **Add to Camera Sequence** moved from the panel into the actor's editor, next to Save in its title bar
+- The Scene popover (background & floor) is now **Viewport**, and the sequencer's weather track is labelled **Weather**, so "scene" only ever means a cast of actors
+
+### Camera Sequencer
+- **Actors on the timeline** — a new **Add to Camera Sequence** button in an actor's editor gives that actor two tracks of its own. **Actor** records where it stands at the playhead (position and rotation — move it with the gizmo and record again for a path, splined or straight like the camera), and **Anim** records the motion its editor is playing, so a take can walk an actor across the zone and switch it from "walk" to "idle" where you say. The route is drawn on the terrain in the actor's lane colour, Stop puts the actor back where it was, and actors come back to a saved sequence by name
+- Sequenced actors' lanes select the actor when clicked; × drops it from the sequence
+- Actors always walk straight lines between their keys; Curve now only shapes the camera path
+- Timeline lanes are labelled in full (Camera Position, Camera Rotation, Animation) and an actor's Animation row lines up under its name
+- Toolbar reshuffle: frame stepping, keyframe delete / clear and the Loop, Curve, Linear rotation, Lock to Actor, Hide UI and Snap toggles sit in the Length row; Place Lock Actor joins the record buttons below the timeline
 
 ---
 
