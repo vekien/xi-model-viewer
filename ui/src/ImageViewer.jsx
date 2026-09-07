@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { spriteSrcOnTexture, spritesForTexture } from '../js/images.js';
 import { Tooltip } from './Tooltip.jsx';
+import { ColorSwatch } from './ColorPicker.jsx';
 
 /**
  * Shows the selected image over the viewport. Image DATs have nothing to do
@@ -170,22 +171,17 @@ export function ImageViewer({ doc, set, sprites = [], highlightSprite = null }) 
             </button>
           </span>
         </Tooltip>
-        <Tooltip content="Background colour (right-click = clear)" placement="top" appendTo={tippyRoot}>
-          <span className="img-tip-wrap">
-            <label
-              className={`tex-bg-swatch${bg && !checker ? ' solid' : ''}`}
-              style={bg && !checker ? { '--tex-bg': bg } : undefined}
-            >
-              <input
-                type="color"
-                value={bg || '#23262a'}
-                aria-label="Background colour"
-                onChange={(e) => setBgPersist(e.target.value)}
-                onContextMenu={(e) => { e.preventDefault(); setBgPersist(''); setChecker(true); }}
-              />
-            </label>
-          </span>
-        </Tooltip>
+        <ColorSwatch
+          className={`tex-bg-swatch${bg && !checker ? ' solid' : ''}`}
+          style={bg && !checker ? { '--tex-bg': bg } : undefined}
+          value={bg || '#23262a'}
+          onChange={setBgPersist}
+          onContextMenu={(e) => { e.preventDefault(); setBgPersist(''); setChecker(true); }}
+          tooltip="Background colour (right-click = clear)"
+          placement="top"
+          appendTo={tippyRoot}
+          title="Background colour"
+        />
         <input
           type="range" min="25" max="400" step="5" value={Math.round(zoom * 100)}
           onChange={(e) => setZoom(+e.target.value / 100)}

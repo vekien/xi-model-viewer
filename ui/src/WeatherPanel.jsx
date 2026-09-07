@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from 'react';
 import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
+import { ColorSwatch } from './ColorPicker.jsx';
 
 // FFXI weather ids → display names (only those present in a zone are listed).
 export const WEATHER_NAMES = {
@@ -146,14 +147,13 @@ export function WeatherPanel({
 
         <div className="wx-row wx-bg-row">
           <span className="wx-bg-label">Viewport Background Colour</span>
-          <Tooltip content="Viewport background colour" placement="left">
-            <input
-              type="color"
-              className="wx-bg-swatch"
-              value={bgColor || '#303438'}
-              onChange={(e) => onBg?.(e.target.value)}
-            />
-          </Tooltip>
+          <ColorSwatch
+            className="wx-bg-swatch"
+            value={bgColor || '#303438'}
+            onChange={(hex) => onBg?.(hex)}
+            tooltip="Viewport background colour"
+            placement="left"
+          />
         </div>
 
         <div className="wx-row wx-fog-row">

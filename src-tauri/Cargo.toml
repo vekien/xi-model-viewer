@@ -16,6 +16,15 @@ dotenvy = "0.15"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 
+[target."cfg(windows)".dependencies]
+# Screen capture for the eyedropper (src/eyedropper.rs).
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
 [profile.release]
 strip = true
 lto = true

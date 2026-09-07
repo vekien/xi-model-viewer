@@ -3,6 +3,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod eyedropper;
 mod github;
 mod tools;
 
@@ -1171,6 +1172,7 @@ fn main() {
             tools::tools_set_local_path,
             tools::tools_clear_local_path,
             tools::pick_tools_folder,
+            eyedropper::screen_pick,
             open_url,
             reveal_path,
             launch_args,

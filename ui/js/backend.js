@@ -408,6 +408,16 @@ export const backend = {
     }
   },
 
+  /**
+   * A square of desktop pixels centred on the mouse cursor, for the eyedropper
+   * (ui/js/eyedropper.js). Tauri only: a browser cannot read the screen, so dev
+   * mode uses the native `EyeDropper` API instead.
+   */
+  async screenPick(radius = 8) {
+    if (!isTauri()) throw new Error('screen colour picking needs the desktop app');
+    return tauriInvoke('screen_pick', { radius });
+  },
+
   /** Shows a file in the system file manager (Explorer/Finder), selected. */
   async revealPath(path) {
     if (isTauri()) return tauriInvoke('reveal_path', { path });

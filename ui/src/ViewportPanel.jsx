@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Tooltip } from './Tooltip.jsx';
+import { ColorSwatch } from './ColorPicker.jsx';
 import { Combo } from './Combo.jsx';
 import { BG_IMAGES, resolveBgUrl } from './bgs.js';
 
@@ -73,14 +74,12 @@ export function ViewportPanel({
       <div className="gfx-line">
         <span className="gfx-lab">Background Colour</span>
         <div className="gfx-ctrl gfx-ctrl-end">
-          <Tooltip content="Viewport background">
-            <input
-              type="color"
-              className="tool-pop-color"
-              value={bgColor}
-              onChange={(e) => onBg?.(e.target.value)}
-            />
-          </Tooltip>
+          <ColorSwatch
+            className="tool-pop-color"
+            value={bgColor}
+            onChange={(hex) => onBg?.(hex)}
+            tooltip="Viewport background"
+          />
         </div>
       </div>
 
@@ -142,15 +141,13 @@ export function ViewportPanel({
       <div className={`gfx-line${flatFloor ? '' : ' dim'}`}>
         <span className="gfx-lab">Flat Floor Color</span>
         <div className="gfx-ctrl gfx-ctrl-end">
-          <Tooltip content="Flat floor colour">
-            <input
-              type="color"
-              className="tool-pop-color"
-              value={flatFloorColor}
-              disabled={!flatFloor}
-              onChange={(e) => onFlatFloorColor?.(e.target.value)}
-            />
-          </Tooltip>
+          <ColorSwatch
+            className="tool-pop-color"
+            value={flatFloorColor}
+            disabled={!flatFloor}
+            onChange={(hex) => onFlatFloorColor?.(hex)}
+            tooltip="Flat floor colour"
+          />
         </div>
       </div>
 

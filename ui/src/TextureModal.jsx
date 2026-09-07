@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@headlessui/react';
 import { decodeTextureRGBA } from '../js/renderer.js';
 import { Tooltip } from './Tooltip.jsx';
+import { ColorSwatch } from './ColorPicker.jsx';
 
 const VIEW_MAX = 640;
 const ZOOM_MIN = 0.25;
@@ -173,20 +174,15 @@ export function TextureModal({ tex, onClose, onFocus, zIndex = 210, initialPos =
         <span className="icon">image</span>
         <span className="modal-title mono">{tex.name || '(unnamed)'}</span>
         <div className="tex-zoom-tools" onPointerDown={(e) => e.stopPropagation()}>
-          <Tooltip content={solidBg ? 'Background colour (right-click = checker)' : 'Background colour'}>
-            <label
-              className={`tex-bg-swatch${solidBg ? ' solid' : ''}`}
-              style={solidBg ? { '--tex-bg': bg } : undefined}
-            >
-              <input
-                type="color"
-                value={bg || '#23262a'}
-                aria-label="Background colour"
-                onChange={(e) => setBgPersist(e.target.value)}
-                onContextMenu={(e) => { e.preventDefault(); setBgPersist(''); }}
-              />
-            </label>
-          </Tooltip>
+          <ColorSwatch
+            className={`tex-bg-swatch${solidBg ? ' solid' : ''}`}
+            style={solidBg ? { '--tex-bg': bg } : undefined}
+            value={bg || '#23262a'}
+            onChange={setBgPersist}
+            onContextMenu={(e) => { e.preventDefault(); setBgPersist(''); }}
+            tooltip={solidBg ? 'Background colour (right-click = checker)' : 'Background colour'}
+            title="Background colour"
+          />
           <Tooltip content="Zoom out">
             <Button
               type="button"

@@ -43,6 +43,10 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 ### Settings
 - Settings → **Weather Transition** — how long a weather change takes to cross-fade, in milliseconds (default 3330, the game's 3.33s). Sky colour, fog, lighting, both weathers' particles and the ambient bed all travel on it; 0 snaps straight over. Takes effect on the next weather change, no zone reload
 
+### Interface
+- **The app's own colour picker.** Clicking a colour swatch now opens ours instead of the webview's: a saturation/value square, hue slider, hex field and R/G/B boxes, in the app's own chrome. The native one had to go because the eyedropper inside it is a dead button - Chromium draws it, but WebView2 implements nothing behind it - and there was no way to put a working one in its place. Right-click still clears the background to checkerboard in the texture and image viewers
+- **A working eyedropper**, in the picker beside the hex field. Click it, move the cursor - a magnified loupe follows, showing the pixel under the crosshair and its hex code - then click to take that colour. It reads the whole desktop, not just the app window; right-click or Escape cancels. Browser dev mode falls back to the browser's own eyedropper
+
 ---
 
 ## [1.1.0] — 2026-09-01

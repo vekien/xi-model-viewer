@@ -1655,8 +1655,6 @@ button.cli-output-stop:hover {
   background: transparent;
   cursor: pointer;
 }
-.wx-bg-swatch::-webkit-color-swatch-wrapper { padding: 2px; }
-.wx-bg-swatch::-webkit-color-swatch { border: none; border-radius: 2px; }
 .wx-bright-row .vol-slider,
 .wx-fog-row .vol-slider { flex: 1 1 auto; min-width: 0; }
 .wx-fog-row .wx-switch { flex: 0 0 auto; }
@@ -2342,16 +2340,6 @@ button.details-path-link.mono { font-family: var(--font-mono); font-size: 11px; 
 .tex-bg-swatch.solid {
   background-color: var(--tex-bg, #23262a);
   background-image: none;
-}
-.tex-bg-swatch input[type='color'] {
-  position: absolute;
-  inset: -4px;
-  width: calc(100% + 8px);
-  height: calc(100% + 8px);
-  padding: 0;
-  border: none;
-  cursor: pointer;
-  opacity: 0;
 }
 .tex-bg-swatch:hover { border-color: var(--accent); }
 .tex-zoom-pct {
@@ -3149,6 +3137,212 @@ input[type='color'] {
   border: 1px solid var(--ring-strong);
   border-radius: 7px;
   cursor: pointer;
+}
+
+/* --- Colour picker (ui/src/ColorPicker.jsx) --------------------------------
+   Every swatch is a button now rather than an `<input type="color">`, so the global
+   button chrome has to be cleared before each swatch's own class can paint it.
+   `--swatch` carries the current colour. */
+button.color-swatch,
+button.color-swatch:hover,
+button.color-swatch:active {
+  padding: 0;
+  min-height: 0;
+  gap: 0;
+  background: var(--swatch, none);
+  box-shadow: none;
+  transition: border-color 0.12s ease;
+}
+button.color-swatch:disabled { opacity: 0.4; cursor: default; }
+button.color-swatch.open { border-color: var(--accent); }
+
+/* Sites that paint themselves rather than showing the colour edge to edge. */
+.color-swatch.tex-bg-swatch,
+.color-swatch.tex-bg-swatch:hover {
+  background-color: #23262a;
+  background-image:
+    linear-gradient(45deg, #34383d 25%, transparent 25%, transparent 75%, #34383d 75%),
+    linear-gradient(45deg, #34383d 25%, transparent 25%, transparent 75%, #34383d 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 4px 4px;
+}
+.color-swatch.tex-bg-swatch.solid,
+.color-swatch.tex-bg-swatch.solid:hover {
+  background-color: var(--tex-bg, #23262a);
+  background-image: none;
+}
+.color-swatch.fx-modal-bg,
+.color-swatch.fx-modal-bg:hover { background: rgba(255, 255, 255, 0.04); }
+/* Keep the 2px inset the native swatch drew inside its border. */
+.color-swatch.wx-bg-swatch,
+.color-swatch.wx-bg-swatch:hover { padding: 2px; background-clip: content-box; }
+
+.color-pop {
+  position: fixed;
+  z-index: 99000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 212px;
+  padding: 8px;
+  border: 1px solid var(--ring-strong);
+  border-radius: 10px;
+  background: var(--gray-900);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+}
+.cp-sv {
+  position: relative;
+  height: 132px;
+  border-radius: 6px;
+  cursor: crosshair;
+  touch-action: none;
+  background:
+    linear-gradient(to top, #000, rgba(0, 0, 0, 0)),
+    linear-gradient(to right, #fff, rgba(255, 255, 255, 0)),
+    var(--hue, #f00);
+}
+.cp-hue {
+  position: relative;
+  height: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  touch-action: none;
+  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+}
+.cp-sv-thumb,
+.cp-hue-thumb {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.cp-hue-thumb { top: 50%; }
+.cp-row { display: flex; align-items: center; gap: 6px; }
+.cp-chip {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--ring-strong);
+  border-radius: 4px;
+}
+.cp-hex {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 24px;
+  padding: 2px 7px;
+  border: 1px solid var(--ring);
+  border-radius: 6px;
+  background: var(--gray-850);
+  color: var(--text);
+  font: 400 12px/1.3 var(--font-mono);
+  box-shadow: none;
+}
+.cp-rgb { gap: 4px; }
+.cp-chan {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.cp-chan > span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.4px;
+}
+.cp-chan input {
+  width: 100%;
+  min-width: 0;
+  min-height: 24px;
+  padding: 2px 4px;
+  border: 1px solid var(--ring);
+  border-radius: 6px;
+  background: var(--gray-850);
+  color: var(--text);
+  font: 400 11px/1.3 var(--font-mono);
+  text-align: center;
+}
+.cp-chan input::-webkit-outer-spin-button,
+.cp-chan input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* Eyedropper (ui/src/EyeDropperButton.jsx). The droplet inside Chromium's own colour
+   picker is inert under WebView2, so every swatch gets one of ours beside it. */
+.eyedrop-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  box-shadow: none;
+  color: var(--gray-300);
+  cursor: pointer;
+}
+.eyedrop-btn .icon {
+  font-size: 17px;
+  color: inherit;
+  pointer-events: none;
+}
+.eyedrop-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.09); color: #fff; }
+.eyedrop-btn:disabled { opacity: 0.4; cursor: default; }
+.eyedrop-btn.picking { color: var(--accent); background: rgba(255, 255, 255, 0.09); }
+
+/* Covers the window while picking: shows the crosshair, and swallows the committing
+   click so it cannot press whatever sits underneath. Transparent, so the screen grab
+   underneath it is unaffected. */
+.eyedrop-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 200000;
+  cursor: crosshair;
+  background: transparent;
+}
+body.eyedrop-picking { user-select: none; }
+
+.eyedrop-loupe {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 200001;
+  padding: 4px;
+  border: 1px solid var(--ring-strong);
+  border-radius: 8px;
+  background: var(--gray-900);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+.eyedrop-loupe-view {
+  display: block;
+  border-radius: 4px;
+  image-rendering: pixelated;
+}
+.eyedrop-loupe-hex {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 0 2px;
+  color: var(--text);
+  font-size: 11px;
+  letter-spacing: 0.4px;
+}
+.eyedrop-loupe-hex::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: var(--pick, #000);
 }
 
 .modal-actions {
@@ -5140,16 +5334,6 @@ button.uimenu-btn.has-note:not(.on) {
   font-size: 16px;
   color: var(--gray-300);
   pointer-events: none;
-}
-.fx-modal-bg input[type="color"] {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
-  border: 0;
-  padding: 0;
 }
 .fx-modal-resize {
   position: absolute;

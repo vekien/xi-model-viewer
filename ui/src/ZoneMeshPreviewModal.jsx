@@ -3,6 +3,7 @@ import { Button } from '@headlessui/react';
 import { ZoneMeshPreviewHost } from '../js/zoneMeshPreview.js';
 import { bgToHex, parseBgHex } from '../js/particlePreview.js';
 import { Tooltip } from './Tooltip.jsx';
+import { ColorSwatch } from './ColorPicker.jsx';
 
 const MIN_W = 360;
 const MIN_H = 280;
@@ -153,16 +154,15 @@ export function ZoneMeshPreviewModal({
               <span className="fx-modal-stats mono">{stats} · unlit</span>
             </div>
             <div className="fx-modal-actions">
-              <Tooltip content="Viewport background">
-                <label className="fx-modal-bg">
-                  <span className="icon">palette</span>
-                  <input
-                    type="color"
-                    value={normalizeColorInput(bgHex)}
-                    onChange={(e) => setBgHex(e.target.value)}
-                  />
-                </label>
-              </Tooltip>
+              <ColorSwatch
+                className="fx-modal-bg"
+                value={normalizeColorInput(bgHex)}
+                onChange={setBgHex}
+                tooltip="Viewport background"
+                title="Viewport background"
+              >
+                <span className="icon">palette</span>
+              </ColorSwatch>
               <Tooltip content="Toggle world grid">
                 <Button
                   className={`btn${showGrid ? ' active' : ''}`}

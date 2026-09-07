@@ -119,10 +119,11 @@ export function MenuBar({
     };
   }, [active]);
 
-  // Shared: Combo options portal to <body>; never treat those clicks as "outside".
-  const isComboPortalClick = (t) => !!(
+  // Shared: Combo options and the colour picker portal to <body>; never treat those
+  // clicks as "outside".
+  const isPortalClick = (t) => !!(
     t?.closest?.(
-      '.combo-options, .combo-option, .combo-input, [data-headlessui-portal], [role="listbox"], [role="option"]',
+      '.combo-options, .combo-option, .combo-input, [data-headlessui-portal], [role="listbox"], [role="option"], .color-pop, .eyedrop-veil',
     )
   );
 
@@ -131,7 +132,7 @@ export function MenuBar({
     const close = (e) => {
       if (barRef.current?.contains(e.target)) return;
       if (viewportRef.current?.contains(e.target)) return;
-      if (isComboPortalClick(e.target)) return;
+      if (isPortalClick(e.target)) return;
       setViewport(null);
     };
     const onKey = (e) => e.key === 'Escape' && setViewport(null);
@@ -149,7 +150,7 @@ export function MenuBar({
     const close = (e) => {
       if (barRef.current?.contains(e.target)) return;
       if (gfxRef.current?.contains(e.target)) return;
-      if (isComboPortalClick(e.target)) return;
+      if (isPortalClick(e.target)) return;
       setGraphics(null);
       onGraphicsOpenChange?.(false);
     };

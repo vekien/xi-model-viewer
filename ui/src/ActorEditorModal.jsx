@@ -4,6 +4,7 @@ import { Combo } from './Combo.jsx';
 import { NpcList } from './NpcList.jsx';
 import { EffectPcStrip } from './EffectActorsPanel.jsx';
 import { Tooltip } from './Tooltip.jsx';
+import { ColorSwatch } from './ColorPicker.jsx';
 import { animDisplayName } from '../js/dat.js';
 import { DEFAULT_LIGHT, kelvinToRgb01, rgb01ToHex } from '../js/lightUtil.js';
 
@@ -456,12 +457,11 @@ function LightForm({ light, onChange, fields = 'all' }) {
         <div className="gfx-line">
           <label className="pc-ctrl-label">Light colour</label>
           <div className="gfx-ctrl">
-            <input
-              type="color"
+            <ColorSwatch
               className="tool-pop-color"
               value={L.color}
-              onChange={(e) => onChange?.({ color: e.target.value })}
-              aria-label="Light colour"
+              onChange={(hex) => onChange?.({ color: hex })}
+              tooltip="Light colour"
             />
           </div>
         </div>
