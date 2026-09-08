@@ -10,6 +10,10 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ## [Unreleased]
 
+## [1.2.2] — 2026-09-08
+
+[Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.2.1...v1.2.2)
+
 ### Characters
 - Fixed: skirts and robe tails clipped through the legs during weapon skills — Tachi: Gekko on a Hume Female in a Seer's Tunic had the skirt standing in the battle-stance sway while the legs lunged. A weapon-skill DAT ships only the lower and upper body parts of its clip; the waist part lives in a companion DAT the client finds by file id (body + 256 / + 512 in the primary bank, + 16 / + 32 in the extended one, per `FFXiMain.dll`'s weapon-skill tables). The viewer never loaded it, so the routine's `wsg?` never touched the waist joints and the stance underlay showed through. Both companions are now resolved through the file table and the right one merged, for every skill in both banks
 - Fixed: long-skirted bodies always got the wrong waist packs. Every waist pack family comes in two blocks — race skirt +3 / +4, battle skirt + n / + 2·n, weapon-skill companion A / B — and the body armour's info byte says which one it is cut for (AltanaView's `BODYinfo == 2`, xim reads the second unconditionally). The first block keys six waist joints and pins 5 / 21 / 23 / 25 to the bind pose; the second keys all ten, and robes such as Seer's Tunic are skinned to exactly the pinned ones. The viewer took the first block for everything, so part of the skirt stayed frozen in idle, battle and attacks alike. The body's byte now picks the block for all three families
