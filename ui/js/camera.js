@@ -98,6 +98,11 @@ export class OrbitCamera {
     this.pitch = 0.3;
     this.distance = 5;
     this.fovDegrees = 45;
+    // Orthographic projection (View › Toggle Ortho). `orthoHeight` is the world
+    // half-height of the view box — seeded from the perspective framing so the
+    // toggle doesn't jump, then driven by zoom/fit like `distance` is.
+    this.ortho = false;
+    this.orthoHeight = 5;
     // Roll about the view direction (Alt+Q / Alt+E); reset by fit().
     this.roll = 0;
     this.minDistance = 0.1;
@@ -116,6 +121,38 @@ export class OrbitCamera {
     this.flySpeedZone = loadFlySpeed('flySpeedZone', FLY_SPEED_ZONE);
     this.flySpeedEntity = loadFlySpeed('flySpeedEntity', FLY_SPEED_ENTITY);
     this.flySpeed = this.flySpeedEntity;
+  }
+
+  /** Half-height of the perspective frustum at `dist` — the ortho seed. */
+  halfHeightAt(dist) {
+    return Math.max(dist, 1e-4) * Math.tan((this.fovDegrees * Math.PI) / 360);
+  }
+
+  /**
+   * The distance whose perspective framing matches the current ortho box, so
+   * pan speed, gizmo sizing and fly zoom all have one "how far away does this
+   * look" number that reads the same in either projection.
+   */
+  get framingDistance() {
+    if (!this.ortho) return this.distance;
+    return this.orthoHeight / Math.max(Math.tan((this.fovDegrees * Math.PI) / 360), 1e-4);
+  }
+
+  /** Clamp + apply an ortho half-height (the distance clamp, in box terms). */
+  setOrthoHeight(h) {
+    this.orthoHeight = Math.min(
+      Math.max(h, this.halfHeightAt(this.minDistance)),
+      this.halfHeightAt(this.maxDistance),
+    );
+  }
+
+  setOrtho(on) {
+    const next = !!on;
+    if (next === this.ortho) return;
+    // Seed off the framing that is on screen right now: same apparent size at
+    // the orbit target, so the toggle reads as flattening rather than a jump.
+    if (next) this.setOrthoHeight(this.halfHeightAt(this.distance));
+    this.ortho = next;
   }
 
   /** World up for the current handedness, before any roll. */
@@ -191,6 +228,16 @@ export class OrbitCamera {
     const far = (this.rangeKind === 'zone' && this.renderDistance > 0)
       ? Math.max(this.renderDistance, this.near * 4)
       : Math.max(this.far, (this.mode === 'fly' ? this.flySpeed * 40 : this.distance * 8) + 50);
+    if (this.ortho) {
+      // Parallel projection has no vanishing point, so the eye's position along
+      // the view axis says nothing about framing — clipping on it would only
+      // hide geometry for a reason nothing on screen explains. Centre the depth
+      // range on the eye instead (glOrtho takes near = −far happily) and let
+      // the depth test sort it. Precision is uniform here, unlike perspective.
+      const h = Math.max(this.orthoHeight, 1e-4);
+      const w = h * Math.max(aspect, 1e-4);
+      return mat4Ortho(-w, w, -h, h, -far, far);
+    }
     // Depth precision is set by the near plane, not the far one: on the 24-bit
     // default framebuffer the resolution at distance d is d²(f−n)/(f·n·2²⁴), so
     // halving n doubles it everywhere. `min` here threw the zone's own 0.5 away
@@ -301,7 +348,7 @@ export class OrbitCamera {
     const f = this.forward;
     const right = norm(cross(f, this.up));
     const up = cross(right, f);
-    const s = this.distance * 0.0015;
+    const s = this.framingDistance * 0.0015;
     this.target = [
       this.target[0] - right[0] * dx * s + up[0] * dy * s,
       this.target[1] - right[1] * dx * s + up[1] * dy * s,
@@ -311,10 +358,11 @@ export class OrbitCamera {
   }
 
   zoom(wheelDelta) {
-    this.distance = Math.min(
-      Math.max(this.distance * Math.pow(0.999, wheelDelta), this.minDistance),
-      this.maxDistance,
-    );
+    const k = Math.pow(0.999, wheelDelta);
+    this.distance = Math.min(Math.max(this.distance * k, this.minDistance), this.maxDistance);
+    // Ortho reads none of that distance, so the box has to shrink alongside it
+    // — both, so switching projection keeps the framing you zoomed to.
+    if (this.ortho) this.setOrthoHeight(this.orthoHeight * k);
     this.userFramed = true;
   }
 
@@ -331,6 +379,24 @@ export class OrbitCamera {
    */
   zoomAt(wheelDelta, ndcX, ndcY, aspect) {
     if (this.mode === 'fly') { this.zoom(wheelDelta); return; }
+    if (this.ortho) {
+      // Anchoring in ortho is a plain 2D shift: the box shrinks by k about its
+      // centre, so slide the centre by the cursor's share of what was lost and
+      // the world point under it lands back on the same pixel.
+      const oldHeight = this.orthoHeight;
+      this.zoom(wheelDelta);
+      const k = this.orthoHeight / oldHeight;
+      if (k === 1) return;
+      const m = this.viewMatrix();   // rows 0/1 are view right / view up
+      const sx = ndcX * oldHeight * aspect * (1 - k);
+      const sy = ndcY * oldHeight * (1 - k);
+      this.target = [
+        this.target[0] + m[0] * sx + m[1] * sy,
+        this.target[1] + m[4] * sx + m[5] * sy,
+        this.target[2] + m[8] * sx + m[9] * sy,
+      ];
+      return;
+    }
     const oldDistance = this.distance;
     this.zoom(wheelDelta);
     const k = this.distance / oldDistance;
@@ -418,16 +484,29 @@ export class OrbitCamera {
     // Movement stays on the world axes even while the view is rolled.
     const up = this.baseUp;
     const right = norm(cross(fwd, up));
+    const boost = (keys.has('shift') ? 3 : 1);
     let mx = 0, my = 0, mz = 0;
-    if (keys.has('w')) { mx += fwd[0]; my += fwd[1]; mz += fwd[2]; }
-    if (keys.has('s')) { mx -= fwd[0]; my -= fwd[1]; mz -= fwd[2]; }
+    if (this.ortho) {
+      // A dolly along the view axis draws the identical picture in ortho, so
+      // W/S resize the view box instead — forward still means closer, and fly
+      // speed keeps its units: apparent distance closed per second.
+      const fb = (keys.has('w') ? 1 : 0) - (keys.has('s') ? 1 : 0);
+      if (fb) {
+        this.setOrthoHeight(
+          this.halfHeightAt(this.framingDistance - fb * this.flySpeed * boost * dt),
+        );
+        this.userFramed = true;
+      }
+    } else {
+      if (keys.has('w')) { mx += fwd[0]; my += fwd[1]; mz += fwd[2]; }
+      if (keys.has('s')) { mx -= fwd[0]; my -= fwd[1]; mz -= fwd[2]; }
+    }
     if (keys.has('d')) { mx += right[0]; my += right[1]; mz += right[2]; }
     if (keys.has('a')) { mx -= right[0]; my -= right[1]; mz -= right[2]; }
     if (keys.has('e')) { mx += up[0]; my += up[1]; mz += up[2]; }
     if (keys.has('q')) { mx -= up[0]; my -= up[1]; mz -= up[2]; }
     const len = Math.hypot(mx, my, mz);
     if (len < 1e-8) return;
-    const boost = (keys.has('shift') ? 3 : 1);
     const s = (this.flySpeed * boost * dt) / len;
     this.pos = [this.pos[0] + mx * s, this.pos[1] + my * s, this.pos[2] + mz * s];
     this.userFramed = true;
@@ -494,6 +573,7 @@ export class OrbitCamera {
       yaw: this.yaw,
       pitch: this.pitch,
       distance: this.distance,
+      orthoHeight: this.orthoHeight,
       flySpeed: this.flySpeed,
       roll: this.roll,
     };
@@ -509,6 +589,7 @@ export class OrbitCamera {
     if (Number.isFinite(snap.distance)) {
       this.distance = Math.min(Math.max(snap.distance, this.minDistance), this.maxDistance);
     }
+    if (Number.isFinite(snap.orthoHeight)) this.setOrthoHeight(snap.orthoHeight);
     if (Number.isFinite(snap.flySpeed)) {
       this.flySpeed = Math.min(FLY_SPEED_MAX, Math.max(FLY_SPEED_MIN, snap.flySpeed));
     }
@@ -584,6 +665,9 @@ export class OrbitCamera {
       dist = radius * 2.4;
     }
     this.distance = Math.min(Math.max(dist, this.minDistance), this.maxDistance);
+    // Ortho reframes off the same distance, so Reset Camera / F fill the frame
+    // the same way whichever projection is on.
+    if (this.ortho) this.setOrthoHeight(this.halfHeightAt(this.distance));
 
     if (this.mode === 'fly') {
       // Seat fly camera on the fitted orbit eye, looking at the target.

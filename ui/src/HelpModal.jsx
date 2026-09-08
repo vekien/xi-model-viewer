@@ -15,6 +15,7 @@ const ZONE_CONTROLS = [
   ['WASD', 'Move around'],
   ['Q / E', 'Up and Down'],
   ['Wheel', 'Move speed'],
+  ['W / S in Ortho', 'Zoom (a dolly draws the same picture)'],
 ];
 
 const openLink = (e, url) => {

@@ -123,12 +123,16 @@ export function buildSolidGizmoMeshes() {
 export function gizmoSize(renderer, gizmo) {
   if (gizmo?.size) return gizmo.size;
   if (!renderer?.camera || !gizmo?.pos) return 1;
-  const eye = renderer.camera.eye;
-  const d = Math.hypot(
+  const cam = renderer.camera;
+  // Ortho draws no falloff with depth, so a handle sized off the eye distance
+  // would grow as you orbited out while staying the same size on screen. The
+  // view box is what sets scale there.
+  const eye = cam.eye;
+  const d = cam.ortho ? cam.framingDistance : (Math.hypot(
     gizmo.pos[0] - eye[0],
     gizmo.pos[1] - eye[1],
     gizmo.pos[2] - eye[2],
-  ) || 1;
+  ) || 1);
   return Math.min(80, Math.max(0.75, d * 0.1));
 }
 
@@ -303,9 +307,15 @@ export function ringDragAngle(renderer, gizmo, axis, prevX, prevY, clientX, clie
   if (d < -Math.PI) d += Math.PI * 2;
   // Screen-clockwise is a negative rotation about an axis pointing at the
   // camera; flip when the ring's axis points away so the cursor is followed.
-  const eye = renderer.camera?.eye;
+  const cam = renderer.camera;
+  const eye = cam?.eye;
   const n = axis === 'rx' ? [1, 0, 0] : axis === 'rz' ? [0, 0, 1] : [0, 1, 0];
-  const toEye = eye ? [eye[0] - o[0], eye[1] - o[1], eye[2] - o[2]] : n;
+  // Ortho has no eye ray — every pixel looks along the view axis, so which
+  // side of the ring faces us is that direction, not one aimed at the eye.
+  const f = cam?.ortho ? cam.forward : null;
+  const toEye = f
+    ? [-f[0], -f[1], -f[2]]
+    : (eye ? [eye[0] - o[0], eye[1] - o[1], eye[2] - o[2]] : n);
   const facing = n[0] * toEye[0] + n[1] * toEye[1] + n[2] * toEye[2];
   return facing >= 0 ? -d : d;
 }

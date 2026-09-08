@@ -27,6 +27,7 @@ const MENUS = [
       { id: 'reset-camera', label: 'Reset Camera', icon: 'recenter' },
       { id: 'toggle-explorer', label: 'Toggle Explorer', icon: 'list_alt', check: 'explorer' },
       { id: 'toggle-wasd', label: 'Toggle WASD', icon: 'keyboard', check: 'wasd' },
+      { id: 'toggle-ortho', label: 'Toggle Orthographic', icon: 'deployed_code', check: 'ortho' },
       { id: 'toggle-hd', label: 'Toggle HD', icon: 'hd', check: 'hd', disableWhen: 'noHdPath' },
       { id: 'toggle-pivot', label: 'Toggle PIVOT', icon: 'swap_horiz', check: 'pivot', disableWhen: 'noPivotPath' },
       { toolbarSep: true },
@@ -69,7 +70,7 @@ const MENUS = [
 ];
 
 /** Quick-toggle strip next to the menus — View checks minus a few menu-only items. */
-const TOOLBAR_SKIP = new Set(['toggle-blend-lequal', 'toggle-region-cull']);
+const TOOLBAR_SKIP = new Set(['toggle-blend-lequal', 'toggle-region-cull', 'toggle-ortho']);
 const VIEW_TOOLBAR = MENUS.find((m) => m.label === 'View').items
   .filter((i) => i.toolbarSep || (i.check && !TOOLBAR_SKIP.has(i.id)));
 

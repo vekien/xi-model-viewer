@@ -802,6 +802,7 @@ export default function App({ launch = null }) {
   const drag = useRef({ btn: -1, x: 0, y: 0 });
   const heldKeys = useRef(new Set());
   const wasdRef = useRef(localStorage.getItem('wasd') === '1');
+  const orthoRef = useRef(localStorage.getItem('ortho') === '1');
 
   const [settings, setSettings] = useState(null);
   const [wasd, setWasdState] = useState(() => localStorage.getItem('wasd') === '1');
@@ -812,6 +813,16 @@ export default function App({ launch = null }) {
     try { localStorage.setItem('wasd', next ? '1' : '0'); } catch { /* quota */ }
     const cam = rendererRef.current?.camera;
     if (cam) cam.setMode(next ? 'fly' : 'orbit');
+  }, []);
+  // Orthographic projection — a view setting like Wireframe, not part of the
+  // per-zone camera pose, so it is remembered globally and re-applied on load.
+  const [ortho, setOrthoState] = useState(() => localStorage.getItem('ortho') === '1');
+  const setOrtho = useCallback((on) => {
+    const next = !!on;
+    orthoRef.current = next;
+    setOrthoState(next);
+    try { localStorage.setItem('ortho', next ? '1' : '0'); } catch { /* quota */ }
+    rendererRef.current?.camera?.setOrtho(next);
   }, []);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsError, setSettingsError] = useState('');
@@ -1711,6 +1722,8 @@ export default function App({ launch = null }) {
     renderer.showUnplaced = true;
     // Restore View > Toggle WASD from last session.
     if (wasdRef.current) renderer.camera.setMode('fly');
+    // Same for View > Toggle Ortho (seeded off the framing fitCamera lands on).
+    renderer.camera.setOrtho(orthoRef.current);
     renderer.attachFxToActor = attachFxRef.current;
     // Seed the toolbar readout so it never shows 0 before the first frame.
     setFlySpeed(Math.round(renderer.camera.flySpeed));
@@ -7873,6 +7886,9 @@ export default function App({ launch = null }) {
       case 'toggle-wasd':
         setWasd(!wasdRef.current);
         break;
+      case 'toggle-ortho':
+        setOrtho(!orthoRef.current);
+        break;
       case 'toggle-textures':
         setShowTex((v) => !v);
         break;
@@ -9054,6 +9070,7 @@ export default function App({ launch = null }) {
           shadows: showShadows,
           explorer: explorerOpen,
           wasd,
+          ortho,
           collision: showCollision,
           navmesh: showNavmesh,
           soundMarkers: showSoundMarkers,

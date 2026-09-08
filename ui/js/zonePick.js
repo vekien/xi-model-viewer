@@ -52,13 +52,30 @@ export function cameraScreenRay(camera, ndcX, ndcY, aspect) {
   const right = [m[0], m[4], m[8]];
   const upv = [m[1], m[5], m[9]];
   const fwd = [-m[2], -m[6], -m[10]];
+  const e = camera.eye;
+  if (camera.ortho) {
+    // Parallel projection: every ray shares the view direction and the cursor
+    // only moves where it starts. Back the origin off along −forward first —
+    // the ortho depth range is centred on the eye, so what was clicked can sit
+    // behind it, and every t here is measured from 0.
+    const h = Math.max(camera.orthoHeight ?? 1, 1e-4);
+    const w = h * aspect;
+    const back = Math.max(camera.far ?? 1000, camera.maxDistance ?? 500);
+    return {
+      origin: [
+        e[0] + right[0] * ndcX * w + upv[0] * ndcY * h - fwd[0] * back,
+        e[1] + right[1] * ndcX * w + upv[1] * ndcY * h - fwd[1] * back,
+        e[2] + right[2] * ndcX * w + upv[2] * ndcY * h - fwd[2] * back,
+      ],
+      dir: [fwd[0], fwd[1], fwd[2]],
+    };
+  }
   const th = Math.tan(((camera.fovDegrees ?? 45) * Math.PI) / 360);
   const dir = norm([
     fwd[0] + right[0] * ndcX * th * aspect + upv[0] * ndcY * th,
     fwd[1] + right[1] * ndcX * th * aspect + upv[1] * ndcY * th,
     fwd[2] + right[2] * ndcX * th * aspect + upv[2] * ndcY * th,
   ]);
-  const e = camera.eye;
   return { origin: [e[0], e[1], e[2]], dir };
 }
 
