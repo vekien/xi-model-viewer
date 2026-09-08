@@ -54,3 +54,6 @@ $RECYCLE.BIN/
 
 # Python bytecode (scripts/ helpers import each other)
 __pycache__/
+
+# Local agent config (machine-specific absolute paths)
+.claude/

@@ -1,12 +1,14 @@
 # XI Model Viewer
 
 A FFXI asset browser — **zones, NPCs & monsters, playable characters, spell
-effects, textures, music, sound effects and raw DAT data** — with a **WebGL2**
-viewport, wrapped in a **Tauri 2** shell (one standalone ~38 MB exe, no
-Electron — it embeds vgmstream, the baked asset lists and the viewport
-backgrounds). Skinning runs on the GPU: the vertex shader rotates pre-weighted
-joint-local positions by per-joint pose quaternions; the CPU only evaluates the
-skeleton pose (one quat/trans/scale triplet per joint per frame).
+effects, textures, music, sound effects and raw DAT data** — in a **WebGL2**
+viewport.
+
+- One standalone ~38 MB exe. **Tauri 2**, not Electron.
+- Embeds vgmstream, the baked asset lists and the viewport backgrounds — nothing to install.
+- Skinning runs on the GPU: the vertex shader rotates pre-weighted joint-local
+  positions by per-joint pose quaternions, so the CPU only evaluates the skeleton
+  pose (one quat/trans/scale triplet per joint per frame).
 
 ## Download
 
@@ -18,96 +20,117 @@ notice until the next release.
 
 ## Features
 
-- **Zones** — full zone geometry with day/night time-of-day and weather
-  (auroras, fog, rain, …), adjustable brightness and scene background, and zone
-  BGM + ambient sound effects. The object browser groups placements by kind
-  (sky, water, collision, sub-areas, unplaced) with per-object and per-group
-  visibility toggles, and lists the zone's visual effects and sound groups
-  alongside its meshes. **Live Selection** picks objects in the world and drags
-  them on an XYZ gizmo (in-memory, with undo), and **View → Region Culling**
-  draws only what the zone's own PVS regions say is visible.
-- **NPCs & monsters** — a categorised tree of every entity model. A single
-  **Motion** picker covers its animations, schedules and the skill packs a trust
-  borrows; scrub the timeline frame-by-frame, set playback speed (10–200 %),
-  play the entity's own VFX routines, and inspect the bone hierarchy in a
-  skeleton overlay. **Base** (Idle / Battle) lays the selected clip over a
-  resting pose as a montage — blend in, play through, blend back.
-- **Characters** — compose a PC from race, face, weapons and gear. Gear is
-  grouped by set (Artifact / Relic / Empyrean / Ebur · Furia · Ebon /
-  Abjuration / Mythic / Aeonic / Prime) and sorted A–Z; equipped weapons play
-  their weapon-skill animations and a ranged weapon stays stowed unless the
-  action draws it; the 40-character look string is generated and copyable.
-- **Effects** — search and play any spell/ability VFX (magic, job abilities,
-  summons, weapon skills) on an empty stage *or on a loaded character or NPC* —
-  attached to the joints the DAT names, with the caster's own cast animation, a
-  Play / Pause / Rewind / Loop transport, playback speed and the effect's sound.
-- **Camera Sequencer** — a multi-track timeline (camera position and rotation,
-  weather, time of day): record keyframes at the playhead, scrub, curve the
-  path between them, and lerp time-of-day across a shot. **Lock to Actor**
-  keeps a moving subject framed by tracking the pelvis, effects and sound play
-  back with the take, and sequences can be named and saved. Placed zone actors
-  join the timeline too — **Add to Camera Sequence** in an actor's editor gives
-  it a movement track and an animation track, so you can record where it
-  stands, move it and record again for a path, and record which motion its
-  editor is playing (walk here, idle there) to switch clips as the take plays.
-- **Images** — browse every UI, map and cutscene texture DAT with a filter,
-  per-set list and zoom, plus a **sprite panel** that lists every sprite in a
-  title/lobby layout, filtered to the atlas you have selected.
-- **Music & Sound FX** — play any BGW/SPW track (vgmstream-decoded) with a live
-  waveform visualiser, seek bar and loop info.
-- **Data** — a DAT inspector: walks any DAT's section tree (folders, resource
-  types, header peeks like texture size/format, joint counts, sound ids) without
-  dumping payloads; textures open in a viewer on click. FTABLE/VTABLE pairs
-  render as a searchable file-id → DAT table whose rows jump straight to the
-  named DAT's structure, with gear model ids browsable per race/slot and
-  monster/NPC model ids resolved from the same tables. Bump maps preview as
-  normal maps, routes open as keyframe tables, XISTRING menu strings and `USER\`
-  macro books get real layouts, and spell/ability tables open in a draggable
-  inspector. Environment and ZoneInteractions tables and a ZoneMesh preview
-  cover the zone-side records.
-- **Title UI editing** — inspect UiMenu (0x30) windows and UiElementGroup (0x31)
-  sets as tables, then patch position, size and nav and **save back to the DAT**
-  through the xi-tools CLI. Writes land in the right root (pivot / HD / game),
-  resolved per DAT.
-- **Notes** — free-text notes on any DAT, kept in a plain
-  `%LOCALAPPDATA%\XiModelViewer\notes.json` you can edit outside the app. The
-  file tree shows each note as a tooltip, so a folder of numbered DATs stops
-  being anonymous.
-- **Viewport** — background images, a flat floor with a colour picker, floor repeat
-  and a radial edge fade, plus a trackball gizmo for aiming the sun that casts
-  the model's shadow.
-- **Zone NPCs** — View › Toggle NPCs stands the server's NPC placements on the
-  loaded zone (from CatsEyeXI's `npc_list`): each NPC at its position and
-  heading, drawn with its look — a unique model, or the race skeleton wearing
-  the gear the look names. Hidden and cutscene-only NPCs are counted, not drawn.
-- **Scenes** — named arrangements of actors on a zone. The Scenes panel lists
-  every saved scene; **New Scene** starts an empty one, and opening a scene puts
-  its actors on the stage, where you place NPCs, composed characters and light
-  sources on the terrain (click to place with a ground line-trace), then select
-  them in the viewport and move / rotate / scale with a gizmo (keys 1 / 2 / 3,
-  Esc to drop the selection, F to frame). Each actor plays its own motion,
-  schedule or borrowed pack with its own effect routines and frame scrubber,
-  casts and receives the sun shadows, and duplicates with Ctrl+C / Ctrl+V.
-  Point, spot and ambient lights take colour or temperature, intensity and
-  radius and light the terrain, props and actors around them. Save writes the
-  stage back into the scene, so flipping between scenes swaps whole casts.
-- **Database** — the client's record DATs as searchable, sortable tables: items
-  (with decoded stats, jobs, slots, icons), quests, missions, key items,
-  titles, spells, abilities and the other d_msg string tables, in English or
-  Japanese. Advanced filters (rule builder or an SQL-ish query string such as
-  `str > 20 and int > 20`), CSV / JSON export, and a one-click `xi mv database`
-  bake so the tables load instantly instead of parsing 20 MB DATs. **File →
-  Database Manager** updates, imports and exports the baked tables.
-- **Camera** — WASD fly camera with roll (Alt+Q / Alt+E), fly speed in steps
-  of 5, a render-distance slider, and a keyframe Camera Sequencer with a spline
-  path, separate position and rotation tracks (roll included), a linear-rotation
-  option, time-of-day / weather tracks and per-actor movement and animation
-  tracks.
-- **Throughout** — type-to-filter dropdowns, search on every asset list,
-  arrow-key list navigation, pinned favourite zones and files, reveal-any-DAT in
-  the system file manager, wireframe / unlit / collision / navmesh / skybox
-  overlays, an Effects Distance slider, and glTF/FBX model export (via the
-  xi-tools CLI) with a part picker, Mesh / Animation tabs and Batch Export.
+### Zones
+
+- Load any zone with its full geometry, textures and collision.
+- Time of day and weather — rain, snow, fog, auroras — with a cross-faded transition.
+- Zone BGM and ambient sound effects play with it; adjustable brightness and scene background.
+- Object browser groups every placement by kind (sky, water, collision, sub-areas, unplaced), with per-object and per-group visibility, plus the zone's VFX and sound groups.
+- **Live Selection** — click an object in the world, drag it on an XYZ gizmo, undo.
+- **Region Culling** — draw only what the zone's own PVS regions say is visible.
+- **Enable LOD** — draw objects at the detail level the zone actually placed them at.
+- **Toggle NPCs** — stand the server's NPC placements (from CatsEyeXI's `npc_list`) on the zone, each at its position and heading, wearing its look.
+
+### NPCs & monsters
+
+- Categorised tree of every entity model in the client.
+- One **Motion** picker covers animations, schedules and the skill packs a trust borrows.
+- Scrub the timeline frame by frame; playback speed 10–200 %.
+- Play the entity's own VFX routines, with their own volume.
+- Inspect the bone hierarchy in a skeleton overlay.
+- **Base** (Idle / Battle) lays a clip over a resting pose — blend in, play, blend back.
+
+### Characters
+
+- Compose a PC from race, face, gear and weapons.
+- Gear grouped by set — Artifact, Relic, Empyrean, Ebur · Furia · Ebon, Abjuration, Mythic, Aeonic, Prime.
+- Equipped weapons play their weapon-skill animations; ranged weapons stay stowed until the action draws them.
+- Battle stances named per race, read from each weapon DAT's own animation type.
+- The 40-character look string is generated and copyable.
+- **(WIP) Character Creation** — the character-creation screen's high-poly models: 8 faces per race, A/B texture variants, with or without initial equipment.
+
+### Effects
+
+- Search and play any spell or ability VFX — magic, job abilities, summons, weapon skills.
+- Play it on an empty stage, or on a loaded character or NPC, attached to the joints the DAT names.
+- The caster's own cast animation plays with it, on the effect's clock.
+- Play / Pause / Rewind / Loop transport, playback speed, and the effect's sound.
+
+### Camera & sequencer
+
+- WASD fly camera with roll (Alt+Q / Alt+E), fly speed in steps of 5, render-distance slider.
+- Multi-track keyframe timeline: camera position, camera rotation, weather, time of day.
+- Spline or linear paths, with eased timing through keys so shots don't change pace at a keyframe.
+- **Curve rows** — click a camera lane to graph its channels underneath it.
+- **Lock to Actor** keeps a moving subject framed by tracking the pelvis.
+- **Actor tracks** — record where an actor stands and which motion it plays, so a take can walk it across the zone and switch it from walk to idle on cue.
+- Effects and sound play back with the take; sequences save by name.
+
+### Scenes
+
+- Named casts of actors on a zone — open one and its whole cast appears.
+- Place NPCs, composed characters and lights on the terrain with a click-to-place ground trace.
+- Move / rotate / scale gizmo (1 / 2 / 3, Esc to deselect, F to frame), Ctrl+C / Ctrl+V to duplicate.
+- Each actor runs its own motion, schedule, effect routines and frame scrubber, and casts sun shadows.
+- Point, spot and ambient lights take colour or temperature, intensity and radius.
+
+### Database
+
+- The client's record DATs as searchable, sortable tables: items (decoded stats, jobs, slots, icons), quests, missions, key items, titles, spells, abilities and the other d_msg string tables.
+- English or Japanese.
+- Advanced filters — a rule builder, or an SQL-ish query string such as `str > 20 and int > 20`.
+- CSV / JSON export.
+- One-click `xi mv database` bake so tables load instantly instead of parsing 20 MB DATs.
+- **File → Database Manager** updates, imports and exports the baked tables.
+
+### Data — the DAT inspector
+
+- Walk any DAT's section tree: folders, resource types, header peeks (texture size and format, joint counts, sound ids) — no payload dumps. Textures open in a viewer on click.
+- FTABLE/VTABLE pairs render as a searchable file-id → DAT table whose rows jump to the named DAT.
+- Gear model ids browsable per race and slot; monster and NPC model ids resolved from the same tables.
+- Bump maps preview as normal maps; routes open as keyframe tables.
+- XISTRING menu strings and `USER\` macro books get real layouts; spell and ability tables open in a draggable inspector.
+- Environment, ZoneInteractions and a ZoneMesh preview cover the zone-side records.
+- **Notes** — free text on any DAT, kept in a plain, editable `%LOCALAPPDATA%\XiModelViewer\notes.json`, shown as a tooltip in the file tree.
+
+### Title UI editing
+
+- Inspect UiMenu (0x30) windows and UiElementGroup (0x31) sets as tables.
+- Patch position, size and nav, and **save back to the DAT** through the xi-tools CLI.
+- Writes land in the right root (pivot / HD / game), resolved per DAT.
+
+### Images
+
+- Browse every UI, map and cutscene texture DAT, with a filter, per-set list, zoom and pan.
+- **Sprite panel** lists every sprite in a title/lobby layout, filtered to the selected atlas.
+
+### Music & Sound FX
+
+- Play any BGW/SPW track, decoded by an embedded vgmstream.
+- Live waveform visualiser, seek bar and loop info.
+
+### Export
+
+- glTF / FBX model export via the xi-tools CLI, with a part picker and Mesh / Animation tabs.
+- **Batch Export** for models, animations and zones, plus **Music** and **Sound FX** tabs that decode straight to `.wav` in-app — no xi-tools needed, just the game path.
+- Sounds export under their own game folder, so same-numbered tracks from different expansions don't collide; filenames can be the real track name or the game's.
+- A banner reports what was written and where, with a button to open the folder.
+
+### Viewport
+
+- Background images, a flat floor with a colour picker, floor repeat and a radial edge fade.
+- Trackball gizmo aims the sun that casts the model's shadow.
+- Overlays: wireframe, unlit, skeleton, collision, navmesh, skybox, sound markers, axes, grid.
+- HD and PIVOT DAT roots toggle live.
+- Shadow, render and effects distance, field of view, FPS limit and render resolution.
+
+### Throughout
+
+- Type-to-filter dropdowns and search on every asset list, with arrow-key navigation.
+- Pin favourites in the zone, NPC, character and DAT lists.
+- Reveal any DAT in the system file manager.
+- Built-in colour picker with a working desktop eyedropper and a magnified loupe.
+- `--zone` opens a single zone chrome-free, for another tool's Preview button — see [Zone preview launch](#zone-preview-launch).
 
 ## Screenshots
 
