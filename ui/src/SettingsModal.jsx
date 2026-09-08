@@ -9,6 +9,25 @@ import { Tooltip } from './Tooltip.jsx';
 const UV_INSTALL_URL = 'https://docs.astral.sh/uv/getting-started/installation/';
 const XI_README_HINT = 'https://github.com/vekien/xi-tools#getting-started';
 
+// What each list is for, in the user's terms. Keyed by filename because that is
+// what the manifest names; anything not listed here still shows, unlabelled, so
+// a list added upstream appears the day it ships rather than the day this map
+// catches up.
+const LIST_BLURBS = {
+  'characters.json': 'Races, faces, gear and the animation catalogue',
+  'npcs.json': 'NPC and monster models',
+  'zone_npcs.json': 'Where each NPC stands, per zone',
+  'zones.json': 'Every zone, by name and DAT',
+  'effects.json': 'Spell and ability VFX',
+  'images.json': 'Maps, UI art and cutscene stills',
+  'music.json': 'Music track names',
+  'sfx.json': 'Sound-effect folders and titles',
+  'zone_music.json': 'Which BGM each zone plays',
+  'floors.json': 'Ground textures for Scenes',
+};
+
+const LISTS_SOURCE_URL = 'https://github.com/vekien/xi-tools/tree/main/mv/lists';
+
 const TOOLS_MODE_ITEMS = [
   { id: 'managed', label: 'Self-managed install' },
   { id: 'custom', label: 'Custom install' },
@@ -34,6 +53,10 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
   const [toolsMode, setToolsMode] = useState('managed');
   const [notesPath, setNotesPath] = useState('');
   const [notesErr, setNotesErr] = useState('');
+  const [lists, setLists] = useState(null);       // ListsStatus from Rust
+  const [listsBusy, setListsBusy] = useState(false);
+  const [listsMsg, setListsMsg] = useState('');
+  const [listsErr, setListsErr] = useState('');
   const panelRef = useRef(null);
   const dragState = useRef(null);
   const setupGen = useRef(0);
@@ -44,6 +67,49 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
     backend.setUiScale(clampUiScale(initial?.uiScale));
     onClose();
   }, [initial?.uiScale, onClose]);
+
+  /** Disk-only list status. Never throws — an unreachable backend just shows nothing. */
+  const refreshLists = useCallback(async () => {
+    try {
+      const st = await backend.listsStatus();
+      setLists(st);
+      return st;
+    } catch (e) {
+      setListsErr(String(e?.message || e));
+      return null;
+    }
+  }, []);
+
+  /**
+   * The one network action on this tab: fetch xi-tools' manifest and pull
+   * whatever no longer matches. Reports "up to date" rather than silence, so a
+   * deliberate press always gets an answer.
+   */
+  const doUpdateLists = useCallback(async () => {
+    setListsBusy(true);
+    setListsErr('');
+    setListsMsg('Checking xi-tools…');
+    try {
+      const res = await backend.listsUpdate();
+      await refreshLists();
+      const n = res?.updated?.length ?? 0;
+      if (res?.error) setListsErr(res.error);
+      if (n) {
+        const mb = (res.bytes || 0) / (1024 * 1024);
+        setListsMsg(`Updated ${n} list${n === 1 ? '' : 's'} (${mb.toFixed(1)} MB). `
+          + 'Reload the app to use them.');
+      } else if (!res?.error) {
+        setListsMsg('Already up to date.');
+      } else {
+        setListsMsg('');
+      }
+    } catch (e) {
+      setListsMsg('');
+      setListsErr(String(e?.message || e));
+    } finally {
+      setListsBusy(false);
+    }
+  }, [refreshLists]);
 
   const detachProgress = useCallback(() => {
     for (const u of unlistenRef.current) {
@@ -170,6 +236,11 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
     setToolsProgress(null);
     setToolsLog('');
     setNotesErr('');
+    setLists(null);
+    setListsBusy(false);
+    setListsMsg('');
+    setListsErr('');
+    refreshLists();
     loadNotes()
       .then(() => setNotesPath(notesFilePath() || ''))
       .catch(() => setNotesPath(''));
@@ -180,7 +251,7 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
     return () => detachProgress();
     // intentionally omit `initial` — snapshot only on open
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, detachProgress, refreshTools, runXiSetup]);
+  }, [open, detachProgress, refreshTools, runXiSetup, refreshLists]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -392,6 +463,16 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
           >
             <span className="icon">terminal</span>
             XI Tools
+          </button>
+          <button
+            type="button"
+            role="tab"
+            className={`settings-tab${tab === 'lists' ? ' on' : ''}`}
+            aria-selected={tab === 'lists'}
+            onClick={() => setTab('lists')}
+          >
+            <span className="icon">database</span>
+            DAT Lists
           </button>
         </div>
 
@@ -850,6 +931,106 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
               </div>
             </div>
           )}
+
+          {tab === 'lists' && (
+            <div className="settings-cols settings-lists">
+              <section className="settings-panel">
+                <div className="settings-panel-title">Where these come from</div>
+                <div className="settings-panel-body">
+                  <div className="form-hint">
+                    The DAT lists are what turns raw DAT paths into names — races and
+                    gear, NPCs, zones, music, sound effects. They are generated by{' '}
+                    <a
+                      className="inline-link"
+                      href={LISTS_SOURCE_URL}
+                      onClick={(e) => { e.preventDefault(); backend.openUrl(LISTS_SOURCE_URL); }}
+                    >
+                      xi-tools
+                    </a>{' '}
+                    and ship inside this build, so the app works with no network at all.
+                  </div>
+                  <div className="form-hint">
+                    On launch it checks xi-tools for newer copies and downloads only the
+                    ones whose contents changed, so a model or gear row found after this
+                    release still shows up. Each download is checked against its
+                    published checksum before it replaces anything.
+                  </div>
+                </div>
+              </section>
+
+              <section className="settings-panel">
+                <div className="settings-panel-title">Status</div>
+                <div className="settings-panel-body">
+                  <div className={`xi-status${listsBusy ? ' busy' : ''}`}>
+                    <span className={`icon${listsBusy ? ' spin' : ''}`}>
+                      {listsBusy ? 'progress_activity' : 'inventory_2'}
+                    </span>
+                    <span className="xi-status-msg">
+                      {listsBusy
+                        ? (listsMsg || 'Checking…')
+                        : (listsMsg || (lists
+                          ? `${lists.files.length} lists, ${fmtMb(lists.bytes)}`
+                            + (lists.downloaded
+                              ? ` — ${lists.downloaded} updated since this build`
+                              : ' — all from this build')
+                          : 'Reading…'))}
+                    </span>
+                  </div>
+
+                  {lists?.generated && (
+                    <div className="form-hint">
+                      Built from xi-tools&rsquo; lists of{' '}
+                      <span className="mono">{fmtStamp(lists.generated)}</span>.
+                    </div>
+                  )}
+                  {!!lists?.downloaded && lists.dir && (
+                    <div className="form-hint mono lists-dir">{lists.dir}</div>
+                  )}
+
+                  <div className="form-inline tools-actions">
+                    <Button className="active" disabled={listsBusy} onClick={doUpdateLists}>
+                      <span className="icon">download</span>
+                      Check for list updates
+                    </Button>
+                    <Tooltip content="The published lists on GitHub">
+                      <Button
+                        className="icon-btn"
+                        onClick={() => backend.openUrl(LISTS_SOURCE_URL)}
+                      >
+                        <span className="icon">open_in_new</span>
+                      </Button>
+                    </Tooltip>
+                  </div>
+
+                  {listsErr && (
+                    <div className="form-error settings-local-err" role="alert">
+                      <span className="icon">error</span>
+                      <span>{listsErr}</span>
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              <section className="settings-panel settings-lists-table-panel">
+                <div className="settings-panel-title">The lists</div>
+                <div className="settings-panel-body">
+                  <div className="lists-table" role="table">
+                    {(lists?.files ?? []).map((f) => (
+                      <div className="lists-row" role="row" key={f.name}>
+                        <div className="lists-name mono">{f.name}</div>
+                        <div className="lists-blurb">{LIST_BLURBS[f.name] || ''}</div>
+                        <div className="lists-size mono">{fmtMb(f.bytes)}</div>
+                        <div className={`lists-src${f.source === 'downloaded' ? ' updated' : ''}`}>
+                          {f.source === 'downloaded' ? 'Updated' : 'In build'}
+                        </div>
+                      </div>
+                    ))}
+                    {!lists && <div className="form-hint">Reading…</div>}
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
         </div>
 
         <div className="modal-actions">
@@ -866,6 +1047,25 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
       </div>
     </div>
   );
+}
+
+/** Bytes as MB/KB, for the list sizes. */
+function fmtMb(bytes) {
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n <= 0) return '—';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * The manifest's ISO stamp as a plain date. Falls back to the raw string: this
+ * is written by xi-tools, and an unparseable one is still worth showing.
+ */
+function fmtStamp(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 /** Make Rust path errors readable under Local checkout. */

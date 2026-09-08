@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { loadList } from '../js/lists.js';
 import { Tooltip } from './Tooltip.jsx';
 
 // NPC data comes fully resolved from lists/npcs.json (baked by
@@ -73,9 +74,7 @@ export function NpcList({ onSelectEntry, selectedPath, onError }) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('lists/npcs.json');
-        if (!res.ok) throw new Error(`${res.status} npcs.json`);
-        const cats = (await res.json()).categories;
+        const cats = (await loadList('npcs.json')).categories;
         if (!cancelled) {
           npcListUi.categories = cats;
           setCategories(cats);

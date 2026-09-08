@@ -1,0 +1,7 @@
+# These are baked into the .exe AND downloaded from raw.githubusercontent.com,
+# where each one is checked against the sha256 in manifest.json. raw serves the
+# blob as git stores it, and xi-tools hashes its own working copy — so under
+# core.autocrlf those are two different byte streams and every list fails
+# verification on every client, forever. Pin them to LF, as xi-tools does for
+# the same files, so the working copy, the blob and what raw serves agree.
+ui/public/lists/*.json text eol=lf

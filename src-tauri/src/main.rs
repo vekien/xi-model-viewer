@@ -5,6 +5,7 @@
 
 mod eyedropper;
 mod github;
+mod lists;
 mod tools;
 
 use serde::Serialize;
@@ -90,6 +91,31 @@ fn user_data_dir_path() -> Result<std::path::PathBuf, String> {
 #[tauri::command]
 fn user_data_dir() -> Result<String, String> {
     user_data_dir_path().map(|p| p.to_string_lossy().into_owned())
+}
+
+/// Where downloaded asset lists live (`<user data>/lists`), whether or not
+/// anything has been downloaded. The frontend reads a list from here when it
+/// finds one, and falls back to the copy baked into this build.
+#[tauri::command]
+fn lists_dir() -> Result<String, String> {
+    user_data_dir_path().map(|p| lists::lists_dir(&p).to_string_lossy().into_owned())
+}
+
+/// Which lists are in effect and where each comes from. Disk only — opening
+/// Settings must not spend a network request.
+#[tauri::command]
+fn lists_status() -> Result<lists::ListsStatus, String> {
+    user_data_dir_path().map(|p| lists::status(&p))
+}
+
+/// Fetch xi-tools' list manifest and replace anything whose contents moved.
+/// One round trip plus the files that actually differ; never fails the boot.
+#[tauri::command]
+async fn lists_update() -> Result<lists::ListsSync, String> {
+    let dir = user_data_dir_path()?;
+    tauri::async_runtime::spawn_blocking(move || lists::sync(&dir))
+        .await
+        .map_err(|e| format!("list update failed: {e}"))
 }
 
 #[tauri::command]
@@ -1156,6 +1182,9 @@ fn main() {
             file_exists,
             write_file,
             user_data_dir,
+            lists_dir,
+            lists_status,
+            lists_update,
             default_game_path,
             pick_folder,
             pick_file,

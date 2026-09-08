@@ -102,6 +102,59 @@ jobs:
         working-directory: ui
         run: npm ci
 
+      # The lists belong to xi-tools, and the app pulls them from there at runtime
+      # anyway — so bake whatever is current at build time rather than whatever
+      # was last copied into this repo by hand. A fresh install is then already
+      # up to date on first launch instead of downloading 12 MB before it can
+      # show anything, and the manifest compiled into the binary
+      # (include_str! in src-tauri/src/lists.rs) describes the lists actually
+      # shipped beside it.
+      #
+      # A fetch failure is not fatal: the copy committed here is a valid, if
+      # older, set and the runtime updater closes the gap on first boot. A
+      # manifest that disagrees with the files it arrived with IS fatal — that
+      # would ship a binary claiming hashes it does not have, and every client
+      # would re-download every list on every boot forever.
+      - name: Bake the current DAT lists from xi-tools
+        shell: bash
+        run: |
+          set -uo pipefail
+          tmp=$(mktemp -d)
+          repo=https://github.com/vekien/xi-tools.git
+          # Blobless + sparse: mv/lists is ~12 MB and the rest of xi-tools is not
+          # wanted at all, so this pulls the lists and almost nothing else.
+          ok=1
+          git clone --depth 1 --filter=blob:none --sparse "$repo" "$tmp" || ok=0
+          if [ "$ok" = 1 ]; then
+            git -C "$tmp" sparse-checkout set mv/lists || ok=0
+          fi
+          if [ "$ok" = 0 ] || [ ! -f "$tmp/mv/lists/manifest.json" ]; then
+            echo "::warning::Could not read xi-tools/mv/lists; baking the lists committed here."
+            exit 0
+          fi
+          cp "$tmp/mv/lists"/*.json ui/public/lists/
+          python - <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+          d = Path("ui/public/lists")
+          m = json.loads((d / "manifest.json").read_text(encoding="utf-8"))
+          bad = []
+          for name, want in (m.get("files") or {}).items():
+              f = d / name
+              if not f.is_file():
+                  bad.append(f"{name}: missing")
+                  continue
+              got = hashlib.sha256(f.read_bytes()).hexdigest()
+              if got != want.get("sha256"):
+                  bad.append(f"{name}: {got[:12]} != {str(want.get('sha256'))[:12]}")
+          if bad:
+              print("::error::Baked lists do not match xi-tools' manifest: " + "; ".join(bad))
+              sys.exit(1)
+          total = sum(f["bytes"] for f in m["files"].values())
+          print(f"Baked {len(m['files'])} lists from xi-tools, {total / 1e6:.1f} MB, "
+                f"generated {m.get('generated')}")
+          PY
+
       # Build.bat runs `cargo tauri build`, which needs `cargo install tauri-cli`
       # (several minutes, every run). The npm CLI is the same tool and installs in
       # seconds. `tauri build` still runs beforeBuildCommand (npm run build) and

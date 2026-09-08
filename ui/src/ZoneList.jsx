@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { loadList } from '../js/lists.js';
 import { Tooltip } from './Tooltip.jsx';
 
 // zones.json shape (from `xi zone json`): [{ id, name, path, group? }]
@@ -41,9 +42,7 @@ function savePins(keys) {
 }
 
 async function loadZones() {
-  const res = await fetch('lists/zones.json');
-  if (!res.ok) throw new Error(`${res.status} lists/zones.json`);
-  return res.json();
+  return loadList('zones.json');
 }
 
 export function ZoneList({ selectedPath, onSelectZone, onError }) {

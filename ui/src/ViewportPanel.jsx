@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { loadListOrNull } from '../js/lists.js';
 import { Tooltip } from './Tooltip.jsx';
 import { ColorSwatch } from './ColorPicker.jsx';
 import { Combo } from './Combo.jsx';
@@ -15,9 +16,7 @@ const FADE_MAX = 200;
 // floors.json rows: { zone, spec: "rom/dir/file", fourcc }
 async function loadFloors() {
   try {
-    const res = await fetch('lists/floors.json');
-    if (!res.ok) return [];
-    const list = await res.json();
+    const list = await loadListOrNull('floors.json');
     if (!Array.isArray(list)) return [];
     return list
       .filter((f) => f?.spec && f?.fourcc)

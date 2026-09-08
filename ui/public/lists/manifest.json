@@ -1,0 +1,45 @@
+{
+ "generated": "2026-09-08T20:36:06Z",
+ "files": {
+  "characters.json": {
+   "sha256": "7030172799964641c4fa54818ad0f3d2beac1e6745d2de39936626b819c13cf7",
+   "bytes": 5470086
+  },
+  "effects.json": {
+   "sha256": "ae84debc46955df5892b90c96a2d57ebbfbc54fc52c01cab11d7649f8d419e28",
+   "bytes": 423969
+  },
+  "floors.json": {
+   "sha256": "8249ca0f8f558ad7b2581052cac827566e6d40c8af6cdc2f505420b289d64666",
+   "bytes": 4370
+  },
+  "images.json": {
+   "sha256": "e69fcb739758e4adaba6662979cb0a9ed09db777d32914c0fba1132695725a56",
+   "bytes": 156658
+  },
+  "music.json": {
+   "sha256": "c190bbe7a423979e7220a2f05397d2fd8746835939abc7eb03c216ace8c3171f",
+   "bytes": 8781
+  },
+  "npcs.json": {
+   "sha256": "079fa8fa616d287cdf0505ce3a801da412ea69a6e9e4c9bdb442adecd972a374",
+   "bytes": 2684764
+  },
+  "sfx.json": {
+   "sha256": "c27948a5c54cbbd7268e8fcc3ed708933b93f93d117524de0b8b8406f17641c4",
+   "bytes": 387128
+  },
+  "zone_music.json": {
+   "sha256": "e57edfa8819a5737a714e272d9ef2410064e43892e440007fd25fbb0e89c6e11",
+   "bytes": 114896
+  },
+  "zone_npcs.json": {
+   "sha256": "cce24bb358ae6d8f49baeae4fcddee48c336a8351abb800f37c387d991a67407",
+   "bytes": 2950289
+  },
+  "zones.json": {
+   "sha256": "e201701b547f7091936878f3389d3363f377c66ac859054e972b0d296aa59405",
+   "bytes": 68326
+  }
+ }
+}

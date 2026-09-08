@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { loadListOrNull } from '../js/lists.js';
 import { Tooltip } from './Tooltip.jsx';
 
 // Effect categories/entries baked from AltanaViewer's List/Effect CSVs (see
@@ -55,8 +56,7 @@ export function EffectList({ onSelect, selectedPath }) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('lists/effects.json');
-        const json = res.ok ? await res.json() : { categories: [] };
+        const json = (await loadListOrNull('effects.json')) ?? { categories: [] };
         if (!cancelled) {
           effectListUi.data = json;
           setData(json);

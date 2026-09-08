@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { loadListOrNull } from '../js/lists.js';
 import { Tooltip } from './Tooltip.jsx';
 
 const HEIGHT_KEY = 'plcPanelHeight';
@@ -46,9 +47,8 @@ export function PlacementPanel({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('lists/sfx.json');
-        if (!res.ok) return;
-        const data = await res.json();
+        const data = await loadListOrNull('sfx.json');
+        if (!data) return;
         if (!cancelled) setSfxNames(new Map(Object.entries(data.names ?? {})));
       } catch { /* optional */ }
     })();

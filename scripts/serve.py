@@ -271,6 +271,12 @@ class Handler(SimpleHTTPRequestHandler):
             return self._reveal(parse_qs(url.query).get("path", [""])[0])
         if url.path == "/fs/app-latest-release":
             return self._app_latest_release()
+        if url.path == "/fs/lists-dir":
+            return self._text(str(self._lists_dir()))
+        if url.path == "/fs/lists-status":
+            return self._json(self._lists_status())
+        if url.path == "/fs/lists-update":
+            return self._json(self._lists_sync())
         return super().do_GET()
 
     def _app_latest_release(self):
@@ -336,6 +342,126 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.write(body)
         except Exception as e:
             return self._error(e)
+
+    # -- DAT list updates (mirrors src-tauri/src/lists.rs) --------------------
+    #
+    # xi-tools publishes mv/lists/manifest.json; the app replaces any list whose
+    # sha256 no longer matches the copy it holds. Dev mode does the same, so an
+    # update can be exercised in the browser rather than only in a packaged
+    # build. XI_LISTS_RAW points it at a local copy to try one before pushing.
+
+    LISTS_RAW = os.environ.get("XI_LISTS_RAW") or (
+        "https://raw.githubusercontent.com/vekien/xi-tools/main/mv/lists")
+
+    def _lists_dir(self):
+        return ROOT_DIR / ".user-data" / "lists"
+
+    def _lists_baked(self):
+        """The manifest beside the baked lists — this build's own hashes."""
+        try:
+            return json.loads((UI_DIR / "public" / "lists" / "manifest.json")
+                              .read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {"files": {}}
+
+    def _lists_fetch(self, name, timeout=60):
+        import urllib.request
+        req = urllib.request.Request(
+            f"{self.LISTS_RAW}/{name}",
+            headers={"User-Agent": "xi-model-viewer-dev", "Cache-Control": "no-cache"},
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.read()
+
+    def _lists_local_sha(self, name, baked):
+        """sha256 of the copy the app would read: the download, else the baked one.
+
+        The downloaded file is hashed rather than trusted from a record, so a
+        truncated or hand-edited one heals itself on the next boot.
+        """
+        import hashlib
+        p = self._lists_dir() / name
+        if p.is_file():
+            try:
+                return hashlib.sha256(p.read_bytes()).hexdigest()
+            except OSError:
+                pass
+        return (baked.get("files") or {}).get(name, {}).get("sha256")
+
+    def _lists_status(self):
+        """What the app would read right now, per list — no network.
+
+        Settings renders from this, so it must not spend a request just to be
+        opened; the Update button is what goes to the network.
+        """
+        baked = self._lists_baked()
+        d = self._lists_dir()
+        names = set((baked.get("files") or {}))
+        if d.is_dir():
+            names |= {p.name for p in d.glob("*.json") if p.name != "manifest.json"}
+
+        files, total, downloaded = [], 0, 0
+        for name in sorted(names):
+            p = d / name
+            if p.is_file():
+                size, source = p.stat().st_size, "downloaded"
+                downloaded += 1
+            else:
+                size = int((baked.get("files") or {}).get(name, {}).get("bytes") or 0)
+                source = "baked"
+            total += size
+            files.append({"name": name, "bytes": size, "source": source})
+        return {
+            "generated": baked.get("generated"),
+            "dir": str(d),
+            "files": files,
+            "downloaded": downloaded,
+            "bytes": total,
+        }
+
+    def _lists_sync(self):
+        import hashlib
+
+        out = {"updated": [], "bytes": 0, "dir": str(self._lists_dir()), "error": None}
+        try:
+            # 10s like lists.rs's CHECK_TIMEOUT: boot must not wait on a hung
+            # proxy, and the baked lists are already loaded either way.
+            remote = json.loads(self._lists_fetch("manifest.json", timeout=10))
+        except Exception as e:  # noqa: BLE001 - offline is not an error worth raising
+            out["error"] = f"list manifest: {e}"
+            return out
+
+        baked = self._lists_baked()
+        want = remote.get("files") or {}
+        stale = [n for n, f in want.items()
+                 if self._lists_local_sha(n, baked) != f.get("sha256")]
+        if not stale:
+            return out
+
+        target = self._lists_dir()
+        target.mkdir(parents=True, exist_ok=True)
+        failed = []
+        for name in stale:
+            if Path(name).name != name:
+                failed.append(f"{name}: not a plain file name")
+                continue
+            try:
+                body = self._lists_fetch(name)
+                if len(body) != int(want[name].get("bytes") or -1):
+                    raise ValueError(
+                        f"got {len(body)} bytes, manifest says {want[name].get('bytes')}")
+                got = hashlib.sha256(body).hexdigest()
+                if got != want[name].get("sha256"):
+                    raise ValueError(f"sha256 {got} does not match the manifest")
+                part = target / f"{name}.part"
+                part.write_bytes(body)
+                part.replace(target / name)
+                out["updated"].append(name)
+                out["bytes"] += len(body)
+            except Exception as e:  # noqa: BLE001
+                failed.append(f"{name}: {e}")
+        out["error"] = "; ".join(failed) or None
+        return out
 
     def _reveal(self, raw):
         """Dev-mode stand-in for the Tauri reveal_path command."""
@@ -576,6 +702,14 @@ class Handler(SimpleHTTPRequestHandler):
         body = f"not found: {path}".encode()
         self.send_response(404)
         self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _json(self, obj):
+        body = json.dumps(obj).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)

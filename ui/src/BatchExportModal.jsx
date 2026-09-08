@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@headlessui/react';
 import { backend } from '../js/backend.js';
+import { loadList } from '../js/lists.js';
 import { gameCandidates } from '../js/gamePath.js';
 import { parseAudioHeader, toWav, FMT_ATRAC3 } from '../js/audio.js';
 import {
@@ -101,7 +102,7 @@ function loadBatchArgs(store) {
 
 /** Job lists, built from the baked asset lists in `ui/public/lists/`. */
 async function jobsFromNpcs(category) {
-  const data = await (await fetch('lists/npcs.json')).json();
+  const data = await loadList('npcs.json');
   const out = [];
   for (const cat of data.categories ?? []) {
     if (category && cat.name !== category) continue;
@@ -119,7 +120,7 @@ async function jobsFromNpcs(category) {
 }
 
 async function jobsFromCharacters(raceId, slot) {
-  const data = await (await fetch('lists/characters.json')).json();
+  const data = await loadList('characters.json');
   const out = [];
   for (const race of data.races ?? []) {
     if (raceId && race.id !== raceId) continue;
@@ -137,7 +138,7 @@ async function jobsFromCharacters(raceId, slot) {
 }
 
 async function jobsFromZones() {
-  const data = await (await fetch('lists/zones.json')).json();
+  const data = await loadList('zones.json');
   return (data ?? []).map((z) => ({
     // zones.json stores `game/ROM3/5/7.DAT`; the `game/` prefix is display-only.
     path: normRel(String(z.path || '').replace(/^game[\\/]/i, '')),
@@ -331,8 +332,8 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
     (async () => {
       try {
         const [npcs, chars] = await Promise.all([
-          fetch('lists/npcs.json').then((r) => r.json()),
-          fetch('lists/characters.json').then((r) => r.json()),
+          loadList('npcs.json'),
+          loadList('characters.json'),
         ]);
         if (!alive) return;
         setCatalogs({

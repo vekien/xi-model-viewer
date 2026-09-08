@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@headlessui/react';
 import { backend } from '../js/backend.js';
+import { loadList, loadListOrNull, updateListsOnBoot } from '../js/lists.js';
 import { clampUiScale } from '../js/uiScale.js';
 import { gameCandidates, normRel, pathKey, relFromAbs } from '../js/gamePath.js';
 import { baseMotionCompanions, battleSkirtPath, weaponSkillWaistPaths } from '../js/pclists.js';
@@ -46,6 +47,7 @@ import { SkeletonPanel } from './SkeletonPanel.jsx';
 import { TextureModal } from './TextureModal.jsx';
 import { HelpModal } from './HelpModal.jsx';
 import { UpdateModal } from './UpdateModal.jsx';
+import { ListsToast } from './ListsToast.jsx';
 import { LightGizmo, DEFAULT_LIGHT_DIR } from './LightGizmo.jsx';
 
 import { CameraSequencer } from './CameraSequencer.jsx';
@@ -697,7 +699,7 @@ async function buildZoneDatDoc(kind, bytes, relPath, settings, tablesRef) {
   let zoneName = null;
   if (zoneId != null) {
     try {
-      const zones = await (await fetch('lists/zones.json')).json();
+      const zones = await loadList('zones.json');
       zoneName = zones.find((z) => z.id === zoneId)?.name ?? null;
     } catch { /* baked list unavailable */ }
   }
@@ -854,6 +856,23 @@ export default function App({ launch = null }) {
     let alive = true;
     checkForUpdate().then((info) => {
       if (alive && info) setUpdate(info);
+    });
+    return () => { alive = false; };
+  }, [minimal]);
+
+  // DAT lists refreshed from xi-tools, once the boot sync finds something.
+  const [listsUpdated, setListsUpdated] = useState(null);
+  // DAT lists (lists/*.json): the same background shape as the release check,
+  // and for the same reason — the window must finish booting whether GitHub
+  // answers or not. updateListsOnBoot() swallows every failure and resolves to
+  // null, so being offline costs one dropped request and nothing else. Unlike
+  // the release check this DOES run in dev: the comparison is by file hash, so
+  // a dev build asks exactly what a packaged one asks.
+  useEffect(() => {
+    if (minimal) return undefined;   // a zone-preview window is not the place for it
+    let alive = true;
+    updateListsOnBoot().then((info) => {
+      if (alive && info) setListsUpdated(info);
     });
     return () => { alive = false; };
   }, [minimal]);
@@ -3302,8 +3321,7 @@ export default function App({ launch = null }) {
     if (zoneId == null) { setZoneTrack(null); return; }
     if (!zoneMusicRef.current) {
       try {
-        const res = await fetch('lists/zone_music.json');
-        zoneMusicRef.current = res.ok ? await res.json() : {};
+        zoneMusicRef.current = (await loadListOrNull('zone_music.json')) ?? {};
       } catch { zoneMusicRef.current = {}; }
     }
     const entry = zoneMusicRef.current[String(zoneId)];
@@ -3557,7 +3575,7 @@ export default function App({ launch = null }) {
       try {
         const tables = await loadMergedTables(settingsRef.current, dataTablesRef);
         let zonesList = [];
-        try { zonesList = await (await fetch('lists/zones.json')).json(); } catch { /* ok */ }
+        zonesList = (await loadListOrNull('zones.json')) ?? [];
         const bundle = buildZoneDatBundle(rel, tables, zonesList);
         const gp = settingsRef.current.gamePath;
         const src = (bundle.dats?.length ? bundle.dats : [{ key: 'zone', label: 'DAT', rel, fileId: bundle.fileId }])
@@ -4220,7 +4238,7 @@ export default function App({ launch = null }) {
     if (!opts?.zone) return false;
     const raw = String(opts.zone).trim();
     let zones = [];
-    try { zones = await (await fetch('lists/zones.json')).json(); } catch { /* baked list unavailable */ }
+    zones = (await loadListOrNull('zones.json')) ?? [];
 
     let zone;
     if (/^\d+$/.test(raw)) {
@@ -5088,7 +5106,7 @@ export default function App({ launch = null }) {
       try {
         const tables = await loadMergedTables(settings, dataTablesRef);
         let zonesList = [];
-        try { zonesList = await (await fetch('lists/zones.json')).json(); } catch { /* ok */ }
+        zonesList = (await loadListOrNull('zones.json')) ?? [];
         const bundle = buildZoneDatBundle(rel, tables, zonesList);
         if (bundle.zoneId != null) {
           zoneMeta = {
@@ -7385,7 +7403,7 @@ export default function App({ launch = null }) {
         // Prefer the baked zone name when this DAT is a known zone.
         let zone = { id: null, name: rel, path: zonePath };
         try {
-          const zones = await (await fetch('lists/zones.json')).json();
+          const zones = await loadList('zones.json');
           const hit = zones.find((z) => zoneDatRelPath(z.path).toLowerCase() === rel.toLowerCase());
           if (hit) zone = { id: hit.id, name: hit.name, path: hit.path };
         } catch { /* nameless is fine */ }
@@ -10013,6 +10031,8 @@ export default function App({ launch = null }) {
         onClose={() => setExportDone(null)}
         onStatus={(msg) => setStatusText(msg)}
       />
+
+      <ListsToast info={listsUpdated} onClose={() => setListsUpdated(null)} />
 
       <BatchExportModal
         open={batchOpen}

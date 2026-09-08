@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { loadList } from '../js/lists.js';
 import { listArrowHandler, useScrollIntoView } from './useListArrows.js';
 import { Tooltip } from './Tooltip.jsx';
 
@@ -6,9 +7,7 @@ import { Tooltip } from './Tooltip.jsx';
 // path is backslash `ROM…\N.DAT`, relative to the game directory.
 
 async function loadImages() {
-  const res = await fetch('lists/images.json');
-  if (!res.ok) throw new Error(`${res.status} lists/images.json`);
-  return res.json();
+  return loadList('images.json');
 }
 
 export function ImageList({ selectedPath, onSelectImage, onError }) {

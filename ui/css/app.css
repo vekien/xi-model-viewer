@@ -2963,6 +2963,60 @@ button.settings-tab.on .icon { color: var(--accent); }
 @media (max-width: 720px) {
   .settings-cols { grid-template-columns: 1fr; }
 }
+/* A link inside a sentence, as opposed to .help-link's button-shaped block.
+   Without this the browser default (#0000EE) applies, which on these dark
+   panels is close to unreadable. */
+.inline-link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: rgba(77, 163, 255, 0.45);
+}
+.inline-link:hover,
+.inline-link:focus-visible {
+  color: #fff;
+  text-decoration-color: currentColor;
+}
+
+/* --- Settings > DAT Lists -------------------------------------------------- */
+
+/* The two intro panels sit side by side like General's; the table wants the
+   full width, so it spans both columns rather than being squeezed into one. */
+.settings-lists-table-panel { grid-column: 1 / -1; }
+.settings-lists .lists-dir {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  direction: rtl; text-align: left;   /* keep the leaf folder visible when it clips */
+}
+.lists-table {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.lists-row {
+  display: grid;
+  /* Name and size are fixed so the columns line up; the blurb takes the slack. */
+  grid-template-columns: 10.5rem 1fr auto 4.5rem;
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.lists-row:last-child { border-bottom: 0; }
+.lists-name { color: var(--gray-200); font-size: 11.5px; }
+.lists-blurb { color: var(--muted); font-size: 12px; min-width: 0; }
+.lists-size { color: var(--gray-500); font-size: 11px; text-align: right; }
+.lists-src {
+  font-size: 10.5px;
+  text-align: right;
+  color: var(--gray-500);
+}
+/* Only the rows that have moved past the build are worth colouring. */
+.lists-src.updated { color: var(--accent); }
+@media (max-width: 720px) {
+  .lists-row { grid-template-columns: 1fr auto; }
+  .lists-blurb { grid-column: 1 / -1; }
+}
+
 /* Embedded dark group panels — same language as the tab track. */
 .settings-panel {
   min-width: 0;

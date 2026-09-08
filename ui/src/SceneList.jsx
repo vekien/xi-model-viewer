@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@headlessui/react';
+import { loadListOrNull } from '../js/lists.js';
 
 
 // floors.json rows: { zone, spec: "rom/dir/file", fourcc } — the fourcc names a
@@ -7,9 +8,9 @@ import { Button } from '@headlessui/react';
 async function loadFloors() {
   const groups = new Map();   // zone -> [{ spec, fourcc }]
   try {
-    const res = await fetch('lists/floors.json');
-    if (res.ok) {
-      for (const { zone, spec, fourcc } of await res.json()) {
+    const rows = await loadListOrNull('floors.json');
+    if (rows) {
+      for (const { zone, spec, fourcc } of rows) {
         if (!groups.has(zone)) groups.set(zone, []);
         groups.get(zone).push({ spec, fourcc });
       }

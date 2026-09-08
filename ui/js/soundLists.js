@@ -6,6 +6,7 @@
 // rather than being spelled once per caller and drifting apart.
 
 import { backend } from './backend.js';
+import { loadList } from './lists.js';
 
 /** FFXI ships audio across seven sound roots; each aligns with an expansion. */
 export const SOUND_ROOTS = [
@@ -34,8 +35,8 @@ export function rootMatches(group, q) {
 // and don't always equal the header track id, so the key includes the root.
 export async function loadMusicNames() {
   try {
-    const res = await fetch('lists/music.json');
-    if (res.ok) return new Map(Object.entries((await res.json()).names ?? {}));
+    const data = await loadList('music.json');
+    return new Map(Object.entries(data.names ?? {}));
   } catch { /* names are optional */ }
   return new Map();
 }
@@ -91,14 +92,11 @@ export async function scanMusicRoots(gamePath, names) {
 // Effects", …) + partial per-sound titles, from lists/sfx.json.
 export async function loadSfxMeta() {
   try {
-    const res = await fetch('lists/sfx.json');
-    if (res.ok) {
-      const data = await res.json();
-      return {
-        folders: new Map(Object.entries(data.folders ?? {})),   // `<root>_seNNN` -> category label
-        names: new Map(Object.entries(data.names ?? {})),       // 6-digit id -> title
-      };
-    }
+    const data = await loadList('sfx.json');
+    return {
+      folders: new Map(Object.entries(data.folders ?? {})),   // `<root>_seNNN` -> category label
+      names: new Map(Object.entries(data.names ?? {})),       // 6-digit id -> title
+    };
   } catch { /* optional */ }
   return { folders: new Map(), names: new Map() };
 }

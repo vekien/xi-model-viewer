@@ -7,6 +7,8 @@
 // sub, ranged — each (slot << 12) | model id. Sizes 2–7 are doors, elevators,
 // ships, automatons and chocobos: not player-space models, so no entry.
 
+import { loadListOrNull } from './lists.js';
+
 const SLOT_KEYS = ['head', 'body', 'hands', 'legs', 'feet', 'main', 'sub', 'range'];
 
 // look race byte → characters.json race id. Tarutaru is one viewer race for
@@ -146,9 +148,7 @@ let characterDataPromise = null;
 /** lists/zone_npcs.json, fetched once per session (null when it is missing). */
 export function loadZoneNpcData() {
   if (!zoneNpcDataPromise) {
-    zoneNpcDataPromise = fetch('lists/zone_npcs.json')
-      .then((res) => (res.ok ? res.json() : null))
-      .catch(() => null)
+    zoneNpcDataPromise = loadListOrNull('zone_npcs.json')
       .then((data) => {
         if (!data) zoneNpcDataPromise = null;   // let a later toggle retry
         return data;
@@ -160,9 +160,7 @@ export function loadZoneNpcData() {
 /** lists/characters.json (race skeletons + gear by model id), fetched once. */
 export function loadCharacterData() {
   if (!characterDataPromise) {
-    characterDataPromise = fetch('lists/characters.json')
-      .then((res) => (res.ok ? res.json() : null))
-      .catch(() => null)
+    characterDataPromise = loadListOrNull('characters.json')
       .then((data) => {
         if (!data) characterDataPromise = null;
         return data;

@@ -387,6 +387,39 @@ export const backend = {
     }
   },
 
+  /**
+   * Where downloaded asset lists live (`<user data>/lists`). Always a path,
+   * whether or not anything has been downloaded yet.
+   */
+  async listsDir() {
+    if (isTauri()) return tauriInvoke('lists_dir');
+    const res = await fetch('/fs/lists-dir');
+    if (!res.ok) throw new Error(await res.text());
+    return (await res.text()).trim();
+  },
+
+  /**
+   * Which lists are in effect and where each comes from, from disk alone.
+   * `{ generated, dir, files: [{ name, bytes, source }], downloaded, bytes }`.
+   */
+  async listsStatus() {
+    if (isTauri()) return tauriInvoke('lists_status');
+    const res = await fetch('/fs/lists-status', { cache: 'no-store' });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  /**
+   * Fetch xi-tools' list manifest and replace anything whose contents moved.
+   * `{ updated: string[], bytes, dir, error }` — see js/lists.js.
+   */
+  async listsUpdate() {
+    if (isTauri()) return tauriInvoke('lists_update');
+    const res = await fetch('/fs/lists-update', { cache: 'no-store' });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
   /** Opens a URL in the system browser. */
   async openUrl(url) {
     if (isTauri()) return tauriInvoke('open_url', { url });

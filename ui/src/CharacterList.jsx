@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { loadList } from '../js/lists.js';
 import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
 
@@ -442,9 +443,7 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
     if (!enabled || races !== null) return;
     (async () => {
       try {
-        const res = await fetch('lists/characters.json');
-        if (!res.ok) throw new Error(`${res.status} characters.json`);
-        const data = await res.json();
+        const data = await loadList('characters.json');
         raceData.current = new Map(data.races.map((r) => [r.id, r]));
         sectionCfg.current = {
           ...DEFAULT_SECTIONS,
