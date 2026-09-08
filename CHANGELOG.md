@@ -10,6 +10,10 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-09-08
+
+[Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.2.2...v1.3.0)
+
 ### Camera
 - **View › Toggle Orthographic**, next to Toggle WASD, swaps the viewport to an orthographic projection: parallel lines stay parallel and nothing shrinks with depth, which is what you want for a flat elevation or an isometric shot of a zone. It is seeded off the framing already on screen, so the toggle flattens the view rather than jumping it, and it survives a restart like the other View toggles
 - Everything still drives it. Orbit, pan and cursor-anchored wheel zoom work as before, object picking and the placement gizmos follow the parallel rays, and WASD still flies — with W/S zooming instead of dollying, because in ortho a move along the view axis draws the identical picture. Fly speed keeps its meaning there: how much apparent distance a second closes
