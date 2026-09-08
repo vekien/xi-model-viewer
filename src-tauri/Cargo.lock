@@ -5156,7 +5156,7 @@ dependencies = [
 
 [[package]]
 name = "xi-model-viewer"
-version = "1.0.1"
+version = "1.2.2"
 dependencies = [
  "dotenvy",
  "reqwest 0.12.28",
