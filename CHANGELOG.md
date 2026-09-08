@@ -10,6 +10,19 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ## [Unreleased]
 
+### Camera
+- **View › Toggle Orthographic**, next to Toggle WASD, swaps the viewport to an orthographic projection: parallel lines stay parallel and nothing shrinks with depth, which is what you want for a flat elevation or an isometric shot of a zone. It is seeded off the framing already on screen, so the toggle flattens the view rather than jumping it, and it survives a restart like the other View toggles
+- Everything still drives it. Orbit, pan and cursor-anchored wheel zoom work as before, object picking and the placement gizmos follow the parallel rays, and WASD still flies — with W/S zooming instead of dollying, because in ortho a move along the view axis draws the identical picture. Fly speed keeps its meaning there: how much apparent distance a second closes
+
+### Lists
+- **The DAT lists now update themselves.** Everything under `lists/` — races, gear, NPCs, zones, music, sound effects, effects, images — is baked into the .exe, so until now a newly-found animation or a corrected gear row reached nobody until the next build. xi-tools authors these lists and `xi mv update` now publishes a manifest of checksums beside them; the viewer fetches that at boot, replaces any list whose contents have moved into `%LOCALAPPDATA%\XiModelViewer\lists`, and reads those in preference to its own. A banner names the lists that changed and offers a Reload, and stays until dismissed
+- Nothing to keep in step on either side: the comparison is by file checksum, so there is no version to bump, a list reverted upstream goes back to matching on its own, and a download that gets corrupted is simply re-fetched next boot. Every file is verified against its checksum and byte count before it replaces anything, and written through a temporary name so a failure leaves the previous copy intact
+- The check is capped at 10 seconds and every failure is swallowed: offline, behind a proxy or on a captive portal, boot is not held up and the baked lists are used exactly as before. The session also stays on whatever it started with — a download landing mid-boot never changes what is already on screen, so two panels opened seconds apart cannot disagree; the banner's Reload is what switches over
+- Release builds now bake the lists straight from xi-tools rather than whatever was last copied into this repo, so a fresh install is already current on first launch instead of downloading 12 MB before it can show anything
+
+### Characters
+- The animation **Category** list has a new **WS (Unreleased)** entry, pinned last in the everyday group just above the rule. It holds the extended weapon-skill bank — animations 256–271 in `FFXiMain.dll`, 55 clips across the seven PC races — which the client can play but retail has never named: the ability name table has no name for a single one of those slots. They are listed by animation number (the number `!injectaction 3 N` takes) rather than under a guessed skill name, and each race lists only the slots it actually has, since the rest of its bank points at the `dumm` placeholder — thirteen for Hume Female, three for Elvaan Female. Four of them already sat under **NPC WS** with names that were only ever guesses (`ROM/204/17` as "Warden Of Terror"); those rows are untouched for now
+
 ## [1.2.2] — 2026-09-08
 
 [Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.2.1...v1.2.2)
