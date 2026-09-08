@@ -63,8 +63,15 @@ const DEFAULT_SECTIONS = { order: [], standardLabel: 'Standard', other: null };
  *  into the N's. Numeric collation keeps the id-style labels ("29/21",
  *  "183/67") in count order instead of 1-before-2-before-9. */
 const isNone = (it) => it.label?.toLowerCase() === 'none';
-/** Everyday animation categories, listed first in this order; the rest follow A-Z. */
-const PINNED_ACTION_GROUPS = ['General', 'Basic', 'Battle', 'Emote'];
+/**
+ * Everyday animation categories, listed first in this order; the rest follow A-Z.
+ *
+ * "WS (Unreleased)" is the extended weapon-skill bank (animations 256-271, see
+ * xi-tools docs/anim/weapon-skills.md) — clips the client can play that retail
+ * never named. It is pinned last so the find-me-anything categories stay at the
+ * top and the curiosity sits right above the rule, not buried in the W's.
+ */
+const PINNED_ACTION_GROUPS = ['General', 'Basic', 'Battle', 'Emote', 'WS (Unreleased)'];
 
 /**
  * True names for the battle stances, per race, by weapon animation type.
