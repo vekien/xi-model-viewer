@@ -608,6 +608,15 @@ function parseInfo(r, sec) {
     weaponAnimationType: b[3],
     weaponAnimationSubType: b[4],
     standardJointIndex: b[6] === 0xff ? null : b[6],
+    // Body armour: which waist (body-slot 2) pack block the client pairs with
+    // it — AltanaView's BODYinfo, byte 0x19 of the section. 2 selects the
+    // second block of every waist pack family (race +4 not +3, battle skirt
+    // +2·n not +n, weapon-skill companion B not A): those clips drive all ten
+    // waist joints (4, 5, 18–25), where the first block keys six and pins
+    // 5 / 21 / 23 / 25 to bind. Long-skirted bodies (Seer's Tunic, robes) are
+    // skinned to exactly those pinned joints, so the first block leaves part
+    // of the skirt frozen while the rest animates — the classic clip-through.
+    waistVariant: b[9] === 0xff ? 0 : b[9],
   };
 }
 

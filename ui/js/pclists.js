@@ -84,9 +84,13 @@ export function specLabel(path) {
 // config (the +2/+4 files are the left-weapon / alternate-body variants this
 // viewer doesn't model). Returns the upper + waist companion motion DATs to merge
 // alongside the base; the loader skips any that don't exist in a given client.
-export function baseMotionCompanions(basePath) {
+//
+// `waistVariant` is the equipped body's info byte 9 (parseInfo.waistVariant,
+// AltanaView BODYinfo): 2 takes the +4 waist pack instead of +3, exactly as
+// CModel::LoadMotion does. xim reads +4 unconditionally (Model.kt preload).
+export function baseMotionCompanions(basePath, waistVariant = 0) {
   const bump = (n) => basePath.replace(/(\d+)(\.DAT)$/i, (_, f, ext) => `${parseInt(f, 10) + n}${ext}`);
-  return [bump(1), bump(3)];
+  return [bump(1), bump(waistVariant === 2 ? 4 : 3)];
 }
 
 // ---------------------------------------------------------------------------
@@ -134,25 +138,85 @@ export function motFileNoToPath(fileNo) {
 /**
  * Battle-skirt (waist / btl2) companion for a main battle DAT.
  * Returns null when the path isn't in a known battle block for the race.
+ *
+ * Two skirt blocks follow the main packs: +num for most bodies, +2·num when
+ * the body's info byte 9 is 2 (CModel::LoadMotion `BODYinfo == 2`). The
+ * second block keys every waist joint; the first pins 5 / 21 / 23 / 25.
  */
-export function battleSkirtPath(battlePath, raceId) {
+export function battleSkirtPath(battlePath, raceId, waistVariant = 0) {
   const idx = PC_RACE_IDX[raceId];
   if (idx == null) return null;
   const n = pathToMotFileNo(battlePath);
   if (n == null) return null;
+  const k = waistVariant === 2 ? 2 : 1;
   const b = MOTION_B_BASE[idx];
   const bn = MOTION_B_NUM[idx];
-  if (n >= b && n < b + bn) return motFileNoToPath(n + bn);
+  if (n >= b && n < b + bn) return motFileNoToPath(n + k * bn);
   const b2 = MOTION_B2_BASE[idx];
   const b2n = MOTION_B2_NUM[idx];
   // Main hand-to-hand / single special file, or the +1 katana twin.
-  if (n >= b2 && n < b2 + Math.max(b2n, 2)) return motFileNoToPath(n + b2n);
+  if (n >= b2 && n < b2 + Math.max(b2n, 2)) return motFileNoToPath(n + k * b2n);
   return null;
 }
 
 /** skirtByType[i] companion for each battleByType[i] entry (nulls preserved). */
-export function battleSkirtTable(battleByType, raceId) {
-  return (battleByType ?? []).map((p) => (p ? battleSkirtPath(p, raceId) : null));
+export function battleSkirtTable(battleByType, raceId, waistVariant = 0) {
+  return (battleByType ?? []).map((p) => (p ? battleSkirtPath(p, raceId, waistVariant) : null));
+}
+
+// ---------------------------------------------------------------------------
+// Weapon-skill waist companions — the FFXiMain.dll weapon-skill banks
+// (xi-tools docs/anim/weapon-skills.md, `xi anim ws`).
+//
+// A weapon-skill DAT (Tachi: Gekko, ROM\101\83 on Hume Female) ships only the
+// lower + upper body parts of its clip (wsg0 / wsg1) and a `main` routine that
+// calls `wsg?`. The waist part (wsg2) lives in two companion DATs the client
+// finds by file id: each bank is a body block of `slots` ids per race followed
+// by companion block A (body + slots) and companion block B (body + 2·slots).
+// Which one is paired with the look follows the body's waist variant, the
+// same rule as every other waist pack family. Without a companion the routine
+// never drives joints 4 / 5 / 18–25, and whatever the battle stance underlays
+// there plays through the swing — a skirt standing in the idle sway while the
+// legs lunge.
+//
+// The per-race bases are stable across DLL builds (only the tables' offsets
+// move); these are the values read from the install's FFXiMain.dll.
+// ---------------------------------------------------------------------------
+
+const WS_BANKS = [
+  // primary bank: animation 0–255
+  { slots: 256, body: [33227, 33995, 34763, 35531, 36299, 36299, 37067, 37835] },
+  // extended bank: animation 256–271
+  { slots: 16, body: [61451, 61499, 61547, 61595, 61643, 61643, 61691, 61739] },
+];
+
+/** Viewer/OS path → the FTABLE map's key (`ROM/101/83.DAT`, uppercase). */
+function fileTableKey(path) {
+  const m = String(path || '').replace(/\//g, '\\').match(/(ROM\d*)\\(\d+)\\(\d+)\.DAT$/i);
+  return m ? `${m[1]}/${m[2]}/${m[3]}.DAT`.toUpperCase() : null;
+}
+
+/**
+ * `{ a, b }` waist companion DATs (viewer `ROM\…` form, either may be null
+ * when its id is unregistered) for a weapon-skill DAT, or null when the path
+ * is not a weapon-skill body slot. `tables` is the merged FTABLE map
+ * (`{ byFid, byPath }`). Race windows never overlap — every race's body block
+ * is 3·slots wide including its companions — so no race id is needed.
+ */
+export function weaponSkillWaistPaths(wsPath, tables) {
+  const key = fileTableKey(wsPath);
+  const fid = key != null ? tables?.byPath?.get(key) : null;
+  if (fid == null) return null;
+  const toPath = (dat) => (dat ? dat.replace(/\//g, '\\') : null);
+  for (const bank of WS_BANKS) {
+    for (const body of bank.body) {
+      if (fid < body || fid >= body + bank.slots) continue;
+      const a = toPath(tables.byFid.get(fid + bank.slots));
+      const b = toPath(tables.byFid.get(fid + 2 * bank.slots));
+      return a || b ? { a, b } : null;
+    }
+  }
+  return null;
 }
 
 /** index.csv -> [{ id, label, base }] */

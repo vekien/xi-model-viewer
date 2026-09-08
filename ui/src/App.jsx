@@ -3,7 +3,7 @@ import { Button } from '@headlessui/react';
 import { backend } from '../js/backend.js';
 import { clampUiScale } from '../js/uiScale.js';
 import { gameCandidates, normRel, pathKey, relFromAbs } from '../js/gamePath.js';
-import { battleSkirtPath } from '../js/pclists.js';
+import { baseMotionCompanions, battleSkirtPath, weaponSkillWaistPaths } from '../js/pclists.js';
 import { animDisplayName, groupAnimations, matchAnimRef, mergeModels, parseEntity, resolveScheduleClip } from '../js/dat.js';
 import { Renderer } from '../js/renderer.js';
 import { FileTree } from './FileTree.jsx';
@@ -240,6 +240,98 @@ function graftIdleWaist(grouped) {
     if (grafted) g.clip = { ...g.clip, jointTracks: jt };
   }
   return grouped;
+}
+
+/**
+ * Merge the waist packs (body-region slot 2) the client pairs with a look into
+ * `parsed`, next to the DATs already read. Three families, one rule:
+ *
+ *   race skirt     base +3 / +4               idl2, wlk2, run2, …
+ *   battle skirt   MotionB + n / + 2·n        btl2, at02, at12, at22, …
+ *   weapon skill   body + slots / + 2·slots   wsg2 (the FFXiMain WS banks)
+ *
+ * The first block of each keys six waist joints and pins 5 / 21 / 23 / 25 to
+ * bind; the second keys all ten. Which applies is the equipped body's
+ * `waistVariant` (info byte 9, AltanaView BODYinfo): 2 → second block. A
+ * long-skirted body (Seer's Tunic) is skinned to exactly the joints the first
+ * block pins, so pairing it with that block froze half the skirt while the
+ * legs moved — and the viewer always took the first block.
+ *
+ * The weapon-skill companion is the piece that was never loaded at all: a
+ * skill's DAT ships wsg0 + wsg1 only, so `wsg?` never touched the waist and
+ * the battle-stance underlay played its idle sway through the swing (Tachi:
+ * Gekko's skirt standing in the stance while the legs lunged). The client
+ * resolves it by file id, which is what the merged FTABLE map is for; with no
+ * map (`tables` null) the lookup is skipped.
+ *
+ * `parse1(rel, true)` reads game/pivot only — motion packs never come from HD.
+ */
+async function mergeWaistPacks({
+  parsed, parse1, settings, weaponSlots, battleTable, skirtByType, raceId, parts, focusPaths, tables,
+}) {
+  const key = (p) => pathKey(p, settings);
+  const has = (p) => parsed.some((e) => key(e.path) === key(p));
+  const loadAnimDat = async (relPath, label) => {
+    if (!relPath || has(relPath)) return;
+    try { parsed.push(await parse1(relPath, true)); }
+    catch (err) { console.warn(`${label} ${relPath}:`, err); }
+  };
+  const partPaths = (k) => parts?.find((p) => p.key === k)?.paths ?? [];
+  const bodyKeys = new Set(partPaths('body').map(key));
+  const body = parsed.find((e) => bodyKeys.has(key(e.path)))?.model;
+  const variant = body?.info?.waistVariant ?? 0;
+
+  // Race skirt: the composer lists the +3 pack (motionExtra). Swap it for +4
+  // in place so the merge order — and with it the skeleton source — holds.
+  const raceBase = partPaths('race')[0];
+  if (variant === 2 && raceBase) {
+    const rel = relFromAbs(raceBase, settings);
+    const [, first] = baseMotionCompanions(rel);
+    const [, second] = baseMotionCompanions(rel, 2);
+    const at = parsed.findIndex((e) => key(e.path) === key(first));
+    if (at >= 0 && !has(second)) {
+      try { parsed[at] = await parse1(second, true); }
+      catch (err) { console.warn(`race skirt ${second}:`, err); }
+    }
+  }
+
+  // The right battle idle depends on the equipped weapon's animation type,
+  // only known after parsing it — resolve + merge that battle DAT now so the
+  // weapon rests in its own stance (e.g. a greatsword held two-handed), not
+  // the hand-to-hand fists idle. Non-focus, so it never enters the lists.
+  // Waist btl2 lives in a parallel skirt pack (old viewer MotionB+num+idx /
+  // xim getSkirtBattleAnimationResource) — without it mid-body freezes.
+  if (battleTable && weaponSlots?.main?.length) {
+    const mainSet = new Set(weaponSlots.main.map(key));
+    const weapon = parsed.find((e) => mainSet.has(key(e.path)))?.model;
+    const type = weapon?.info?.weaponAnimationType;
+    const rel = type != null ? battleTable[type] : null;
+    if (rel) {
+      await loadAnimDat(rel, 'battle idle');
+      // A baked skirtByType (`xi mv update`) is the first block, so it only
+      // stands for the first variant; otherwise MotionB + k·num.
+      let skirt = (variant !== 2 && skirtByType && type != null) ? skirtByType[type] : null;
+      if (!skirt) {
+        const races = ['HumeM', 'HumeF', 'ElvaanM', 'ElvaanF', 'Tarutaru', 'TaruM', 'Mithra', 'Galka'];
+        if (raceId) races.unshift(raceId);
+        for (const rid of races) {
+          skirt = battleSkirtPath(rel, rid, variant);
+          if (skirt) break;
+        }
+      }
+      await loadAnimDat(skirt, 'battle skirt');
+    }
+  }
+
+  // Weapon-skill waist companion for the action's own schedule DATs.
+  if (tables) {
+    for (const p of focusPaths ?? []) {
+      const ws = weaponSkillWaistPaths(relFromAbs(p, settings), tables);
+      if (!ws) continue;
+      await loadAnimDat(variant === 2 ? (ws.b ?? ws.a) : (ws.a ?? ws.b), 'weapon-skill waist');
+    }
+  }
+  return variant;
 }
 
 /**
@@ -1983,40 +2075,18 @@ export default function App({ launch = null }) {
       if (parsed.length === 0) throw new Error('no readable DATs');
       if (showOverlay) stepLoad('Building model…');
 
-      // The right battle idle depends on the equipped weapon's animation type,
-      // only known after parsing it — resolve + merge that battle DAT now so the
-      // weapon rests in its own stance (e.g. a greatsword held two-handed), not
-      // the hand-to-hand fists idle. Non-focus, so it never enters the lists.
-      // Battle packs are animation DATs → game/pivot only (never HD).
-      // Waist btl2 lives in a parallel skirt pack (old viewer MotionB+num+idx /
-      // xim getSkirtBattleAnimationResource) — without it mid-body freezes.
-      if (battleTable && weaponSlots?.main?.length) {
-        const mainSet = new Set(weaponSlots.main.map((p) => pathKey(p, settingsRef.current)));
-        const weapon = parsed.find((e) => mainSet.has(pathKey(e.path, settingsRef.current)))?.model;
-        const type = weapon?.info?.weaponAnimationType;
-        const rel = type != null ? battleTable[type] : null;
-        const loadAnimDat = async (relPath, label) => {
-          if (!relPath) return;
-          const key = pathKey(relPath, settingsRef.current);
-          if (parsed.some((e) => pathKey(e.path, settingsRef.current) === key)) return;
-          try { parsed.push(await parse1(relPath, true)); }
-          catch (err) { console.warn(`${label} ${relPath}:`, err); }
-        };
-        if (rel) {
-          await loadAnimDat(rel, 'battle idle');
-          // skirtByType[type] from bake; else MotionB+num+idx (old viewer / xim).
-          let skirt = (skirtByType && type != null) ? skirtByType[type] : null;
-          if (!skirt) {
-            const races = ['HumeM', 'HumeF', 'ElvaanM', 'ElvaanF', 'Tarutaru', 'TaruM', 'Mithra', 'Galka'];
-            if (opts.raceId) races.unshift(opts.raceId);
-            for (const rid of races) {
-              skirt = battleSkirtPath(rel, rid);
-              if (skirt) break;
-            }
-          }
-          await loadAnimDat(skirt, 'battle skirt');
-        }
+      // Battle stance + the three waist packs (see mergeWaistPacks). Weapon
+      // skills are resolved by file id, so this needs the FTABLE map — read
+      // once per session and cached; a failed read just skips that lookup.
+      let tables = null;
+      if (focusPaths?.length) {
+        try { tables = await loadMergedTables(settingsRef.current, dataTablesRef); }
+        catch (err) { console.warn('file tables unavailable, weapon-skill waist skipped:', err); }
       }
+      await mergeWaistPacks({
+        parsed, parse1, settings: settingsRef.current, weaponSlots, battleTable, skirtByType,
+        raceId: opts.raceId ?? null, parts, focusPaths, tables,
+      });
       if (!stillCurrent()) { releaseOverlay(); return; }
       const model = parsed.length === 1 ? parsed[0].model : mergeModels(parsed.map((e) => e.model), displayName);
       // Fishing rod: a rigged prop (own skeleton + bend clips), grafted onto
@@ -6258,28 +6328,16 @@ export default function App({ launch = null }) {
     }
     if (!parsed.length) throw new Error('no readable DATs');
     const weaponSlots = entry.weaponSlots ?? null;
-    if (entry.battleTable && weaponSlots?.main?.length) {
-      const mainSet = new Set(weaponSlots.main.map((p) => pathKey(p, settings)));
-      const weapon = parsed.find((e) => mainSet.has(pathKey(e.path, settings)))?.model;
-      const type = weapon?.info?.weaponAnimationType;
-      const rel = type != null ? entry.battleTable[type] : null;
-      const loadAnimDat = async (relPath) => {
-        if (!relPath) return;
-        const key = pathKey(relPath, settings);
-        if (parsed.some((e) => pathKey(e.path, settings) === key)) return;
-        try { parsed.push(await parse1(relPath, true)); } catch (err) { console.warn('actor battle DAT', relPath, err); }
-      };
-      if (rel) {
-        await loadAnimDat(rel);
-        let skirt = (entry.skirtByType && type != null) ? entry.skirtByType[type] : null;
-        if (!skirt) {
-          const races = ['HumeM', 'HumeF', 'ElvaanM', 'ElvaanF', 'Tarutaru', 'TaruM', 'Mithra', 'Galka'];
-          if (entry.raceId) races.unshift(entry.raceId);
-          for (const rid of races) { skirt = battleSkirtPath(rel, rid); if (skirt) break; }
-        }
-        await loadAnimDat(skirt);
-      }
+    let tables = null;
+    if (entry.focusPaths?.length) {
+      try { tables = await loadMergedTables(settings, dataTablesRef); }
+      catch (err) { console.warn('file tables unavailable, weapon-skill waist skipped:', err); }
     }
+    await mergeWaistPacks({
+      parsed, parse1, settings, weaponSlots,
+      battleTable: entry.battleTable ?? null, skirtByType: entry.skirtByType ?? null,
+      raceId: entry.raceId ?? null, parts: entry.parts ?? null, focusPaths: entry.focusPaths ?? null, tables,
+    });
     const model = parsed.length === 1 ? parsed[0].model : mergeModels(parsed.map((e) => e.model), entry.name);
     if (entry.rodPaths?.length && model.skeleton) {
       for (const rp of entry.rodPaths) {
