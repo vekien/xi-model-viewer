@@ -382,8 +382,11 @@ jobs:
             # which is the thing this leg exists to prove. On a .deb leg they
             # stay out entirely, so the package's own Depends have to pull them.
             if [ "${{ matrix.package }}" = "appimage" ]; then
+              # libgles2 is not optional decoration: without libGLESv2.so.2 the
+              # app comes all the way up — window, React, IPC — and paints an
+              # entirely black screen.
               apt-get install -y --no-install-recommends \
-                libgtk-3-0 libegl1 libgl1-mesa-dri libglx-mesa0
+                libgtk-3-0 libegl1 libgles2 libgl1-mesa-dri libglx-mesa0
             fi
           else
             pacman -Syu --noconfirm --needed \

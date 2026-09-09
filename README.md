@@ -283,10 +283,13 @@ scripts/linux_smoke_test.sh src-tauri/target/release/xi-model-viewer --screensho
 ```
 
 It waits for a window titled *XI Model Viewer* **and** for the app to create its
-data directory. The second half is the point: that directory is created by the
-`lists_update` command, which only runs because React mounted inside the WebView
-and called it — so watching it appear proves the whole stack came up, where "the
-process is still running" would pass a build whose WebView never painted.
+data directory, and then checks that the frame it captured is not a flat colour.
+Each half rules out a way of passing while broken. The data directory is created
+by the `lists_update` command, which only runs because React mounted inside the
+WebView and called it, so "the process is still running" cannot pass for it. And
+because JS will happily run behind a black screen — the AppImage did exactly
+that on a container missing `libGLESv2` — the screenshot is graded rather than
+merely filed.
 
 Browser dev mode (no Rust):
 

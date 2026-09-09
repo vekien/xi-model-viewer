@@ -11,7 +11,9 @@
 # the distro's libraries, GTK opened a window, WebKit loaded the frontend
 # embedded in the binary, React mounted, and an IPC call round-tripped back into
 # Rust. "Still running after 10 seconds" proves none of that — a Tauri process
-# whose WebView never painted sits there quite happily.
+# whose WebView never painted sits there quite happily. And since JS can run
+# behind a black screen, the frame it grabs at the end has to actually vary
+# before this reports a pass.
 #
 # Needs Xvfb and xdotool. ImageMagick's `import` is optional and only used for
 # --screenshot.
@@ -114,19 +116,43 @@ if command -v dbus-daemon >/dev/null 2>&1; then
     fi
 fi
 
-# A screenshot of a failure is worth more than one of a success — a blank window
-# and a window that never appeared look identical in a log and nothing alike in
-# a picture — so this is called on the way out either way.
+# Always grab a frame, whether or not one was asked to be kept: it is the
+# evidence on the way out of a failure, and the paint check below reads it on
+# the way out of a success. A blank window and a window that never appeared look
+# identical in a log and nothing alike in a picture.
 capture() {
+    command -v import >/dev/null 2>&1 || {
+        echo "  screenshot: skipped (ImageMagick's 'import' not installed)" >&2; return 0; }
+    import -window root -display "$DISPLAY" "$WORK/frame.png" 2>/dev/null || {
+        echo "  screenshot: import failed" >&2; return 0; }
     [ -n "$SHOT" ] || return 0
-    mkdir -p "$(dirname "$SHOT")" || return 0
-    if command -v import >/dev/null 2>&1; then
-        import -window root -display "$DISPLAY" "$SHOT" 2>/dev/null \
-            && echo "  screenshot: $SHOT" \
-            || echo "  screenshot: import failed" >&2
-    else
-        echo "  screenshot: skipped (ImageMagick's 'import' not installed)" >&2
+    mkdir -p "$(dirname "$SHOT")" && cp "$WORK/frame.png" "$SHOT" \
+        && echo "  screenshot: $SHOT"
+}
+
+# The last way to pass while being broken. A window that maps and a frontend
+# that reaches the backend still leaves WebKit free to paint nothing at all, and
+# the app then sits there looking perfectly healthy: this is not hypothetical,
+# the AppImage did exactly that on a container without libGLESv2, running JS and
+# IPC the whole time behind a black screen. So grade the frame rather than
+# merely filing it. A real render of this UI scores about 0.06; a flat image
+# scores 0, and ImageMagick reports a uniform non-black one as "-nan", which the
+# filter below folds into the same answer.
+BLANK_FLOOR=0.01
+painted() {
+    [ -s "$WORK/frame.png" ] || return 0          # no frame, nothing to claim
+    command -v convert >/dev/null 2>&1 || return 0
+    sd="$(convert "$WORK/frame.png" -colorspace Gray \
+          -format '%[fx:standard_deviation]' info: 2>/dev/null)"
+    case "$sd" in ''|*[!0-9.eE+-]*) sd=0 ;; esac
+    if awk -v v="$sd" -v f="$BLANK_FLOOR" 'BEGIN { exit !(v + 0 >= f) }'; then
+        echo "  painted:  yes (frame varies, sigma $sd)"
+        return 0
     fi
+    echo "FAIL: the window opened and the frontend ran, but nothing was painted." >&2
+    echo "  The frame is flat (sigma $sd). WebKit came up and rendered nothing —" >&2
+    echo "  usually a missing GL library. Check the output below." >&2
+    return 1
 }
 
 echo "Launching $(basename "$APP") on $DISPLAY (timeout ${TIMEOUT}s)"
@@ -170,12 +196,16 @@ if ! kill -0 "$APP_PID" 2>/dev/null; then
 fi
 
 geom="$(xdotool getwindowgeometry "$win" 2>/dev/null | tr '\n' ' ' | tr -s ' ')"
-echo "PASS"
 echo "  window:   $win — $geom"
 echo "  frontend: created $MARKER ($(ls -A "$MARKER" | wc -l) entries)"
-
 capture
 
+if ! painted; then
+    echo "--- output ---" >&2; tail -n 40 "$WORK/app.log" >&2
+    exit 1
+fi
+
+echo "PASS"
 if [ -s "$WORK/app.log" ]; then
     echo "--- output ---"
     tail -n 20 "$WORK/app.log"
