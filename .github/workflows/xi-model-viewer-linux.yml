@@ -353,11 +353,21 @@ jobs:
             apt-get update
             apt-get install -y --no-install-recommends \
               ca-certificates git xvfb xdotool imagemagick dbus-x11 \
-              libgl1-mesa-dri desktop-file-utils
+              desktop-file-utils
+            # The GTK stack and the GL drivers go in only on the AppImage legs.
+            # An AppImage is built against a desktop and deliberately leaves
+            # those to the system — a container with literally nothing in it is
+            # not a machine anybody runs. webkit2gtk stays absent either way,
+            # which is the thing this leg exists to prove. On a .deb leg they
+            # stay out entirely, so the package's own Depends have to pull them.
+            if [ "${{ matrix.package }}" = "appimage" ]; then
+              apt-get install -y --no-install-recommends \
+                libgtk-3-0 libegl1 libgl1-mesa-dri libglx-mesa0
+            fi
           else
             pacman -Syu --noconfirm --needed \
               ca-certificates git xorg-server-xvfb xdotool imagemagick dbus \
-              mesa gtk3
+              gtk3 mesa libglvnd
           fi
 
       - name: Checkout repository
@@ -388,6 +398,38 @@ jobs:
             chmod +x dist/xi-model-viewer_*_amd64.AppImage
             echo "APP=$(ls dist/xi-model-viewer_*_amd64.AppImage)" >> "$GITHUB_ENV"
           fi
+
+      # Deterministic, and it needs no display: does everything the AppImage
+      # carries actually resolve against this distro? A library it left to the
+      # system that the system does not have is the failure that makes an
+      # AppImage useless on Arch, and it is invisible until someone runs it.
+      - name: Check the AppImage resolves here
+        if: matrix.package == 'appimage'
+        run: |
+          set -euo pipefail
+          dir=$(mktemp -d)
+          cp "$APP" "$dir/app.AppImage"
+          (cd "$dir" && ./app.AppImage --appimage-extract >/dev/null)
+          root="$dir/squashfs-root"
+          export LD_LIBRARY_PATH="$root/usr/lib:$root/usr/lib/x86_64-linux-gnu"
+
+          missing=0
+          for f in "$root/usr/bin/xi-model-viewer" \
+                   "$root/usr/lib/libwebkit2gtk-4.1.so.0" \
+                   "$root"/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKit*Process; do
+            if [ ! -e "$f" ]; then
+              echo "::error::not in the AppImage at all: $f"
+              missing=1
+              continue
+            fi
+            echo "--- $(basename "$f")"
+            if ldd "$f" | grep 'not found'; then
+              echo "::error::$(basename "$f") has libraries this distro cannot supply"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then exit 1; fi
+          echo "Every library the AppImage needs resolves on ${{ matrix.name }}."
 
       - name: Launch it
         run: scripts/linux_smoke_test.sh "$APP" --timeout 180 --screenshot "shots/${{ matrix.slug }}.png"

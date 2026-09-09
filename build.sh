@@ -19,7 +19,7 @@ for arg in "$@"; do
     case "$arg" in
         --bundle)     BUNDLE=1 ;;
         --no-reveal)  REVEAL=0 ;;
-        -h|--help)    sed -n '2,10p' "${BASH_SOURCE[0]}"; exit 0 ;;
+        -h|--help)    sed -n '2,9p' "${BASH_SOURCE[0]}"; exit 0 ;;
         *) echo "Unknown option: $arg" >&2; exit 2 ;;
     esac
 done
