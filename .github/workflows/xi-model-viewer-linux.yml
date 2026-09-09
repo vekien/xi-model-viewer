@@ -7,18 +7,26 @@ run-name: Linux build — ${{ inputs.version || github.ref_name }}
 # dependencies or a bundle that carries them. This builds both — a .deb for the
 # Ubuntu/Mint side and an AppImage for everything else, Manjaro included — and
 # then proves each one actually opens on the distros people run.
+#
+# It publishes nothing. xi-model-viewer-release.yml calls it as part of cutting a
+# release, and attaches what it produces alongside the .exe on the one release
+# that dispatch creates; on a push it is plain CI, so Linux breakage surfaces
+# between releases rather than during one.
 on:
+  # How the release workflow builds the Linux half. Everything below is the same
+  # build; only the version differs, and only the caller publishes.
+  workflow_call:
+    inputs:
+      version:
+        description: Version to stamp in. Blank builds whatever the repo carries.
+        required: false
+        type: string
   workflow_dispatch:
     inputs:
       version:
-        description: Version to stamp in, e.g. 1.3.0 (blank = whatever the repo carries).
+        description: Version to stamp in, e.g. 1.3.0 (blank = whatever the repo carries). Builds only — releasing is xi-model-viewer-release.
         required: false
         type: string
-      release:
-        description: Attach the packages to the release for that version. Built from the ref this runs on, so dispatch it from the tag if main has moved on.
-        required: false
-        default: false
-        type: boolean
   push:
     # Every branch, but not tags: a path filter is ignored on a tag push, so
     # without this every `v1.3.0` would kick off a second full build behind the
@@ -36,7 +44,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: xi-model-viewer-linux-${{ github.ref }}
+  # github.workflow is the *caller's* name under workflow_call, so a release
+  # build gets its own group instead of queueing behind CI on the same ref.
+  group: ${{ github.workflow }}-linux-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'push' }}
 
 env:
@@ -69,7 +79,6 @@ jobs:
           # text someone typed, and pasting it into the script body would let it
           # run as shell.
           INPUT_VERSION: ${{ inputs.version }}
-          RELEASING: ${{ inputs.release }}
         run: |
           set -euo pipefail
 
@@ -77,10 +86,6 @@ jobs:
           version="${version#v}"
 
           if [[ -z "${version}" ]]; then
-            if [[ "${RELEASING:-false}" == "true" ]]; then
-              echo "::error::Releasing needs an explicit version."
-              exit 1
-            fi
             version=$(python3 -c "import json;print(json.load(open('src-tauri/tauri.conf.json'))['version'])")
             echo "No version given — building what the repo carries: ${version}"
             echo "stamp=false" >> "$GITHUB_OUTPUT"
@@ -467,34 +472,3 @@ jobs:
           path: shots/
           if-no-files-found: warn
 
-  release:
-    name: Attach to the release
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.release }}
-    needs: [build, verify]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download the packages
-        uses: actions/download-artifact@v4
-        with:
-          name: xi-model-viewer-linux
-          path: dist
-
-      - name: Attach to the GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.build.outputs.tag_name }}
-          name: XI Model Viewer v${{ needs.build.outputs.version }}
-          files: dist/*
-          fail_on_unmatched_files: true
-
-      - name: Write job summary
-        run: |
-          url="${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.build.outputs.tag_name }}"
-          {
-            echo "## Attached to ${{ needs.build.outputs.tag_name }}"
-            echo ""
-            echo "[View release]($url)"
-          } >> "$GITHUB_STEP_SUMMARY"

@@ -258,11 +258,27 @@ Release exe: `cargo build --release` → `src-tauri/target/release/xi-model-view
 (frontend assets are embedded; the exe is standalone, needing only the WebView2
 runtime that ships with Windows 11).
 
+### Releasing
+
+`xi-model-viewer-release.yml` is the one thing you dispatch. Give it a version
+and it builds the Windows exe and the Linux packages in parallel from the same
+commit, verifies the Linux ones, and creates a single release carrying all of
+them plus a `SHA256SUMS` over the lot. Nothing is published until every one of
+those has passed, so a release is complete or it does not exist. Tick **dry
+run** to do all of that and stop short of the release itself, which is how you
+rehearse a version bump or a change to the workflow.
+
+The Linux half is `xi-model-viewer-linux.yml`, called by the release workflow
+and also run on its own for every push that touches the app — so Linux breakage
+shows up between releases rather than in the middle of one. On a push it
+publishes nothing; the packages are workflow artifacts, which GitHub keeps for
+90 days.
+
 ### Linux packages
 
-`.github/workflows/xi-model-viewer-linux.yml` builds both packages on Ubuntu
-22.04 — the oldest release the app supports — then installs each one, in a
-container per distro, the way a user would. The .deb goes in through `apt` on
+That workflow builds both packages on Ubuntu 22.04 — the oldest release the app
+supports — then installs each one, in a container per distro, the way a user
+would. The .deb goes in through `apt` on
 Ubuntu 22.04, Ubuntu 24.04, Mint 21 and Mint 22, so its declared dependencies
 have to genuinely resolve rather than being papered over by `dpkg -i`, and each
 is then launched on a virtual display and photographed. The AppImage gets that
