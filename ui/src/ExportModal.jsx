@@ -142,7 +142,7 @@ export function buildXiArgs(catalog, datPath, folder, format, userArgs) {
  * go in as `--anim-dat`: they carry the upper-body and waist layers of the clip the pose
  * is frozen at, and without them only the legs are posed.
  */
-export function buildPoseArgs(pose, folder, format, userArgs) {
+export function buildPoseArgs(pose, folder, format, userArgs, poseFile = null) {
   const argv = tokensToArgv(userArgs);
   const has = (flag) => argv.includes(flag);
   const args = [...EXPORT_COMMANDS.pose, ...(pose.gear ?? [])];
@@ -153,6 +153,9 @@ export function buildPoseArgs(pose, folder, format, userArgs) {
   if (pose.drawRanged && !has('--draw-ranged')) args.push('--draw-ranged');
   if (!has('--output')) args.push('--output', folder);
   if (!has('--name') && pose.stem) args.push('--name', pose.stem);
+  // The evaluated joints of whatever the viewport is playing. Written beside the model
+  // at export time; named here too so the previewed command is the one that runs.
+  if (poseFile && !has('--pose-file')) args.push('--pose-file', poseFile);
   if (format === 'fbx' && !has('--fbx')) args.push('--fbx');
   return [...args, ...argv];
 }
@@ -206,12 +209,12 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
       const first = spec?.animations?.[0]?.id;
       if (first) next = addToken('anim', next, `--anim ${first}`);
     }
-    // Full Pose exports what is on screen, so it re-seeds the clip and frame from the
-    // viewport every time it opens rather than restoring whatever was exported last.
-    // Both are ordinary tokens, so they can still be edited before exporting.
-    if (id === 'pose' && spec?.playing?.anim) {
-      next = addToken('pose', next, `--anim ${spec.playing.anim}`);
-      next = addToken('pose', next, `--frame ${spec.playing.frame ?? 0}`);
+    // Full Pose exports what is on screen, so it re-seeds the frame from the viewport
+    // every time it opens rather than restoring whatever was exported last. No --anim:
+    // the pose itself is captured, and a schedule has no clip name to give.
+    if (id === 'pose') {
+      next = removeFlag(next, '--anim');
+      next = addToken('pose', next, `--frame ${spec?.playing?.frame ?? 0}`);
     }
     setArgs(next);
     saveArgs(k.store, next);
@@ -260,9 +263,11 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
     ? addToken(catalog, args, '--all-frames')
     : removeFlag(args, '--all-frames'));
   const animEntry = spec.animations?.find((a) => a.id === animId);
-  // Full Pose counts frames on the played timeline (matching the viewport's counter and
-  // `xi gear pose --frame`); mesh export indexes the DAT's stored keyframes.
-  const animFrames = (isPose ? animEntry?.playFrames : animEntry?.frames) ?? 1;
+  // Full Pose scrubs the played timeline of whatever the viewport is showing — a
+  // schedule as readily as a clip — so its length comes from the viewport rather than
+  // from an --anim lookup. Mesh export indexes the DAT's stored keyframes instead.
+  const playingLabel = spec.playing?.label ?? null;
+  const animFrames = (isPose ? spec.playing?.frames : animEntry?.frames) ?? 1;
   const frame = Math.min(Math.max(Number(tokenValue(args, '--frame')) || 0, 0), Math.max(animFrames - 1, 0));
   const setFrame = (n) => setArgList(addToken(catalog, args, `--frame ${n}`));
 
@@ -293,8 +298,14 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
   const headTitle = isXi
     ? `Export ${kind.label}: ${spec.name || datStem}`
     : `Export ${spec.typeLabel}: ${spec.title}`;
+  // Written next to the model at export time, and named in the preview so the command
+  // shown is the command that runs. It stays behind as a record of the exact pose.
+  const poseFileName = isPose ? `${poseStem}.pose.json` : null;
+  const poseFileFor = (dir) => (isPose && spec.capturePose ? `${dir}\\${poseFileName}` : null);
   const previewArgs = !isXi ? null
-    : (isPose ? buildPoseArgs({ ...pose, stem: poseStem }, folder || '…', format, args)
+    : (isPose
+      ? buildPoseArgs({ ...pose, stem: poseStem }, folder || '…', format, args,
+        poseFileFor(folder || '…'))
       : buildXiArgs(catalog, activePath, folder || '…', format, args));
 
   const doExport = async () => {
@@ -320,8 +331,26 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
     });
     try {
       if (isXi) {
+        // Snapshot the joints the renderer has evaluated and hand them to xi, so the
+        // export is the pose on screen rather than xi's own reading of a clip name —
+        // which for a schedule there isn't one of. Failing to write it is not fatal:
+        // xi falls back to posing from its default clip, and the log says which ran.
+        let poseFile = null;
+        if (isPose && spec.capturePose) {
+          try {
+            const captured = spec.capturePose({ all: allFrames, frame });
+            if (captured?.frames?.length) {
+              poseFile = `${folder}\\${poseFileName}`;
+              await backend.writeFile(poseFile,
+                new TextEncoder().encode(JSON.stringify(captured)));
+            }
+          } catch (e) {
+            poseFile = null;
+            onStatus?.(`Could not write the pose file (${e?.message ?? e}) — exporting from the clip instead.`);
+          }
+        }
         const xiArgs = isPose
-          ? buildPoseArgs({ ...pose, stem: poseStem }, folder, format, args)
+          ? buildPoseArgs({ ...pose, stem: poseStem }, folder, format, args, poseFile)
           : buildXiArgs(catalog, activePath, folder, format, args);
         const cmd = `xi ${xiArgs.map(shellQuote).join(' ')}`;
         const title = `xi ${EXPORT_COMMANDS[catalog].join(' ')} · ${snap.datStem}`;
@@ -466,16 +495,16 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
                   <Combo
                     value={allFrames ? 'anim' : 'frame'}
                     items={[
-                      { id: 'frame', label: animId ? `Single frame of ${animId}` : 'Single frame (bind pose)' },
-                      { id: 'anim', label: animId ? `Whole ${animId} animation` : 'Whole animation' },
+                      { id: 'frame', label: playingLabel ? `Frame ${frame} of ${playingLabel}` : 'Current pose' },
+                      { id: 'anim', label: playingLabel ? `Whole ${playingLabel} animation` : 'Whole animation' },
                     ]}
                     onChange={(v) => setAllFrames(v === 'anim')}
                     className="export-select"
                   />
                   <div className="form-hint">
                     {allFrames
-                      ? 'Every frame of the clip is embedded, so the export plays in a DCC.'
-                      : 'The clip and frame the viewport is showing, frozen into the mesh.'}
+                      ? 'Every frame is embedded, so the export plays in a DCC.'
+                      : 'The pose the viewport is showing, frozen into the mesh.'}
                   </div>
                 </div>
               )}
@@ -499,12 +528,17 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
                 </label>
                 <ArgsInput type={catalog} tokens={args} onChange={setArgList}
                   dynamicValues={{ '--anim': (spec.animations ?? []).map((a) => ({ value: a.id })) }} />
-                <div className="args-preview mono">
-                  {previewArgs.map(shellQuote).join(' ')}
-                </div>
+                <textarea
+                  className="args-preview mono"
+                  readOnly
+                  spellCheck={false}
+                  rows={3}
+                  value={previewArgs.map(shellQuote).join(' ')}
+                  onFocus={(e) => e.target.select()}
+                />
               </div>
 
-              {(kindId === 'mesh' || isPose) && animId && !allFrames && (
+              {((kindId === 'mesh' && animId) || (isPose && animFrames > 1)) && !allFrames && (
                 <div className="export-frame-row">
                   <span className="export-frame-label mono">--frame</span>
                   <input type="range" min="0" max={Math.max(animFrames - 1, 0)} value={frame}

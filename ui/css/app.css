@@ -1423,17 +1423,42 @@ button.cli-output-stop:hover {
 .cli-line.cli-meta {
   color: var(--gray-500);
 }
-.cli-output-timer {
+/* Progress strip under the console header. One element carries three states: a blue
+   band sweeping while xi runs, then solid green or red for how it ended — and with
+   auto-close on, that same solid bar drains left as the dismissal countdown. */
+.cli-output-progress {
+  position: relative;
   flex: 0 0 auto;
   height: 3px;
   background: rgba(255, 255, 255, 0.06);
   overflow: hidden;
 }
-.cli-output-timer-bar {
+.cli-output-progress.is-running::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(77, 163, 255, 0) 0%,
+    rgba(77, 163, 255, 0.18) 30%,
+    var(--accent, #4da3ff) 50%,
+    rgba(77, 163, 255, 0.18) 70%,
+    rgba(77, 163, 255, 0) 100%
+  );
+  animation: cli-output-sweep 1.4s ease-in-out infinite;
+}
+@keyframes cli-output-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+.cli-output-progress-bar {
   height: 100%;
   width: 100%;
   transform-origin: left center;
-  background: linear-gradient(90deg, var(--accent, #5b9dff), #7aa2ff);
+  background: #6dca96;
+}
+.cli-output-progress.is-failed .cli-output-progress-bar { background: #e07068; }
+.cli-output-progress-bar.counting {
   animation-name: cli-output-countdown;
   animation-timing-function: linear;
   animation-fill-mode: forwards;
@@ -1441,6 +1466,11 @@ button.cli-output-stop:hover {
 @keyframes cli-output-countdown {
   from { transform: scaleX(1); }
   to { transform: scaleX(0); }
+}
+/* The sweep is the one looping animation here; the countdown still runs, since it is
+   telling you how long is left rather than decorating. */
+@media (prefers-reduced-motion: reduce) {
+  .cli-output-progress.is-running::after { animation: none; opacity: 0.55; }
 }
 
 #statusFile {
@@ -4347,11 +4377,26 @@ button.update-dl-btn .update-dl-meta {
   color: var(--muted); font-size: 11px; line-height: 1.4;
 }
 
-.args-preview {
+/* The generated command. A textarea rather than a block of wrapped text: the paths make
+   it long enough to swamp the dialog, and this way it scrolls, and is selectable. */
+textarea.args-preview {
+  width: 100%;
+  box-sizing: border-box;
+  /* Read-only command echo — nothing to drag out, and the grip sat on the
+     corner of a box the user cannot type in. `none`, not just dropping the
+     line: a bare textarea resizes BOTH ways by default. */
+  resize: none;
   color: var(--gray-500);
+  background: var(--gray-900);
+  border: 1px solid var(--ring);
+  border-radius: 6px;
+  padding: 6px 8px;
   font-size: 11px; line-height: 1.5;
+  white-space: pre-wrap;
   word-break: break-all;
+  overflow-y: auto;
 }
+textarea.args-preview:focus { outline: none; border-color: var(--ring-strong); }
 
 /* --- Radio row (Export type) ---------------------------------------------- */
 

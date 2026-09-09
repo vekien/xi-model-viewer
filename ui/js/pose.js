@@ -64,6 +64,25 @@ function blendSample(a, b, u) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Clips that are the character at rest: idle, stand, and the locomotion set
+ * (trailing digit = body-region part). Everything else — the battle stance, the
+ * attack rounds, a weapon skill's routine — is the character engaged.
+ */
+const RESTING_CLIP = /^(idl|std|wlk|run|mvb|mvl|mvr)\d*$/i;
+
+/**
+ * True when every part of `clip` is a resting clip — xim's `!isDisplayEngaged`,
+ * which is what gates the drawn-weapon re-parent (see evaluate). A clip is only
+ * at rest if all of it is: a schedule named `main` over `b10`/`b12` is not.
+ * No clip at all (bind pose) counts as engaged, so a weapon still shows in hand.
+ */
+export function isRestingClip(clip) {
+  if (!clip) return false;
+  const ids = [clip.id, ...(Array.isArray(clip.parts) ? clip.parts : [])].filter(Boolean).map(String);
+  return ids.length > 0 && ids.every((id) => RESTING_CLIP.test(id));
+}
+
+/**
  * Drops re-parenting entries that would make a joint wait on itself.
  *
  * evaluate() resolves the skeleton in repeated passes, each joint held back
@@ -161,6 +180,12 @@ export class SkeletonPose {
       basePhase = baseLen > 0 ? (frame % baseLen) / baseLen : 0;
     }
 
+    // Weapons are only in the hands while the character is engaged, so the
+    // re-parent is gated the way xim gates it (isDisplayEngaged). At rest the
+    // grip joint keeps its real parent and the clip's own keys carry it on the
+    // hip, which is where a sheathed weapon belongs.
+    const engaged = !isRestingClip(clip);
+
     // Local, so a stalled pass can drop the re-parenting for the rest of this
     // evaluate without touching the model's own map (see the bail below).
     let overrides = this.parentOverrides;
@@ -171,17 +196,23 @@ export class SkeletonPose {
       for (let i = 0; i < n; i++) {
         if (computed[i]) continue;
 
-        // Hand re-parenting applies only while no clip drives the grip joint —
-        // weapon-skill clips animate it (relative to its real parent) and the
-        // override would double-transform the swing. When it applies, the joint
-        // adopts the hand transform wholesale: bind local dropped, scale reset
-        // (xim updateCurrentJointTransformWithParentOverride).
-        // A reset track (negative offsets in the DAT) pins the joint to bind,
-        // which for a re-parented grip is "hang off the hand" — so it does not
-        // count as the clip driving the joint.
+        // Hand re-parenting: the joint adopts the hand transform wholesale —
+        // bind local dropped, own keys dropped, scale reset (xim
+        // updateCurrentJointTransformWithParentOverride). While engaged it
+        // always wins, exactly as the client applies it, because every PC
+        // upper-body clip keys all fourteen weapon mounts and honouring those
+        // keys is what left old dagger weapon skills sheathed: the `b1*`/`b2*`
+        // packs (Wasp Sting, Viper Bite, Gust Slash, Cyclone, Dancing Edge) key
+        // the OFF-hand dagger mount onto its hand and park the main-hand one on
+        // the hip. The battle and attack packs happen to key the mount onto the
+        // hand themselves, so re-parenting there lands on the same spot.
+        // At rest only an undriven joint re-parents, so a sheathed weapon stays
+        // on the hip. A reset track (negative offsets in the DAT) pins the joint
+        // to bind, which for a re-parented grip is "hang off the hand" — so it
+        // does not count as the clip driving the joint.
         const override = overrides?.get(i);
         const driven = clip?.jointTracks.get(i);
-        if (override !== undefined && !(driven && !driven.reset)) {
+        if (override !== undefined && (engaged || !(driven && !driven.reset))) {
           if (!computed[override]) { missing = true; continue; }
           this.rot[i] = this.rot[override];
           this.trans[i] = this.trans[override];

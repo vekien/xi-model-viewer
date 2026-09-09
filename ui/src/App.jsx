@@ -7,6 +7,7 @@ import { gameCandidates, normRel, pathKey, relFromAbs } from '../js/gamePath.js'
 import { baseMotionCompanions, battleSkirtPath, weaponSkillWaistPaths } from '../js/pclists.js';
 import { animDisplayName, groupAnimations, matchAnimRef, mergeModels, parseEntity, resolveScheduleClip } from '../js/dat.js';
 import { Renderer } from '../js/renderer.js';
+import { isRestingClip } from '../js/pose.js';
 import { FileTree } from './FileTree.jsx';
 import { DatabaseList } from './DatabaseList.jsx';
 import { DatabaseViewer, invalidateDbCache, dbDataDir, importDbFolder } from './DatabaseViewer.jsx';
@@ -254,9 +255,9 @@ function buildPoseComposition({ parts, weaponSlots, rodPaths, animOnlyPaths, ran
 // started yet would show bind pose (T-pose flash each loop). Underlay a looping
 // idle so those joints rest naturally — battle idle for weapon actions if it's
 // loaded, otherwise plain idle (falling back to std).
-// Clips that are "at rest": idle, stand, and the locomotion set. The battle
-// stance must never underlay one of these. Trailing digit = body-region layer.
-const RESTING_CLIP = /^(idl|std|wlk|run|mvb|mvl|mvr)\d*$/i;
+// Clips that are "at rest" (idl/std and the locomotion set) come from pose.js,
+// which uses the same rule to decide whether the weapons are drawn. The battle
+// stance must never underlay one of these.
 
 function pickBaseIdle(model, { skipId = null } = {}) {
   const grouped = groupAnimations(model.animations);
@@ -400,10 +401,9 @@ async function mergeWaistPacks({
  */
 function withBaseIdle(model, clip) {
   if (!clip || !model) return clip ?? null;
-  const ids = [clip.id, ...(Array.isArray(clip.parts) ? clip.parts : [])].filter(Boolean).map(String);
   const isBtl = clip.id === 'btl'
     || (Array.isArray(clip.parts) && clip.parts.length > 0 && clip.parts.every((p) => String(p).startsWith('btl')));
-  const isResting = ids.length > 0 && ids.every((id) => RESTING_CLIP.test(id));
+  const isResting = isRestingClip(clip);
   const base = pickBaseIdle(model, { skipId: (isBtl || isResting) ? 'btl' : null });
   if (!base || base === clip || base.id === clip.id) return clip;
   if (clip.baseClip === base) return clip;
@@ -1921,7 +1921,7 @@ export default function App({ launch = null }) {
       }
       if (k === 'f') {
         e.preventDefault();
-        focusOrResetCameraRef.current?.();
+        focusOrResetCameraRef.current?.({ refit: e.shiftKey });
         return;
       }
       // Alt+Q / Alt+E: roll the view (any camera mode).
@@ -6213,7 +6213,7 @@ export default function App({ launch = null }) {
           r.frameEffect();
         }
       } else if (modelRef.current) {
-        focusOrResetCameraRef.current?.();
+        focusOrResetCameraRef.current?.({ refit: true });
       } else if (!nextZone && leftView !== 'creation') {
         r.camera?.setRangeFor?.('entity');
       }
@@ -7857,6 +7857,60 @@ export default function App({ launch = null }) {
     }
   };
 
+  /**
+   * The pose the viewport is actually showing, as the world transform of every joint —
+   * what `xi gear pose --pose-file` bakes.
+   *
+   * A clip name and a frame number cannot describe what is on screen. A weapon-skill
+   * schedule lays several clips on a timeline, blends each back out to an underlaid base
+   * idle, merges the waist pack, and re-parents the weapon grips onto the hands; the
+   * result is a composition, not a clip, and `currentAnim` is empty for the whole of it.
+   * Handing over the joints the renderer has already evaluated skips all of that, so the
+   * export matches whatever is playing — schedule, battle stance or plain clip.
+   *
+   * `frame` picks which frame to capture (default: the one on screen); `all` walks the
+   * whole clip. The viewport is put back on its own frame either way.
+   */
+  const capturePose = useCallback((opts = {}) => {
+    const r = rendererRef.current;
+    const pose = r?.pose;
+    if (!pose?.rot?.length) return null;
+    const clip = r.currentAnimation ?? null;
+    const n = pose.rot.length;
+    const grab = () => {
+      const flat = new Array(n * 7);
+      for (let i = 0; i < n; i++) {
+        const q = pose.rot[i] ?? [0, 0, 0, 1];
+        const t = pose.trans[i] ?? [0, 0, 0];
+        const o = i * 7;
+        flat[o] = q[0]; flat[o + 1] = q[1]; flat[o + 2] = q[2]; flat[o + 3] = q[3];
+        flat[o + 4] = t[0]; flat[o + 5] = t[1]; flat[o + 6] = t[2];
+      }
+      return flat;
+    };
+    const saved = r.animFrame ?? 0;
+    const frames = [];
+    try {
+      if (opts.all && clip) {
+        const len = Math.max(1, Math.round(clip.lengthInFrames ?? 1));
+        for (let f = 0; f < len; f++) { pose.evaluate(clip, f); frames.push(grab()); }
+      } else {
+        if (clip) pose.evaluate(clip, opts.frame ?? saved);
+        frames.push(grab());
+      }
+    } finally {
+      // Put the viewport back on the frame the user left it on.
+      pose.evaluate(clip, saved);
+      r.poseDirty = true;
+    }
+    return {
+      name: currentSchedule || currentAnim || 'pose',
+      fps: clip?.fps ?? 30,
+      space: 'world',
+      frames,
+    };
+  }, [currentAnim, currentSchedule]);
+
   const buildExportSpec = () => {
     const t = player.current;
     if (t) {
@@ -7919,20 +7973,22 @@ export default function App({ launch = null }) {
         sources: (dataSourcesRef.current || []).map((d) => ({ id: d.id, label: d.label, path: d.path })),
         // Present only for a composed character — drives the Full Pose tab.
         pose: poseRef.current,
-        animations: animsRef.current.map((g) => ({
-          id: g.id,
-          // `frames` counts the DAT's stored keyframes, which is what `xi mesh export
-          // --frame` indexes. Full Pose scrubs the played 30 fps timeline instead — the
-          // one the viewport's own frame counter shows — so it needs both.
-          frames: g.clip.numFrames,
-          playFrames: g.clip.lengthInFrames ?? g.clip.numFrames,
-        })),
+        // `frames` counts the DAT's stored keyframes, which is what `xi mesh export
+        // --frame` indexes. Full Pose scrubs the played timeline instead and reads its
+        // length off `playing` below, since it follows the viewport rather than a clip id.
+        animations: animsRef.current.map((g) => ({ id: g.id, frames: g.clip.numFrames })),
         // What the viewport is playing right now, so Full Pose opens on the frame the
-        // user is looking at rather than a fixed default.
+        // user is looking at rather than a fixed default. `label` is what to call it:
+        // a schedule (a weapon skill) has no single clip name, which is exactly why the
+        // pose itself is captured rather than a clip id — see capturePose.
         playing: {
           anim: currentAnim || null,
+          schedule: currentSchedule || null,
+          label: currentSchedule || currentAnim || null,
           frame: Math.max(0, Math.round(rendererRef.current?.animFrame ?? 0)),
+          frames: Math.max(1, Math.round(rendererRef.current?.currentAnimation?.lengthInFrames ?? 1)),
         },
+        capturePose,
         xiPath: s?.xiPath || '',
         gamePath: s?.gamePath || '',
         pivotPath: s?.pivotPath || '',
@@ -8014,7 +8070,7 @@ export default function App({ launch = null }) {
         ensureXiTools().then((ok) => { if (ok) setBatchOpen(true); });
         break;
       case 'reset-camera':
-        focusOrResetCamera();
+        focusOrResetCamera({ refit: true });
         break;
       case 'toggle-wasd':
         setWasd(!wasdRef.current);
@@ -8310,8 +8366,11 @@ export default function App({ launch = null }) {
   /**
    * F / Reset Camera: with a zone object selected, frame that selection;
    * otherwise frame the whole model/zone (fixed FOV fit — not the old radius×2.4).
+   *
+   * `refit` forces the full framing (Shift+F, View > Reset Camera, Assets view
+   * switches). Plain F on a character only re-centres — see r.focusJoint().
    */
-  const focusOrResetCamera = useCallback(() => {
+  const focusOrResetCamera = useCallback(({ refit = false } = {}) => {
     const r = rendererRef.current;
     if (!r) return;
     // A selected actor wins: frame it, whatever else is picked.
@@ -8357,6 +8416,9 @@ export default function App({ launch = null }) {
         }
       }
     }
+    // Character mode: re-centre on the hips at the distance we are already at.
+    // The full fit frames the DAT origin, which is down at the model's feet.
+    if (!refit && r.focusJoint?.()) return;
     r.resetCamera();
   }, [focusBounds]);
   const focusOrResetCameraRef = useRef(focusOrResetCamera);

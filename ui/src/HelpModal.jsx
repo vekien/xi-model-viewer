@@ -11,6 +11,8 @@ const GENERAL_CONTROLS = [
   ['Right Mouse', 'Pan'],
   ['Ctrl + Left Mouse', 'Pan'],
   ['Wheel', 'Zoom'],
+  ['F', 'Recentre on the model'],
+  ['Shift + F', 'Reset camera framing'],
 ];
 const ZONE_CONTROLS = [
   ['WASD', 'Move around'],

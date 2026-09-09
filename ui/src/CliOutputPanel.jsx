@@ -4,9 +4,12 @@ import { Button } from '@headlessui/react';
 /**
  * Bottom-left anchored console dump (e.g. xi title menu save / export stream).
  * `log`: { title, text } | null
- * `autoClose` + `autoCloseMs` — dismiss after a countdown with a progress bar
- *   (skipped while a streamed job is still running).
+ * `autoClose` + `autoCloseMs` — dismiss after a countdown, drawn as the strip draining.
  * `onCancel` — kill in-flight streamed xi (shows Stop while running).
+ *
+ * One strip under the header carries the whole state: a blue sweep while xi is running,
+ * then solid green or red for how it ended — and when auto-close is on, that same solid
+ * bar is what drains away as the countdown.
  */
 export function CliOutputPanel({
   log,
@@ -25,6 +28,14 @@ export function CliOutputPanel({
   const running = !!(text.includes('# running…')
     && !/\n# (done|exit |cancelled)/m.test(text)
     && !/· (ok|failed|cancelled)$/.test(title));
+  // How it ended, read the same way `running` is: callers mark the outcome in the title
+  // suffix, and a non-zero `# exit` line is the fallback for the ones that don't. A
+  // cancelled job counts as failed — it stopped without finishing.
+  const failed = /· (failed|cancelled)$/.test(title)
+    || /^# exit (?!0\b)\d+/m.test(text)
+    || /\n# cancelled/.test(text);
+  const status = running ? 'running' : failed ? 'failed' : 'ok';
+  const counting = autoClose && !running;
 
   // Stable key for the finished log — must NOT include live text, or every
   // streamed line / parent re-render would restart the 10s timer forever.
@@ -76,15 +87,15 @@ export function CliOutputPanel({
           <span className="icon">close</span>
         </Button>
       </div>
-      {autoClose && !running && (
-        <div className="cli-output-timer" aria-hidden="true">
+      <div className={`cli-output-progress is-${status}`} aria-hidden="true">
+        {!running && (
           <div
             ref={barRef}
-            className="cli-output-timer-bar"
-            style={{ animationDuration: `${Math.max(500, autoCloseMs || 10000)}ms` }}
+            className={`cli-output-progress-bar${counting ? ' counting' : ''}`}
+            style={counting ? { animationDuration: `${Math.max(500, autoCloseMs || 10000)}ms` } : undefined}
           />
-        </div>
-      )}
+        )}
+      </div>
       <div className="cli-output-body" ref={bodyRef}>
         {lines.map((line, i) => (
           <div

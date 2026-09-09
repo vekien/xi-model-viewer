@@ -52,6 +52,13 @@ const ENTITY_ROT_M = new Float32Array([
 /** The matrix above applied to a point — for anything comparing against raw DAT. */
 const toEntityPt = (p) => [p[0], -p[1], -p[2]];
 
+// Joint every entity is framed on — boot, Assets view switches, Reset Camera and
+// F alike. FFXI skeletons carry no names — a joint is an index — and 1 is
+// `bone0001` in the Skeleton panel's numbering: the hips, one up from the root at
+// the feet. (The Camera Sequencer's actor lock aims one further up at bone0002,
+// the pelvis, which tracks better through a jump.)
+const FOCUS_JOINT = 1;
+
 const IDENTITY_M = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 
 /**
@@ -1599,6 +1606,7 @@ export class Renderer {
     this.meshSourceFilter = null;
     // New geometry (including a gear swap) invalidates the cached rest bounds.
     this._restBounds = undefined;
+    this._restFocus = undefined;
     for (const b of this.batches) {
       gl.deleteBuffer(b.vbo);
       if (b.wireEbo) gl.deleteBuffer(b.wireEbo);
@@ -2326,19 +2334,30 @@ export class Renderer {
       const b = toEntityPt(bounds.max);
       min = [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.min(a[2], b[2])];
       max = [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.max(a[2], b[2])];
-      // Entities frame around the ORIGIN, not the mesh box centre: the look-at
-      // lands on the axis gizmo (the orbit pivot, see getOrbitPivot) at screen
-      // centre, and only the distance comes from the bounds — far enough that
-      // the whole box fits, measured from the origin to its farthest corner
-      // so a model that stands entirely above its feet is not cut off.
+      // Entities frame around a FIXED POINT ON THE SKELETON, not the mesh box
+      // centre: the box centre wanders with pose and gear (see restBounds), so
+      // framing off it put the same character somewhere new every load. The
+      // point is the rest hips (FOCUS_JOINT) — the DAT origin, used here before,
+      // is down at the model's FEET, which left the character hanging in the top
+      // half of the viewport on boot and on every Assets view switch.
+      // Only the distance comes from the bounds: far enough that the whole box
+      // fits, measured from the centre to its farthest corner so a model that
+      // stands entirely above its feet is not cut off.
+      const c = this.restFocusPoint() ?? [0, 0, 0];
       let reach = 0;
       for (const x of [min[0], max[0]]) {
         for (const y of [min[1], max[1]]) {
-          for (const z of [min[2], max[2]]) reach = Math.max(reach, Math.hypot(x, y, z));
+          for (const z of [min[2], max[2]]) {
+            reach = Math.max(reach, Math.hypot(x - c[0], y - c[1], z - c[2]));
+          }
         }
       }
       reach = Math.max(reach, 0.5);
-      this.camera.fit([-reach, -reach, -reach], [reach, reach, reach], { distance: reach * 2.4 });
+      this.camera.fit(
+        [c[0] - reach, c[1] - reach, c[2] - reach],
+        [c[0] + reach, c[1] + reach, c[2] + reach],
+        { distance: reach * 2.4 },
+      );
       this.snapFloorToFeet();
       return;
     }
@@ -2369,6 +2388,40 @@ export class Renderer {
   }
 
   /**
+   * The point an entity is framed on: the hips (FOCUS_JOINT) in the model's REST
+   * pose. The DAT origin, used here before, sits at the model's FEET (see
+   * getOrbitPivot), which left the character hanging in the top half of the
+   * viewport; the hips put the body's middle at screen centre for every race.
+   *
+   * Rest, not live, for the reason restBounds is: read off the running clip it
+   * would drift with the animation and no two re-frames would agree. Null when
+   * there is no posed entity skeleton to read.
+   */
+  restFocusPoint() {
+    if (this.effectMode || !this.pose || !this.model || this.model.kind === 'zone') return null;
+    this.restBounds();                       // populates _restFocus (cached per model)
+    return this._restFocus ?? this.getJointPosition(FOCUS_JOINT);
+  }
+
+  /**
+   * Re-centre an entity on its framing point at the distance the camera is
+   * already at — F.
+   *
+   * Distance is carried over deliberately: F is "put them back in the middle",
+   * not "undo my zoom" — Shift+F / View > Reset Camera still do the full fit.
+   * Orbit angles still snap back to the defaults, so it stays a reset, and the
+   * point matches the one fitCamera uses, so F agrees with the boot framing.
+   *
+   * Returns false when there is nothing to focus (caller falls back).
+   */
+  focusJoint() {
+    const p = this.restFocusPoint();
+    if (!p) return false;
+    this.camera.fit(p, p, { distance: this.camera.distance });
+    return true;
+  }
+
+  /**
    * Display-space point an entity or effect orbits around: ALWAYS the world
    * origin, where the axis gizmo sits. In a zone it is the Camera Sequencer's
    * lock target when one is placed — a drag then swings around the thing the
@@ -2382,6 +2435,11 @@ export class Renderer {
    * depends on which pose computeBounds last saw. The DAT origin is the one
    * fixed point every model shares (its feet/root), so a drag turns the model
    * about the axes on screen and the same spot every time.
+   *
+   * Deliberately NOT restFocusPoint(), which is where the camera is *framed*:
+   * a pivot has to be the same spot for every model to stay predictable, and
+   * orbiting about it keeps a prior pan, so the character stays put on screen
+   * either way.
    */
   getOrbitPivot() {
     if (this.effectMode) return [0, 0, 0];
@@ -2519,6 +2577,9 @@ export class Renderer {
     // Body only: equipped weapons (tagged at load) are left out so the frame
     // and orbit pivot sit on the character, not on a box a polearm doubles.
     this._restBounds = this.computeBounds({ bodyOnly: true });
+    // Framing centre, read in the same rest pose for the same reason the box is:
+    // taken live it would drift with the clip and every re-fit would land somewhere new.
+    this._restFocus = this.getJointPosition(FOCUS_JOINT);
     this.pose.evaluate(clip ?? null, clip ? frame : 0);
     this.poseDirty = true;
     return this._restBounds;
