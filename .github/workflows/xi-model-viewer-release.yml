@@ -198,9 +198,11 @@ jobs:
           path: ${{ steps.stage.outputs.exe_path }}
           if-no-files-found: error
 
-  # The same build CI runs on every push, called with the version being cut so
-  # the packages carry it. Runs alongside the Windows job rather than after it:
-  # both validate the version the same way, so neither needs the other's answer.
+  # The Linux half, called with the version being cut so the packages carry it.
+  # That workflow starts no other way — cutting a release is the only thing that
+  # justifies four distro containers. Runs alongside the Windows job rather than
+  # after it: both validate the version the same way, so neither needs the
+  # other's answer.
   linux:
     name: Linux
     uses: ./.github/workflows/xi-model-viewer-linux.yml

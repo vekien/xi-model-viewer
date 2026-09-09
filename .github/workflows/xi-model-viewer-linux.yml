@@ -8,46 +8,32 @@ run-name: Linux build — ${{ inputs.version || github.ref_name }}
 # Ubuntu/Mint side and an AppImage for everything else, Manjaro included — and
 # then proves each one actually opens on the distros people run.
 #
-# It publishes nothing. xi-model-viewer-release.yml calls it as part of cutting a
-# release, and attaches what it produces alongside the .exe on the one release
-# that dispatch creates; on a push it is plain CI, so Linux breakage surfaces
-# between releases rather than during one.
+# It publishes nothing, and it does not start on its own. Reaching every distro
+# costs four containers and the better part of ten minutes, which is worth paying
+# when a version is being cut and not on every push; xi-model-viewer-release.yml
+# calls it as part of cutting one and attaches what it produces alongside the
+# .exe. To exercise it without releasing, dispatch that workflow with dry run
+# ticked — it runs this build and then stops short of the release.
 on:
-  # How the release workflow builds the Linux half. Everything below is the same
-  # build; only the version differs, and only the caller publishes.
+  # The only way in. The release workflow passes the version being cut; blank
+  # builds whatever the repo carries. Only the caller publishes.
   workflow_call:
     inputs:
       version:
         description: Version to stamp in. Blank builds whatever the repo carries.
         required: false
         type: string
-  workflow_dispatch:
-    inputs:
-      version:
-        description: Version to stamp in, e.g. 1.3.0 (blank = whatever the repo carries). Builds only — releasing is xi-model-viewer-release.
-        required: false
-        type: string
-  push:
-    # Every branch, but not tags: a path filter is ignored on a tag push, so
-    # without this every `v1.3.0` would kick off a second full build behind the
-    # release dispatch that is already doing one.
-    branches: ['**']
-    paths:
-      - 'ui/**'
-      - '!ui/public/lists/**'
-      - 'src-tauri/**'
-      - 'build.sh'
-      - 'scripts/linux_smoke_test.sh'
-      - '.github/workflows/xi-model-viewer-linux.yml'
 
 permissions:
   contents: read
 
 concurrency:
-  # github.workflow is the *caller's* name under workflow_call, so a release
-  # build gets its own group instead of queueing behind CI on the same ref.
+  # github.workflow is the *caller's* name under workflow_call, so this groups
+  # per release rather than pooling every Linux build on the same ref.
   group: ${{ github.workflow }}-linux-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'push' }}
+  # Never cancel: the only caller is a release being cut, and half a release is
+  # worse than a slow one. (This used to cancel superseded push builds.)
+  cancel-in-progress: false
 
 env:
   # linuxdeploy and appimagetool are themselves AppImages, and mounting one needs

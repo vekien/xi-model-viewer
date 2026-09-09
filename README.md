@@ -268,11 +268,13 @@ those has passed, so a release is complete or it does not exist. Tick **dry
 run** to do all of that and stop short of the release itself, which is how you
 rehearse a version bump or a change to the workflow.
 
-The Linux half is `xi-model-viewer-linux.yml`, called by the release workflow
-and also run on its own for every push that touches the app — so Linux breakage
-shows up between releases rather than in the middle of one. On a push it
-publishes nothing; the packages are workflow artifacts, which GitHub keeps for
-90 days.
+The Linux half is `xi-model-viewer-linux.yml`, and the release workflow is the
+only thing that starts it: reaching every distro costs four containers and the
+better part of ten minutes, which is worth paying for a version being cut and
+not for every push. It publishes nothing itself — the packages come back as
+workflow artifacts, which GitHub keeps for 90 days, and the release job is what
+attaches them. To exercise it without releasing, dispatch the release workflow
+with **dry run** ticked.
 
 ### Linux packages
 

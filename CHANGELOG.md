@@ -10,6 +10,12 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [1.4.0] — 2026-09-09
+
+[Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.3.0...v1.4.0)
+
 ### Export
 - **File › Export now has a Full Pose tab** for a character, beside Mesh and Animation. Mesh exports one DAT at a time — a character is nine of them, and the tab exports the lot as a single rigged GLB or FBX: race body, face, every armour slot, and the weapons. It appears only when a composed character is loaded, since a single DAT has nothing to assemble
 - **The pieces the game hides are actually removed.** FFXI gear is authored to overlap — the body keeps its bare wrists, its shins and a full head of hair, and the client drops whichever of those the worn set covers. Merging the DATs by hand leaves all of it sealed inside the armour, where it inflates the mesh, drags along textures nothing samples, and pokes straight through the moment anything is posed. The export runs the same occlusion test the client does, so a robed, full-helmed character comes out ~25% lighter and one texture shorter
