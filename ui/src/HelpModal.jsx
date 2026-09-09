@@ -4,6 +4,7 @@ import { backend } from '../js/backend.js';
 import { Tooltip } from './Tooltip.jsx';
 
 const GITHUB = 'https://github.com/vekien/xi-model-viewer';
+const RELEASES = 'https://github.com/vekien/xi-model-viewer/releases';
 
 const GENERAL_CONTROLS = [
   ['Left Mouse', 'Rotate'],
@@ -13,9 +14,10 @@ const GENERAL_CONTROLS = [
 ];
 const ZONE_CONTROLS = [
   ['WASD', 'Move around'],
+  ['Shift', 'Speed up'],
   ['Q / E', 'Up and Down'],
   ['Wheel', 'Move speed'],
-  ['W / S in Ortho', 'Zoom (a dolly draws the same picture)'],
+  ['W / S in Ortho', 'Zoom'],
 ];
 
 const openLink = (e, url) => {
@@ -28,12 +30,20 @@ const openLink = (e, url) => {
  */
 export function HelpModal({ open, onClose }) {
   const [pos, setPos] = useState(null);
+  const [version, setVersion] = useState('');
   const panelRef = useRef(null);
   const dragState = useRef(null);
 
   useEffect(() => {
     if (open) setPos(null);
   }, [open]);
+
+  // Asked of the shell rather than baked in, so a running build always names
+  // its own version. Silence on failure — About is not the place for an error.
+  useEffect(() => {
+    if (!open || version) return;
+    backend.appVersion().then((v) => setVersion(String(v || '').trim())).catch(() => {});
+  }, [open, version]);
 
   useEffect(() => {
     if (!open) return;
@@ -79,18 +89,31 @@ export function HelpModal({ open, onClose }) {
         </div>
 
         <div className="modal-body help-body">
-          <img className="help-logo" src="./icon.png" alt="XI Model Viewer" width={140} draggable={false} />
-          <div className="help-title">XI Model Viewer</div>
-          <div className="help-badges">
-            <span className="help-badge">Built by Vekien</span>
-            <span className="help-badge">AI Assisted Dev</span>
-          </div>
+          <section className="help-about">
+            <img className="help-logo" src="./icon.png" alt="" width={128} draggable={false} />
+            <div className="help-title">XI Model Viewer</div>
+            {version && <div className="help-version mono">v{version}</div>}
+            <div className="help-badges">
+              <span className="help-badge">Built by Vekien</span>
+              <span className="help-badge">AI Assisted Dev</span>
+            </div>
+            <div className="help-links">
+              <a className="help-link" href={GITHUB} onClick={(e) => openLink(e, GITHUB)}>
+                <span className="icon">code</span>
+                <span>Source on GitHub</span>
+              </a>
+              <a className="help-link" href={RELEASES} onClick={(e) => openLink(e, RELEASES)}>
+                <span className="icon">system_update_alt</span>
+                <span>Releases &amp; changelog</span>
+              </a>
+            </div>
+          </section>
 
-          <div className="help-controls">
+          <section className="help-controls">
             <div className="help-controls-group">
               <div className="help-controls-title">General Assets</div>
               {GENERAL_CONTROLS.map(([keys, action]) => (
-                <div className="help-key-row" key={action}>
+                <div className="help-key-row" key={keys}>
                   <span className="help-keys">{keys}</span>
                   <span className="help-action">{action}</span>
                 </div>
@@ -99,20 +122,13 @@ export function HelpModal({ open, onClose }) {
             <div className="help-controls-group">
               <div className="help-controls-title">Zones</div>
               {ZONE_CONTROLS.map(([keys, action]) => (
-                <div className="help-key-row" key={action}>
+                <div className="help-key-row" key={keys}>
                   <span className="help-keys">{keys}</span>
                   <span className="help-action">{action}</span>
                 </div>
               ))}
             </div>
-          </div>
-
-          <div className="help-links">
-            <a className="help-link" href={GITHUB} onClick={(e) => openLink(e, GITHUB)}>
-              <span className="icon">code</span>
-              <span>GitHub — vekien/xi-model-viewer</span>
-            </a>
-          </div>
+          </section>
         </div>
 
       </div>
@@ -121,7 +137,7 @@ export function HelpModal({ open, onClose }) {
 }
 
 function clamp(p, panel) {
-  const w = panel?.offsetWidth ?? 380;
+  const w = panel?.offsetWidth ?? 640;
   const h = panel?.offsetHeight ?? 420;
   return {
     x: Math.min(Math.max(p.x, 0), Math.max(window.innerWidth - w, 0)),

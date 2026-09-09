@@ -36,10 +36,15 @@ const TOOLS_MODE_ITEMS = [
 /**
  * Draggable settings dialog.
  * Tabs: General (paths + options) · XI Tools (install / update / local path).
+ *
+ * `initialTab` is how the rest of the app sends someone straight to the tab
+ * that fixes their problem — Export with no xi-tools opens on 'xitools'.
  */
-export function SettingsModal({ open, initial, onSave, onClose, error }) {
+export function SettingsModal({
+  open, initial, onSave, onClose, error, initialTab = 'general', onGamePathValid,
+}) {
   const [draft, setDraft] = useState(initial);
-  const [tab, setTab] = useState('general');
+  const [tab, setTab] = useState(initialTab);
   const [pos, setPos] = useState(null);
   const [xiStatus, setXiStatus] = useState(null); // uv/setup badge (custom verify)
   const [tools, setTools] = useState(null);       // ToolsStatus from Rust
@@ -53,6 +58,7 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
   const [toolsMode, setToolsMode] = useState('managed');
   const [notesPath, setNotesPath] = useState('');
   const [notesErr, setNotesErr] = useState('');
+  const [gameCheck, setGameCheck] = useState(null);  // { state, message }
   const [lists, setLists] = useState(null);       // ListsStatus from Rust
   const [listsBusy, setListsBusy] = useState(false);
   const [listsMsg, setListsMsg] = useState('');
@@ -159,7 +165,7 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
         const upd = st.updateAvailable ? ' · update available' : ' · up to date';
         setToolsMsg(`v${st.localVersion}${latest}${upd}`);
       } else {
-        setToolsMsg('Not installed yet — click Install to download the latest release.');
+        setToolsMsg('Not installed yet — click Install / Update to download the latest release.');
       }
       return st;
     } catch (e) {
@@ -227,7 +233,8 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
 
     setDraft(initial);
     setPos(null);
-    setTab('general');
+    setTab(initialTab || 'general');
+    setGameCheck(null);
     setXiStatus(null);
     setTools(null);
     setToolsBusy(false);
@@ -251,7 +258,32 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
     return () => detachProgress();
     // intentionally omit `initial` — snapshot only on open
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, detachProgress, refreshTools, runXiSetup, refreshLists]);
+  }, [open, initialTab, detachProgress, refreshTools, runXiSetup, refreshLists]);
+
+  // Live game-path check. The startup banner is written before the user has
+  // typed anything, so it goes stale the moment the field points at a real
+  // install — clear it here rather than making them press Save to find out.
+  // Debounced: the field is typed into as well as browsed to.
+  useEffect(() => {
+    if (!open) return undefined;
+    const path = (draft?.gamePath || '').trim();
+    if (!path) {
+      setGameCheck(null);
+      return undefined;
+    }
+    let alive = true;
+    setGameCheck({ state: 'checking', message: 'Checking…' });
+    const t = setTimeout(() => {
+      checkGamePath(path).then((res) => {
+        if (!alive) return;
+        setGameCheck(res);
+        // A folder that exists is enough to retire "not set" / "not found";
+        // "looks wrong" is said inline, next to the field it is about.
+        if (res.state !== 'missing') onGamePathValid?.();
+      });
+    }, 300);
+    return () => { alive = false; clearTimeout(t); };
+  }, [open, draft?.gamePath, onGamePathValid]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -336,7 +368,7 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
       } else if (st.installed) {
         setToolsMsg(`Up to date (v${st.localVersion})`);
       } else {
-        setToolsMsg('Not installed yet — click Install to download the latest release.');
+        setToolsMsg('Not installed yet — click Install / Update to download the latest release.');
       }
     } catch (e) {
       setToolsErr(e?.message || String(e));
@@ -402,7 +434,7 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
         if (st.installed) {
           setToolsMsg(`v${st.localVersion}${st.updateAvailable ? ' · update available' : ' · up to date'}`);
         } else {
-          setToolsMsg('Not installed yet — click Install to download the latest release.');
+          setToolsMsg('Not installed yet — click Install / Update to download the latest release.');
         }
       } catch (e) {
         setToolsErr(e?.message || String(e));
@@ -496,6 +528,7 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
                         type="text"
                         value={draft.gamePath}
                         spellCheck={false}
+                        placeholder="Your FINAL FANTASY XI install folder"
                         onChange={(e) => setDraft({ ...draft, gamePath: e.target.value })}
                       />
                       <Button onClick={browse}>
@@ -503,6 +536,14 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
                         Browse
                       </Button>
                     </div>
+                    {gameCheck && (
+                      <div className={`xi-status settings-path-status ${GAME_CHECK[gameCheck.state].cls}`}>
+                        <span className={`icon${gameCheck.state === 'checking' ? ' spin' : ''}`}>
+                          {GAME_CHECK[gameCheck.state].icon}
+                        </span>
+                        <span className="xi-status-msg">{gameCheck.message}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="form-row">
@@ -806,7 +847,7 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
                       <div className="form-inline tools-actions">
                         <Button className="active" disabled={toolsBusy} onClick={doInstallOrUpdate}>
                           <span className="icon">download</span>
-                          {tools?.updateAvailable ? 'Update now' : (tools?.installed ? 'Reinstall / Update' : 'Install')}
+                          Install / Update
                         </Button>
                         <Button disabled={toolsBusy} onClick={doCheckReleases}>
                           <span className="icon">travel_explore</span>
@@ -1047,6 +1088,36 @@ export function SettingsModal({ open, initial, onSave, onClose, error }) {
       </div>
     </div>
   );
+}
+
+// Badge look per game-path verdict.
+const GAME_CHECK = {
+  checking: { cls: 'busy', icon: 'progress_activity' },
+  ok: { cls: 'ok', icon: 'check_circle' },
+  warn: { cls: 'warn', icon: 'warning' },
+  missing: { cls: 'err', icon: 'error' },
+};
+
+/**
+ * Does this folder exist, and does it look like an FFXI install? A folder that
+ * merely exists opens no DAT, so `ok` wants the ROM tree (or FFXiMain.dll) —
+ * anything else is a warning, not a refusal, since odd layouts do exist.
+ */
+async function checkGamePath(path) {
+  let entries;
+  try {
+    entries = await backend.listDir(path);
+  } catch {
+    return { state: 'missing', message: `Folder not found: ${path}` };
+  }
+  const names = new Set((entries || []).map((e) => String(e?.name || '').toLowerCase()));
+  if (names.has('rom') || names.has('ffximain.dll')) {
+    return { state: 'ok', message: 'FINAL FANTASY XI install found.' };
+  }
+  return {
+    state: 'warn',
+    message: 'Folder found, but no ROM folder or FFXiMain.dll inside — is this the install root?',
+  };
 }
 
 /** Bytes as MB/KB, for the list sizes. */

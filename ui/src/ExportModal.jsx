@@ -27,6 +27,10 @@ export const EXPORT_KINDS = {
     catalog: 'mesh', store: 'model', label: 'Mesh', icon: 'deployed_code',
     tabIcon: 'deployed_code', ext: (fbx) => (fbx ? 'fbx' : 'glb'),
   },
+  pose: {
+    catalog: 'pose', store: 'pose', label: 'Full Pose', icon: 'accessibility_new',
+    tabIcon: 'accessibility_new', ext: (fbx) => (fbx ? 'fbx' : 'glb'),
+  },
   anim: {
     catalog: 'anim', store: 'anim', label: 'Animation', icon: 'directions_run',
     tabIcon: 'directions_run', ext: (fbx) => (fbx ? 'fbx' : 'gltf'),
@@ -41,7 +45,7 @@ export const EXPORT_KINDS = {
 const DEFAULT_ANIM = 'idl';
 
 const DEFAULT_FORMAT = 'glb';
-const DEFAULT_ARGS = { model: ['--all-parts'], anim: [], zone: [] };
+const DEFAULT_ARGS = { model: ['--all-parts'], pose: [], anim: [], zone: [] };
 
 function loadFormat(key) {
   try {
@@ -127,6 +131,32 @@ export function buildXiArgs(catalog, datPath, folder, format, userArgs) {
   return [...args, ...argv];
 }
 
+/**
+ * `xi gear pose <every worn DAT> --main <weapon> … --output <dir> [--fbx] <user args…>`.
+ *
+ * Unlike the other kinds this is not one DAT: the whole worn set goes on the command
+ * line at once, because the occlusion pass needs to see every piece before it can tell
+ * which are hidden — a helmet only drops the hair if the hair is in the same run. The
+ * hand slots are named separately so xi can re-parent them onto the hands; passing a
+ * weapon positionally would leave it at its bind pose on the floor. The anim-only DATs
+ * go in as `--anim-dat`: they carry the upper-body and waist layers of the clip the pose
+ * is frozen at, and without them only the legs are posed.
+ */
+export function buildPoseArgs(pose, folder, format, userArgs) {
+  const argv = tokensToArgv(userArgs);
+  const has = (flag) => argv.includes(flag);
+  const args = [...EXPORT_COMMANDS.pose, ...(pose.gear ?? [])];
+  for (const [flag, paths] of [['--main', pose.main], ['--sub', pose.sub], ['--ranged', pose.ranged],
+    ['--anim-dat', pose.motion]]) {
+    for (const path of paths ?? []) args.push(flag, path);
+  }
+  if (pose.drawRanged && !has('--draw-ranged')) args.push('--draw-ranged');
+  if (!has('--output')) args.push('--output', folder);
+  if (!has('--name') && pose.stem) args.push('--name', pose.stem);
+  if (format === 'fbx' && !has('--fbx')) args.push('--fbx');
+  return [...args, ...argv];
+}
+
 const stemOf = (path) => (String(path || '').split(/[\\/]/).pop() || 'export').replace(/\.dat$/i, '');
 
 /**
@@ -155,6 +185,11 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
   const isXi = spec?.type === 'model' || spec?.type === 'zone';
   const kindId = spec?.type === 'zone' ? 'zone' : mode;
   const kind = EXPORT_KINDS[kindId];
+  // Full Pose needs a composed character (race skeleton + worn slots). A single-DAT
+  // model has nothing to assemble, so the tab only appears when App supplies one.
+  const pose = spec?.pose ?? null;
+  const modeIds = pose ? ['mesh', 'pose', 'anim'] : ['mesh', 'anim'];
+  const isPose = kindId === 'pose';
 
   /** Read a kind's saved folder + format + args, dropping an --anim this model lacks. */
   const hydrate = (id) => {
@@ -170,6 +205,13 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
     if (id === 'anim' && tokenValue(next, '--anim') == null) {
       const first = spec?.animations?.[0]?.id;
       if (first) next = addToken('anim', next, `--anim ${first}`);
+    }
+    // Full Pose exports what is on screen, so it re-seeds the clip and frame from the
+    // viewport every time it opens rather than restoring whatever was exported last.
+    // Both are ordinary tokens, so they can still be edited before exporting.
+    if (id === 'pose' && spec?.playing?.anim) {
+      next = addToken('pose', next, `--anim ${spec.playing.anim}`);
+      next = addToken('pose', next, `--frame ${spec.playing.frame ?? 0}`);
     }
     setArgs(next);
     saveArgs(k.store, next);
@@ -200,7 +242,8 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
   const store = kind?.store;
 
   // Character / NPC composites load several DATs; each is separately exportable.
-  const sources = (spec.type === 'model' && spec.sources?.length > 1) ? spec.sources : null;
+  // Not in Full Pose, which is the whole set at once by definition.
+  const sources = (!isPose && spec.type === 'model' && spec.sources?.length > 1) ? spec.sources : null;
   const activePath = sources
     ? (sources.find((s) => s.path.toLowerCase() === sourcePath.toLowerCase())?.path ?? sources[0].path)
     : (spec.sourcePath || '');
@@ -211,7 +254,15 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
   const setArgList = (next) => { setArgs(next); saveArgs(store, next); };
 
   const animId = tokenValue(args, '--anim');
-  const animFrames = spec.animations?.find((a) => a.id === animId)?.frames ?? 1;
+  // Full Pose exports either the single frame on screen or the whole clip.
+  const allFrames = args.some((t) => t.trim() === '--all-frames');
+  const setAllFrames = (on) => setArgList(on
+    ? addToken(catalog, args, '--all-frames')
+    : removeFlag(args, '--all-frames'));
+  const animEntry = spec.animations?.find((a) => a.id === animId);
+  // Full Pose counts frames on the played timeline (matching the viewport's counter and
+  // `xi gear pose --frame`); mesh export indexes the DAT's stored keyframes.
+  const animFrames = (isPose ? animEntry?.playFrames : animEntry?.frames) ?? 1;
   const frame = Math.min(Math.max(Number(tokenValue(args, '--frame')) || 0, 0), Math.max(animFrames - 1, 0));
   const setFrame = (n) => setArgList(addToken(catalog, args, `--frame ${n}`));
 
@@ -234,13 +285,17 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
   };
 
   const outExt = isXi ? kind.ext(format === 'fbx') : 'wav';
+  const poseStem = pose ? sanitizeFileName(pose.stem || spec.name || datStem) : datStem;
   const outStem = !isXi
     ? sanitizeFileName(spec.outStem)
-    : (kindId === 'anim' ? `${datStem}_${animId || DEFAULT_ANIM}` : datStem);
+    : (isPose ? poseStem
+      : kindId === 'anim' ? `${datStem}_${animId || DEFAULT_ANIM}` : datStem);
   const headTitle = isXi
     ? `Export ${kind.label}: ${spec.name || datStem}`
     : `Export ${spec.typeLabel}: ${spec.title}`;
-  const previewArgs = isXi ? buildXiArgs(catalog, activePath, folder || '…', format, args) : null;
+  const previewArgs = !isXi ? null
+    : (isPose ? buildPoseArgs({ ...pose, stem: poseStem }, folder || '…', format, args)
+      : buildXiArgs(catalog, activePath, folder || '…', format, args));
 
   const doExport = async () => {
     if (!folder) { onStatus?.('Choose an export folder first.'); return; }
@@ -265,7 +320,9 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
     });
     try {
       if (isXi) {
-        const xiArgs = buildXiArgs(catalog, activePath, folder, format, args);
+        const xiArgs = isPose
+          ? buildPoseArgs({ ...pose, stem: poseStem }, folder, format, args)
+          : buildXiArgs(catalog, activePath, folder, format, args);
         const cmd = `xi ${xiArgs.map(shellQuote).join(' ')}`;
         const title = `xi ${EXPORT_COMMANDS[catalog].join(' ')} · ${snap.datStem}`;
         const head = [];
@@ -328,7 +385,7 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
 
   return (
     <div className="modal-backdrop" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal" ref={panelRef} style={style}>
+      <div className="modal export-modal" ref={panelRef} style={style}>
         <div className="modal-header" onPointerDown={startDrag} onPointerMove={onDrag} onPointerUp={endDrag}>
           <span className="icon">download</span>
           <Tooltip content={headTitle}>
@@ -343,7 +400,7 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
 
         {spec.type === 'model' && (
           <div className="settings-tabs" role="tablist">
-            {['mesh', 'anim'].map((id) => (
+            {modeIds.map((id) => (
               <button
                 key={id}
                 type="button"
@@ -403,6 +460,26 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
 
           {isXi && (
             <>
+              {isPose && (
+                <div className="form-row">
+                  <label className="form-label">Contents</label>
+                  <Combo
+                    value={allFrames ? 'anim' : 'frame'}
+                    items={[
+                      { id: 'frame', label: animId ? `Single frame of ${animId}` : 'Single frame (bind pose)' },
+                      { id: 'anim', label: animId ? `Whole ${animId} animation` : 'Whole animation' },
+                    ]}
+                    onChange={(v) => setAllFrames(v === 'anim')}
+                    className="export-select"
+                  />
+                  <div className="form-hint">
+                    {allFrames
+                      ? 'Every frame of the clip is embedded, so the export plays in a DCC.'
+                      : 'The clip and frame the viewport is showing, frozen into the mesh.'}
+                  </div>
+                </div>
+              )}
+
               <div className="form-row">
                 <label className="form-label">Output type</label>
                 <Combo
@@ -427,7 +504,7 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
                 </div>
               </div>
 
-              {kindId === 'mesh' && animId && (
+              {(kindId === 'mesh' || isPose) && animId && !allFrames && (
                 <div className="export-frame-row">
                   <span className="export-frame-label mono">--frame</span>
                   <input type="range" min="0" max={Math.max(animFrames - 1, 0)} value={frame}

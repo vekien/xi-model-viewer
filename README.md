@@ -232,6 +232,26 @@ python scripts/serve.py
 then open http://localhost:8766. `window.xi` exposes the renderer for
 debugging.
 
+### Testing the first-run experience
+
+Setup happens once, so the flow a new user meets is the one you stop seeing the
+day you finish setting up. `Reset.bat` puts it back (Windows):
+
+```
+Reset.bat            park everything the viewer remembers
+Reset.bat /restore   put the most recent backup of each back
+```
+
+It renames both places the viewer stores anything aside as
+`<name>.bak-<timestamp>` — the WebView2 profile holding every setting, saved
+scene and path, and `%LOCALAPPDATA%\XiModelViewer\` holding the xi-tools
+install, vgmstream, downloaded lists, the imported database and `notes.json`. The
+next launch is then a genuine first run. Nothing is deleted, and a local xi-tools
+checkout is left alone — only the pointer to it is parked, so the viewer forgets
+it, and its `.env` is shared with other apps.
+
+Close the viewer first: it writes its settings back out on exit.
+
 ## Updating the lists
 
 The asset lists under `ui/public/lists/` are baked into the executable, but this

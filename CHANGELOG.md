@@ -10,6 +10,14 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ## [Unreleased]
 
+### Export
+- **File › Export now has a Full Pose tab** for a character, beside Mesh and Animation. Mesh exports one DAT at a time — a character is nine of them, and the tab exports the lot as a single rigged GLB or FBX: race body, face, every armour slot, and the weapons. It appears only when a composed character is loaded, since a single DAT has nothing to assemble
+- **The pieces the game hides are actually removed.** FFXI gear is authored to overlap — the body keeps its bare wrists, its shins and a full head of hair, and the client drops whichever of those the worn set covers. Merging the DATs by hand leaves all of it sealed inside the armour, where it inflates the mesh, drags along textures nothing samples, and pokes straight through the moment anything is posed. The export runs the same occlusion test the client does, so a robed, full-helmed character comes out ~25% lighter and one texture shorter
+- **Weapons land in the hands.** A weapon is skinned to its own grip joint, which at bind sits at the skeleton root — exported as plain geometry, the sword lies on the floor. The main and off hands are re-parented onto the hand joints the way the client draws them. A stowed ranged weapon is left out entirely, as the game leaves it out; pick a ranged action and it is drawn into the bow hand instead
+- The pose matches what is on screen, upper body included. FFXI splits a clip by body region across the companion motion packs — `idl0` in the race DAT is the legs, `idl1` in the pack is the arms — so those go along too and every layer is merged. Without them a stowed shield ends up at the character's feet instead of on the back
+- **It exports the frame you are looking at.** The tab opens on whatever clip and frame the viewport is playing, and its frame slider reads the same number the Animation panel does — so scrub to the pose you want, open Export, and that is what comes out. Contents switches between that single frame and **the whole animation**, which embeds every frame so the export plays in a DCC; with FBX the motion is baked in
+- Runs through the new `xi gear pose` in xi-tools, so the same export is available from the command line
+
 ## [1.3.0] — 2026-09-08
 
 [Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.2.2...v1.3.0)

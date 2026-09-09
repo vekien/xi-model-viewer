@@ -5,3 +5,9 @@
 # verification on every client, forever. Pin them to LF, as xi-tools does for
 # the same files, so the working copy, the blob and what raw serves agree.
 ui/public/lists/*.json text eol=lf
+
+# cmd.exe parses batch files line by line and needs CRLF: an LF-only file breaks
+# `for /f`, labels and parenthesised blocks in ways that look like syntax errors
+# in the middle of a working script. Stored as LF like any text file, checked out
+# as CRLF so it runs.
+*.bat text eol=crlf

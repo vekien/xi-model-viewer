@@ -3,14 +3,15 @@
 //
 // Mirrors the click definitions in xi-tools:
 //   mesh  → src/xi/entity/mesh/xi_export.py  (`xi mesh export`)
+//   pose  → src/xi/gear/xi_pose.py            (`xi gear pose`)
 //   anim  → src/xi/entity/anim/xi_export.py  (`xi anim export`)
 //   zone  → src/xi/zone/xi_export.py         (`xi zone export`)
 //   fx    → src/xi/fx/xi_export.py           (`xi fx export`)
 //   music → src/xi/audio/xi_music.py         (`xi audio music export`)
 //   sfx   → src/xi/audio/xi_sfx.py           (`xi audio sfx export`)
 //
-// Only mesh and zone are reachable from the dialog today — music/SFX decode to
-// WAV in-app and anim/fx have no export entry point yet — but the catalog is
+// Only mesh, pose and zone are reachable from the dialog today — music/SFX decode
+// to WAV in-app and anim/fx have no export entry point yet — but the catalog is
 // keyed by type so those wire up with no extra work here.
 //
 // Each arg is `{ flag, kind, group, label, hint }` where `kind` is:
@@ -24,6 +25,7 @@
 /** The `xi …` sub-command each type exports through. */
 export const EXPORT_COMMANDS = {
   mesh: ['mesh', 'export'],
+  pose: ['gear', 'pose'],
   zone: ['zone', 'export'],
   anim: ['anim', 'export'],
   fx: ['fx', 'export'],
@@ -120,6 +122,85 @@ const MESH_ARGS = [
     flag: '--no-base', kind: 'flag', group: 'Source',
     label: 'Ignore .base backup',
     hint: 'Ignore any .base pristine backup and export from the live (edited) DAT instead.',
+  },
+];
+
+// `xi gear pose` merges the whole worn set onto one skeleton. The DAT list and the
+// per-hand weapon flags are built from the loaded character, so they are `managed`
+// and never appear in the picker — what is left is how to pose and cull it.
+const POSE_ARGS = [
+  OUTPUT_DIR,
+  FBX,
+  {
+    flag: '--main', kind: 'value', group: 'Weapons', managed: true,
+    label: 'Main-hand weapon', hint: 'Taken from the equipped main-hand slot.',
+  },
+  {
+    flag: '--sub', kind: 'value', group: 'Weapons', managed: true,
+    label: 'Off-hand weapon', hint: 'Taken from the equipped off-hand slot.',
+  },
+  {
+    flag: '--ranged', kind: 'value', group: 'Weapons', managed: true,
+    label: 'Ranged weapon', hint: 'Taken from the equipped ranged slot.',
+  },
+  {
+    flag: '--name', kind: 'value', group: 'Output', managed: true,
+    label: 'File stem', hint: 'Named after the character.',
+  },
+  {
+    flag: '--keep-hidden', kind: 'flag', group: 'Occlusion',
+    label: 'Keep hidden geometry',
+    hint: 'Merge every piece, including the skin and hair the worn gear covers. Off by default: '
+      + 'the export drops what the game hides — bare wrists under sleeves, hair under a helm, '
+      + 'shins under boots — so nothing pokes through in the DCC.',
+  },
+  {
+    flag: '--anim-dat', kind: 'value', group: 'Pose', managed: true,
+    label: 'Motion DATs', hint: 'The loaded motion packs, which carry the clip’s upper-body layers.',
+  },
+  {
+    flag: '--draw-ranged', kind: 'flag', group: 'Weapons', managed: true,
+    label: 'Draw the ranged weapon',
+    hint: 'Added when the current action holds the bow; otherwise the game hides it and so does '
+      + 'the export.',
+  },
+  {
+    flag: '--anim', kind: 'value', group: 'Pose', defaultHint: 'idl',
+    label: 'Pose animation',
+    hint: 'Clip to freeze the pose at — seeded from what the viewport is playing. Pass an '
+      + 'empty value for the neutral bind pose.',
+  },
+  {
+    flag: '--frame', kind: 'value', group: 'Pose', defaultHint: '0',
+    label: 'Pose keyframe',
+    hint: 'Keyframe index within --anim, seeded from the frame on screen.',
+  },
+  {
+    flag: '--all-frames', kind: 'flag', group: 'Pose', managed: true,
+    label: 'Whole animation',
+    hint: 'Set by the Contents picker: embed the whole clip instead of one frame.',
+  },
+  {
+    flag: '--no-weld', kind: 'flag', group: 'Geometry', conflicts: ['--weld'],
+    label: "Don't weld vertices",
+    hint: 'Preserve per-section splitting instead of welding by world position + UV.',
+  },
+  {
+    flag: '--mesh-merge-dp', kind: 'value', group: 'Geometry', defaultHint: '4',
+    label: 'Merge precision (dp)',
+    hint: 'Decimal places used when deduplicating vertices. Lower = more aggressive merging.',
+  },
+  {
+    flag: '--split-tex', kind: 'flag', group: 'Textures',
+    label: 'Split texture',
+    hint: 'Unmirror the skin into a stacked 2-up atlas and remap the UVs so each mirror half '
+      + 'samples its own copy.',
+  },
+  ALPHA_SCALE,
+  {
+    flag: '--skeleton', kind: 'value', group: 'Source',
+    label: 'Skeleton DAT',
+    hint: 'Rig onto this skeleton instead of the first source that has one (the race body).',
   },
 ];
 
@@ -294,6 +375,7 @@ const audioArgs = (what, numbered) => [
 
 export const ARG_CATALOG = {
   mesh: MESH_ARGS,
+  pose: POSE_ARGS,
   zone: ZONE_ARGS,
   anim: ANIM_ARGS,
   fx: FX_ARGS,
@@ -302,7 +384,7 @@ export const ARG_CATALOG = {
 };
 
 /** Order groups appear in the picker; anything unlisted sorts last, in place. */
-const GROUP_ORDER = ['Sections', 'Contents', 'Layout', 'Pose', 'Geometry', 'Textures', 'Extras',
+const GROUP_ORDER = ['Sections', 'Contents', 'Layout', 'Occlusion', 'Weapons', 'Pose', 'Geometry', 'Textures', 'Extras',
   'Clip', 'Skeleton', 'Selection', 'Decoding', 'Naming', 'Bulk mode', 'Source', 'Output'];
 
 /** Args offered in the picker for `type`, minus the ones the dialog owns. */

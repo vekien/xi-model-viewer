@@ -200,6 +200,56 @@ function pcIsolationPaths(keys, parts) {
   }
   return paths;
 }
+
+/**
+ * The character composition File > Export's "Full Pose" hands to `xi gear pose`:
+ * every worn DAT, plus which one is in each hand.
+ *
+ * The hand slots are split out because xi has to re-parent them onto the hand joints
+ * the way the client draws a weapon — listed as plain gear they would export at their
+ * bind pose, which for a weapon is on the floor at the skeleton root. Everything else
+ * goes in one list so the occlusion pass can see the whole set at once: a helm only
+ * knows to drop the hair if the hair is in the same run.
+ *
+ * `motion` is the anim-only DATs, and they matter more than they look: FFXI splits a
+ * clip by body region across them, so `idl0` in the race DAT is the LOWER body and
+ * `idl1` in the companion pack is the upper. Export without them and every upper-body
+ * joint stays at bind — which is how a shield ends up at the character's feet instead
+ * of on the back.
+ *
+ * Null for anything that isn't a composed character — a single DAT has nothing to
+ * assemble, so the tab stays hidden.
+ */
+function buildPoseComposition({ parts, weaponSlots, rodPaths, animOnlyPaths, rangedInUse, name }) {
+  if (!parts?.length) return null;
+  const key = (p) => String(p).toLowerCase();
+  // A fishing rod is a separate rigged prop with its own skeleton, grafted onto the
+  // actor rather than rigged to it — xi gear pose puts everything on one skeleton, so
+  // it has nowhere to put the rod's own joints.
+  const rods = new Set((rodPaths ?? []).map(key));
+  const weaponKeys = new Set(['main', 'sub', 'range']);
+  const gear = [];
+  for (const p of parts) {
+    if (weaponKeys.has(p.key)) continue;
+    for (const path of p.paths ?? []) {
+      if (!rods.has(key(path))) gear.push(path);
+    }
+  }
+  if (!gear.length) return null;
+  const hand = (k) => (weaponSlots?.[k] ?? []).filter((p) => !rods.has(key(p)));
+  const worn = new Set(gear.map(key));
+  return {
+    stem: name || 'character',
+    gear: [...new Set(gear)],
+    main: hand('main'),
+    sub: hand('sub'),
+    ranged: hand('range'),
+    // A weapon-skill / ranged action holds the bow; otherwise the game scales it to
+    // zero, and so does the export.
+    drawRanged: !!rangedInUse,
+    motion: [...new Set((animOnlyPaths ?? []).filter((p) => !worn.has(key(p))))],
+  };
+}
 // A schedule sequence lays segments on a timeline; a joint whose segment hasn't
 // started yet would show bind pose (T-pose flash each loop). Underlay a looping
 // idle so those joints rest naturally — battle idle for weapon actions if it's
@@ -828,6 +878,23 @@ export default function App({ launch = null }) {
   }, []);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsError, setSettingsError] = useState('');
+  // Which tab Settings opens on. Actions that fail for a fixable reason send
+  // the user to the tab that fixes it (Export with no xi-tools → 'xitools').
+  const [settingsTab, setSettingsTab] = useState('general');
+  // What the banner is complaining about, so a fix for one thing doesn't clear
+  // the message about another (a good game path must not retire "no xi-tools").
+  const settingsErrorKind = useRef('');
+  const showSettingsError = useCallback((text, kind = '') => {
+    settingsErrorKind.current = text ? kind : '';
+    setSettingsError(text);
+  }, []);
+  // The modal reports that the Game path field resolves; only the banner that
+  // was about the game path is stale because of it.
+  const onGamePathValid = useCallback(() => {
+    if (settingsErrorKind.current !== 'gamepath') return;
+    settingsErrorKind.current = '';
+    setSettingsError('');
+  }, []);
   // Greet first-time users with the About panel (controls + links), then never
   // auto-open it again. A missing/false 'booted' flag means this install has
   // never launched before.
@@ -2494,6 +2561,11 @@ export default function App({ launch = null }) {
         }
         for (const path of paths) pushSrc(relKey(path), relativeName(path), path);
         setDataSources(sources);
+        // Set (or cleared) on every load, not just character loads — otherwise a
+        // composition would linger and offer Full Pose for the next single DAT.
+        poseRef.current = buildPoseComposition({
+          parts, weaponSlots, rodPaths, animOnlyPaths, rangedInUse, name: displayName,
+        });
       }
 
       setTexWindows([]);   // close texture windows from the previous model
@@ -3716,6 +3788,7 @@ export default function App({ launch = null }) {
   // Character composer (Assets > Characters) — shared by the left panel and
   // the Animation panel Action combo.
   const pcPartsRef = useRef([]);
+  const poseRef = useRef(null);             // Full Pose composition, or null if not a character
   const pcIsoKeysRef = useRef(new Set());   // slot keys isolated in the composer
   const applyPcIsolation = useCallback((keys, parts) => {
     if (parts) pcPartsRef.current = parts;
@@ -4296,7 +4369,7 @@ export default function App({ launch = null }) {
         settingsRef.current = initialSettings;
 
         if (!gamePath) {
-          setSettingsError('Game path not set. Browse to your FINAL FANTASY XI install folder.');
+          showSettingsError('Game path not set. Browse to your FINAL FANTASY XI install folder.', 'gamepath');
           setSettingsOpen(true);
           setStatusText('Set a game path in Settings to get started.');
           return;
@@ -4305,7 +4378,7 @@ export default function App({ launch = null }) {
         try {
           await backend.listDir(gamePath);
         } catch {
-          setSettingsError(`Game path not found:\n${gamePath}`);
+          showSettingsError(`Game path not found:\n${gamePath}`, 'gamepath');
           setSettingsOpen(true);
           setStatusText('Game path not found — open Settings to fix it.');
           return;
@@ -7650,20 +7723,20 @@ export default function App({ launch = null }) {
     const prevNavmesh = settingsRef.current?.navmeshPath ?? '';
 
     if (!gamePath) {
-      setSettingsError('Game path is required. Browse to your FINAL FANTASY XI install folder.');
+      showSettingsError('Game path is required. Browse to your FINAL FANTASY XI install folder.', 'gamepath');
       return;
     }
     try {
       await backend.listDir(gamePath);
     } catch {
-      setSettingsError(`Game path not found:\n${gamePath}`);
+      showSettingsError(`Game path not found:\n${gamePath}`, 'gamepath');
       return;
     }
     if (hdPath) {
       try {
         await backend.listDir(hdPath);
       } catch {
-        setSettingsError(`HD path not found:\n${hdPath}`);
+        showSettingsError(`HD path not found:\n${hdPath}`, 'hdpath');
         return;
       }
     }
@@ -7671,7 +7744,7 @@ export default function App({ launch = null }) {
       try {
         await backend.listDir(pivotPath);
       } catch {
-        setSettingsError(`Pivot path not found:\n${pivotPath}`);
+        showSettingsError(`Pivot path not found:\n${pivotPath}`, 'pivotpath');
         return;
       }
     }
@@ -7679,7 +7752,7 @@ export default function App({ launch = null }) {
       try {
         await backend.listDir(navmeshPath);
       } catch {
-        setSettingsError(`Navmesh folder not found:\n${navmeshPath}`);
+        showSettingsError(`Navmesh folder not found:\n${navmeshPath}`, 'navmeshpath');
         return;
       }
     }
@@ -7735,7 +7808,7 @@ export default function App({ launch = null }) {
     };
     setSettings(next);
     settingsRef.current = next;
-    setSettingsError('');
+    showSettingsError('');
     setSettingsOpen(false);
 
     // Path changed (or first successful set) — load the default model.
@@ -7844,7 +7917,22 @@ export default function App({ launch = null }) {
         // gear slot, borrowed anim packs). Same list the Data Struct switches
         // on, so the dialog can export any one of them.
         sources: (dataSourcesRef.current || []).map((d) => ({ id: d.id, label: d.label, path: d.path })),
-        animations: animsRef.current.map((g) => ({ id: g.id, frames: g.clip.numFrames })),
+        // Present only for a composed character — drives the Full Pose tab.
+        pose: poseRef.current,
+        animations: animsRef.current.map((g) => ({
+          id: g.id,
+          // `frames` counts the DAT's stored keyframes, which is what `xi mesh export
+          // --frame` indexes. Full Pose scrubs the played 30 fps timeline instead — the
+          // one the viewport's own frame counter shows — so it needs both.
+          frames: g.clip.numFrames,
+          playFrames: g.clip.lengthInFrames ?? g.clip.numFrames,
+        })),
+        // What the viewport is playing right now, so Full Pose opens on the frame the
+        // user is looking at rather than a fixed default.
+        playing: {
+          anim: currentAnim || null,
+          frame: Math.max(0, Math.round(rendererRef.current?.animFrame ?? 0)),
+        },
         xiPath: s?.xiPath || '',
         gamePath: s?.gamePath || '',
         pivotPath: s?.pivotPath || '',
@@ -7854,13 +7942,31 @@ export default function App({ launch = null }) {
     return null;
   };
 
+  /**
+   * Export shells out to xi-tools — without it the export dialog is a form with
+   * nothing behind it. Send the user to the tab that installs it, with the
+   * reason on screen, rather than to a dialog that can only fail.
+   */
+  const ensureXiTools = async () => {
+    const xiPath = (settingsRef.current?.xiPath || '').trim();
+    const ok = !!xiPath && await backend.xiAvailable(xiPath).catch(() => false);
+    if (ok) return true;
+    showSettingsError('xi-tools is not set up. Exporting runs through it — '
+      + 'click Install / Update below to fetch it.', 'xitools');
+    setSettingsTab('xitools');
+    setSettingsOpen(true);
+    setStatusText('Export needs xi-tools — install it in Settings › XI Tools.');
+    return false;
+  };
+
   const handleMenuAction = (id, label) => {
     switch (id) {
       case 'reload-dat':
         reloadCurrentDat();
         break;
       case 'settings':
-        setSettingsError('');
+        showSettingsError('');
+        setSettingsTab('general');
         setSettingsOpen(true);
         break;
       case 'check-updates': {
@@ -7891,12 +7997,21 @@ export default function App({ launch = null }) {
           break;
         }
         const spec = buildExportSpec();
-        if (spec) setExportSpec(spec);
-        else setStatusText('Nothing to export — load a model or play a track first.');
+        if (!spec) {
+          setStatusText('Nothing to export — load a model or play a track first.');
+          break;
+        }
+        // Music and sound effects go through the bundled vgmstream, so they
+        // export with no xi-tools at all; meshes and zones do not.
+        if (spec.type === 'music' || spec.type === 'sfx') {
+          setExportSpec(spec);
+          break;
+        }
+        ensureXiTools().then((ok) => { if (ok) setExportSpec(spec); });
         break;
       }
       case 'batch-export':
-        setBatchOpen(true);
+        ensureXiTools().then((ok) => { if (ok) setBatchOpen(true); });
         break;
       case 'reset-camera':
         focusOrResetCamera();
@@ -9059,8 +9174,10 @@ export default function App({ launch = null }) {
             showAxes,
           }}
           error={settingsError}
+          initialTab={settingsTab}
+          onGamePathValid={onGamePathValid}
           onSave={saveSettings}
-          onClose={() => { setSettingsOpen(false); setSettingsError(''); }}
+          onClose={() => { setSettingsOpen(false); showSettingsError(''); }}
         />
         <LoadingOverlay
           open={!!loading}
@@ -10010,8 +10127,10 @@ export default function App({ launch = null }) {
           showAxes,
         }}
         error={settingsError}
+        initialTab={settingsTab}
+        onGamePathValid={onGamePathValid}
         onSave={saveSettings}
-        onClose={() => { setSettingsOpen(false); setSettingsError(''); }}
+        onClose={() => { setSettingsOpen(false); showSettingsError(''); }}
       />
 
       <ExportModal

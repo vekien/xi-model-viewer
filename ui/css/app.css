@@ -2858,6 +2858,17 @@ button.details-path-link.mono { font-family: var(--font-mono); font-size: 11px; 
   display: flex;
   flex-direction: column;
 }
+/* Export grew a Contents picker and an args box, so on a short window its body has to
+   scroll — otherwise the Export button itself falls off the bottom of the screen. */
+.modal.export-modal {
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+}
+.modal.export-modal .modal-body { overflow-y: auto; min-height: 0; }
+.modal.export-modal .modal-header,
+.modal.export-modal .modal-actions,
+.modal.export-modal .settings-tabs { flex: 0 0 auto; }
 /* Segmented control under the header — pill track, one filled chip active. */
 .settings-tabs {
   display: flex;
@@ -3101,6 +3112,17 @@ button.settings-tab.on .icon { color: var(--accent); }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Live verdict under a path field. Wraps: "folder not found: <long path>" is
+   the one message where the tail is the whole point. */
+.settings-path-status {
+  margin-top: 6px;
+  padding: 5px 8px;
+}
+.settings-path-status > .icon { font-size: 16px; }
+.settings-path-status .xi-status-msg {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .xi-status-detail {
   margin: 0;
@@ -3901,22 +3923,42 @@ body.ui-hidden #root > .shot-flash { display: block !important; }
 
 /* --- Help / About ---------------------------------------------------------- */
 
-.help-modal { width: 380px; }
-.help-body { align-items: center; text-align: center; gap: 2px; padding: 4px 14px 10px; }
+.help-modal { width: 660px; max-width: calc(100vw - 40px); }
+/* Two columns: who made it on the left, what the keys do on the right. */
+.help-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  align-items: start;
+  gap: 18px;
+  padding: 14px 16px 16px;
+}
+.help-about {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
+  min-width: 0;
+}
 .help-logo {
-  width: 140px;
+  width: 128px;
   height: auto;
   display: block;
-  margin: 20px 0;
+  margin: 4px 0 10px;
   background: transparent;
   border: none;
   border-radius: 0;
   box-shadow: none;
 }
-.help-title { font-size: 17px; font-weight: 650; letter-spacing: 0.01em; margin: 5px 0; }
+.help-title { font-size: 18px; font-weight: 650; letter-spacing: 0.01em; }
+.help-version {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
 .help-badges {
   display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
-  margin: 6px 0 8px;
+  margin: 10px 0 0;
 }
 .help-badge {
   display: inline-block;
@@ -3931,13 +3973,12 @@ body.ui-hidden #root > .shot-flash { display: block !important; }
   border-radius: 999px;
 }
 .help-controls {
-  width: 100%;
   display: flex; flex-direction: column; gap: 10px;
-  margin: 10px 0 4px;
+  min-width: 0;
 }
 .help-controls-group {
   display: flex; flex-direction: column; gap: 3px;
-  padding: 8px 12px;
+  padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid var(--ring);
   background: rgba(0, 0, 0, 0.18);
@@ -3954,6 +3995,7 @@ body.ui-hidden #root > .shot-flash { display: block !important; }
 .help-key-row {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   font-size: 12.5px;
+  padding: 1px 0;
 }
 .help-keys {
   flex: 0 0 auto;
@@ -3968,7 +4010,11 @@ body.ui-hidden #root > .shot-flash { display: block !important; }
 }
 .help-action { color: var(--gray-300); text-align: right; }
 
-.help-links { width: 100%; display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.help-links {
+  width: 100%;
+  display: flex; flex-direction: column; gap: 6px;
+  margin-top: 16px;
+}
 .help-link {
   display: flex; align-items: center; gap: 8px;
   padding: 9px 12px;
@@ -3987,6 +4033,11 @@ body.ui-hidden #root > .shot-flash { display: block !important; }
   color: #fff;
 }
 .help-link > .icon { color: var(--accent); font-size: 18px; flex: 0 0 auto; }
+
+/* Narrow windows (and 200% UI scale) — stack rather than squeeze. */
+@media (max-width: 700px) {
+  .help-body { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* --- Update available (subtle green "new release" chrome) ------------------- */
 
