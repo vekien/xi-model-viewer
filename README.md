@@ -260,13 +260,21 @@ runtime that ships with Windows 11).
 
 ### Linux packages
 
-`.github/workflows/xi-model-viewer-linux.yml` builds both Linux packages on
-Ubuntu 22.04 — the oldest release the app supports — then installs each one in a
-container for Ubuntu 22.04, Ubuntu 24.04, Mint 21, Mint 22 and Manjaro and
-launches it on a virtual display. The .deb goes in through `apt`, so its declared
-dependencies have to genuinely resolve on that distro rather than being papered
-over by `dpkg -i`. Every run uploads a screenshot per distro, which is the
-evidence that the package *works* rather than merely builds.
+`.github/workflows/xi-model-viewer-linux.yml` builds both packages on Ubuntu
+22.04 — the oldest release the app supports — then installs each one, in a
+container per distro, the way a user would. The .deb goes in through `apt` on
+Ubuntu 22.04, Ubuntu 24.04, Mint 21 and Mint 22, so its declared dependencies
+have to genuinely resolve rather than being papered over by `dpkg -i`, and each
+is then launched on a virtual display and photographed. The AppImage gets that
+same launch on Ubuntu 22.04.
+
+On Manjaro the AppImage is unpacked instead, and every library it and the
+WebKit it carries need is checked against what Arch supplies — which is the
+thing that actually breaks an AppImage on Arch. It is not launched there: a
+container has no DRI device, so WebKit cannot bring up EGL inside one however
+well it does on a real Manjaro desktop, and the window opens anyway. That is
+precisely the false pass the launch check exists to refuse, so the leg asserts
+what it can prove rather than what would merely look green.
 
 The launch check is `scripts/linux_smoke_test.sh`, and it runs anywhere:
 
