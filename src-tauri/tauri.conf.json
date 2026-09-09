@@ -28,10 +28,16 @@
   },
   "bundle": {
     "active": false,
+    "publisher": "Vekien",
+    "homepage": "https://github.com/vekien/xi-model-viewer",
+    "category": "Graphics and Design",
+    "shortDescription": "FFXI asset browser in a WebGL2 viewport",
+    "longDescription": "Browse Final Fantasy XI's DAT files as models rather than bytes: zones, NPCs and monsters, playable characters with equipment and animations, spell effects, textures, music and sound effects, and the client's record tables. Exports to GLB and FBX.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
+      "icons/icon.png",
       "icons/icon.ico"
     ]
   }

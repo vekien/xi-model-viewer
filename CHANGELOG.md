@@ -18,6 +18,13 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 - **It exports the frame you are looking at.** The tab opens on whatever clip and frame the viewport is playing, and its frame slider reads the same number the Animation panel does — so scrub to the pose you want, open Export, and that is what comes out. Contents switches between that single frame and **the whole animation**, which embeds every frame so the export plays in a DCC; with FBX the motion is baked in
 - Runs through the new `xi gear pose` in xi-tools, so the same export is available from the command line
 
+### Linux
+- **There are Linux packages now** — a `.deb` and an AppImage, built and released alongside the Windows .exe. Both embed the frontend, the baked lists and the viewport backgrounds exactly as the .exe does, so there is still nothing to install beside them. The .deb is the small one (~20 MB) because it leaves webkit2gtk and gtk3 to the distro, which covers Ubuntu 22.04 and Mint 21 onwards; the AppImage carries that stack itself, which is what lets it run on Arch and Manjaro and what makes it ~95 MB
+- Built on Ubuntu 22.04 against glibc 2.35, and the build now fails if that floor ever creeps upwards. glibc only promises compatibility forwards, so a package built on 24.04 does not merely warn on 22.04 or Mint 21 — it refuses to start, on a machine nobody building it is sitting at
+- The build does not stop at "it compiled". Every run installs each package the way a user would — the .deb through `apt`, so its declared dependencies have to genuinely resolve rather than being papered over by `dpkg -i` — in a container for Ubuntu 22.04, Ubuntu 24.04, Mint 21, Mint 22 and Manjaro, launches it on a virtual display and uploads a screenshot per distro. The check waits for the app to create its data directory, not just for the process to survive: that directory is written by an IPC command the React app calls on mount, so a WebView that came up blank fails it where "still running" would pass
+- The packaged app carries a proper menu entry and icons at the sizes a Linux desktop actually asks for, rather than one 256px image for every slot
+- Audio is the one thing that does not come across. The vgmstream baked into the .exe is a win32 build, so `.bgw`/`.spw` playback on Linux looks for a `vgmstream-cli` on `PATH` instead — everything else works without one
+
 ## [1.3.0] — 2026-09-08
 
 [Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.2.2...v1.3.0)

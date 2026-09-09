@@ -18,6 +18,41 @@ The app checks for a newer release in the background on start — nothing waits 
 it, and if one is out you get a notice with a link to it. **OK** dismisses that
 notice until the next release.
 
+### Linux
+
+Two packages, self-contained in the same sense the .exe is — the frontend, the
+baked lists and the backgrounds live inside the binary either way. Pick by
+distro, not by preference:
+
+```
+sudo apt install ./xi-model-viewer_<version>_amd64.deb    # Ubuntu, Mint, Pop!_OS, Debian
+chmod +x xi-model-viewer_<version>_amd64.AppImage         # everything else, Manjaro included
+./xi-model-viewer_<version>_amd64.AppImage
+```
+
+The **.deb** is the small one (~20 MB) because it leaves webkit2gtk and gtk3 to
+the distro — which is also why it needs a distro that has them: Ubuntu 22.04 and
+Mint 21 onwards do. It installs `/usr/bin/xi-model-viewer` and adds the app to
+your menu. Install it with `apt`, not `dpkg -i`, so those two get pulled in.
+
+The **AppImage** carries that stack itself, which is what lets it run on Arch and
+Manjaro and what makes it ~95 MB. Nothing is installed; delete the file to
+uninstall. It mounts itself with FUSE 2, which Ubuntu and Mint stopped shipping
+by default:
+
+```
+sudo apt install libfuse2      # Ubuntu 22.04, Mint 21
+sudo apt install libfuse2t64   # Ubuntu 24.04, Mint 22
+```
+
+or sidestep FUSE altogether with `APPIMAGE_EXTRACT_AND_RUN=1 ./xi-model-viewer_*.AppImage`.
+
+Both are built on Ubuntu 22.04 against glibc 2.35, and glibc only promises
+compatibility forwards, so they run on 22.04 and anything newer. Audio is the one
+thing that is not in the box: the vgmstream baked into the Windows build is a
+win32 one, so `.bgw`/`.spw` playback looks for a `vgmstream-cli` on `PATH`
+instead (`pacman -S vgmstream`, or build it) — everything else works without it.
+
 ## Features
 
 ### Zones
@@ -209,7 +244,7 @@ Release build (embeds the Vite frontend, standalone binary):
 
 ```
 Build.bat          (Windows)
-./build.sh         (macOS / Linux — pass --bundle for a .dmg/.AppImage)
+./build.sh         (macOS / Linux — pass --bundle for a .deb + .AppImage, or a .dmg)
 ```
 
 or:
@@ -222,6 +257,28 @@ cargo run
 Release exe: `cargo build --release` → `src-tauri/target/release/xi-model-viewer.exe`
 (frontend assets are embedded; the exe is standalone, needing only the WebView2
 runtime that ships with Windows 11).
+
+### Linux packages
+
+`.github/workflows/xi-model-viewer-linux.yml` builds both Linux packages on
+Ubuntu 22.04 — the oldest release the app supports — then installs each one in a
+container for Ubuntu 22.04, Ubuntu 24.04, Mint 21, Mint 22 and Manjaro and
+launches it on a virtual display. The .deb goes in through `apt`, so its declared
+dependencies have to genuinely resolve on that distro rather than being papered
+over by `dpkg -i`. Every run uploads a screenshot per distro, which is the
+evidence that the package *works* rather than merely builds.
+
+The launch check is `scripts/linux_smoke_test.sh`, and it runs anywhere:
+
+```
+scripts/linux_smoke_test.sh src-tauri/target/release/xi-model-viewer --screenshot shot.png
+```
+
+It waits for a window titled *XI Model Viewer* **and** for the app to create its
+data directory. The second half is the point: that directory is created by the
+`lists_update` command, which only runs because React mounted inside the WebView
+and called it — so watching it appear proves the whole stack came up, where "the
+process is still running" would pass a build whose WebView never painted.
 
 Browser dev mode (no Rust):
 

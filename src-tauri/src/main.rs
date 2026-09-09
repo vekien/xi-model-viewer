@@ -172,7 +172,16 @@ fn env_path(name: &str) -> Option<std::path::PathBuf> {
 // vgmstream (ATRAC3 decoder) is embedded in the exe so the app is a single
 // self-contained file. On first use it's extracted to a per-user cache dir.
 // Bump VGM_VERSION whenever these files change to force a re-extract.
+//
+// Windows only. find_vgmstream() never reaches extract_vgmstream() on anything
+// else — Linux and macOS take a vgmstream-cli from PATH — so on those targets
+// this is ten megabytes of unreachable payload. LTO does strip it from the
+// release build today, but that is a `lto = true` in Cargo.toml away from
+// quietly not being true, and the Linux packages are the ones that would carry
+// it. Say it in cfg rather than hope the optimiser keeps noticing.
+#[cfg(windows)]
 const VGM_VERSION: &str = "1";
+#[cfg(windows)]
 const VGM_FILES: &[(&str, &[u8])] = &[
     ("vgmstream-cli.exe", include_bytes!("../vgmstream/vgmstream-cli.exe")),
     ("avcodec-vgmstream-59.dll", include_bytes!("../vgmstream/avcodec-vgmstream-59.dll")),
@@ -190,6 +199,7 @@ const VGM_FILES: &[(&str, &[u8])] = &[
 
 /// Extracts the embedded vgmstream to %LOCALAPPDATA%\XiModelViewer\vgmstream on
 /// first run (or after a version bump) and returns the cli path.
+#[cfg(windows)]
 fn extract_vgmstream() -> Option<std::path::PathBuf> {
     // XI_CACHE_DIR wins; otherwise the Windows locations, then the XDG/HOME
     // cache on unix, then the system temp dir as a last resort.
@@ -251,7 +261,8 @@ fn find_vgmstream() -> Option<std::path::PathBuf> {
             }
         }
     }
-    if cfg!(windows) {
+    #[cfg(windows)]
+    {
         if let Some(p) = extract_vgmstream() {
             return Some(p);
         }
