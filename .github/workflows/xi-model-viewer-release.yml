@@ -1,6 +1,6 @@
 name: xi-model-viewer-release
 
-run-name: xi-model-viewer ${{ inputs.version }}
+run-name: xi-model-viewer ${{ inputs.version }}${{ inputs.dry_run && ' (dry run)' || '' }}
 
 on:
   workflow_dispatch:
@@ -9,6 +9,11 @@ on:
         description: Version to release, e.g. 0.1.0 (no leading v).
         required: true
         type: string
+      dry_run:
+        description: Build and verify everything, then stop without creating or touching a release.
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -18,10 +23,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Build and release
+  windows:
+    name: Build the Windows exe
     # Build.bat produces a Windows exe via MSVC, so this cannot run on ubuntu.
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      exe_bytes: ${{ steps.stage.outputs.exe_bytes }}
 
     steps:
       - name: Checkout repository
@@ -189,35 +198,79 @@ jobs:
           path: ${{ steps.stage.outputs.exe_path }}
           if-no-files-found: error
 
-      - name: Create GitHub Release
+  # The same build CI runs on every push, called with the version being cut so
+  # the packages carry it. Runs alongside the Windows job rather than after it:
+  # both validate the version the same way, so neither needs the other's answer.
+  linux:
+    name: Linux
+    uses: ./.github/workflows/xi-model-viewer-linux.yml
+    with:
+      version: ${{ inputs.version }}
+
+  # One release, made once, with every platform on it. Nothing is published
+  # until Windows has built and the Linux packages have been installed and
+  # opened on each distro — a half-released version is worse than a late one.
+  release:
+    name: Publish the release
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Collect every platform's artifact
+        uses: actions/download-artifact@v4
+        with:
+          # Both jobs upload into this run; merge-multiple flattens them into
+          # one directory rather than one subdirectory each.
+          pattern: xi-model-viewer-*
+          merge-multiple: true
+          path: dist
+
+      - name: Checksum the lot
+        id: assets
+        run: |
+          set -euo pipefail
+          cd dist
+          # Named, not globbed as `*`, so the file cannot end up listing itself.
+          sha256sum xi-model-viewer* > SHA256SUMS
+          ls -l
+          echo "---"
+          cat SHA256SUMS
+
+      - name: Create the GitHub Release
+        if: ${{ !inputs.dry_run }}
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.release.outputs.tag_name }}
-          name: XI Model Viewer v${{ steps.release.outputs.version }}
-          files: ${{ steps.stage.outputs.exe_path }}
+          tag_name: ${{ needs.windows.outputs.tag_name }}
+          name: XI Model Viewer v${{ needs.windows.outputs.version }}
+          files: dist/*
           generate_release_notes: true
           fail_on_unmatched_files: true
 
       - name: Write job summary
         if: always()
-        shell: bash
         run: |
-          release_url="${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.release.outputs.tag_name }}"
-          bytes="${{ steps.stage.outputs.exe_bytes }}"
+          set -euo pipefail
+          release_url="${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.windows.outputs.tag_name }}"
           {
-            echo "## XI Model Viewer v${{ steps.release.outputs.version }}"
+            echo "## XI Model Viewer v${{ needs.windows.outputs.version }}"
             echo ""
             echo "| Field | Value |"
             echo "| --- | --- |"
-            echo "| Version | \`${{ steps.release.outputs.version }}\` |"
-            echo "| Tag | \`${{ steps.release.outputs.tag_name }}\` |"
-            echo "| Trigger | \`${{ github.event_name }}\` |"
+            echo "| Version | \`${{ needs.windows.outputs.version }}\` |"
+            echo "| Tag | \`${{ needs.windows.outputs.tag_name }}\` |"
             echo "| Commit | \`${{ github.sha }}\` |"
-            if [[ -n "$bytes" ]]; then
-              echo "| Asset | \`xi-model-viewer.exe\` ($((bytes / 1048576)) MB) |"
-            else
-              echo "| Asset | _not built_ |"
-            fi
             echo ""
-            echo "[View release]($release_url)"
+            echo "| Asset | Size |"
+            echo "| --- | --- |"
+            for f in dist/*; do
+              echo "| \`$(basename "$f")\` | $(numfmt --to=iec-i --suffix=B "$(stat -c%s "$f")") |"
+            done
+            echo ""
+            if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+              echo "**Dry run** — everything above was built and verified, and no release was created or touched."
+            else
+              echo "[View release]($release_url)"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

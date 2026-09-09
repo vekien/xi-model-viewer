@@ -1,0 +1,474 @@
+name: xi-model-viewer-linux
+
+run-name: Linux build — ${{ inputs.version || github.ref_name }}
+
+# Windows ships a bare .exe (see xi-model-viewer-release.yml). Linux cannot: the
+# app links webkit2gtk and gtk3, so it needs either a package that declares those
+# dependencies or a bundle that carries them. This builds both — a .deb for the
+# Ubuntu/Mint side and an AppImage for everything else, Manjaro included — and
+# then proves each one actually opens on the distros people run.
+#
+# It publishes nothing. xi-model-viewer-release.yml calls it as part of cutting a
+# release, and attaches what it produces alongside the .exe on the one release
+# that dispatch creates; on a push it is plain CI, so Linux breakage surfaces
+# between releases rather than during one.
+on:
+  # How the release workflow builds the Linux half. Everything below is the same
+  # build; only the version differs, and only the caller publishes.
+  workflow_call:
+    inputs:
+      version:
+        description: Version to stamp in. Blank builds whatever the repo carries.
+        required: false
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to stamp in, e.g. 1.3.0 (blank = whatever the repo carries). Builds only — releasing is xi-model-viewer-release.
+        required: false
+        type: string
+  push:
+    # Every branch, but not tags: a path filter is ignored on a tag push, so
+    # without this every `v1.3.0` would kick off a second full build behind the
+    # release dispatch that is already doing one.
+    branches: ['**']
+    paths:
+      - 'ui/**'
+      - '!ui/public/lists/**'
+      - 'src-tauri/**'
+      - 'build.sh'
+      - 'scripts/linux_smoke_test.sh'
+      - '.github/workflows/xi-model-viewer-linux.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  # github.workflow is the *caller's* name under workflow_call, so a release
+  # build gets its own group instead of queueing behind CI on the same ref.
+  group: ${{ github.workflow }}-linux-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+env:
+  # linuxdeploy and appimagetool are themselves AppImages, and mounting one needs
+  # FUSE — which containers and some runner images do not have. This asks them to
+  # unpack to a temp dir instead, which works everywhere.
+  APPIMAGE_EXTRACT_AND_RUN: 1
+
+jobs:
+  build:
+    name: Build .deb and AppImage
+    # Not ubuntu-latest, deliberately. glibc is backwards compatible and nothing
+    # else: a binary built against 24.04's 2.39 dies on startup on Ubuntu 22.04
+    # and Mint 21 with "GLIBC_2.39 not found". Building on the oldest supported
+    # LTS is what makes one package cover 22.04 through Manjaro, and the glibc
+    # floor check below fails the build if that ever stops being true.
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag_name: ${{ steps.resolve.outputs.tag_name }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: resolve
+        env:
+          # Via the environment, not string interpolation: a dispatch input is
+          # text someone typed, and pasting it into the script body would let it
+          # run as shell.
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          version="${INPUT_VERSION:-}"
+          version="${version#v}"
+
+          if [[ -z "${version}" ]]; then
+            version=$(python3 -c "import json;print(json.load(open('src-tauri/tauri.conf.json'))['version'])")
+            echo "No version given — building what the repo carries: ${version}"
+            echo "stamp=false" >> "$GITHUB_OUTPUT"
+          elif [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([._-].+)?$ ]]; then
+            echo "::error::Invalid version '${version}'. Expected MAJOR.MINOR.PATCH."
+            exit 1
+          else
+            echo "stamp=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "version=${version}"   >> "$GITHUB_OUTPUT"
+          echo "tag_name=v${version}" >> "$GITHUB_OUTPUT"
+
+      # The counterpart of the Windows workflow's pwsh step: tauri.conf.json is
+      # what the built app reports as its version, and Cargo.toml keeps the crate
+      # in step. Runner-only — nothing is committed back.
+      - name: Stamp version into the app
+        if: steps.resolve.outputs.stamp == 'true'
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+
+          version = os.environ["VERSION"]
+
+          def stamp(path, pattern):
+              f = Path(path)
+              raw = f.read_text(encoding="utf-8")
+              # Guard on the match, not on the text changing: re-releasing the
+              # version the repo already carries rewrites the field to itself,
+              # which is a no-op, not a missing field.
+              new, n = re.subn(pattern, lambda m: m.group(1) + version + m.group(2),
+                               raw, count=1)
+              if not n:
+                  raise SystemExit(f"Could not find a version field in {path}")
+              f.write_text(new, encoding="utf-8")
+
+          stamp("src-tauri/tauri.conf.json", r'("version"\s*:\s*")[^"]*(")')
+          stamp("src-tauri/Cargo.toml",      r'(?m)^(version\s*=\s*")[^"]*(")')
+          print(f"Stamped version {version}")
+          PY
+
+      # webkit2gtk 4.1 and gtk3 are what tauri links against; patchelf is what the
+      # AppImage bundler uses to rewrite the runpaths of everything it collects.
+      - name: Install Linux build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            patchelf \
+            file \
+            desktop-file-utils
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        working-directory: ui
+        run: npm ci
+
+      # Same fetch the Windows release does, for the same reasons — see the long
+      # comment on that step in xi-model-viewer-release.yml. A fetch failure is
+      # not fatal (the copy committed here is valid, just older); a manifest that
+      # disagrees with the files it arrived with is.
+      - name: Bake the current DAT lists from xi-tools
+        run: |
+          set -uo pipefail
+          tmp=$(mktemp -d)
+          repo=https://github.com/vekien/xi-tools.git
+          ok=1
+          git clone --depth 1 --filter=blob:none --sparse "$repo" "$tmp" || ok=0
+          if [ "$ok" = 1 ]; then
+            git -C "$tmp" sparse-checkout set mv/lists || ok=0
+          fi
+          if [ "$ok" = 0 ] || [ ! -f "$tmp/mv/lists/manifest.json" ]; then
+            echo "::warning::Could not read xi-tools/mv/lists; baking the lists committed here."
+            exit 0
+          fi
+          cp "$tmp/mv/lists"/*.json ui/public/lists/
+          python3 - <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+          d = Path("ui/public/lists")
+          m = json.loads((d / "manifest.json").read_text(encoding="utf-8"))
+          bad = []
+          for name, want in (m.get("files") or {}).items():
+              f = d / name
+              if not f.is_file():
+                  bad.append(f"{name}: missing")
+                  continue
+              got = hashlib.sha256(f.read_bytes()).hexdigest()
+              if got != want.get("sha256"):
+                  bad.append(f"{name}: {got[:12]} != {str(want.get('sha256'))[:12]}")
+          if bad:
+              print("::error::Baked lists do not match xi-tools' manifest: " + "; ".join(bad))
+              sys.exit(1)
+          total = sum(f["bytes"] for f in m["files"].values())
+          print(f"Baked {len(m['files'])} lists from xi-tools, {total / 1e6:.1f} MB, "
+                f"generated {m.get('generated')}")
+          PY
+
+      # generate_context! embeds ui/dist at compile time, so the frontend has to
+      # exist before anything compiles the crate — including the tests.
+      - name: Build the frontend
+        working-directory: ui
+        run: npm run build
+
+      - name: Run the Rust tests
+        working-directory: src-tauri
+        run: cargo test
+
+      - name: Build the Linux packages
+        working-directory: src-tauri
+        run: npx --yes @tauri-apps/cli@^2 build --bundles deb,appimage
+
+      - name: Collect the packages
+        id: pkg
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          rel=src-tauri/target/release
+          out="$GITHUB_WORKSPACE/dist"
+          mkdir -p "$out"
+
+          deb=$(find "$rel/bundle/deb"      -maxdepth 1 -name '*.deb'      -print -quit)
+          app=$(find "$rel/bundle/appimage" -maxdepth 1 -name '*.AppImage' -print -quit)
+          [ -n "$deb" ] || { echo "::error::No .deb was produced."; exit 1; }
+          [ -n "$app" ] || { echo "::error::No .AppImage was produced."; exit 1; }
+
+          # productName has spaces in it, so tauri writes "XI Model
+          # Viewer_1.2.2_amd64.deb". Rename to the package's own name: a release
+          # asset with %20 in its URL is a nuisance to curl and worse to script.
+          cp "$deb" "$out/xi-model-viewer_${VERSION}_amd64.deb"
+          cp "$app" "$out/xi-model-viewer_${VERSION}_amd64.AppImage"
+          chmod +x "$out/xi-model-viewer_${VERSION}_amd64.AppImage"
+          (cd "$out" && sha256sum xi-model-viewer_* > SHA256SUMS)
+          ls -l "$out"
+
+      - name: Check what was built
+        run: |
+          set -euo pipefail
+          bin=src-tauri/target/release/xi-model-viewer
+          deb=$(ls dist/*.deb)
+
+          echo "### Shared library requirements"
+          objdump -p "$bin" | sed -n '/Version References/,/^$/p'
+
+          # The floor that decides which distros this runs on. Ubuntu 22.04 and
+          # Mint 21 ship glibc 2.35; anything newer in the binary means it dies
+          # on startup there rather than failing here, where it is cheap to fix.
+          floor=2.35
+          need=$(objdump -T "$bin" \
+                 | grep -oE 'GLIBC_[0-9]+(\.[0-9]+)+' | sed 's/GLIBC_//' \
+                 | sort -uV | tail -1)
+          echo "Needs glibc ${need}; the oldest supported distro has ${floor}."
+          if [ "$(printf '%s\n%s\n' "$need" "$floor" | sort -V | tail -1)" != "$floor" ]; then
+            echo "::error::Built against glibc ${need}, which is newer than the ${floor} on Ubuntu 22.04 / Mint 21. Build on an older runner."
+            exit 1
+          fi
+
+          echo "### Package metadata"
+          dpkg-deb -I "$deb"
+          dpkg-deb -c "$deb"
+
+          # An invalid desktop entry is invisible until the app is missing from
+          # somebody's menu, so let the validator say so here instead.
+          tmp=$(mktemp -d)
+          dpkg-deb -x "$deb" "$tmp"
+          find "$tmp/usr/share/applications" -name '*.desktop' -print0 \
+            | xargs -0 -r desktop-file-validate
+          echo "Desktop entry is valid."
+
+          {
+            echo "## Linux packages"
+            echo ""
+            echo "| File | Size |"
+            echo "| --- | --- |"
+            for f in dist/xi-model-viewer_*; do
+              echo "| \`$(basename "$f")\` | $(( $(stat -c%s "$f") / 1048576 )) MB |"
+            done
+            echo ""
+            echo "Built against glibc \`${need}\`; runs on anything with \`${floor}\` or newer."
+            echo ""
+            echo '```'
+            dpkg-deb -f "$deb" Package Version Depends Maintainer Homepage
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: xi-model-viewer-linux
+          path: dist/
+          if-no-files-found: error
+
+  # Building is not the same as working. Each of these installs the package the
+  # way a user would, on the distro they actually run, and launches it on a
+  # virtual display — the screenshot each uploads is the evidence.
+  verify:
+    name: ${{ matrix.name }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: ${{ matrix.image }}
+      # Xvfb and apt both want root, and these base images have no other user.
+      options: --user root
+    defaults:
+      run:
+        # A container job's steps default to `sh`, which on Ubuntu and Mint is
+        # dash — no `set -o pipefail`, and the step dies before it runs a line.
+        # Every image in this matrix ships bash, so ask for it by name.
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Ubuntu 22.04 · .deb
+            slug: ubuntu-2204-deb
+            image: ubuntu:22.04
+            family: debian
+            package: deb
+            launch: true
+          - name: Ubuntu 24.04 · .deb
+            slug: ubuntu-2404-deb
+            image: ubuntu:24.04
+            family: debian
+            package: deb
+            launch: true
+          - name: Linux Mint 21 · .deb
+            slug: mint-21-deb
+            image: linuxmintd/mint21-amd64
+            family: debian
+            package: deb
+            launch: true
+          - name: Linux Mint 22 · .deb
+            slug: mint-22-deb
+            image: linuxmintd/mint22-amd64
+            family: debian
+            package: deb
+            launch: true
+          - name: Ubuntu 22.04 · AppImage
+            slug: ubuntu-2204-appimage
+            image: ubuntu:22.04
+            family: debian
+            package: appimage
+            launch: true
+          # Libraries only, and not a shortcut. WebKit inside the AppImage dies
+          # on Arch here with "Could not create default EGL display:
+          # EGL_BAD_PARAMETER" — an Arch container with no DRI device cannot
+          # bring up EGL at all, which a real Manjaro desktop can and does. The
+          # window still opens, so this is exactly the false pass the launch
+          # check refuses to give. What genuinely can break an AppImage on Arch
+          # is a library it left to the system that Arch does not ship, and the
+          # step below settles that question with no display in sight.
+          - name: Manjaro · AppImage (libraries)
+            slug: manjaro-appimage
+            image: manjarolinux/base
+            family: arch
+            package: appimage
+            launch: false
+
+    steps:
+      # Before checkout, which needs git in the container to do anything but a
+      # tarball download. Xvfb + xdotool are what the smoke test drives; the mesa
+      # software renderer is what stands in for the GPU that is not here.
+      - name: Install the test harness
+        run: |
+          set -eux
+          if [ "${{ matrix.family }}" = "debian" ]; then
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update
+            apt-get install -y --no-install-recommends \
+              ca-certificates git xvfb xdotool imagemagick dbus-x11 \
+              desktop-file-utils
+            # The GTK stack and the GL drivers go in only on the AppImage legs.
+            # An AppImage is built against a desktop and deliberately leaves
+            # those to the system — a container with literally nothing in it is
+            # not a machine anybody runs. webkit2gtk stays absent either way,
+            # which is the thing this leg exists to prove. On a .deb leg they
+            # stay out entirely, so the package's own Depends have to pull them.
+            if [ "${{ matrix.package }}" = "appimage" ]; then
+              # libgles2 is not optional decoration: without libGLESv2.so.2 the
+              # app comes all the way up — window, React, IPC — and paints an
+              # entirely black screen.
+              apt-get install -y --no-install-recommends \
+                libgtk-3-0 libegl1 libgles2 libgl1-mesa-dri libglx-mesa0
+            fi
+          else
+            pacman -Syu --noconfirm --needed \
+              ca-certificates git xorg-server-xvfb xdotool imagemagick dbus \
+              gtk3 mesa libglvnd
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download the packages
+        uses: actions/download-artifact@v4
+        with:
+          name: xi-model-viewer-linux
+          path: dist
+
+      # The .deb goes in through apt so its Depends have to actually resolve on
+      # this distro — the failure that a plain `dpkg -i` would paper over. The
+      # AppImage is supposed to need none of that, so it is run where it lands.
+      - name: Install the package
+        run: |
+          set -eux
+          if [ "${{ matrix.package }}" = "deb" ]; then
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get install -y ./dist/xi-model-viewer_*_amd64.deb
+            echo "APP=/usr/bin/xi-model-viewer" >> "$GITHUB_ENV"
+            # A package that installs a binary and nothing else leaves the app
+            # missing from the menu, which is not a failure anything else here
+            # would notice.
+            dpkg -L xi-model-viewer | grep -q '\.desktop$'
+            dpkg -L xi-model-viewer | grep -q 'icons/hicolor/32x32/apps/'
+          else
+            chmod +x dist/xi-model-viewer_*_amd64.AppImage
+            echo "APP=$(ls dist/xi-model-viewer_*_amd64.AppImage)" >> "$GITHUB_ENV"
+          fi
+
+      # Deterministic, and it needs no display: does everything the AppImage
+      # carries actually resolve against this distro? A library it left to the
+      # system that the system does not have is the failure that makes an
+      # AppImage useless on Arch, and it is invisible until someone runs it.
+      - name: Check the AppImage resolves here
+        if: matrix.package == 'appimage'
+        run: |
+          set -euo pipefail
+          dir=$(mktemp -d)
+          cp "$APP" "$dir/app.AppImage"
+          (cd "$dir" && ./app.AppImage --appimage-extract >/dev/null)
+          root="$dir/squashfs-root"
+          export LD_LIBRARY_PATH="$root/usr/lib:$root/usr/lib/x86_64-linux-gnu"
+
+          missing=0
+          for f in "$root/usr/bin/xi-model-viewer" \
+                   "$root/usr/lib/libwebkit2gtk-4.1.so.0" \
+                   "$root"/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKit*Process; do
+            if [ ! -e "$f" ]; then
+              echo "::error::not in the AppImage at all: $f"
+              missing=1
+              continue
+            fi
+            echo "--- $(basename "$f")"
+            if ldd "$f" | grep 'not found'; then
+              echo "::error::$(basename "$f") has libraries this distro cannot supply"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then exit 1; fi
+          echo "Every library the AppImage needs resolves on ${{ matrix.name }}."
+
+      - name: Launch it
+        if: matrix.launch
+        run: scripts/linux_smoke_test.sh "$APP" --timeout 180 --screenshot "shots/${{ matrix.slug }}.png"
+
+      - name: Upload the screenshot
+        if: always() && matrix.launch
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-${{ matrix.slug }}
+          path: shots/
+          if-no-files-found: warn
+

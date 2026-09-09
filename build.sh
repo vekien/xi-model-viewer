@@ -4,8 +4,8 @@
 # Do NOT use plain `cargo build` — that leaves the app pointed at localhost:5173.
 #
 # Usage: ./build.sh [--bundle] [--no-reveal]
-#   --bundle      also produce a platform installer (.dmg / .AppImage / .deb).
-#                 Requires "bundle.active": true in src-tauri/tauri.conf.json.
+#   --bundle      also produce installers: .deb + .AppImage on Linux, .app +
+#                 .dmg on macOS — the same targets the Linux CI build ships.
 #   --no-reveal   skip opening the output folder when the build finishes.
 set -euo pipefail
 
@@ -19,7 +19,7 @@ for arg in "$@"; do
     case "$arg" in
         --bundle)     BUNDLE=1 ;;
         --no-reveal)  REVEAL=0 ;;
-        -h|--help)    sed -n '2,10p' "${BASH_SOURCE[0]}"; exit 0 ;;
+        -h|--help)    sed -n '2,9p' "${BASH_SOURCE[0]}"; exit 0 ;;
         *) echo "Unknown option: $arg" >&2; exit 2 ;;
     esac
 done
@@ -96,7 +96,13 @@ echo
 # `tauri build` runs beforeBuildCommand (npm run build), embeds ui/dist, and
 # produces a standalone binary that does not need a local dev server.
 if [ "$BUNDLE" -eq 1 ]; then
-    cargo tauri build
+    # Name the targets rather than leaning on "bundle.active": --bundles turns
+    # bundling on by itself, so the config stays off by default (Windows ships a
+    # bare .exe) and a local build here produces exactly what CI uploads.
+    case "$(uname -s)" in
+        Darwin) cargo tauri build --bundles app,dmg ;;
+        *)      cargo tauri build --bundles deb,appimage ;;
+    esac
 else
     cargo tauri build --no-bundle
 fi
