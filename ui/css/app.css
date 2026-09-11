@@ -1467,10 +1467,12 @@ button.cli-output-stop:hover {
   from { transform: scaleX(1); }
   to { transform: scaleX(0); }
 }
-/* The sweep is the one looping animation here; the countdown still runs, since it is
-   telling you how long is left rather than decorating. */
+/* Both animations carry state rather than decorate — the sweep says "xi is still
+   running", the countdown says how long is left — so reduced motion only slows the
+   sweep down instead of freezing it. (Windows with "Animation effects" off reports
+   reduce, which used to leave the strip as a static faint band.) */
 @media (prefers-reduced-motion: reduce) {
-  .cli-output-progress.is-running::after { animation: none; opacity: 0.55; }
+  .cli-output-progress.is-running::after { animation-duration: 2.8s; }
 }
 
 #statusFile {
@@ -2616,8 +2618,12 @@ button.details-path-link.mono { font-family: var(--font-mono); font-size: 11px; 
   min-width: max(var(--combo-min-width, 0px), 168px);
   max-width: min(440px, calc(100vw - 24px)) !important;
   scrollbar-gutter: stable;
-  /* Above Settings/modals (backdrop 5000) so Combos inside dialogs stay usable. */
-  z-index: 5100;
+  /* Above every floating window. A click raises the clicked window to
+     modalZCounterRef (App.jsx), which starts at 10000 and only climbs, so the
+     panel has to clear that range too — at 5100 the Install-mode Combo in
+     Settings opened underneath the window it dropped out of. Tooltips sit at
+     100000 and stay on top. */
+  z-index: 90000;
   margin-top: 4px;
   padding: 4px;
   background:
