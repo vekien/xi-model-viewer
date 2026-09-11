@@ -10,6 +10,16 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [1.5.0] — 2026-09-11
+
+[Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.4.0...v1.5.0)
+
+### First run
+- **A setup wizard greets a fresh install.** With no FFXI folder set, the app used to open straight into Settings behind an error banner. It now walks through four steps — the FFXI folder, an optional HD texture pack, XI Tools for exporting, and a final check — and only the first is required; the rest can be skipped and set later in Settings. The folder is checked as you type, the background installs of xi-tools and the DAT lists wait until the wizard is done so the two never write to the same place at once, and when it closes a pointer shows where the Assets menu is
+- Settings and About are floating windows now, like the other panels: no dimmed backdrop, so a click on the viewport moves the camera instead of closing them. × and Esc still close them. The game path in Settings is also checked live while you type, rather than only when you press Save
+
 ### Models
 - **Effect-only NPCs render.** Home Points, telepoints, portals, lightbeams, vortexes and every elemental used to open as an empty stage — the viewer read the skeleton, the mesh and the idle clip, drew all three, and there was nothing to see. The mesh in those DATs is a decoy: one triangle about 3 mm across, painted with a 2×1 black texture, on a skeleton named `toum` (*toumei*, transparent). It is there so the client's actor system has something to place, click and pose. The whole visible object is `0x05` generators drawing `0x1F` ParticleMesh geometry, which nothing here parsed. It does now, and the 104 models built that way are marked **(Effect)** in the NPC list
 - **Effect layers composite additively**, which is what makes an aura an aura. FFXI authors a glow shell with a vertex colour ramping from white to black and relies on the generator's blend mode to make the black end vanish; a generator that declares no `0x1E` BlendFunc falls through to `Src_One_Add`. Drawn opaque — as any straightforward port of the mesh path would — the same geometry reads as a solid dark shell wrapped around the model. Layers that *do* declare a blend mode still get it: a Home Point's crystal is alpha-blended and the five shells around it are additive
