@@ -40,23 +40,116 @@ const SOUND_OPS = new Set([0x0a, 0x0b, 0x4a, 0x53, 0x60]);
  */
 const ANIM_OP = 0x05;
 
+/**
+ * Control flow. sec2 is a PROGRAM, not a list: 0x69/0x6A bracket a block,
+ * 0x64/0x67 are if/else over operands 0x6B pushes, and 0x3D/0x3E bracket a set
+ * of siblings the engine picks exactly ONE of at random (effect_system.md §3).
+ *
+ * Walking it flat ran every branch at once. A dual-wield swing reaches the
+ * shared damage dispatcher (`atl0` → `dada`), whose `atpr` tests the weapon
+ * type against 0…23 in an if/else chain and whose `crtl` picks one of two
+ * criticals — so all of them fired together: 149 generators on one hit, on top
+ * of `vatk` playing all seven attack grunts simultaneously.
+ *
+ * The brackets are trustworthy: across the 103,351 retail 0x07 routines in the
+ * effect DATs and every race's motion packs, 0x69/0x6A and 0x3D/0x3E balance in
+ * every single one, and none overruns the 256-entry guard.
+ */
+const BLOCK_OPEN = 0x69;
+const BLOCK_CLOSE = 0x6a;
+const RANDOM_OPEN = 0x3d;    // exactly one entry between these two runs
+const RANDOM_CLOSE = 0x3e;
+const OP_IF = 0x64;
+const OP_ELSE = 0x67;
+const OP_PUSH = 0x6b;        // operand / operator for the next 0x64
+const CMP_EQUAL = 0x0c;      // 46 of the 48 comparisons in ROM/0/0.DAT
+
 /** Trim trailing NUL/space so a routine ref compares like a DatId key. */
 const cleanId = (s) => s.replace(/\0+$/, '').trimEnd();
+
+/**
+ * The entry stream, flat: `+0 op, +1 u16 sizeWords (low 5 bits), +4 u16 delay,
+ * +6 u16 duration, +8 ref (4 chars)`, advancing by max(1, sizeWords) * 4 until
+ * op 0x00. The 256 guard is the same runaway stop the flat walk always had.
+ */
+function readEntries(bytes, start, end) {
+  const entries = [];
+  let p = start;
+  for (let guard = 0; guard < 256 && p + 8 <= end; guard++) {
+    const op = bytes[p];
+    if (op === 0x00) break;
+    const n = (bytes[p + 1] | (bytes[p + 2] << 8)) & 0x1f;
+    entries.push({ op, p });
+    p += Math.max(1, n) * 4;
+  }
+  return entries;
+}
+
+/**
+ * Nest the flat entries on their bracket pairs. A close with nothing open is
+ * dropped rather than unwinding past the top — no retail routine does it.
+ */
+function nestBlocks(entries) {
+  const root = [];
+  const stack = [root];
+  for (const e of entries) {
+    if (e.op === BLOCK_CLOSE || e.op === RANDOM_CLOSE) {
+      if (stack.length > 1) stack.pop();
+      continue;
+    }
+    stack[stack.length - 1].push(e);
+    if (e.op === BLOCK_OPEN || e.op === RANDOM_OPEN) {
+      e.body = [];
+      stack.push(e.body);
+    }
+  }
+  return root;
+}
+
+/**
+ * One 0x6B: a 16-byte entry is an operand (`u16 0x1C` type, `u16 kind`, `u16
+ * value` — kind 3 reads scheduler register `value`, kind 1 is the literal); a
+ * 12-byte one is the operator.
+ */
+function readOperand(p, u16) {
+  return { kind: u16(p + 10), value: u16(p + 12), operator: u16(p + 8) };
+}
+
+/**
+ * Decide one 0x64.
+ *
+ * The registers hold combat state the server sends — which weapon type landed,
+ * how hard, whether it critted — and a viewer with no target has none of it. So
+ * a condition that can't be settled takes the FIRST branch: showing an effect
+ * beats showing nothing.
+ *
+ * `regs` is what makes that one branch rather than several. The chains are
+ * switches (`atpr`: weapon type == 0, == 1, == 2, … == 23), so binding the
+ * register to the literal of the case we take leaves every later case in the
+ * chain honestly false, and one hit effect plays instead of all twenty-four.
+ */
+function decideCondition(stack, regs) {
+  if (stack.length !== 3) return true;
+  const [lhs, rhs, cmp] = stack;
+  if (lhs.kind !== 3 || rhs.kind !== 1 || cmp.operator !== CMP_EQUAL) return true;
+  const have = regs.get(lhs.value);
+  if (have === undefined) { regs.set(lhs.value, rhs.value); return true; }
+  return have === rhs.value;
+}
 
 /**
  * One 0x07 routine's command list. Ports the sec2 walk in dat.js parseRoutine,
  * but keeps the ops the effect runtime needs rather than the 0x05
  * (skeleton-animation) commands the pose system reads.
  *
- * Layout per entry: +0 op, +1 u16 sizeWords (low 5 bits), +4 u16 delay,
- * +6 u16 duration, +8 ref (4 chars).
- *
  * TIMING — delays are RELATIVE, not absolute: the header's totalDelay (@+0x1C)
  * equals the SUM of all sec2 delays on 26,329 of 26,832 retail routines
  * (98.1%), and equals the max (absolute reading) on zero. Every entry's delay —
  * including ops we don't act on — advances the running clock, and each delay
  * TRAILS its op: a command fires at the sum of the PRIOR entries' delays (see
- * the clock note in the loop; XiClient CMoSchedulerTask::OnMove).
+ * the clock note on `emit`; XiClient CMoSchedulerTask::OnMove). Only entries
+ * that actually RUN advance it, so taking case 1 of a 24-case chain no longer
+ * inherits the other 23 cases' waits.
  */
 function parseRoutineCommands(bytes, dv, section) {
   const base = section.start + 0x10;             // dataStart
@@ -71,35 +164,72 @@ function parseRoutineCommands(bytes, dv, section) {
   const calls = [];
   const sounds = [];
   const anims = [];
-  let p = base + (sec2 - 16);
+  const regs = new Map();                        // bound as conditions are decided
+  let stack = [];                                // operands awaiting the next 0x64
   let clock = 0;                                 // Σ delays of the entries BEFORE this one
-  for (let guard = 0; guard < 256 && p + 8 <= end; guard++) {
-    const op = bytes[p];
-    const n = (bytes[p + 1] | (bytes[p + 2] << 8)) & 0x1f;
-    const entryLen = Math.max(1, n) * 4;
-    if (op === 0x00) break;
 
-    // A tag executes IMMEDIATELY and its delay is the wait AFTER it, before the
-    // next tag — XiClient CMoSchedulerTask::OnMove pumps
-    //   field_98 += tag.delay; ExecuteTag();   (research/XIClient …/CMoSchedulerTask.cpp:75)
-    // and CYyScheduler::CalcTotalFrame measures each window from the sum of the
-    // PRIOR delays. Attaching the delay before its own op instead played
-    // Banishga V's impact sound 65 ticks (1.08s) late while the small generator
-    // delays hid the same error visually.
+  // A tag executes IMMEDIATELY and its delay is the wait AFTER it, before the
+  // next tag — XiClient CMoSchedulerTask::OnMove pumps
+  //   field_98 += tag.delay; ExecuteTag();   (research/XIClient …/CMoSchedulerTask.cpp:75)
+  // and CYyScheduler::CalcTotalFrame measures each window from the sum of the
+  // PRIOR delays. Attaching the delay before its own op instead played
+  // Banishga V's impact sound 65 ticks (1.08s) late while the small generator
+  // delays hid the same error visually.
+  const emit = (node) => {
+    const { op, p } = node;
     const at = clock;
     clock += u16(p + 4);
+    if (p + 16 > end) return;
+    const ref = cleanId(String.fromCharCode(bytes[p + 8], bytes[p + 9], bytes[p + 10], bytes[p + 11]));
+    if (!/^[\x20-\x7e]{1,4}$/.test(ref)) return;
+    if (op === CMD_SPAWN_GENERATOR) commands.push({ genId: ref, delay: at, dur: u16(p + 6) });
+    else if (CALL_OPS.has(op)) calls.push({ routineId: ref, delay: at });
+    else if (SOUND_OPS.has(op)) sounds.push({ soundId: ref, delay: at });
+    else if (op === ANIM_OP) anims.push({ ref, delay: at, dur: u16(p + 6) });
+  };
 
-    if (p + 16 <= end) {
-      const ref = cleanId(String.fromCharCode(bytes[p + 8], bytes[p + 9], bytes[p + 10], bytes[p + 11]));
-      if (/^[\x20-\x7e]{1,4}$/.test(ref)) {
-        if (op === CMD_SPAWN_GENERATOR) commands.push({ genId: ref, delay: at, dur: u16(p + 6) });
-        else if (CALL_OPS.has(op)) calls.push({ routineId: ref, delay: at });
-        else if (SOUND_OPS.has(op)) sounds.push({ soundId: ref, delay: at });
-        else if (op === ANIM_OP) anims.push({ ref, delay: at, dur: u16(p + 6) });
+  const run = (nodes) => {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      const { op, p } = node;
+
+      if (op === OP_PUSH) { clock += u16(p + 4); stack.push(readOperand(p, u16)); continue; }
+
+      if (op === BLOCK_OPEN) { clock += u16(p + 4); run(node.body); continue; }
+
+      if (op === RANDOM_OPEN) {
+        // The engine rolls each time it runs the routine; we parse once, so the
+        // roll happens here and holds until the next load. Always taking the
+        // first would make `vatk` silent forever — three of its seven options
+        // are the no-op that leaves a swing quiet.
+        clock += u16(p + 4);
+        if (node.body.length) run([node.body[Math.floor(Math.random() * node.body.length)]]);
+        continue;
       }
+
+      if (op === OP_IF) {
+        clock += u16(p + 4);
+        const taken = decideCondition(stack, regs);
+        stack = [];
+        let j = i + 1;
+        const thenBlock = nodes[j]?.op === BLOCK_OPEN ? nodes[j++] : null;
+        let elseBlock = null;
+        if (nodes[j]?.op === OP_ELSE) {
+          clock += u16(nodes[j].p + 4);
+          j += 1;
+          if (nodes[j]?.op === BLOCK_OPEN) elseBlock = nodes[j++];
+        }
+        const branch = taken ? thenBlock : elseBlock;
+        if (branch) { clock += u16(branch.p + 4); run(branch.body); }
+        i = j - 1;
+        continue;
+      }
+
+      emit(node);
     }
-    p += entryLen;
-  }
+  };
+
+  run(nestBlocks(readEntries(bytes, base + (sec2 - 16), end)));
   return { commands, calls, sounds, anims };
 }
 

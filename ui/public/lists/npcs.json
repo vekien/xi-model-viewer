@@ -18238,7 +18238,7 @@
           "fileId": 1739
         },
         {
-          "name": "Elemental Actions",
+          "name": "Elemental Actions (Effect)",
           "variants": [
             "ROM\\97\\58.DAT",
             "ROM\\97\\59.DAT",
@@ -18260,7 +18260,8 @@
             1313,
             1314,
             1315
-          ]
+          ],
+          "effect": 5
         },
         {
           "name": "Pixie",
@@ -18379,60 +18380,67 @@
           "fileId": 53223
         },
         {
-          "name": "Fire Elemental",
+          "name": "Fire Elemental (Effect)",
           "variants": [
             "ROM\\5\\71.DAT"
           ],
           "base": null,
-          "fileId": 1736
+          "fileId": 1736,
+          "effect": 3
         },
         {
-          "name": "Ice Elemental",
+          "name": "Ice Elemental (Effect)",
           "variants": [
             "ROM\\5\\72.DAT"
           ],
           "base": null,
-          "fileId": 1737
+          "fileId": 1737,
+          "effect": 4
         },
         {
-          "name": "Air Elemental",
+          "name": "Air Elemental (Effect)",
           "variants": [
             "ROM\\5\\73.DAT"
           ],
           "base": null,
-          "fileId": 1738
+          "fileId": 1738,
+          "effect": 5
         },
         {
-          "name": "Water Elemental",
+          "name": "Water Elemental (Effect)",
           "variants": [
             "ROM\\5\\75.DAT"
           ],
           "base": null,
-          "fileId": 1740
+          "fileId": 1740,
+          "effect": 1
         },
         {
-          "name": "Thunder Elemental",
+          "name": "Thunder Elemental (Effect)",
           "variants": [
             "ROM\\5\\76.DAT"
           ],
           "base": null,
-          "fileId": 1741
+          "fileId": 1741,
+          "effect": 4
         },
         {
-          "name": "Chaos Elemental",
+          "name": "Chaos Elemental (Effect)",
           "variants": [
             "ROM\\5\\77.DAT"
           ],
           "base": null,
-          "fileId": 1742
+          "fileId": 1742,
+          "effect": 4
         },
         {
-          "name": "Dark Elemental",
+          "name": "Dark Elemental (Effect)",
           "variants": [
             "ROM\\5\\78.DAT"
           ],
           "base": null,
-          "fileId": 1743
+          "fileId": 1743,
+          "effect": 3
         },
         {
           "name": "Heartwing",
@@ -18502,12 +18510,13 @@
           "fileId": 1377
         },
         {
-          "name": "Animations: 34 various",
+          "name": "Animations: 34 various (Effect)",
           "variants": [
             "ROM\\97\\64.DAT"
           ],
           "base": null,
-          "fileId": 1314
+          "fileId": 1314,
+          "effect": 3
         },
         {
           "name": "New Year's Festival",
@@ -20936,12 +20945,13 @@
           "fileId": 2280
         },
         {
-          "name": "Shattered Telepoint",
+          "name": "Shattered Telepoint (Effect)",
           "variants": [
             "ROM\\142\\100.DAT"
           ],
           "base": null,
-          "fileId": 1357
+          "fileId": 1357,
+          "effect": 4
         },
         {
           "name": "Enigmatic Sphere",
@@ -20965,20 +20975,22 @@
           ]
         },
         {
-          "name": "Dimensional Portal",
+          "name": "Dimensional Portal (Effect)",
           "variants": [
             "ROM\\157\\56.DAT"
           ],
           "base": null,
-          "fileId": 2639
+          "fileId": 2639,
+          "effect": 7
         },
         {
-          "name": "Sparkles on the Ground",
+          "name": "Sparkles on the Ground (Effect)",
           "variants": [
             "ROM\\158\\9.DAT"
           ],
           "base": null,
-          "fileId": 2636
+          "fileId": 2636,
+          "effect": 2
         },
         {
           "name": "Furnace",
@@ -21211,12 +21223,13 @@
           "fileId": 52561
         },
         {
-          "name": "Seed Afterglow",
+          "name": "Seed Afterglow (Effect)",
           "variants": [
             "ROM\\222\\24.DAT"
           ],
           "base": null,
-          "fileId": 2682
+          "fileId": 2682,
+          "effect": 2
         },
         {
           "name": "Red Bow",
@@ -21271,20 +21284,22 @@
           ]
         },
         {
-          "name": "Rising Portal",
+          "name": "Rising Portal (Effect)",
           "variants": [
             "ROM\\263\\55.DAT"
           ],
           "base": null,
-          "fileId": 52710
+          "fileId": 52710,
+          "effect": 7
         },
         {
-          "name": "Provenance Crystal",
+          "name": "Provenance Crystal (Effect)",
           "variants": [
             "ROM\\267\\58.DAT"
           ],
           "base": null,
-          "fileId": 52712
+          "fileId": 52712,
+          "effect": 6
         },
         {
           "name": "Waypoint",
@@ -21302,12 +21317,13 @@
           ]
         },
         {
-          "name": "Odyssean Passage",
+          "name": "Odyssean Passage (Effect)",
           "variants": [
             "ROM\\306\\52.DAT"
           ],
           "base": null,
-          "fileId": 52716
+          "fileId": 52716,
+          "effect": 8
         },
         {
           "name": "Boat",
@@ -21336,28 +21352,31 @@
           ]
         },
         {
-          "name": "Harvesting Point",
+          "name": "Harvesting Point (Effect)",
           "variants": [
             "ROM\\317\\117.DAT"
           ],
           "base": null,
-          "fileId": 52717
+          "fileId": 52717,
+          "effect": 3
         },
         {
-          "name": "Logging Point",
+          "name": "Logging Point (Effect)",
           "variants": [
             "ROM\\317\\118.DAT"
           ],
           "base": null,
-          "fileId": 52718
+          "fileId": 52718,
+          "effect": 3
         },
         {
-          "name": "Excavation Point",
+          "name": "Excavation Point (Effect)",
           "variants": [
             "ROM\\317\\119.DAT"
           ],
           "base": null,
-          "fileId": 52719
+          "fileId": 52719,
+          "effect": 3
         },
         {
           "name": "Atomos Statue",
@@ -21389,44 +21408,49 @@
           ]
         },
         {
-          "name": "Portal on da Ground",
+          "name": "Portal on da Ground (Effect)",
           "variants": [
             "ROM\\326\\27.DAT"
           ],
           "base": null,
-          "fileId": 52742
+          "fileId": 52742,
+          "effect": 7
         },
         {
-          "name": "Undulating Confluence",
+          "name": "Undulating Confluence (Effect)",
           "variants": [
             "ROM\\333\\35.DAT"
           ],
           "base": null,
-          "fileId": 52785
+          "fileId": 52785,
+          "effect": 7
         },
         {
-          "name": "Sea Quasilumin #1",
+          "name": "Sea Quasilumin #1 (Effect)",
           "variants": [
             "ROM\\262\\101.DAT"
           ],
           "base": null,
-          "fileId": 2345
+          "fileId": 2345,
+          "effect": 3
         },
         {
-          "name": "Sea Quasilumin #2",
+          "name": "Sea Quasilumin #2 (Effect)",
           "variants": [
             "ROM\\156\\110.DAT"
           ],
           "base": null,
-          "fileId": 2296
+          "fileId": 2296,
+          "effect": 3
         },
         {
-          "name": "Eschan Portal #1",
+          "name": "Eschan Portal #1 (Effect)",
           "variants": [
             "ROM\\333\\58.DAT"
           ],
           "base": null,
-          "fileId": 52786
+          "fileId": 52786,
+          "effect": 4
         },
         {
           "name": "Tenzen's Sword",
@@ -21445,20 +21469,22 @@
           "fileId": 53098
         },
         {
-          "name": "Ethereal Ingress #1",
+          "name": "Ethereal Ingress #1 (Effect)",
           "variants": [
             "ROM\\343\\15.DAT"
           ],
           "base": null,
-          "fileId": 52787
+          "fileId": 52787,
+          "effect": 4
         },
         {
-          "name": "Swirling Vortex Entrance",
+          "name": "Swirling Vortex Entrance (Effect)",
           "variants": [
             "ROM\\343\\19.DAT"
           ],
           "base": null,
-          "fileId": 53236
+          "fileId": 53236,
+          "effect": 4
         },
         {
           "name": "Battlefield Memories",
@@ -21630,12 +21656,13 @@
           "fileId": 100095
         },
         {
-          "name": "Floating Teleport",
+          "name": "Floating Teleport (Effect)",
           "variants": [
             "ROM\\378\\111.DAT"
           ],
           "base": null,
-          "fileId": 52773
+          "fileId": 52773,
+          "effect": 3
         },
         {
           "name": "Shadow Lord's Head",
@@ -21706,12 +21733,13 @@
           "fileId": 2777
         },
         {
-          "name": "Telepoint",
+          "name": "Telepoint (Effect)",
           "variants": [
             "ROM\\3\\29.DAT"
           ],
           "base": null,
-          "fileId": 1355
+          "fileId": 1355,
+          "effect": 4
         },
         {
           "name": "Lamp",
@@ -21727,20 +21755,22 @@
           ]
         },
         {
-          "name": "Assault Clear",
+          "name": "Assault Clear (Effect)",
           "variants": [
             "ROM4\\1\\108.DAT"
           ],
           "base": null,
-          "fileId": 51803
+          "fileId": 51803,
+          "effect": 2
         },
         {
-          "name": "Walahra Temple-Gordeus flaots",
+          "name": "Walahra Temple-Gordeus flaots (Effect)",
           "variants": [
             "ROM4\\1\\117.DAT"
           ],
           "base": null,
-          "fileId": 51812
+          "fileId": 51812,
+          "effect": 7
         },
         {
           "name": "Painting",
@@ -21798,7 +21828,7 @@
           "fileId": 51819
         },
         {
-          "name": "Warhorse Hoofprint",
+          "name": "Warhorse Hoofprint (Effect)",
           "variants": [
             "ROM4\\1\\125.DAT"
           ],
@@ -21814,7 +21844,8 @@
                 "wz00"
               ]
             }
-          ]
+          ],
+          "effect": 5
         },
         {
           "name": "Tongue",
@@ -21953,36 +21984,40 @@
           ]
         },
         {
-          "name": "Top of Aht Urghan Teleporter",
+          "name": "Top of Aht Urghan Teleporter (Effect)",
           "variants": [
             "ROM5\\8\\86.DAT"
           ],
           "base": null,
-          "fileId": 52610
+          "fileId": 52610,
+          "effect": 5
         },
         {
-          "name": "Top of Beastmen Teleporter",
+          "name": "Top of Beastmen Teleporter (Effect)",
           "variants": [
             "ROM5\\8\\88.DAT"
           ],
           "base": null,
-          "fileId": 52612
+          "fileId": 52612,
+          "effect": 5
         },
         {
-          "name": "Swirling Vortex",
+          "name": "Swirling Vortex (Effect)",
           "variants": [
             "ROM5\\8\\89.DAT"
           ],
           "base": null,
-          "fileId": 52613
+          "fileId": 52613,
+          "effect": 7
         },
         {
-          "name": "Ethereal Spout",
+          "name": "Ethereal Spout (Effect)",
           "variants": [
             "ROM5\\8\\90.DAT"
           ],
           "base": null,
-          "fileId": 52614
+          "fileId": 52614,
+          "effect": 7
         },
         {
           "name": "Biouvac",
@@ -21998,12 +22033,13 @@
           ]
         },
         {
-          "name": "Assault Gates",
+          "name": "Assault Gates (Effect)",
           "variants": [
             "ROM5\\8\\113.DAT"
           ],
           "base": null,
-          "fileId": 52637
+          "fileId": 52637,
+          "effect": 4
         },
         {
           "name": "Crystal",
@@ -22014,44 +22050,49 @@
           "fileId": 52646
         },
         {
-          "name": "Seed Fragment",
+          "name": "Seed Fragment (Effect)",
           "variants": [
             "ROM6\\0\\18.DAT"
           ],
           "base": null,
-          "fileId": 52652
+          "fileId": 52652,
+          "effect": 7
         },
         {
-          "name": "Tiny Light on the Ground",
+          "name": "Tiny Light on the Ground (Effect)",
           "variants": [
             "ROM6\\0\\102.DAT"
           ],
           "base": null,
-          "fileId": 67447
+          "fileId": 67447,
+          "effect": 4
         },
         {
-          "name": "White Light in Distance",
+          "name": "White Light in Distance (Effect)",
           "variants": [
             "ROM6\\0\\91.DAT"
           ],
           "base": null,
-          "fileId": 67436
+          "fileId": 67436,
+          "effect": 8
         },
         {
-          "name": "Smawl Constant Light",
+          "name": "Smawl Constant Light (Effect)",
           "variants": [
             "ROM6\\0\\92.DAT"
           ],
           "base": null,
-          "fileId": 67437
+          "fileId": 67437,
+          "effect": 8
         },
         {
-          "name": "Medium Yellow Constant Ball",
+          "name": "Medium Yellow Constant Ball (Effect)",
           "variants": [
             "ROM6\\0\\93.DAT"
           ],
           "base": null,
-          "fileId": 67438
+          "fileId": 67438,
+          "effect": 8
         },
         {
           "name": "JP Title-Crystalline Prophecy",
@@ -22086,12 +22127,13 @@
           "fileId": 67443
         },
         {
-          "name": "Big Ol Pretty Crystal",
+          "name": "Big Ol Pretty Crystal (Effect)",
           "variants": [
             "ROM6\\0\\99.DAT"
           ],
           "base": null,
-          "fileId": 67444
+          "fileId": 67444,
+          "effect": 3
         },
         {
           "name": "Big Ol Water Drop",
@@ -22110,36 +22152,40 @@
           "fileId": 67484
         },
         {
-          "name": "Swirling Dark Tendril Portal",
+          "name": "Swirling Dark Tendril Portal (Effect)",
           "variants": [
             "ROM7\\0\\49.DAT"
           ],
           "base": null,
-          "fileId": 67485
+          "fileId": 67485,
+          "effect": 8
         },
         {
-          "name": "Feather Writing Magic",
+          "name": "Feather Writing Magic (Effect)",
           "variants": [
             "ROM8\\0\\24.DAT"
           ],
           "base": null,
-          "fileId": 67535
+          "fileId": 67535,
+          "effect": 1
         },
         {
-          "name": "Super Thunderbolt of Fawk You",
+          "name": "Super Thunderbolt of Fawk You (Effect)",
           "variants": [
             "ROM8\\0\\26.DAT"
           ],
           "base": null,
-          "fileId": 67537
+          "fileId": 67537,
+          "effect": 6
         },
         {
-          "name": "Evil Ground Portal",
+          "name": "Evil Ground Portal (Effect)",
           "variants": [
             "ROM8\\0\\39.DAT"
           ],
           "base": null,
-          "fileId": 67550
+          "fileId": 67550,
+          "effect": 3
         },
         {
           "name": "Random Animations",
@@ -22298,12 +22344,13 @@
           "base": null
         },
         {
-          "name": "Swirling Vortex",
+          "name": "Swirling Vortex (Effect)",
           "variants": [
             "ROM9\\2\\67.DAT"
           ],
           "base": null,
-          "fileId": 53090
+          "fileId": 53090,
+          "effect": 7
         },
         {
           "name": "Tiny Dark-Green Bulb",
@@ -28873,7 +28920,7 @@
           ]
         },
         {
-          "name": "Black Portal",
+          "name": "Black Portal (Effect)",
           "variants": [
             "ROM\\240\\110.DAT"
           ],
@@ -28892,7 +28939,8 @@
                 "wz30"
               ]
             }
-          ]
+          ],
+          "effect": 4
         },
         {
           "name": "Volker (S)",
@@ -37300,7 +37348,7 @@
           ]
         },
         {
-          "name": "Memory Receptacle",
+          "name": "Memory Receptacle (Effect)",
           "variants": [
             "ROM3\\5\\31.DAT",
             "ROM3\\5\\32.DAT",
@@ -37323,10 +37371,11 @@
                 "ni10"
               ]
             }
-          ]
+          ],
+          "effect": 4
         },
         {
-          "name": "Memory Receptacle",
+          "name": "Memory Receptacle (Effect)",
           "variants": [
             "ROM\\272\\85.DAT"
           ],
@@ -37343,7 +37392,8 @@
                 "ni10"
               ]
             }
-          ]
+          ],
+          "effect": 4
         }
       ]
     },
@@ -50077,12 +50127,13 @@
       "name": "Unclassified",
       "entries": [
         {
-          "name": "Qiqirn Mine",
+          "name": "Qiqirn Mine (Effect)",
           "variants": [
             "ROM4\\12\\104.DAT"
           ],
           "base": null,
-          "fileId": 52085
+          "fileId": 52085,
+          "effect": 1
         },
         {
           "name": "Blue Jewel Necklace",
@@ -50101,12 +50152,13 @@
           "fileId": 2287
         },
         {
-          "name": "Time Bomb",
+          "name": "Time Bomb (Effect)",
           "variants": [
             "ROM\\172\\66.DAT"
           ],
           "base": null,
-          "fileId": 52086
+          "fileId": 52086,
+          "effect": 1
         },
         {
           "name": "Kiokudama (Blue Ball)",
@@ -50144,25 +50196,27 @@
           "fileId": 51875
         },
         {
-          "name": "Esoteric Scrivening",
+          "name": "Esoteric Scrivening (Effect)",
           "variants": [
             "ROM\\259\\74.DAT"
           ],
           "base": null,
           "modelId": 2140,
-          "fileId": 52435
+          "fileId": 52435,
+          "effect": 3
         },
         {
-          "name": "Elemental Gyves",
+          "name": "Elemental Gyves (Effect)",
           "variants": [
             "ROM\\259\\75.DAT"
           ],
           "base": null,
           "modelId": 2141,
-          "fileId": 52436
+          "fileId": 52436,
+          "effect": 3
         },
         {
-          "name": "Poisoncloud",
+          "name": "Poisoncloud (Effect)",
           "variants": [
             "ROM9\\1\\26.DAT"
           ],
@@ -50200,7 +50254,8 @@
                 "wz20"
               ]
             }
-          ]
+          ],
+          "effect": 2
         },
         {
           "name": "Icy Palisade",
@@ -50221,13 +50276,14 @@
           "fileId": 53128
         },
         {
-          "name": "Luopan",
+          "name": "Luopan (Effect)",
           "variants": [
             "ROM\\289\\62.DAT"
           ],
           "base": null,
           "modelId": 2856,
-          "fileId": 53151
+          "fileId": 53151,
+          "effect": 11
         }
       ]
     },
@@ -53227,13 +53283,14 @@
           ]
         },
         {
-          "name": "NEW - model 54",
+          "name": "NEW - model 54 (Effect)",
           "variants": [
             "ROM\\3\\28.DAT"
           ],
           "base": null,
           "modelId": 54,
-          "fileId": 1354
+          "fileId": 1354,
+          "effect": 4
         },
         {
           "name": "NEW - model 193",
@@ -55134,148 +55191,164 @@
           "fileId": 52210
         },
         {
-          "name": "NEW - model 1916",
+          "name": "NEW - model 1916 (Effect)",
           "variants": [
             "ROM\\293\\50.DAT"
           ],
           "base": null,
           "modelId": 1916,
-          "fileId": 52211
+          "fileId": 52211,
+          "effect": 4
         },
         {
-          "name": "NEW - model 1917",
+          "name": "NEW - model 1917 (Effect)",
           "variants": [
             "ROM\\293\\51.DAT"
           ],
           "base": null,
           "modelId": 1917,
-          "fileId": 52212
+          "fileId": 52212,
+          "effect": 5
         },
         {
-          "name": "NEW - model 1918",
+          "name": "NEW - model 1918 (Effect)",
           "variants": [
             "ROM\\293\\52.DAT"
           ],
           "base": null,
           "modelId": 1918,
-          "fileId": 52213
+          "fileId": 52213,
+          "effect": 5
         },
         {
-          "name": "NEW - model 1919",
+          "name": "NEW - model 1919 (Effect)",
           "variants": [
             "ROM\\293\\53.DAT"
           ],
           "base": null,
           "modelId": 1919,
-          "fileId": 52214
+          "fileId": 52214,
+          "effect": 4
         },
         {
-          "name": "NEW - model 1920",
+          "name": "NEW - model 1920 (Effect)",
           "variants": [
             "ROM\\293\\54.DAT"
           ],
           "base": null,
           "modelId": 1920,
-          "fileId": 52215
+          "fileId": 52215,
+          "effect": 6
         },
         {
-          "name": "NEW - model 1921",
+          "name": "NEW - model 1921 (Effect)",
           "variants": [
             "ROM\\293\\55.DAT"
           ],
           "base": null,
           "modelId": 1921,
-          "fileId": 52216
+          "fileId": 52216,
+          "effect": 4
         },
         {
-          "name": "NEW - model 1922",
+          "name": "NEW - model 1922 (Effect)",
           "variants": [
             "ROM\\293\\56.DAT"
           ],
           "base": null,
           "modelId": 1922,
-          "fileId": 52217
+          "fileId": 52217,
+          "effect": 5
         },
         {
-          "name": "NEW - model 1923",
+          "name": "NEW - model 1923 (Effect)",
           "variants": [
             "ROM\\293\\57.DAT"
           ],
           "base": null,
           "modelId": 1923,
-          "fileId": 52218
+          "fileId": 52218,
+          "effect": 4
         },
         {
-          "name": "NEW - model 1924",
+          "name": "NEW - model 1924 (Effect)",
           "variants": [
             "ROM\\293\\58.DAT"
           ],
           "base": null,
           "modelId": 1924,
-          "fileId": 52219
+          "fileId": 52219,
+          "effect": 5
         },
         {
-          "name": "NEW - model 1925",
+          "name": "NEW - model 1925 (Effect)",
           "variants": [
             "ROM\\293\\59.DAT"
           ],
           "base": null,
           "modelId": 1925,
-          "fileId": 52220
+          "fileId": 52220,
+          "effect": 6
         },
         {
-          "name": "NEW - model 1926",
+          "name": "NEW - model 1926 (Effect)",
           "variants": [
             "ROM\\293\\60.DAT"
           ],
           "base": null,
           "modelId": 1926,
-          "fileId": 52221
+          "fileId": 52221,
+          "effect": 6
         },
         {
-          "name": "NEW - model 1927",
+          "name": "NEW - model 1927 (Effect)",
           "variants": [
             "ROM\\293\\61.DAT"
           ],
           "base": null,
           "modelId": 1927,
-          "fileId": 52222
+          "fileId": 52222,
+          "effect": 5
         },
         {
-          "name": "NEW - model 1928",
+          "name": "NEW - model 1928 (Effect)",
           "variants": [
             "ROM\\293\\62.DAT"
           ],
           "base": null,
           "modelId": 1928,
-          "fileId": 52223
+          "fileId": 52223,
+          "effect": 6
         },
         {
-          "name": "NEW - model 1929",
+          "name": "NEW - model 1929 (Effect)",
           "variants": [
             "ROM\\293\\63.DAT"
           ],
           "base": null,
           "modelId": 1929,
-          "fileId": 52224
+          "fileId": 52224,
+          "effect": 5
         },
         {
-          "name": "NEW - model 1930",
+          "name": "NEW - model 1930 (Effect)",
           "variants": [
             "ROM\\293\\64.DAT"
           ],
           "base": null,
           "modelId": 1930,
-          "fileId": 52225
+          "fileId": 52225,
+          "effect": 6
         },
         {
-          "name": "NEW - model 1931",
+          "name": "NEW - model 1931 (Effect)",
           "variants": [
             "ROM\\293\\65.DAT"
           ],
           "base": null,
           "modelId": 1931,
-          "fileId": 52226
+          "fileId": 52226,
+          "effect": 5
         },
         {
           "name": "NEW - model 1971",
@@ -55359,58 +55432,64 @@
           "fileId": 52430
         },
         {
-          "name": "NEW - model 2139",
+          "name": "NEW - model 2139 (Effect)",
           "variants": [
             "ROM\\259\\73.DAT"
           ],
           "base": null,
           "modelId": 2139,
-          "fileId": 52434
+          "fileId": 52434,
+          "effect": 3
         },
         {
-          "name": "NEW - model 2142",
+          "name": "NEW - model 2142 (Effect)",
           "variants": [
             "ROM\\259\\76.DAT"
           ],
           "base": null,
           "modelId": 2142,
-          "fileId": 52437
+          "fileId": 52437,
+          "effect": 3
         },
         {
-          "name": "NEW - model 2143",
+          "name": "NEW - model 2143 (Effect)",
           "variants": [
             "ROM\\259\\77.DAT"
           ],
           "base": null,
           "modelId": 2143,
-          "fileId": 52438
+          "fileId": 52438,
+          "effect": 3
         },
         {
-          "name": "NEW - model 2144",
+          "name": "NEW - model 2144 (Effect)",
           "variants": [
             "ROM\\259\\78.DAT"
           ],
           "base": null,
           "modelId": 2144,
-          "fileId": 52439
+          "fileId": 52439,
+          "effect": 3
         },
         {
-          "name": "NEW - model 2145",
+          "name": "NEW - model 2145 (Effect)",
           "variants": [
             "ROM\\259\\79.DAT"
           ],
           "base": null,
           "modelId": 2145,
-          "fileId": 52440
+          "fileId": 52440,
+          "effect": 4
         },
         {
-          "name": "NEW - model 2146",
+          "name": "NEW - model 2146 (Effect)",
           "variants": [
             "ROM\\259\\80.DAT"
           ],
           "base": null,
           "modelId": 2146,
-          "fileId": 52441
+          "fileId": 52441,
+          "effect": 3
         },
         {
           "name": "NEW - model 2157",
@@ -56763,139 +56842,154 @@
           "fileId": 53144
         },
         {
-          "name": "NEW - model 2850",
+          "name": "NEW - model 2850 (Effect)",
           "variants": [
             "ROM\\289\\56.DAT"
           ],
           "base": null,
           "modelId": 2850,
-          "fileId": 53145
+          "fileId": 53145,
+          "effect": 7
         },
         {
-          "name": "NEW - model 2851",
+          "name": "NEW - model 2851 (Effect)",
           "variants": [
             "ROM\\289\\57.DAT"
           ],
           "base": null,
           "modelId": 2851,
-          "fileId": 53146
+          "fileId": 53146,
+          "effect": 11
         },
         {
-          "name": "NEW - model 2852",
+          "name": "NEW - model 2852 (Effect)",
           "variants": [
             "ROM\\289\\58.DAT"
           ],
           "base": null,
           "modelId": 2852,
-          "fileId": 53147
+          "fileId": 53147,
+          "effect": 9
         },
         {
-          "name": "NEW - model 2853",
+          "name": "NEW - model 2853 (Effect)",
           "variants": [
             "ROM\\289\\59.DAT"
           ],
           "base": null,
           "modelId": 2853,
-          "fileId": 53148
+          "fileId": 53148,
+          "effect": 9
         },
         {
-          "name": "NEW - model 2854",
+          "name": "NEW - model 2854 (Effect)",
           "variants": [
             "ROM\\289\\60.DAT"
           ],
           "base": null,
           "modelId": 2854,
-          "fileId": 53149
+          "fileId": 53149,
+          "effect": 9
         },
         {
-          "name": "NEW - model 2855",
+          "name": "NEW - model 2855 (Effect)",
           "variants": [
             "ROM\\289\\61.DAT"
           ],
           "base": null,
           "modelId": 2855,
-          "fileId": 53150
+          "fileId": 53150,
+          "effect": 8
         },
         {
-          "name": "NEW - model 2857",
+          "name": "NEW - model 2857 (Effect)",
           "variants": [
             "ROM\\289\\63.DAT"
           ],
           "base": null,
           "modelId": 2857,
-          "fileId": 53152
+          "fileId": 53152,
+          "effect": 9
         },
         {
-          "name": "NEW - model 2858",
+          "name": "NEW - model 2858 (Effect)",
           "variants": [
             "ROM\\289\\64.DAT"
           ],
           "base": null,
           "modelId": 2858,
-          "fileId": 53153
+          "fileId": 53153,
+          "effect": 8
         },
         {
-          "name": "NEW - model 2859",
+          "name": "NEW - model 2859 (Effect)",
           "variants": [
             "ROM\\289\\65.DAT"
           ],
           "base": null,
           "modelId": 2859,
-          "fileId": 53154
+          "fileId": 53154,
+          "effect": 12
         },
         {
-          "name": "NEW - model 2860",
+          "name": "NEW - model 2860 (Effect)",
           "variants": [
             "ROM\\289\\66.DAT"
           ],
           "base": null,
           "modelId": 2860,
-          "fileId": 53155
+          "fileId": 53155,
+          "effect": 9
         },
         {
-          "name": "NEW - model 2861",
+          "name": "NEW - model 2861 (Effect)",
           "variants": [
             "ROM\\289\\67.DAT"
           ],
           "base": null,
           "modelId": 2861,
-          "fileId": 53156
+          "fileId": 53156,
+          "effect": 9
         },
         {
-          "name": "NEW - model 2862",
+          "name": "NEW - model 2862 (Effect)",
           "variants": [
             "ROM\\289\\68.DAT"
           ],
           "base": null,
           "modelId": 2862,
-          "fileId": 53157
+          "fileId": 53157,
+          "effect": 10
         },
         {
-          "name": "NEW - model 2863",
+          "name": "NEW - model 2863 (Effect)",
           "variants": [
             "ROM\\289\\69.DAT"
           ],
           "base": null,
           "modelId": 2863,
-          "fileId": 53158
+          "fileId": 53158,
+          "effect": 7
         },
         {
-          "name": "NEW - model 2864",
+          "name": "NEW - model 2864 (Effect)",
           "variants": [
             "ROM\\289\\70.DAT"
           ],
           "base": null,
           "modelId": 2864,
-          "fileId": 53159
+          "fileId": 53159,
+          "effect": 12
         },
         {
-          "name": "NEW - model 2865",
+          "name": "NEW - model 2865 (Effect)",
           "variants": [
             "ROM\\289\\71.DAT"
           ],
           "base": null,
           "modelId": 2865,
-          "fileId": 53160
+          "fileId": 53160,
+          "effect": 9
         },
         {
           "name": "NEW - model 2877",
@@ -56916,13 +57010,14 @@
           "fileId": 53173
         },
         {
-          "name": "NEW - model 2915",
+          "name": "NEW - model 2915 (Effect)",
           "variants": [
             "ROM\\318\\24.DAT"
           ],
           "base": null,
           "modelId": 2915,
-          "fileId": 53210
+          "fileId": 53210,
+          "effect": 1
         },
         {
           "name": "NEW - model 2966",
@@ -57076,13 +57171,14 @@
           "fileId": 101809
         },
         {
-          "name": "NEW - model 3579",
+          "name": "NEW - model 3579 (Effect)",
           "variants": [
             "ROM\\354\\94.DAT"
           ],
           "base": null,
           "modelId": 3579,
-          "fileId": 101818
+          "fileId": 101818,
+          "effect": 3
         },
         {
           "name": "NEW - model 3587",
@@ -116988,13 +117084,14 @@
           "fileId": 1350
         },
         {
-          "name": "Home Point #1",
+          "name": "Home Point #1 (Effect)",
           "variants": [
             "ROM\\3\\25.DAT"
           ],
           "base": null,
           "modelId": 51,
-          "fileId": 1351
+          "fileId": 1351,
+          "effect": 4
         },
         {
           "name": "Unity Master",
@@ -117087,7 +117184,7 @@
           "fileId": 52588
         },
         {
-          "name": "Mog-Tablet",
+          "name": "Mog-Tablet (Effect)",
           "variants": [
             "ROM\\222\\16.DAT"
           ],
@@ -117182,7 +117279,8 @@
                 "aef0"
               ]
             }
-          ]
+          ],
+          "effect": 2
         },
         {
           "name": "baku01",
@@ -117194,13 +117292,14 @@
           "fileId": 52595
         },
         {
-          "name": "Resume Point",
+          "name": "Resume Point (Effect)",
           "variants": [
             "ROM\\197\\87.DAT"
           ],
           "base": null,
           "modelId": 2326,
-          "fileId": 52621
+          "fileId": 52621,
+          "effect": 4
         },
         {
           "name": "Shake",
@@ -117221,40 +117320,44 @@
           "fileId": 52640
         },
         {
-          "name": "Npc[1c8]",
+          "name": "Npc[1c8] (Effect)",
           "variants": [
             "ROM\\247\\22.DAT"
           ],
           "base": null,
           "modelId": 2404,
-          "fileId": 52699
+          "fileId": 52699,
+          "effect": 4
         },
         {
-          "name": "Transcendental Radiance",
+          "name": "Transcendental Radiance (Effect)",
           "variants": [
             "ROM\\261\\110.DAT"
           ],
           "base": null,
           "modelId": 2410,
-          "fileId": 52705
+          "fileId": 52705,
+          "effect": 11
         },
         {
-          "name": "010fd27b",
+          "name": "010fd27b (Effect)",
           "variants": [
             "ROM\\261\\112.DAT"
           ],
           "base": null,
           "modelId": 2411,
-          "fileId": 52706
+          "fileId": 52706,
+          "effect": 3
         },
         {
-          "name": "010da244",
+          "name": "010da244 (Effect)",
           "variants": [
             "ROM\\261\\113.DAT"
           ],
           "base": null,
           "modelId": 2412,
-          "fileId": 52707
+          "fileId": 52707,
+          "effect": 2
         },
         {
           "name": "010fd27f",
@@ -117275,13 +117378,14 @@
           "fileId": 52745
         },
         {
-          "name": "Valhallan Rift",
+          "name": "Valhallan Rift (Effect)",
           "variants": [
             "ROM\\375\\109.DAT"
           ],
           "base": null,
           "modelId": 2493,
-          "fileId": 52788
+          "fileId": 52788,
+          "effect": 6
         },
         {
           "name": "Qm",

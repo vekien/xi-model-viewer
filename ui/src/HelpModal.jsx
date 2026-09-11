@@ -28,9 +28,13 @@ const openLink = (e, url) => {
 };
 
 /**
- * About / Help dialog — logo, credits, short blurb, and support links.
+ * About / Help window — logo, credits, short blurb, and support links.
+ *
+ * Backdrop-less like the Settings window and the other floating panels: it sits
+ * over the app rather than blocking it, and a click outside leaves it alone.
+ * The × and Esc close it.
  */
-export function HelpModal({ open, onClose }) {
+export function HelpModal({ open, onClose, onFocus, zIndex = 5000 }) {
   const [pos, setPos] = useState(null);
   const [version, setVersion] = useState('');
   const panelRef = useRef(null);
@@ -69,71 +73,69 @@ export function HelpModal({ open, onClose }) {
   const endDrag = () => { dragState.current = null; };
 
   const style = pos
-    ? { left: pos.x, top: pos.y, transform: 'none' }
-    : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' };
+    ? { left: pos.x, top: pos.y, transform: 'none', zIndex }
+    : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex };
 
   return (
-    <div className="modal-backdrop" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal help-modal" ref={panelRef} style={style}>
-        <div
-          className="modal-header"
-          onPointerDown={startDrag}
-          onPointerMove={onDrag}
-          onPointerUp={endDrag}
-        >
-          <span className="icon">star</span>
-          <span className="modal-title">About</span>
-          <Tooltip content="Close">
-            <Button className="icon-btn modal-close" onClick={onClose}>
-              <span className="icon">close</span>
-            </Button>
-          </Tooltip>
-        </div>
-
-        <div className="modal-body help-body">
-          <section className="help-about">
-            <img className="help-logo" src="./icon.png" alt="" width={128} draggable={false} />
-            <div className="help-title">XI Model Viewer</div>
-            {version && <div className="help-version mono">v{version}</div>}
-            <div className="help-badges">
-              <span className="help-badge">Built by Vekien</span>
-              <span className="help-badge">AI Assisted Dev</span>
-            </div>
-            <div className="help-links">
-              <a className="help-link" href={GITHUB} onClick={(e) => openLink(e, GITHUB)}>
-                <span className="icon">code</span>
-                <span>Source on GitHub</span>
-              </a>
-              <a className="help-link" href={RELEASES} onClick={(e) => openLink(e, RELEASES)}>
-                <span className="icon">system_update_alt</span>
-                <span>Releases &amp; changelog</span>
-              </a>
-            </div>
-          </section>
-
-          <section className="help-controls">
-            <div className="help-controls-group">
-              <div className="help-controls-title">General Assets</div>
-              {GENERAL_CONTROLS.map(([keys, action]) => (
-                <div className="help-key-row" key={keys}>
-                  <span className="help-keys">{keys}</span>
-                  <span className="help-action">{action}</span>
-                </div>
-              ))}
-            </div>
-            <div className="help-controls-group">
-              <div className="help-controls-title">Zones</div>
-              {ZONE_CONTROLS.map(([keys, action]) => (
-                <div className="help-key-row" key={keys}>
-                  <span className="help-keys">{keys}</span>
-                  <span className="help-action">{action}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-        </div>
-
+    <div className="modal help-modal" ref={panelRef} style={style} onPointerDown={onFocus}>
+      <div
+        className="modal-header"
+        onPointerDown={startDrag}
+        onPointerMove={onDrag}
+        onPointerUp={endDrag}
+      >
+        <span className="icon">star</span>
+        <span className="modal-title">About</span>
+        <Tooltip content="Close">
+          <Button className="icon-btn modal-close" onClick={onClose}>
+            <span className="icon">close</span>
+          </Button>
+        </Tooltip>
       </div>
+
+      <div className="modal-body help-body">
+        <section className="help-about">
+          <img className="help-logo" src="./icon.png" alt="" width={128} draggable={false} />
+          <div className="help-title">XI Model Viewer</div>
+          {version && <div className="help-version mono">v{version}</div>}
+          <div className="help-badges">
+            <span className="help-badge">Built by Vekien</span>
+            <span className="help-badge">AI Assisted Dev</span>
+          </div>
+          <div className="help-links">
+            <a className="help-link" href={GITHUB} onClick={(e) => openLink(e, GITHUB)}>
+              <span className="icon">code</span>
+              <span>Source on GitHub</span>
+            </a>
+            <a className="help-link" href={RELEASES} onClick={(e) => openLink(e, RELEASES)}>
+              <span className="icon">system_update_alt</span>
+              <span>Releases &amp; changelog</span>
+            </a>
+          </div>
+        </section>
+
+        <section className="help-controls">
+          <div className="help-controls-group">
+            <div className="help-controls-title">General Assets</div>
+            {GENERAL_CONTROLS.map(([keys, action]) => (
+              <div className="help-key-row" key={keys}>
+                <span className="help-keys">{keys}</span>
+                <span className="help-action">{action}</span>
+              </div>
+            ))}
+          </div>
+          <div className="help-controls-group">
+            <div className="help-controls-title">Zones</div>
+            {ZONE_CONTROLS.map(([keys, action]) => (
+              <div className="help-key-row" key={keys}>
+                <span className="help-keys">{keys}</span>
+                <span className="help-action">{action}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
     </div>
   );
 }

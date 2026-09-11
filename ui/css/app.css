@@ -614,7 +614,7 @@ input[type='text'].list-search::placeholder {
 
 .tree-browse {
   flex: 0 0 auto;
-  padding: 8px 10px;
+  padding: 12px 10px 10px 10px;
   border-bottom: 1px solid var(--ring);
 }
 .tree-browse-btn {
@@ -2882,9 +2882,13 @@ button.details-path-link.mono { font-family: var(--font-mono); font-size: 11px; 
   border-radius: 12px;
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
 }
+/* Backdrop-less, like the floating panels: base stacking lives here, and App
+   raises it past the Data Struct windows when you click it. */
 .modal.settings-modal {
   width: min(860px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
+  z-index: 5000;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -3019,12 +3023,18 @@ button.settings-tab.on .icon { color: var(--accent); }
   text-decoration-color: currentColor;
 }
 
-/* --- Settings > DAT Lists -------------------------------------------------- */
+/* --- Settings > DAT Lists / DAT Database ----------------------------------- */
 
 /* The two intro panels sit side by side like General's; the table wants the
    full width, so it spans both columns rather than being squeezed into one. */
 .settings-lists-table-panel { grid-column: 1 / -1; }
-.settings-lists .lists-dir {
+/* Settings' own buttons carry no disabled state of their own, and here one of
+   them is disabled for as long as xi-tools is unconnected — not a flicker. */
+.settings-db button[disabled] { opacity: 0.45; cursor: default; }
+/* The bake verdict is a sentence, not a badge — let it wrap rather than clip. */
+.settings-db .xi-status-msg { white-space: normal; }
+.settings-lists .lists-dir,
+.settings-db .lists-dir {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   direction: rtl; text-align: left;   /* keep the leaf folder visible when it clips */
 }
@@ -3099,15 +3109,23 @@ button.settings-tab.on .icon { color: var(--accent); }
   background: var(--ring);
   margin: 2px 0;
 }
+/* Status banners (Settings + first-run setup). The colour is carried by a
+   gradient that fades out to the right and a solid edge on the left, so the
+   verdict reads at a glance without the box turning into a slab of colour. */
 .xi-status {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px 6px 10px;
+  padding: 7px 10px 7px 12px;
   border-radius: 8px;
   border: 1px solid var(--ring);
-  background: rgba(255, 255, 255, 0.03);
-  font-size: 12px;
+  border-left-width: 4px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02) 55%),
+    rgba(255, 255, 255, 0.02);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  font-size: 13px;
   line-height: 1.3;
 }
 .xi-status-compact {
@@ -3119,22 +3137,39 @@ button.settings-tab.on .icon { color: var(--accent); }
   color: var(--muted);
 }
 .xi-status.ok {
-  border-color: rgba(80, 180, 120, 0.4);
-  background: rgba(60, 140, 90, 0.12);
+  border-color: rgba(80, 180, 120, 0.3);
+  border-left-color: #4fb87e;
+  background:
+    linear-gradient(90deg, rgba(70, 170, 110, 0.26), rgba(60, 140, 90, 0.07) 58%, rgba(60, 140, 90, 0.03)),
+    rgba(255, 255, 255, 0.02);
 }
-.xi-status.ok > .icon { color: #6dca96; }
+.xi-status.ok > .icon { color: #6dca96; text-shadow: 0 0 12px rgba(109, 202, 150, 0.45); }
 .xi-status.warn {
-  border-color: rgba(220, 170, 60, 0.4);
-  background: rgba(180, 130, 40, 0.12);
+  border-color: rgba(220, 170, 60, 0.3);
+  border-left-color: #d9a83c;
+  background:
+    linear-gradient(90deg, rgba(210, 160, 50, 0.26), rgba(180, 130, 40, 0.07) 58%, rgba(180, 130, 40, 0.03)),
+    rgba(255, 255, 255, 0.02);
 }
-.xi-status.warn > .icon { color: #e0b84a; }
+.xi-status.warn > .icon { color: #e0b84a; text-shadow: 0 0 12px rgba(224, 184, 74, 0.45); }
 .xi-status.err {
-  border-color: rgba(220, 80, 70, 0.4);
-  background: rgba(220, 80, 70, 0.1);
+  border-color: rgba(220, 80, 70, 0.3);
+  border-left-color: #d9564c;
+  background:
+    linear-gradient(90deg, rgba(220, 80, 70, 0.24), rgba(220, 80, 70, 0.07) 58%, rgba(220, 80, 70, 0.03)),
+    rgba(255, 255, 255, 0.02);
 }
-.xi-status.err > .icon { color: #e07068; }
+.xi-status.err > .icon { color: #e07068; text-shadow: 0 0 12px rgba(224, 112, 104, 0.45); }
+.xi-status.working,
+.xi-status.busy {
+  border-color: rgba(77, 163, 255, 0.3);
+  border-left-color: var(--accent);
+  background:
+    linear-gradient(90deg, rgba(77, 163, 255, 0.22), rgba(77, 163, 255, 0.06) 58%, rgba(77, 163, 255, 0.02)),
+    rgba(255, 255, 255, 0.02);
+}
 .xi-status.working > .icon,
-.xi-status.busy > .icon { color: var(--accent, #7aa2ff); }
+.xi-status.busy > .icon { color: var(--accent, #7aa2ff); text-shadow: 0 0 12px rgba(77, 163, 255, 0.5); }
 .xi-status-msg {
   flex: 1 1 auto;
   min-width: 0;
@@ -3147,7 +3182,7 @@ button.settings-tab.on .icon { color: var(--accent); }
    the one message where the tail is the whole point. */
 .settings-path-status {
   margin-top: 6px;
-  padding: 5px 8px;
+  padding: 10px;
 }
 .settings-path-status > .icon { font-size: 16px; }
 .settings-path-status .xi-status-msg {
@@ -3198,7 +3233,8 @@ button.settings-tab.on .icon { color: var(--accent); }
 .modal-header {
   display: flex; align-items: center; gap: 8px;
   padding: 10px 12px;
-  border-bottom: 1px solid var(--ring);
+  /* Fades into the panel instead of ruling a line across it. */
+  background: linear-gradient(180deg, rgb(57 57 57 / 54%) 0%, rgba(26, 26, 26, 0) 100%);
   cursor: grab;
   user-select: none;
   touch-action: none;
@@ -3224,8 +3260,12 @@ button.settings-tab.on .icon { color: var(--accent); }
 .form-error {
   display: flex; align-items: flex-start; gap: 8px;
   padding: 10px 12px;
-  background: rgba(220, 80, 70, 0.12);
-  border: 1px solid rgba(220, 80, 70, 0.35);
+  background:
+    linear-gradient(90deg, rgba(220, 80, 70, 0.26), rgba(220, 80, 70, 0.08) 58%, rgba(220, 80, 70, 0.04)),
+    rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(220, 80, 70, 0.3);
+  border-left: 2px solid #d9564c;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   border-radius: 8px;
   color: #f0a8a2;
   font-size: 12.5px;
@@ -3951,9 +3991,383 @@ body.ui-hidden #root > .shot-flash { display: block !important; }
   100% { opacity: 0; }
 }
 
+/* --- First-run setup ------------------------------------------------------- */
+
+/* The one dialog that still dims the app: until there is a game path there is
+   nothing behind it to use, and no way out of it but finishing. The vignette
+   pulls the eye to the middle rather than flatly greying the window. */
+.setup-backdrop {
+  z-index: 5300;
+  background:
+    radial-gradient(1100px 640px at 50% 42%, rgba(30, 46, 68, 0.5), rgba(0, 0, 0, 0) 70%),
+    rgba(0, 0, 0, 0.6);
+}
+.modal.setup-modal {
+  width: min(780px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  z-index: 5301;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-color: rgba(77, 163, 255, 0.22);
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.66),
+    0 0 60px rgba(77, 163, 255, 0.06);
+  animation: setup-in 200ms ease-out both;
+}
+/* Accent hairline along the top edge — the one bit of chrome that says this is
+   not just another panel. */
+.modal.setup-modal::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(122, 186, 255, 0.7), transparent);
+}
+.setup-header { padding: 12px 14px; }
+.setup-count {
+  flex: 0 0 auto;
+  margin-right: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.setup-progress {
+  flex: 0 0 auto;
+  height: 2px;
+  background: rgba(0, 0, 0, 0.4);
+}
+.setup-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-deep), var(--accent));
+  box-shadow: 0 0 10px rgba(77, 163, 255, 0.55);
+  transition: width 260ms ease;
+}
+
+/* Two rows so the rail can span both: the buttons sit in the content column,
+   which lets the rail run the full height of the panel instead of stopping on
+   top of a full-width footer. */
+.setup-main {
+  display: grid;
+  grid-template-columns: 208px 1fr;
+  grid-template-rows: minmax(0, 1fr) auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Left rail: who this is, and how far in you are. */
+.setup-rail {
+  grid-row: 1 / span 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 14px 16px;
+  background:
+    linear-gradient(180deg, rgba(77, 163, 255, 0.1), rgba(77, 163, 255, 0) 46%),
+    rgba(0, 0, 0, 0.26);
+  border-right: 1px solid var(--ring);
+}
+.setup-logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.5));
+  user-select: none;
+}
+.setup-brand {
+  margin-top: 8px;
+  font: 600 12px/1.2 var(--font-ui);
+  color: var(--gray-100);
+  text-align: center;
+}
+.setup-version { font-size: 10px; color: var(--gray-500); }
+
+.setup-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.setup-step {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px;
+  border-radius: 8px;
+  color: var(--gray-500);
+  font: 500 12px/1.15 var(--font-ui);
+}
+/* Timeline thread between the dots. */
+.setup-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 22px;
+  top: 38px;
+  width: 2px;
+  height: 18px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.16);
+}
+.setup-step.done::after { background: rgba(109, 202, 150, 0.55); }
+.setup-step.on::after { background: linear-gradient(180deg, rgba(122, 186, 255, 0.6), rgba(255, 255, 255, 0.14)); }
+.setup-dot {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--ring-strong);
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--gray-500);
+}
+.setup-dot .icon { font-size: 15px; color: inherit; }
+.setup-step-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.setup-step-label { color: inherit; }
+.setup-step-hint {
+  font: 400 10px/1.2 var(--font-ui);
+  color: var(--gray-600);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.setup-step.done { color: var(--gray-300); }
+.setup-step.done .setup-dot {
+  border-color: rgba(109, 202, 150, 0.55);
+  background: rgba(60, 140, 90, 0.18);
+  color: #6dca96;
+}
+.setup-step.on {
+  background: linear-gradient(90deg, rgba(77, 163, 255, 0.14), rgba(77, 163, 255, 0));
+  color: var(--gray-50, #f2f4f7);
+}
+.setup-step.on .setup-dot {
+  border-color: rgba(122, 186, 255, 0.7);
+  background: linear-gradient(180deg, var(--accent), var(--accent-deep));
+  color: #08131f;
+  box-shadow: 0 0 0 3px rgba(77, 163, 255, 0.14), 0 2px 8px rgba(77, 163, 255, 0.35);
+}
+.setup-step.on .setup-step-hint { color: var(--gray-400); }
+
+.setup-body {
+  overflow: auto;
+  min-height: 0;
+  padding: 18px 20px;
+}
+/* No footer bar: the buttons float over the panel's own ground, bottom-right. */
+.setup-actions {
+  grid-column: 2;
+  background: transparent;
+  border-top: 0;
+}
+/* Steps differ in height (one field vs. a checklist); a floor stops the panel
+   resizing under the pointer every time Next is pressed. */
+.setup-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 268px;
+  animation: setup-pane-in 200ms ease-out both;
+}
+.setup-lead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 17px/1.25 var(--font-ui);
+  color: var(--gray-50, #f2f4f7);
+  letter-spacing: -0.01em;
+}
+.setup-lead-icon { font-size: 22px; color: #6dca96; }
+.setup-blurb {
+  margin-top: -4px;
+  font: 400 12.5px/1.55 var(--font-ui);
+  color: var(--gray-300);
+  max-width: 62ch;
+}
+.setup-blurb .mono { font-family: var(--font-mono); font-size: 11px; color: var(--gray-100); }
+
+.setup-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--ring);
+  border-left: 4px solid rgba(77, 163, 255, 0.45);
+  border-radius: 8px;
+  background: rgb(0 0 0 / 21%);
+  box-shadow: inset 0 0 10px #000000b0;
+  font: italic 400 12px/1.5 var(--font-ui);
+  color: #5b87c6;
+}
+.setup-hint > .icon { flex: 0 0 auto; font-size: 16px; color: var(--accent); font-style: normal; }
+.setup-hint .mono { font-family: var(--font-mono); font-size: 11px; }
+
+.setup-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.setup-chip {
+  padding: 4px 10px;
+  border: 1px solid var(--ring-strong);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  font: 500 11px/1 var(--font-ui);
+  color: var(--gray-300);
+}
+
+.setup-check {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.setup-check-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--ring);
+  border-left-width: 2px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+}
+.setup-check-icon { flex: 0 0 auto; font-size: 17px; color: var(--gray-500); }
+.setup-check-mark { flex: 0 0 auto; font-size: 17px; color: var(--gray-600); }
+.setup-check-row.ok {
+  border-color: rgba(80, 180, 120, 0.3);
+  border-left-color: #4fb87e;
+  background:
+    linear-gradient(90deg, rgba(70, 170, 110, 0.24), rgba(60, 140, 90, 0.06) 58%, rgba(60, 140, 90, 0.03)),
+    rgba(255, 255, 255, 0.02);
+}
+.setup-check-row.busy {
+  border-color: rgba(77, 163, 255, 0.3);
+  border-left-color: var(--accent);
+  background:
+    linear-gradient(90deg, rgba(77, 163, 255, 0.2), rgba(77, 163, 255, 0.05) 58%, rgba(77, 163, 255, 0.02)),
+    rgba(255, 255, 255, 0.02);
+}
+.setup-check-row.ok .setup-check-icon,
+.setup-check-row.ok .setup-check-mark { color: #6dca96; }
+.setup-check-row.busy .setup-check-mark { color: var(--accent); }
+.setup-check-label { flex: 0 0 auto; color: var(--gray-100); font-weight: 500; }
+.setup-check-detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.setup-actions {
+  gap: 8px;
+  padding: 4px 20px 18px;
+}
+.setup-spacer { flex: 1 1 auto; }
+.setup-modal .setup-go {
+  min-height: 34px;
+  padding: 0 18px;
+  font-weight: 600;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 0 0 1px rgba(77, 163, 255, 0.3),
+    0 6px 20px rgba(77, 163, 255, 0.3);
+}
+
+@keyframes setup-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes setup-pane-in {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* --- First-run tutorial balloon -------------------------------------------- */
+
+.tutorial-balloon {
+  position: fixed;
+  z-index: 5400;
+  width: 268px;
+  padding: 10px 12px 8px;
+  background:
+    linear-gradient(180deg, rgba(77, 163, 255, 0.16), rgba(77, 163, 255, 0) 60%),
+    var(--gray-850);
+  border: 1px solid rgba(77, 163, 255, 0.5);
+  border-radius: 10px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+  animation: tutorial-in 220ms ease-out both;
+}
+/* Rotated square rather than a border triangle: one element, and it picks up
+   the balloon's own border on the two sides that show. The tint is the flat
+   colour the balloon's gradient has AT ITS TOP EDGE — with the plain panel
+   colour the arrow read as a separate dark notch stuck to the box. */
+.tutorial-arrow {
+  position: absolute;
+  top: -7px;
+  width: 13px;
+  height: 13px;
+  margin-left: -6.5px;
+  background:
+    linear-gradient(rgba(77, 163, 255, 0.16), rgba(77, 163, 255, 0.16)),
+    var(--gray-850);
+  border-left: 1px solid rgba(122, 186, 255, 0.62);
+  border-top: 1px solid rgba(122, 186, 255, 0.62);
+  border-radius: 3px 0 0 0;
+  transform: rotate(45deg);
+}
+.tutorial-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gray-100);
+  font: 600 14px/1.2 var(--font-ui);
+}
+.tutorial-head .icon { font-size: 17px; color: var(--accent); }
+.tutorial-text {
+  margin-top: 10px;
+  font: 400 12px/1.45 var(--font-ui);
+  color: var(--gray-300);
+}
+.tutorial-actions { display: flex; justify-content: flex-end; margin-top: 9px; }
+.tutorial-got-it {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 31px;
+  padding: 0 18px;
+  background: linear-gradient(180deg, #3d9c6a, #245f42);
+  border: 1px solid rgba(90, 185, 135, 0.5);
+  border-radius: 8px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 2px 10px rgba(40, 120, 80, 0.4);
+  color: #fff;
+  font: 600 12.5px/1 var(--font-ui);
+  cursor: pointer;
+}
+.tutorial-got-it:hover {
+  background: linear-gradient(180deg, #47ae78, #2b7454);
+  color: #fff;
+}
+
+@keyframes tutorial-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
 /* --- Help / About ---------------------------------------------------------- */
 
-.help-modal { width: 660px; max-width: calc(100vw - 40px); }
+.help-modal { width: 660px; max-width: calc(100vw - 40px); z-index: 5000; }
 /* Two columns: who made it on the left, what the keys do on the right. */
 .help-body {
   display: grid;
@@ -6210,15 +6624,3 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .actor-light .gfx-ctrl { justify-self: start; }
 .actor-seg .seg-tab { flex: 0 0 auto; min-height: 24px; padding: 0 10px; font-size: 11px; white-space: nowrap; }
 .actor-light-swatch { justify-self: start; width: 28px; height: 16px; border-radius: 4px; border: 1px solid var(--ring); }
-
-.dbm-modal { width: min(520px, 92vw); }
-.dbm-modal code { font-family: var(--font-mono); font-size: 11px; color: var(--gray-200); }
-.dbm-dim { color: var(--muted); }
-.dbm-inline-btn {
-  display: inline-flex; align-items: center; justify-content: center; vertical-align: middle;
-  width: 20px; height: 20px; min-height: 0; padding: 0; margin: 0 0 0 4px;
-  background: transparent !important; border: none !important; box-shadow: none !important;
-  color: var(--muted); cursor: pointer;
-}
-.dbm-inline-btn .icon { font-size: 14px; }
-.dbm-inline-btn:hover { color: var(--text); }

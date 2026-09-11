@@ -284,6 +284,15 @@ uniform vec4 uRot[${MAX_JOINTS}];
 uniform vec4 uTrans[${MAX_JOINTS}];
 uniform vec4 uScale[${MAX_JOINTS}];
 
+// Effect-layer motion (dat.js buildEffectLayers): a 0x1F layer's geometry is
+// baked at its generator's transform, and these turn and scroll it per frame.
+// uEffectSpin is the accumulated 0x0B RotationVelocity about Y, taken about
+// uEffectPivot (the generator's own position, so an off-centre layer spins
+// instead of orbiting). uUvOffset is the accumulated 0x27/0x28 TexCoord scroll.
+uniform float uEffectSpin;
+uniform vec3 uEffectPivot;
+uniform vec2 uUvOffset;
+
 out vec2 vUV;
 out vec4 vColor;
 out vec3 vNormal;
@@ -304,9 +313,17 @@ void main() {
              + qrot(uRot[j1], uScale[j1].xyz * aP1) + aWeights.y * uTrans[j1].xyz;
 
   vec3 nrm = aWeights.x * qrot(uRot[j0], aN0) + aWeights.y * qrot(uRot[j1], aN1);
+
+  if (uEffectSpin != 0.0) {
+    float sn = sin(uEffectSpin), cs = cos(uEffectSpin);
+    vec3 rel = world - uEffectPivot;
+    world = vec3(cs * rel.x + sn * rel.z, rel.y, -sn * rel.x + cs * rel.z) + uEffectPivot;
+    nrm = vec3(cs * nrm.x + sn * nrm.z, nrm.y, -sn * nrm.x + cs * nrm.z);
+  }
+
   vec4 placed = uModel * vec4(world, 1.0);
   vNormal = mat3(uModel) * nrm;
-  vUV = aUV;
+  vUV = aUV + uUvOffset;
   vColor = aColor;
   vWorld = placed.xyz;
   gl_Position = uViewProj * placed;
@@ -544,6 +561,11 @@ void main() {
     // Zone soft-edge / water blend (xim): vertex alpha fades tile edges.
     alpha = rawAlpha;
     if (alpha < 0.02) discard;
+  } else if (uAlphaMode == 4) {
+    // Effect glow shell (0x1F layer with no BlendFunc): drawn additively, so
+    // the authored black-to-white vertex ramp IS the fade and nothing is cut.
+    alpha = rawAlpha;
+    if (alpha < 0.02) discard;
   } else {
     // Entity default: two-pass solid/translucent split.
     alpha = rawAlpha;
@@ -587,6 +609,10 @@ void main() {
       : 0.55 + 0.6 * max(0.0, dot(vNormal / nl, -uLightDir));
     litRgb = vColor.rgb * intensity * gain;
   }
+
+  // Additive glow is emissive — a key light on it just dims the aura and makes
+  // the shell read as a solid surface facing away from the camera.
+  if (uAlphaMode == 4) litRgb = vColor.rgb * gain;
 
   // modulate2x: 2 * lit * tex (0x80 diffuse neutral)
   outColor = vec4(tex.rgb * litRgb * 2.0, alpha);
@@ -946,6 +972,9 @@ export class Renderer {
       alphaPass: gl.getUniformLocation(this.program, 'uAlphaPass'),
       showAlpha: gl.getUniformLocation(this.program, 'uShowAlpha'),
       alphaMode: gl.getUniformLocation(this.program, 'uAlphaMode'),
+      effectSpin: gl.getUniformLocation(this.program, 'uEffectSpin'),
+      effectPivot: gl.getUniformLocation(this.program, 'uEffectPivot'),
+      uvOffset: gl.getUniformLocation(this.program, 'uUvOffset'),
       terrainLit: gl.getUniformLocation(this.program, 'uTerrainLit'),
       ambient: gl.getUniformLocation(this.program, 'uAmbient'),
       sunDir: gl.getUniformLocation(this.program, 'uSunDir'),
@@ -1070,6 +1099,7 @@ export class Renderer {
     this.zoneBatches = [];
     this.zoneSpinnerBatches = [];   // live-spin companions (mill on w_mill)
     this.zoneSpinnerAngle = 0;
+    this.effectLayerFrames = 0;
     this.zoneDisableCull = false;   // debug: ignore the per-submesh cull flag
     // Coplanar water/overlay submeshes: retail-style LEQUAL lets equal-depth blend
     // fragments pass. Off = strict LESS (old behaviour) for A/B comparison.
@@ -1622,6 +1652,7 @@ export class Renderer {
     }
     this.zoneSpinnerBatches = [];
     this.zoneSpinnerAngle = 0;
+    this.effectLayerFrames = 0;
     this.particleDrawer?.disposeMeshes();
     this.particleSystem = null;
     this.particleEnvironment = null;
@@ -2791,10 +2822,13 @@ export class Renderer {
     gl.bindVertexArray(null);
 
     // Entity pieces have no alphaMode → 0 (two-pass). Zone pieces set opaque/cutout/blend.
+    // Effect layers (dat.js buildEffectLayers) set blend or additive from their
+    // generator's 0x1E BlendFunc.
     const alphaMode = piece.alphaMode === 'opaque' ? 1
       : piece.alphaMode === 'cutout' ? 2
         : piece.alphaMode === 'blend' ? 3
-          : 0;
+          : piece.alphaMode === 'additive' ? 4
+            : 0;
 
     const batch = {
       vao,
@@ -2805,6 +2839,11 @@ export class Renderer {
       count: piece.corners.length,
       texture: piece.textureName ? (texMap ?? this.textures).get(piece.textureName) ?? null : null,
       alphaMode,
+      // Effect-layer motion, in per-60Hz-frame units (see dat.js). Absent on
+      // every other batch, which is why the draw loop resets the uniforms.
+      spin: group.spin || 0,
+      uvScroll: group.uvScroll || null,
+      pivot: group.pivot || null,
       layer: piece.layer || 'world', // 'world' | 'env' (sky/water)
       sourcePath: group.sourcePath || null,
     };
@@ -2973,6 +3012,11 @@ export class Renderer {
         cam.fovDegrees = this.creationCamera.fovDegrees;
       }
     }
+
+    // Effect layers turn and scroll on the FFXI effect clock — 60 frames a
+    // second, the same rate the particle system ticks at (see _updateEnvironment).
+    // Clamped so a stalled tab doesn't spin the crystal a full turn on resume.
+    this.effectLayerFrames += Math.min(8, Math.max(0, (dtSeconds || 1 / 60) * 60));
 
     // xim WindFactor.update: step 1/60 per game frame (30fps) → 2s per leg.
     this.windFactor += dtSeconds * 0.5 * this.windDir;
@@ -3228,6 +3272,7 @@ export class Renderer {
         if (!this._batchSourceVisible(batch)) continue;
         if (pred && !pred(batch)) continue;
         gl.uniform1i(this.uniforms.alphaMode, batch.alphaMode ?? 0);
+        this._setEffectMotion(batch);
         gl.polygonOffset(0, batch.depthNudge ?? 0);
         gl.bindTexture(gl.TEXTURE_2D, this.showTextures && batch.texture ? batch.texture : this.whiteTexture);
         gl.bindVertexArray(batch.vao);
@@ -3242,11 +3287,12 @@ export class Renderer {
     const wireFallback = this.showWireframe && !usePolyMode;
     const modeOf = (b) => b.alphaMode ?? 0;
 
-    // Solid depth-write pass: entity batches + zone opaque/cutout (not blend).
+    // Solid depth-write pass: entity batches + zone opaque/cutout (not blend,
+    // not additive).
     gl.disable(gl.BLEND);
     gl.depthMask(true);
     gl.uniform1i(this.uniforms.alphaPass, 0);
-    drawBatches(wireFallback, (b) => modeOf(b) !== 3);
+    drawBatches(wireFallback, (b) => modeOf(b) < 3);
 
     // Translucent pass: entity membrane/glass (mode 0) + zone soft-edge/water
     // blend (mode 3). Depth-test ON, depth-write OFF so soft terrain edges
@@ -3260,6 +3306,14 @@ export class Renderer {
         const m = modeOf(b);
         return m === 0 || m === 3;
       });
+
+      // Additive pass (mode 4): effect glow shells. Same SRC_ALPHA,ONE the
+      // particle drawer uses for BlendFunc.Src_One_Add — which is what the
+      // engine falls back to when a generator declares no 0x1E BlendFunc, and
+      // what makes an aura's black vertices read as transparent.
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      drawBatches(false, (b) => modeOf(b) === 4);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     }
 
     if (usePolyMode) {
@@ -4084,6 +4138,7 @@ export class Renderer {
       for (const batch of actor.batches) {
         if (pred && !pred(batch)) continue;
         gl.uniform1i(this.uniforms.alphaMode, batch.alphaMode ?? 0);
+        this._setEffectMotion(batch);
         gl.polygonOffset(0, batch.depthNudge ?? 0);
         gl.bindTexture(gl.TEXTURE_2D, this.showTextures && batch.texture ? batch.texture : this.whiteTexture);
         gl.bindVertexArray(batch.vao);
@@ -4104,13 +4159,16 @@ export class Renderer {
       gl.disable(gl.BLEND);
       gl.depthMask(true);
       gl.uniform1i(this.uniforms.alphaPass, 0);
-      drawActorBatches(actor, (b) => (b.alphaMode ?? 0) !== 3);
+      drawActorBatches(actor, (b) => (b.alphaMode ?? 0) < 3);
       if (alphaOn) {
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         gl.depthMask(false);
         gl.uniform1i(this.uniforms.alphaPass, 1);
         drawActorBatches(actor, (b) => { const m = b.alphaMode ?? 0; return m === 0 || m === 3; });
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE);       // effect glow shells
+        drawActorBatches(actor, (b) => (b.alphaMode ?? 0) === 4);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       }
     }
 
@@ -4474,7 +4532,7 @@ export class Renderer {
             gl.uniform4fv(u.scale, actor.scaleArray);
             gl.uniformMatrix4fv(u.model, false, actor.modelMatrix);
             for (const batch of actor.batches) {
-              if ((batch.alphaMode ?? 0) === 3) continue;
+              if ((batch.alphaMode ?? 0) >= 3) continue;   // blend + additive don't cast
               gl.bindTexture(gl.TEXTURE_2D, batch.texture || this.whiteTexture);
               gl.bindVertexArray(batch.vao);
               gl.drawArrays(batch.mode, 0, batch.count);
@@ -4495,7 +4553,7 @@ export class Renderer {
         gl.uniform1f(u.cutout, alphaOn ? 0.5 : 0);
         for (const batch of this.batches) {
           if (batch.layer === 'sky' || batch.layer === 'water') continue;
-          if ((batch.alphaMode ?? 0) === 3) continue;   // zone-style blend submesh
+          if ((batch.alphaMode ?? 0) >= 3) continue;   // zone blend submesh / effect glow
           if (!this._batchSourceVisible(batch)) continue;
           gl.bindTexture(gl.TEXTURE_2D, batch.texture || this.whiteTexture);
           gl.bindVertexArray(batch.vao);
@@ -4611,6 +4669,29 @@ export class Renderer {
         const batch = this.buildZoneBatch(draw);
         if (batch) this.zoneSpinnerBatches.push(batch);
       }
+    }
+  }
+
+  /**
+   * Per-batch effect-layer motion: the accumulated spin about the layer's pivot
+   * and the accumulated UV scroll. Both are reset for ordinary batches — the
+   * uniforms are program state, so a layer left one set would turn and streak
+   * the next model drawn with the same program.
+   */
+  _setEffectMotion(batch) {
+    const gl = this.gl;
+    const t = this.effectLayerFrames;
+    if (batch.spin) {
+      gl.uniform1f(this.uniforms.effectSpin, batch.spin * t);
+      const pv = batch.pivot || [0, 0, 0];
+      gl.uniform3f(this.uniforms.effectPivot, pv[0], pv[1], pv[2]);
+    } else {
+      gl.uniform1f(this.uniforms.effectSpin, 0);
+    }
+    if (batch.uvScroll) {
+      gl.uniform2f(this.uniforms.uvOffset, batch.uvScroll[0] * t, batch.uvScroll[1] * t);
+    } else {
+      gl.uniform2f(this.uniforms.uvOffset, 0, 0);
     }
   }
 

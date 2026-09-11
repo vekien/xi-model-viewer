@@ -5,8 +5,11 @@
 export const SectionType = {
   End: 0x00,
   Directory: 0x01,
+  ParticleGenerator: 0x05,
   EffectRoutine: 0x07,
+  ParticleMesh: 0x1f,
   Texture: 0x20,
+  SpriteSheetMesh: 0x21,
   Skeleton: 0x29,
   SkeletonMesh: 0x2a,
   SkeletonAnimation: 0x2b,
@@ -90,11 +93,43 @@ export function parseEntity(buffer, sourceName = '') {
     animations: [],
     schedules: [],            // 0x07 EffectRoutine entries (raw refs, resolved below)
     info: null,               // 0x45 movement/weapon metadata
+    particleMeshes: new Map(),  // fourcc -> 0x1F/0x21 geometry an effect draws
+    effectLayers: [],           // the subset built into renderable meshGroups
   };
 
   const r = new DatReader(buffer);
+  const sections = walkSections(buffer);
 
-  for (const sec of walkSections(buffer)) {
+  // Particle geometry first: a generator names its mesh by FourCC, so the set of
+  // 0x1F/0x21 ids has to exist before the 0x05 pass can spot a reference.
+  for (const sec of sections) {
+    if (sec.typeCode !== SectionType.ParticleMesh && sec.typeCode !== SectionType.SpriteSheetMesh) continue;
+    try {
+      const mesh = sec.typeCode === SectionType.ParticleMesh
+        ? parseParticleMesh(r, sec)
+        : parseSpriteMesh(r, sec);
+      // Keyed by FourCC and first-wins, matching the client's local-then-parent
+      // DatId lookup (ROM/0/0 reuses 14 of its 61 mesh names across scopes).
+      if (mesh && !model.particleMeshes.has(mesh.sectionId)) model.particleMeshes.set(mesh.sectionId, mesh);
+    } catch (e) {
+      console.warn(`[${sec.id}] particle mesh 0x${sec.typeCode.toString(16)} parse failed:`, e);
+    }
+  }
+
+  const generators = [];
+  if (model.particleMeshes.size) {
+    for (const sec of sections) {
+      if (sec.typeCode !== SectionType.ParticleGenerator) continue;
+      try {
+        const gen = parseGenerator(r, sec, model.particleMeshes);
+        if (gen) generators.push(gen);
+      } catch (e) {
+        console.warn(`[${sec.id}] generator parse failed:`, e);
+      }
+    }
+  }
+
+  for (const sec of sections) {
     try {
       switch (sec.typeCode) {
         case SectionType.EffectRoutine: {
@@ -126,6 +161,16 @@ export function parseEntity(buffer, sourceName = '') {
   }
 
   resolveSchedules(model);
+
+  // Effect-only entities (Home Points, and every other thing whose 0x2A geometry
+  // is just a transparent click proxy): the visible object is its effect layers.
+  // Append them so the normal skinned draw path picks them up — they bind to
+  // joint 0, which every skeleton has.
+  if (generators.length) {
+    model.effectLayers = buildEffectLayers(model.particleMeshes, generators);
+    model.meshGroups.push(...model.effectLayers);
+  }
+
   // Tag meshes with the DAT they came from so the PC isolator can hide/show
   // per equipment slot after merge.
   const src = String(sourceName || '').replace(/\//g, '\\').toLowerCase();
@@ -843,6 +888,371 @@ function readRenderProps(r) {
   const specularPower = r.f32();
   const specularEnabled = r.f32() === 1.0;
   return { specularEnabled, specularPower, displayType, ambientMultiplier };
+}
+
+// ---------------------------------------------------------------------------
+// Particle geometry (0x1F ParticleMesh, 0x21 SpriteSheetMesh)
+// ---------------------------------------------------------------------------
+//
+// Some entities have no body at all. A Home Point's 0x2A mesh is a single 3 mm
+// triangle painted with a 2x1 black texture, on a skeleton named `toum`
+// (toumei, "transparent") — an invisible proxy that exists so the client's actor
+// system has something to place, click and pose. Everything you actually see is
+// drawn by its 0x05 generators out of 0x1F meshes, which nothing here parsed, so
+// the viewer rendered an empty stage.
+//
+// Layout is the client's own loader (CMoD3m::Open / GetAnotherShortPointer /
+// GetFloatPointer), cross-checked against retail bytes. Ported from xi-tools
+// src/xi/fx/xi_particle_mesh.py — see xi-tools docs/fx/particle_mesh.md.
+//
+//   +0x00 u16 flags        marker = flags & 0xF (5/6 = vertex-array layout)
+//   +0x04 u8  matCount     +0x05 u8 extraCount
+//   +0x06 u16 triCount
+//   +0x08 u16[matCount+extraCount] per-entry triangle counts
+//         materials at 8 + 2*align(matCount+extraCount), 16 bytes each
+//         vertices  at materials + 16*matCount, 36 bytes each
+//
+// A vertex is D3DFVF_XYZ|NORMAL|DIFFUSE|TEX1: pos, normal, BGRA, uv.
+
+const PARTICLE_VERTEX_STRIDE = 36;
+const SPRITE_VERTEX_STRIDE = 24;
+const SPRITE_CARD_VERTS = 6;
+const SPRITE_CARD_STRIDE = 4 + SPRITE_CARD_VERTS * SPRITE_VERTEX_STRIDE;   // 148
+const SPRITE_DATA_START = 0x18;
+
+// The material table is aligned by rounding the ENTRY COUNT down to a multiple
+// of 4 and adding 3 — not by rounding the byte offset up to 16. They agree for
+// 1-3 entries (offset 14) and diverge after; a generic 16-byte alignment reads
+// two bytes into every vertex and yields garbage positions.
+function materialTableOffset(matCount, extraCount) {
+  const n = matCount + extraCount;
+  const rem = n & 3;
+  return 8 + 2 * (rem === 0 ? n : n - rem + 3);
+}
+
+function particleVertex(p0, n0) {
+  return { p0, p1: [0, 0, 0], n0, n1: [0, 0, 0], w0: 1, w1: 0, joint0: 0, joint1: -1 };
+}
+
+function parseParticleMesh(r, sec) {
+  const base = sec.dataStart;
+  const avail = sec.end - base;
+  if (avail < 14) return null;
+
+  r.pos = base;
+  const marker = r.u16() & 0xf;
+  // 7 is what the client REWRITES the marker to when its own validation fails.
+  if (marker !== 5 && marker !== 6) return null;
+  r.u16();                                  // runtime "opened" flags, 0 on disk
+  const matCount = r.u8();
+  const extraCount = r.u8();
+  const triCount = r.u16();
+  if (!triCount) return null;
+
+  const matOffset = materialTableOffset(matCount, extraCount);
+  const vertOffset = matOffset + 16 * matCount;
+  const corners = triCount * 3;
+  if (vertOffset + corners * PARTICLE_VERTEX_STRIDE > avail) return null;
+
+  const materials = [];
+  for (let i = 0; i < matCount; i++) {
+    r.pos = base + matOffset + 16 * i;
+    materials.push(r.str(0x10));            // the 0x20 texture's own 16-char name
+  }
+
+  const vertices = new Array(corners);
+  const cornerList = new Array(corners);
+  for (let i = 0; i < corners; i++) {
+    r.pos = base + vertOffset + i * PARTICLE_VERTEX_STRIDE;
+    const p0 = r.vec3();
+    const n0 = r.vec3();
+    const color = r.u32();
+    const u = r.f32(), v = r.f32();
+    vertices[i] = particleVertex(p0, n0);
+    cornerList[i] = { vi: i, u, v, color };
+  }
+
+  const piece = {
+    topology: 'list',
+    corners: cornerList,
+    textureName: materials[0] ?? '',
+    props: defaultProps(),
+    mirrored: false,
+  };
+  return {
+    sectionId: sec.id, sectionType: SectionType.ParticleMesh, materials,
+    triangles: triCount, vertices, flippedVertices: null, pieces: [piece],
+    hasNormals: true, occludeType: 0,
+  };
+}
+
+// A 0x21 is N flat cards sharing one texture — the quad a sprite-sheet particle
+// billboards. Header, then per card a 4-byte tag and six 24-byte vertices
+// (pos, BGRA, uv; no normal — the generator orients the card at runtime).
+function parseSpriteMesh(r, sec) {
+  const base = sec.dataStart;
+  const avail = sec.end - base;
+  if (avail < SPRITE_DATA_START + SPRITE_CARD_STRIDE) return null;
+
+  r.pos = base + 2;
+  const cardCount = r.u16();
+  if (!cardCount) return null;
+  if (SPRITE_DATA_START + cardCount * SPRITE_CARD_STRIDE > avail) return null;
+
+  r.pos = base + 8;
+  const tag = r.str(0x10);
+
+  const total = cardCount * SPRITE_CARD_VERTS;
+  const vertices = new Array(total);
+  const cornerList = new Array(total);
+  for (let c = 0; c < cardCount; c++) {
+    for (let i = 0; i < SPRITE_CARD_VERTS; i++) {
+      const idx = c * SPRITE_CARD_VERTS + i;
+      r.pos = base + SPRITE_DATA_START + c * SPRITE_CARD_STRIDE + 4 + i * SPRITE_VERTEX_STRIDE;
+      const p0 = r.vec3();
+      const color = r.u32();
+      const u = r.f32(), v = r.f32();
+      vertices[idx] = particleVertex(p0, [0, 0, -1]);
+      cornerList[idx] = { vi: idx, u, v, color };
+    }
+  }
+
+  const piece = {
+    topology: 'list', corners: cornerList, textureName: tag,
+    props: defaultProps(), mirrored: false,
+  };
+  return {
+    sectionId: sec.id, sectionType: SectionType.SpriteSheetMesh, materials: [tag],
+    triangles: cardCount * 2, vertices, flippedVertices: null, pieces: [piece],
+    hasNormals: false, occludeType: 0,
+  };
+}
+
+// --- 0x05 generators: the transform and the motion --------------------------
+//
+// A generator names its mesh by FourCC and carries both the transform it draws
+// at and what moves it. The body is four opcode streams whose offsets sit at
+// section+0x80; an entry is a u32 config (`op = cfg & 0xFF`, `size = (cfg >> 8)
+// & 0x1F` in 4-byte words, including the config) followed by its payload, and
+// op 0 ends the stream. The ops that matter here:
+//
+//   sec2 0x01 StandardSetup      the mesh FourCC, then +8 -> 3x f32 position
+//   sec2 0x09 Rotation           3x f32 radians — STATIC placement rotation
+//   sec2 0x0B RotationVelocity   3x f32 radians per 60 Hz frame
+//   sec2 0x0F Scale              3x f32
+//   sec2 0x1E BlendFunc          u8
+//   sec3 0x05 Rotation           the updater that integrates 0x0B each frame
+//   sec3 0x27/0x28 TexCoordU/V   f32 UV scroll per 60 Hz frame
+//
+// The velocity and the updater are separate: sec2 carries the rate, sec3 applies
+// it. A Home Point's crystal and its two ground rings have both; the aura shells
+// and cross planes have neither and only scroll their UVs.
+//
+// autoRun (genFlags bit 0x10) is what separates an ambient entity's idle layers
+// from its triggered ones: every generator in a Home Point's `aper` idle routine
+// sets it, and every generator in its `bind` activation routine does not.
+const GENERATOR_AUTORUN_BIT = 0x10;
+const GENERATOR_FLAGS_OFFSET = 0x79;     // section-start relative
+const GENERATOR_STREAM_TABLE = 0x80;     // section-start relative: 4x u32 offsets
+const GENERATOR_OP_CAP = 256;
+
+/** The four opcode streams of a 0x05, as `[, sec1, sec2, sec3, sec4]`. */
+function generatorStreams(r, sec) {
+  if (sec.start + GENERATOR_STREAM_TABLE + 16 > sec.end) return null;
+  const view = r.view;
+  const out = [null, [], [], [], []];
+  for (let i = 0; i < 4; i++) {
+    const off = view.getUint32(sec.start + GENERATOR_STREAM_TABLE + i * 4, true);
+    if (!off) continue;
+    const ops = out[i + 1];
+    let p = sec.start + off;
+    while (p + 4 <= sec.end && ops.length < GENERATOR_OP_CAP) {
+      const cfg = view.getUint32(p, true);
+      const op = cfg & 0xff;
+      const words = (cfg >>> 8) & 0x1f;
+      if (op === 0 || words === 0) break;
+      ops.push({ op, at: p + 4, floats: words - 1 });
+      p += words * 4;
+    }
+  }
+  return out;
+}
+
+function streamFloats(view, streams, section, opcode, count) {
+  for (const e of streams?.[section] || []) {
+    if (e.op !== opcode) continue;
+    if (e.floats < count) return null;
+    const out = [];
+    for (let i = 0; i < count; i++) out.push(view.getFloat32(e.at + i * 4, true));
+    return out.every(Number.isFinite) ? out : null;
+  }
+  return null;
+}
+
+function streamByte(view, streams, section, opcode) {
+  for (const e of streams?.[section] || []) {
+    if (e.op === opcode && e.floats >= 1) return view.getUint8(e.at);
+  }
+  return null;
+}
+
+function streamHas(streams, section, opcode) {
+  return (streams?.[section] || []).some((e) => e.op === opcode);
+}
+
+/** Rotate by ZYX Euler radians — the order xi-tools' trs_matrix uses. */
+function eulerRotate(v, rot) {
+  const [rx, ry, rz] = rot;
+  const sx = Math.sin(rx), cx = Math.cos(rx);
+  const sy = Math.sin(ry), cy = Math.cos(ry);
+  const sz = Math.sin(rz), cz = Math.cos(rz);
+  const c0 = [cy * cz, cy * sz, -sy];
+  const c1 = [sx * sy * cz - cx * sz, sx * sy * sz + cx * cz, sx * cy];
+  const c2 = [cx * sy * cz + sx * sz, cx * sy * sz - sx * cz, cx * cy];
+  return [
+    c0[0] * v[0] + c1[0] * v[1] + c2[0] * v[2],
+    c0[1] * v[0] + c1[1] * v[1] + c2[1] * v[2],
+    c0[2] * v[0] + c1[2] * v[1] + c2[2] * v[2],
+  ];
+}
+
+// `0x1E` BlendFunc, same nibble decode as particle/ops/initializers.js. A
+// generator that declares NO BlendFunc falls through to Src_One_Add — which is
+// why the Home Point's aura, ground rings and cross planes are authored with a
+// black-to-white vertex ramp: under additive, black is transparent.
+function blendModeFrom(value) {
+  if (value === null) return 'additive';
+  if (((value >> 4) & 0x01) !== 0) return 'opaque';         // One_Zero
+  switch (value & 0x0f) {
+    case 0x4: return 'blend';                               // Src_InvSrc_Add
+    case 0x6: return 'blend';                               // Zero_InvSrc_Add
+    default: return 'additive';                             // Src_One_Add / RevSub
+  }
+}
+
+function parseGenerator(r, sec, meshIds) {
+  const bytes = r.bytes;
+  const view = r.view;
+  const body = sec.start;
+  const autoRun = body + GENERATOR_FLAGS_OFFSET < sec.end
+    ? (bytes[body + GENERATOR_FLAGS_OFFSET] & GENERATOR_AUTORUN_BIT) !== 0
+    : false;
+
+  let meshRef = null;
+  let position = [0, 0, 0];
+  for (let p = sec.dataStart; p + 20 <= sec.end; p++) {
+    // Section ids come off walkSections through r.str(4), which strips trailing
+    // spaces — so a reference to `"wa  "` has to be trimmed the same way or it
+    // never matches the mesh it names.
+    const id = String.fromCharCode(bytes[p], bytes[p + 1], bytes[p + 2], bytes[p + 3])
+      .replace(/ +$/, '');
+    if (!id || !meshIds.has(id)) continue;
+    if (meshRef === null) meshRef = id;
+    const xyz = [view.getFloat32(p + 8, true), view.getFloat32(p + 12, true),
+                 view.getFloat32(p + 16, true)];
+    // A generator authored at its mesh's own origin writes (0,0,0) here and
+    // still names the mesh — keep the reference, keep scanning for a position.
+    if (xyz.every((v) => Number.isFinite(v) && Math.abs(v) < 1e5)
+        && xyz.some((v) => Math.abs(v) > 0.01)) {
+      position = xyz;
+      meshRef = id;
+      break;
+    }
+  }
+  if (meshRef === null) return null;
+
+  const streams = generatorStreams(r, sec);
+  const sane = (v, lo, hi) => v.every((x) => Number.isFinite(x) && x >= lo && x <= hi);
+
+  let scale = streamFloats(view, streams, 2, 0x0f, 3) ?? [1, 1, 1];
+  if (!scale.every((v) => Number.isFinite(v) && v > 0 && v <= 100)) scale = [1, 1, 1];
+
+  let rotation = streamFloats(view, streams, 2, 0x09, 3) ?? [0, 0, 0];
+  if (!sane(rotation, -100, 100)) rotation = [0, 0, 0];
+
+  // The rate alone turns nothing — sec3's 0x05 Rotation updater is what
+  // integrates it each frame. Treat a rate with no updater as no spin.
+  let spin = 0;
+  if (streamHas(streams, 3, 0x05)) {
+    const vel = streamFloats(view, streams, 2, 0x0b, 3);
+    if (vel && sane(vel, -1, 1)) spin = vel[1];      // Y is the only axis retail uses
+  }
+
+  const uvScroll = [
+    streamFloats(view, streams, 3, 0x27, 1)?.[0] ?? 0,
+    streamFloats(view, streams, 3, 0x28, 1)?.[0] ?? 0,
+  ].map((v) => (Number.isFinite(v) && Math.abs(v) < 1 ? v : 0));
+
+  const blend = blendModeFrom(streamByte(view, streams, 2, 0x1e));
+  return { name: sec.id, meshRef, position, scale, rotation, spin, uvScroll, autoRun, blend };
+}
+
+/**
+ * Build renderable mesh groups for an entity whose geometry lives in its
+ * effects. Each autorun generator contributes one group: its 0x1F mesh with the
+ * generator's scale, static rotation and position baked into the vertices (the
+ * renderer skins straight from `vertices`, there is no per-group transform).
+ *
+ * What is NOT baked is the motion. `spin` (radians per 60 Hz frame about Y) and
+ * `uvScroll` ride along on the group for the renderer to apply per frame — see
+ * `uEffectSpin` / `uUvOffset` in renderer.js. `pivot` is the point the spin
+ * turns about: the generator's own position, not the model origin, so a layer
+ * placed off-centre rotates rather than orbits.
+ *
+ * 0x21 sprite cards are left out — they are the billboard for ONE emitted
+ * particle, so a static copy at the origin is a flat square through the middle
+ * of the model rather than a layer of it. `particleMeshes` still carries them.
+ */
+function buildEffectLayers(particleMeshes, generators) {
+  const groups = [];
+  // ONLY autorun. A generator without the flag is fired by a routine, and a DAT
+  // where none of them autorun (`ROM/3/27`, 29 generators over three routines)
+  // has nothing to show at rest — the engine draws none of it until something
+  // triggers it. Flattening them all into one static pile stacks every phase of
+  // every routine on top of each other, which reads as one big lit quad, not as
+  // the effect. Those play through the particle system instead; see the Effect
+  // routine picker in AnimationPanel.
+  const chosen = generators.filter((g) => g.autoRun);
+  const seen = new Set();
+
+  for (const gen of chosen) {
+    const mesh = particleMeshes.get(gen.meshRef);
+    if (!mesh || mesh.sectionType !== SectionType.ParticleMesh) continue;
+    // Rotation belongs in the key: a Home Point's nak0/nak1 are ONE mesh at
+    // 30 deg and 150 deg — the crossed planes inside the crystal — and differ
+    // in nothing else, so keying on mesh+position+scale alone drops one of them.
+    const key = [gen.meshRef, gen.position, gen.rotation, gen.scale].join('|');
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const [sx, sy, sz] = gen.scale;
+    const [px, py, pz] = gen.position;
+    const rot = gen.rotation || [0, 0, 0];
+    const turned = !!(rot[0] || rot[1] || rot[2]);
+    const place = (v) => {
+      const s = [v[0] * sx, v[1] * sy, v[2] * sz];
+      const q = turned ? eulerRotate(s, rot) : s;
+      return [q[0] + px, q[1] + py, q[2] + pz];
+    };
+
+    groups.push({
+      sectionId: mesh.sectionId,
+      generator: gen.name,
+      isEffectLayer: true,
+      spin: gen.spin || 0,
+      uvScroll: gen.uvScroll || [0, 0],
+      pivot: gen.position,
+      vertices: mesh.vertices.map((v) => particleVertex(
+        place(v.p0),
+        turned ? eulerRotate(v.n0, rot) : v.n0,     // scale is not applied to normals
+      )),
+      flippedVertices: null,
+      pieces: mesh.pieces.map((p) => ({ ...p, alphaMode: gen.blend })),
+      hasNormals: mesh.hasNormals,
+      occludeType: 0,
+    });
+  }
+  return groups;
 }
 
 /**

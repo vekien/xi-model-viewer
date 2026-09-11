@@ -118,3 +118,31 @@ export async function ensureXiToolsOnBoot(opts = {}) {
     };
   }
 }
+
+/**
+ * One line of `tools-progress` detail: bytes for a download, files for an
+ * extract, whatever the payload carried otherwise.
+ */
+export function formatProgressDetail(p) {
+  const unit = p.unit || 'bytes';
+  const loaded = Number(p.loaded) || 0;
+  const total = p.total == null ? null : Number(p.total);
+  const pct = Number(p.pct);
+  if (unit === 'bytes' && (loaded > 0 || total > 0)) {
+    if (total > 0) return `${fmtBytes(loaded)} / ${fmtBytes(total)}  ·  ${Math.round(pct)}%`;
+    return `${fmtBytes(loaded)} downloaded`;
+  }
+  if (unit === 'files' && total > 0) {
+    return `${loaded} / ${total} files  ·  ${Math.round(pct)}%`;
+  }
+  if (p.detail) return p.detail;
+  return Number.isFinite(pct) && pct > 0 ? `${Math.round(pct)}%` : '';
+}
+
+function fmtBytes(n) {
+  const v = Number(n) || 0;
+  if (v < 1024) return `${v} B`;
+  if (v < 1024 * 1024) return `${(v / 1024).toFixed(1)} KB`;
+  if (v < 1024 * 1024 * 1024) return `${(v / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(v / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}

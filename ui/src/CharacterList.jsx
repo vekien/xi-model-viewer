@@ -407,6 +407,11 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
   const raceData = useRef(new Map());           // race id -> full characters.json entry
   const sectionCfg = useRef(DEFAULT_SECTIONS);  // characters.json `gearSections`
   const prevEnabled = useRef(false);
+  // This load puts the same look and action back on stage rather than
+  // answering a new pick: a return to the view, or a caller asking for the
+  // current look again. `loadedOnce` keeps the very first load out of it.
+  const revisit = useRef(false);
+  const loadedOnce = useRef(false);
   const cbRef = useRef({});
   cbRef.current = { onLoad, onError };
   // Bumped by reload(): re-runs the assemble even when nothing changed.
@@ -577,7 +582,14 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
   // Re-enter the Characters view: allow a reload (and a camera re-fit) even if
   // selections didn't change — another view may have replaced the model.
   useEffect(() => {
-    if (enabled && !prevEnabled.current) { lastKey.current = ''; lastRace.current = ''; }
+    if (enabled && !prevEnabled.current) {
+      lastKey.current = '';
+      lastRace.current = '';
+      // Nothing the user picked changed while they were away, so the reload
+      // has to put the motion they left running back on the character rather
+      // than lead with the action's own routine (App's `resume`).
+      revisit.current = loadedOnce.current;
+    }
     prevEnabled.current = enabled;
   }, [enabled]);
 
@@ -672,6 +684,9 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
     prevSelRef.current = { ...sel };
 
     partsRef.current = parts;
+    const isRevisit = revisit.current;
+    revisit.current = false;
+    loadedOnce.current = true;
     cbRef.current.onLoad?.({
       name: r.label,
       paths: unique,
@@ -693,6 +708,7 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
       rodPaths,
       keepCamera: isGearSwap,
       actionChanged,
+      revisit: isRevisit,
     });
     lastRace.current = race;
     // Re-apply current isolation against the new part paths (gear/race swap).
@@ -702,6 +718,8 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
   /** Load the current look again — for a caller that replaced the model. */
   const reload = useCallback(() => {
     lastKey.current = '';
+    // The same look again for a caller that replaced the model — not a pick.
+    revisit.current = loadedOnce.current;
     setReloadTick((t) => t + 1);
   }, []);
 

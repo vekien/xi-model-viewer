@@ -117,7 +117,7 @@ instead (`pacman -S vgmstream`, or build it) — everything else works without i
 - Advanced filters — a rule builder, or an SQL-ish query string such as `str > 20 and int > 20`.
 - CSV / JSON export.
 - One-click `xi mv database` bake so tables load instantly instead of parsing 20 MB DATs.
-- **File → Database Manager** updates, imports and exports the baked tables.
+- **Settings → DAT Database** updates and imports the baked tables; File → Export saves the open table.
 
 ### Data — the DAT inspector
 

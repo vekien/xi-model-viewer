@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Checkbox, Field, Label } from '@headlessui/react';
 import { backend } from '../js/backend.js';
 import { clampUiScale, sliderToUiScale, uiScaleToSlider } from '../js/uiScale.js';
+import { GAME_CHECK, checkGamePath } from '../js/gameCheck.js';
+import { formatProgressDetail } from '../js/toolsBoot.js';
 import { loadNotes, notesFilePath, revealNotesFile } from '../js/notes.js';
 import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
@@ -34,14 +36,25 @@ const TOOLS_MODE_ITEMS = [
 ];
 
 /**
- * Draggable settings dialog.
- * Tabs: General (paths + options) · XI Tools (install / update / local path).
+ * Draggable settings window. No backdrop: like the Sequencer and the other
+ * floating panels it sits over the app rather than blocking it, so a stray
+ * click on the viewport moves the camera instead of throwing the dialog away.
+ * Cancel, × and Esc are the ways out.
+ *
+ * Tabs: General (paths + options) · XI Tools (install / update / local path) ·
+ * DAT Lists (the name lists that ship with the build) · DAT Database (the
+ * prebuilt tables the Database page reads).
  *
  * `initialTab` is how the rest of the app sends someone straight to the tab
  * that fixes their problem — Export with no xi-tools opens on 'xitools'.
+ *
+ * `db` carries the DAT Database tab: { dir, xiConnected, updating, refreshTick,
+ * onUpdate, onImport }. Omitted (the zone-preview window) the tab is not shown
+ * — there is no Database page there to prebuild for.
  */
 export function SettingsModal({
   open, initial, onSave, onClose, error, initialTab = 'general', onGamePathValid,
+  onFocus, zIndex = 5000, db = null,
 }) {
   const [draft, setDraft] = useState(initial);
   const [tab, setTab] = useState(initialTab);
@@ -58,6 +71,8 @@ export function SettingsModal({
   const [toolsMode, setToolsMode] = useState('managed');
   const [notesPath, setNotesPath] = useState('');
   const [notesErr, setNotesErr] = useState('');
+  const [dbManifest, setDbManifest] = useState(null);  // manifest.json of the last bake
+  const [dbState, setDbState] = useState('loading');   // loading | none | bad | ok
   const [gameCheck, setGameCheck] = useState(null);  // { state, message }
   const [lists, setLists] = useState(null);       // ListsStatus from Rust
   const [listsBusy, setListsBusy] = useState(false);
@@ -68,7 +83,7 @@ export function SettingsModal({
   const setupGen = useRef(0);
   const unlistenRef = useRef([]);
 
-  // Slider previews live; Cancel/backdrop/× put the saved scale back.
+  // Slider previews live; Cancel/× put the saved scale back.
   const cancel = useCallback(() => {
     backend.setUiScale(clampUiScale(initial?.uiScale));
     onClose();
@@ -285,6 +300,25 @@ export function SettingsModal({
     return () => { alive = false; clearTimeout(t); };
   }, [open, draft?.gamePath, onGamePathValid]);
 
+  // Every `xi mv database` bake writes a manifest.json naming the tables, their
+  // row counts and the time — read it when the tab is actually on screen, and
+  // again after a bake or an import (refreshTick).
+  useEffect(() => {
+    if (!open || tab !== 'database') return undefined;
+    let alive = true;
+    setDbState('loading');
+    if (!db?.dir) { setDbManifest(null); setDbState('none'); return undefined; }
+    backend.readTextFile(`${db.dir}\\manifest.json`)
+      .then((text) => {
+        if (!alive) return;
+        if (!text) { setDbManifest(null); setDbState('none'); return; }
+        try { setDbManifest(JSON.parse(text)); setDbState('ok'); }
+        catch { setDbManifest(null); setDbState('bad'); }
+      })
+      .catch(() => { if (alive) { setDbManifest(null); setDbState('none'); } });
+    return () => { alive = false; };
+  }, [open, tab, db?.dir, db?.refreshTick, db?.updating]);
+
   useEffect(() => {
     if (!open) return undefined;
     const clampNow = () => setPos((p) => (p ? clamp(p, panelRef.current) : p));
@@ -293,6 +327,18 @@ export function SettingsModal({
   }, [open]);
 
   if (!open) return null;
+
+  // DAT Database tab: the bake in one sentence.
+  const dbTables = dbManifest?.tables ? Object.keys(dbManifest.tables) : [];
+  const dbLangs = [...new Set(dbTables.map((k) => k.split('.').pop()))];
+  const dbStatusMsg = {
+    loading: 'Checking…',
+    none: 'Not built yet.',
+    bad: 'These tables could not be read — build them again.',
+    ok: `${dbTables.length} tables ready`
+      + `${dbLangs.length ? ` in ${dbLangs.map(langName).join(' and ')}` : ''}`
+      + `${dbManifest?.generated ? `, built ${fmtBaked(dbManifest.generated)}` : ''}`,
+  }[dbState] ?? '';
 
   const startDrag = (e) => {
     if (e.target.closest('button, input, a, [role="button"]')) return;
@@ -451,673 +497,716 @@ export function SettingsModal({
   };
 
   const style = pos
-    ? { left: pos.x, top: pos.y, transform: 'none' }
-    : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' };
+    ? { left: pos.x, top: pos.y, transform: 'none', zIndex }
+    : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex };
 
   const badge = xiBadge(xiStatus);
   const toolsBadge = toolsUiBadge(tools, toolsBusy);
 
   return (
-    <div className="modal-backdrop" onPointerDown={(e) => { if (e.target === e.currentTarget) cancel(); }}>
-      <div className="modal settings-modal" ref={panelRef} style={style}>
-        <div
-          className="modal-header"
-          onPointerDown={startDrag}
-          onPointerMove={onDrag}
-          onPointerUp={endDrag}
+    <div className="modal settings-modal" ref={panelRef} style={style} onPointerDown={onFocus}>
+      <div
+        className="modal-header"
+        onPointerDown={startDrag}
+        onPointerMove={onDrag}
+        onPointerUp={endDrag}
+      >
+        <span className="icon">settings</span>
+        <span className="modal-title">Settings</span>
+        <Tooltip content="Close">
+          <Button className="icon-btn modal-close" onClick={cancel}>
+            <span className="icon">close</span>
+          </Button>
+        </Tooltip>
+      </div>
+
+      <div className="settings-tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          className={`settings-tab${tab === 'general' ? ' on' : ''}`}
+          aria-selected={tab === 'general'}
+          onClick={() => setTab('general')}
         >
-          <span className="icon">settings</span>
-          <span className="modal-title">Settings</span>
-          <Tooltip content="Close">
-            <Button className="icon-btn modal-close" onClick={cancel}>
-              <span className="icon">close</span>
-            </Button>
-          </Tooltip>
-        </div>
-
-        <div className="settings-tabs" role="tablist">
+          <span className="icon">tune</span>
+          General
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className={`settings-tab${tab === 'xitools' ? ' on' : ''}`}
+          aria-selected={tab === 'xitools'}
+          onClick={() => setTab('xitools')}
+        >
+          <span className="icon">terminal</span>
+          XI Tools
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className={`settings-tab${tab === 'lists' ? ' on' : ''}`}
+          aria-selected={tab === 'lists'}
+          onClick={() => setTab('lists')}
+        >
+          <span className="icon">database</span>
+          DAT Lists
+        </button>
+        {db && (
           <button
             type="button"
             role="tab"
-            className={`settings-tab${tab === 'general' ? ' on' : ''}`}
-            aria-selected={tab === 'general'}
-            onClick={() => setTab('general')}
+            className={`settings-tab${tab === 'database' ? ' on' : ''}`}
+            aria-selected={tab === 'database'}
+            onClick={() => setTab('database')}
           >
-            <span className="icon">tune</span>
-            General
+            <span className="icon">dataset</span>
+            DAT Database
           </button>
-          <button
-            type="button"
-            role="tab"
-            className={`settings-tab${tab === 'xitools' ? ' on' : ''}`}
-            aria-selected={tab === 'xitools'}
-            onClick={() => setTab('xitools')}
-          >
-            <span className="icon">terminal</span>
-            XI Tools
-          </button>
-          <button
-            type="button"
-            role="tab"
-            className={`settings-tab${tab === 'lists' ? ' on' : ''}`}
-            aria-selected={tab === 'lists'}
-            onClick={() => setTab('lists')}
-          >
-            <span className="icon">database</span>
-            DAT Lists
-          </button>
-        </div>
+        )}
+      </div>
 
-        <div className="modal-body settings-body">
-          {error && (
-            <div className="form-error settings-error" role="alert">
-              <span className="icon">error</span>
-              <span>{error}</span>
-            </div>
-          )}
+      <div className="modal-body settings-body">
+        {error && (
+          <div className="form-error settings-error" role="alert">
+            <span className="icon">error</span>
+            <span>{error}</span>
+          </div>
+        )}
 
-          {tab === 'general' && (
-            <div className="settings-cols">
-              <section className="settings-panel">
-                <div className="settings-panel-title">Data paths</div>
-                <div className="settings-panel-body">
-                  <div className="form-row">
-                    <label className="form-label">Game path</label>
-                    <div className="form-inline">
-                      <input
-                        type="text"
-                        value={draft.gamePath}
-                        spellCheck={false}
-                        placeholder="Your FINAL FANTASY XI install folder"
-                        onChange={(e) => setDraft({ ...draft, gamePath: e.target.value })}
-                      />
-                      <Button onClick={browse}>
-                        <span className="icon">folder_open</span>
-                        Browse
-                      </Button>
-                    </div>
-                    {gameCheck && (
-                      <div className={`xi-status settings-path-status ${GAME_CHECK[gameCheck.state].cls}`}>
-                        <span className={`icon${gameCheck.state === 'checking' ? ' spin' : ''}`}>
-                          {GAME_CHECK[gameCheck.state].icon}
-                        </span>
-                        <span className="xi-status-msg">{gameCheck.message}</span>
-                      </div>
-                    )}
+        {tab === 'general' && (
+          <div className="settings-cols">
+            <section className="settings-panel">
+              <div className="settings-panel-title">Data paths</div>
+              <div className="settings-panel-body">
+                <div className="form-row">
+                  <label className="form-label">Game path</label>
+                  <div className="form-inline">
+                    <input
+                      type="text"
+                      value={draft.gamePath}
+                      spellCheck={false}
+                      placeholder="Your FINAL FANTASY XI install folder"
+                      onChange={(e) => setDraft({ ...draft, gamePath: e.target.value })}
+                    />
+                    <Button onClick={browse}>
+                      <span className="icon">folder_open</span>
+                      Browse
+                    </Button>
                   </div>
+                  {gameCheck && (
+                    <div className={`xi-status settings-path-status ${GAME_CHECK[gameCheck.state].cls}`}>
+                      <span className={`icon${gameCheck.state === 'checking' ? ' spin' : ''}`}>
+                        {GAME_CHECK[gameCheck.state].icon}
+                      </span>
+                      <span className="xi-status-msg">{gameCheck.message}</span>
+                    </div>
+                  )}
+                </div>
 
-                  <div className="form-row">
-                    <label className="form-label">HD path</label>
-                    <div className="form-inline">
-                      <input
-                        type="text"
-                        value={draft.hdPath ?? ''}
-                        spellCheck={false}
-                        placeholder="Optional HD pack root"
-                        onChange={(e) => setDraft({ ...draft, hdPath: e.target.value })}
-                      />
-                      <Button onClick={browseHd}>
-                        <span className="icon">folder_open</span>
-                        Browse
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="form-row">
-                    <label className="form-label">Pivot path</label>
-                    <div className="form-inline">
-                      <input
-                        type="text"
-                        value={draft.pivotPath ?? ''}
-                        spellCheck={false}
-                        placeholder="Ashita / override DAT root"
-                        onChange={(e) => setDraft({ ...draft, pivotPath: e.target.value })}
-                      />
-                      <Button onClick={browsePivot}>
-                        <span className="icon">folder_open</span>
-                        Browse
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="form-row">
-                    <label className="form-label">Navmesh Folder</label>
-                    <div className="form-inline">
-                      <input
-                        type="text"
-                        value={draft.navmeshPath ?? ''}
-                        spellCheck={false}
-                        placeholder="Folder of zone .nav files (e.g. server navmeshes)"
-                        onChange={(e) => setDraft({ ...draft, navmeshPath: e.target.value })}
-                      />
-                      <Button onClick={browseNavmesh}>
-                        <span className="icon">folder_open</span>
-                        Browse
-                      </Button>
-                    </div>
-                    <div className="form-hint">
-                      Optional. Zone overlay reads <span className="mono">ZoneName.nav</span> from here first.
-                    </div>
-                  </div>
-
-                  <div className="form-row">
-                    <label className="form-label">Notes file</label>
-                    <div className="form-inline">
-                      <input
-                        type="text"
-                        readOnly
-                        className="mono"
-                        value={notesPath || '%LOCALAPPDATA%\\XiModelViewer\\notes.json'}
-                        spellCheck={false}
-                      />
-                      <Button
-                        onClick={async () => {
-                          setNotesErr('');
-                          try {
-                            await revealNotesFile();
-                            setNotesPath(notesFilePath() || notesPath);
-                          } catch (e) {
-                            setNotesErr(e?.message || String(e));
-                          }
-                        }}
-                      >
-                        <span className="icon">folder_open</span>
-                        Open file
-                      </Button>
-                    </div>
-                    <div className="form-hint">
-                      Shared notes for DATs, UiMenus, and UiElementGroups.
-                      {notesErr ? ` ${notesErr}` : ''}
-                    </div>
+                <div className="form-row">
+                  <label className="form-label">HD path</label>
+                  <div className="form-inline">
+                    <input
+                      type="text"
+                      value={draft.hdPath ?? ''}
+                      spellCheck={false}
+                      placeholder="Optional HD pack root"
+                      onChange={(e) => setDraft({ ...draft, hdPath: e.target.value })}
+                    />
+                    <Button onClick={browseHd}>
+                      <span className="icon">folder_open</span>
+                      Browse
+                    </Button>
                   </div>
                 </div>
-              </section>
 
-              <section className="settings-panel">
-                <div className="settings-panel-title">Options</div>
-                <div className="settings-panel-body">
+                <div className="form-row">
+                  <label className="form-label">Pivot path</label>
+                  <div className="form-inline">
+                    <input
+                      type="text"
+                      value={draft.pivotPath ?? ''}
+                      spellCheck={false}
+                      placeholder="Ashita / override DAT root"
+                      onChange={(e) => setDraft({ ...draft, pivotPath: e.target.value })}
+                    />
+                    <Button onClick={browsePivot}>
+                      <span className="icon">folder_open</span>
+                      Browse
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <label className="form-label">Navmesh Folder</label>
+                  <div className="form-inline">
+                    <input
+                      type="text"
+                      value={draft.navmeshPath ?? ''}
+                      spellCheck={false}
+                      placeholder="Folder of zone .nav files (e.g. server navmeshes)"
+                      onChange={(e) => setDraft({ ...draft, navmeshPath: e.target.value })}
+                    />
+                    <Button onClick={browseNavmesh}>
+                      <span className="icon">folder_open</span>
+                      Browse
+                    </Button>
+                  </div>
+                  <div className="form-hint">
+                    Optional. Zone overlay reads <span className="mono">ZoneName.nav</span> from here first.
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <label className="form-label">Notes file</label>
+                  <div className="form-inline">
+                    <input
+                      type="text"
+                      readOnly
+                      className="mono"
+                      value={notesPath || '%LOCALAPPDATA%\\XiModelViewer\\notes.json'}
+                      spellCheck={false}
+                    />
+                    <Button
+                      onClick={async () => {
+                        setNotesErr('');
+                        try {
+                          await revealNotesFile();
+                          setNotesPath(notesFilePath() || notesPath);
+                        } catch (e) {
+                          setNotesErr(e?.message || String(e));
+                        }
+                      }}
+                    >
+                      <span className="icon">folder_open</span>
+                      Open file
+                    </Button>
+                  </div>
+                  <div className="form-hint">
+                    Shared notes for DATs, UiMenus, and UiElementGroups.
+                    {notesErr ? ` ${notesErr}` : ''}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="settings-panel">
+              <div className="settings-panel-title">Options</div>
+              <div className="settings-panel-body">
+                <div className="form-row">
+                  <Field className="check-field">
+                    <Checkbox
+                      checked={draft.autoPlay}
+                      onChange={(v) => setDraft({ ...draft, autoPlay: v })}
+                      className="checkbox"
+                    >
+                      <span className="icon check-icon">check</span>
+                    </Checkbox>
+                    <Label className="check-label">Auto-play idle animation on load</Label>
+                  </Field>
+                </div>
+
+                <Tooltip content="Fly camera on zone load (WASD / QE / Shift / wheel).">
                   <div className="form-row">
                     <Field className="check-field">
                       <Checkbox
-                        checked={draft.autoPlay}
-                        onChange={(v) => setDraft({ ...draft, autoPlay: v })}
+                        checked={draft.autoWasdZones !== false}
+                        onChange={(v) => setDraft({ ...draft, autoWasdZones: v })}
                         className="checkbox"
                       >
                         <span className="icon check-icon">check</span>
                       </Checkbox>
-                      <Label className="check-label">Auto-play idle animation on load</Label>
+                      <Label className="check-label">Auto switch to WASD for Zones</Label>
                     </Field>
                   </div>
+                </Tooltip>
 
-                  <Tooltip content="Fly camera on zone load (WASD / QE / Shift / wheel).">
-                    <div className="form-row">
-                      <Field className="check-field">
-                        <Checkbox
-                          checked={draft.autoWasdZones !== false}
-                          onChange={(v) => setDraft({ ...draft, autoWasdZones: v })}
-                          className="checkbox"
-                        >
-                          <span className="icon check-icon">check</span>
-                        </Checkbox>
-                        <Label className="check-label">Auto switch to WASD for Zones</Label>
-                      </Field>
-                    </div>
-                  </Tooltip>
-
-                  <Tooltip content="A zone opens with its sky and weather running, even if you switched them off in the last one.">
-                    <div className="form-row">
-                      <Field className="check-field">
-                        <Checkbox
-                          checked={draft.autoWeatherZones !== false}
-                          onChange={(v) => setDraft({ ...draft, autoWeatherZones: v })}
-                          className="checkbox"
-                        >
-                          <span className="icon check-icon">check</span>
-                        </Checkbox>
-                        <Label className="check-label">Auto Enable Weather</Label>
-                      </Field>
-                    </div>
-                  </Tooltip>
-
-                  <Tooltip content="Clicking a row in the Objects list frames the camera on it. Off = select only, camera stays put.">
-                    <div className="form-row">
-                      <Field className="check-field">
-                        <Checkbox
-                          checked={draft.autoFocusZoneObject !== false}
-                          onChange={(v) => setDraft({ ...draft, autoFocusZoneObject: v })}
-                          className="checkbox"
-                        >
-                          <span className="icon check-icon">check</span>
-                        </Checkbox>
-                        <Label className="check-label">Auto Focus Zone Object</Label>
-                      </Field>
-                    </div>
-                  </Tooltip>
-
-                  <Tooltip content="Off: picking another actor keeps your view. F reframes.">
-                    <div className="form-row">
-                      <Field className="check-field">
-                        <Checkbox
-                          checked={!!draft.reframeOnSelect}
-                          onChange={(v) => setDraft({ ...draft, reframeOnSelect: v })}
-                          className="checkbox"
-                        >
-                          <span className="icon check-icon">check</span>
-                        </Checkbox>
-                        <Label className="check-label">Reframe camera on Actor Selection</Label>
-                      </Field>
-                    </div>
-                  </Tooltip>
-
+                <Tooltip content="A zone opens with its sky and weather running, even if you switched them off in the last one.">
                   <div className="form-row">
-                    <label className="form-label">Day Length</label>
-                    {/* A few digits at most; form-inline stretches otherwise. */}
-                    <div className="form-inline">
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        spellCheck={false}
-                        style={{ flex: '0 0 auto', width: 100 }}
-                        value={draft.dayLength ?? ''}
-                        onChange={(e) => setDraft({ ...draft, dayLength: e.target.value })}
-                      />
-                    </div>
-                    <div className="form-hint">
-                      Seconds of real time for one in-game day when the day/night
-                      cycle is playing (Zone panel). Default 60.
-                    </div>
-                  </div>
-
-                  <div className="form-row">
-                    <label className="form-label">Weather Transition</label>
-                    <div className="form-inline">
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        spellCheck={false}
-                        style={{ flex: '0 0 auto', width: 100 }}
-                        value={draft.weatherFadeMs ?? ''}
-                        onChange={(e) => setDraft({ ...draft, weatherFadeMs: e.target.value })}
-                      />
-                      <span className="form-suffix">ms</span>
-                    </div>
-                    <div className="form-hint">
-                      How long a weather change takes to cross-fade — sky, fog,
-                      lighting, particles and the ambient bed. Default 3330
-                      (the game's 3.33s); 0 snaps straight over.
-                    </div>
-                  </div>
-
-                  <div className="form-row">
-                    <label className="form-label">UI Scale</label>
-                    <div className="form-inline ui-scale-row">
-                      <input
-                        type="range"
-                        className="vol-slider"
-                        min={-100}
-                        max={100}
-                        step={1}
-                        value={uiScaleToSlider(draft.uiScale)}
-                        style={{ '--fill': `${(uiScaleToSlider(draft.uiScale) + 100) / 2}%` }}
-                        aria-label="UI scale"
-                        title="Double-click to reset to 100%"
-                        onChange={(e) => setDraft({ ...draft, uiScale: sliderToUiScale(e.target.value) })}
-                        // Apply on release only — zooming mid-drag moves the
-                        // slider out from under the pointer.
-                        onPointerUp={(e) => backend.setUiScale(sliderToUiScale(e.currentTarget.value))}
-                        onKeyUp={(e) => backend.setUiScale(sliderToUiScale(e.currentTarget.value))}
-                        onDoubleClick={() => {
-                          setDraft({ ...draft, uiScale: 1 });
-                          backend.setUiScale(1);
-                        }}
-                      />
-                      <span className="mono ui-scale-num">{Math.round(clampUiScale(draft.uiScale) * 100)}%</span>
-                    </div>
-                    <div className="form-hint">
-                      Zoom the whole window, 20% – 200% in 5% steps. Centre is 100%; double-click to reset.
-                      Ctrl +/− and Ctrl 0 also work anywhere.
-                    </div>
-                  </div>
-
-                  <Tooltip content="Only the whole-DAT Notes window (status bar), not UiMenu notes.">
-                    <div className="form-row">
-                      <Field className="check-field">
-                        <Checkbox
-                          checked={!!draft.closeDatNotesOnSave}
-                          onChange={(v) => setDraft({ ...draft, closeDatNotesOnSave: v })}
-                          className="checkbox"
-                        >
-                          <span className="icon check-icon">check</span>
-                        </Checkbox>
-                        <Label className="check-label">Close DAT Notes on Save</Label>
-                      </Field>
-                    </div>
-                  </Tooltip>
-                </div>
-              </section>
-            </div>
-          )}
-
-          {tab === 'xitools' && (
-            <div className="settings-xitools">
-              <div className="settings-xitools-main">
-                <section className="settings-panel">
-                  <div className="settings-panel-title">Install mode</div>
-                  <div className="settings-panel-body">
-                    <div className="form-row">
-                      <label className="form-label">How xi-tools is provided</label>
-                      <Combo
-                        value={toolsMode}
-                        items={TOOLS_MODE_ITEMS}
-                        onChange={(id) => { if (!toolsBusy) switchToolsMode(id); }}
-                      />
-                    </div>
-                    <div className="form-hint">
-                      {toolsMode === 'managed'
-                        ? 'Downloads the latest GitHub release into AppData, sets up Python/uv, and checks for updates on launch (same as XI Zone Editor).'
-                        : 'Point at an xi-tools checkout you already built. The app will only verify it — no download or uv sync.'}
-                    </div>
-                  </div>
-                </section>
-
-                {toolsMode === 'managed' && (
-                  <section className="settings-panel">
-                    <div className="settings-panel-title">Self-managed install</div>
-                    <div className="settings-panel-body">
-                      <div className={`xi-status${toolsBadge ? ` ${toolsBadge.cls}` : ''}${toolsBusy ? ' busy' : ''}`}>
-                        <span className={`icon${toolsBusy ? ' spin' : ''}`}>{toolsBadge?.icon || 'info'}</span>
-                        <span className="xi-status-msg">{toolsMsg || 'Checking…'}</span>
-                      </div>
-
-                      {tools?.toolsDir && !tools.usingLocalOverride && (
-                        <div className="form-hint mono">{tools.toolsDir}</div>
-                      )}
-
-                      {toolsProgress && (
-                        <div className="tools-progress">
-                          <div className="tools-progress-bar">
-                            <div className="tools-progress-fill" style={{ width: `${Math.min(100, toolsProgress.pct || 0)}%` }} />
-                          </div>
-                          <div className="tools-progress-meta mono">
-                            {toolsProgress.detail || toolsProgress.label}
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="form-inline tools-actions">
-                        <Button className="active" disabled={toolsBusy} onClick={doInstallOrUpdate}>
-                          <span className="icon">download</span>
-                          Install / Update
-                        </Button>
-                        <Button disabled={toolsBusy} onClick={doCheckReleases}>
-                          <span className="icon">travel_explore</span>
-                          Check for updates
-                        </Button>
-                        <Tooltip content="xi-tools on GitHub">
-                          <Button className="icon-btn" onClick={() => backend.openUrl(XI_README_HINT)}>
-                            <span className="icon">open_in_new</span>
-                          </Button>
-                        </Tooltip>
-                      </div>
-
-                      {toolsErr && (
-                        <div className="form-error settings-local-err" role="alert">
-                          <span className="icon">error</span>
-                          <span>{toolsErr}</span>
-                        </div>
-                      )}
-                      {toolsLog && (
-                        <pre className="xi-status-detail mono tools-log">{toolsLog}</pre>
-                      )}
-                    </div>
-                  </section>
-                )}
-
-                {toolsMode === 'custom' && (
-                  <section className="settings-panel">
-                    <div className="settings-panel-title">Custom install</div>
-                    <div className="settings-panel-body">
-                      <div className="form-row">
-                        <label className="form-label">xi-tools folder</label>
-                        <div className="form-inline">
-                          <input
-                            type="text"
-                            value={localPathDraft}
-                            spellCheck={false}
-                            placeholder="e.g. D:\xi-tools"
-                            disabled={toolsBusy}
-                            onChange={(e) => {
-                              setLocalPathDraft(e.target.value);
-                              if (toolsErr) setToolsErr('');
-                            }}
-                          />
-                          <Button disabled={toolsBusy} onClick={browseLocalTools}>
-                            <span className="icon">folder_open</span>
-                            Browse
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="form-inline tools-actions">
-                        <Button className="active" disabled={toolsBusy} onClick={applyCustomPath}>
-                          <span className="icon">verified</span>
-                          {toolsBusy ? 'Verifying…' : 'Verify & use'}
-                        </Button>
-                        <Tooltip content="Setup guide">
-                          <Button className="icon-btn" onClick={() => backend.openUrl(XI_README_HINT)}>
-                            <span className="icon">menu_book</span>
-                          </Button>
-                        </Tooltip>
-                        {xiStatus?.status === 'missing_uv' && (
-                          <Button onClick={() => backend.openUrl(UV_INSTALL_URL)}>
-                            <span className="icon">open_in_new</span>
-                            Install uv
-                          </Button>
-                        )}
-                      </div>
-
-                      {(toolsMsg || xiStatus?.message) && !toolsErr && (
-                        <div className={`xi-status${xiStatus?.ok || tools?.usingLocalOverride ? ' ok' : ''}${xiStatus?.busy || toolsBusy ? ' busy' : ''}`}>
-                          <span className={`icon${xiStatus?.busy || toolsBusy ? ' spin' : ''}`}>
-                            {xiStatus?.busy || toolsBusy ? 'progress_activity' : (xiStatus?.ok ? 'check_circle' : 'info')}
-                          </span>
-                          <span className="xi-status-msg">{xiStatus?.message || toolsMsg}</span>
-                        </div>
-                      )}
-                      {toolsErr && (
-                        <div className="form-error settings-local-err" role="alert">
-                          <span className="icon">error</span>
-                          <span>{toolsErr}</span>
-                        </div>
-                      )}
-                      {xiStatus?.detail && xiStatus.status === 'error' && (
-                        <pre className="xi-status-detail mono">{xiStatus.detail.slice(0, 600)}</pre>
-                      )}
-                    </div>
-                  </section>
-                )}
-              </div>
-
-              <div className="settings-xitools-side">
-                <section className="settings-panel">
-                  <div className="settings-panel-title">Console</div>
-                  <div className="settings-panel-body">
-                    <div className="form-row">
-                      <Field className="check-field">
-                        <Checkbox
-                          checked={draft.showXiConsole !== false}
-                          onChange={(v) => setDraft({ ...draft, showXiConsole: v })}
-                          className="checkbox"
-                        >
-                          <span className="icon check-icon">check</span>
-                        </Checkbox>
-                        <Label className="check-label">Show console output</Label>
-                      </Field>
-                    </div>
-                    <div className="form-row">
-                      <Field className="check-field">
-                        <Checkbox
-                          checked={!!draft.autoCloseXiConsole}
-                          onChange={(v) => setDraft({ ...draft, autoCloseXiConsole: v })}
-                          className="checkbox"
-                          disabled={draft.showXiConsole === false}
-                        >
-                          <span className="icon check-icon">check</span>
-                        </Checkbox>
-                        <Label className="check-label">Auto-close console (10s)</Label>
-                      </Field>
-                    </div>
-                  </div>
-                </section>
-              </div>
-            </div>
-          )}
-
-          {tab === 'lists' && (
-            <div className="settings-cols settings-lists">
-              <section className="settings-panel">
-                <div className="settings-panel-title">Where these come from</div>
-                <div className="settings-panel-body">
-                  <div className="form-hint">
-                    The DAT lists are what turns raw DAT paths into names — races and
-                    gear, NPCs, zones, music, sound effects. They are generated by{' '}
-                    <a
-                      className="inline-link"
-                      href={LISTS_SOURCE_URL}
-                      onClick={(e) => { e.preventDefault(); backend.openUrl(LISTS_SOURCE_URL); }}
-                    >
-                      xi-tools
-                    </a>{' '}
-                    and ship inside this build, so the app works with no network at all.
-                  </div>
-                  <div className="form-hint">
-                    On launch it checks xi-tools for newer copies and downloads only the
-                    ones whose contents changed, so a model or gear row found after this
-                    release still shows up. Each download is checked against its
-                    published checksum before it replaces anything.
-                  </div>
-                </div>
-              </section>
-
-              <section className="settings-panel">
-                <div className="settings-panel-title">Status</div>
-                <div className="settings-panel-body">
-                  <div className={`xi-status${listsBusy ? ' busy' : ''}`}>
-                    <span className={`icon${listsBusy ? ' spin' : ''}`}>
-                      {listsBusy ? 'progress_activity' : 'inventory_2'}
-                    </span>
-                    <span className="xi-status-msg">
-                      {listsBusy
-                        ? (listsMsg || 'Checking…')
-                        : (listsMsg || (lists
-                          ? `${lists.files.length} lists, ${fmtMb(lists.bytes)}`
-                            + (lists.downloaded
-                              ? ` — ${lists.downloaded} updated since this build`
-                              : ' — all from this build')
-                          : 'Reading…'))}
-                    </span>
-                  </div>
-
-                  {lists?.generated && (
-                    <div className="form-hint">
-                      Built from xi-tools&rsquo; lists of{' '}
-                      <span className="mono">{fmtStamp(lists.generated)}</span>.
-                    </div>
-                  )}
-                  {!!lists?.downloaded && lists.dir && (
-                    <div className="form-hint mono lists-dir">{lists.dir}</div>
-                  )}
-
-                  <div className="form-inline tools-actions">
-                    <Button className="active" disabled={listsBusy} onClick={doUpdateLists}>
-                      <span className="icon">download</span>
-                      Check for list updates
-                    </Button>
-                    <Tooltip content="The published lists on GitHub">
-                      <Button
-                        className="icon-btn"
-                        onClick={() => backend.openUrl(LISTS_SOURCE_URL)}
+                    <Field className="check-field">
+                      <Checkbox
+                        checked={draft.autoWeatherZones !== false}
+                        onChange={(v) => setDraft({ ...draft, autoWeatherZones: v })}
+                        className="checkbox"
                       >
-                        <span className="icon">open_in_new</span>
-                      </Button>
-                    </Tooltip>
+                        <span className="icon check-icon">check</span>
+                      </Checkbox>
+                      <Label className="check-label">Auto Enable Weather</Label>
+                    </Field>
                   </div>
+                </Tooltip>
 
-                  {listsErr && (
-                    <div className="form-error settings-local-err" role="alert">
-                      <span className="icon">error</span>
-                      <span>{listsErr}</span>
-                    </div>
-                  )}
+                <Tooltip content="Clicking a row in the Objects list frames the camera on it. Off = select only, camera stays put.">
+                  <div className="form-row">
+                    <Field className="check-field">
+                      <Checkbox
+                        checked={draft.autoFocusZoneObject !== false}
+                        onChange={(v) => setDraft({ ...draft, autoFocusZoneObject: v })}
+                        className="checkbox"
+                      >
+                        <span className="icon check-icon">check</span>
+                      </Checkbox>
+                      <Label className="check-label">Auto Focus Zone Object</Label>
+                    </Field>
+                  </div>
+                </Tooltip>
+
+                <Tooltip content="Off: picking another actor keeps your view. F reframes.">
+                  <div className="form-row">
+                    <Field className="check-field">
+                      <Checkbox
+                        checked={!!draft.reframeOnSelect}
+                        onChange={(v) => setDraft({ ...draft, reframeOnSelect: v })}
+                        className="checkbox"
+                      >
+                        <span className="icon check-icon">check</span>
+                      </Checkbox>
+                      <Label className="check-label">Reframe camera on Actor Selection</Label>
+                    </Field>
+                  </div>
+                </Tooltip>
+
+                <div className="form-row">
+                  <label className="form-label">Day Length</label>
+                  {/* A few digits at most; form-inline stretches otherwise. */}
+                  <div className="form-inline">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      spellCheck={false}
+                      style={{ flex: '0 0 auto', width: 100 }}
+                      value={draft.dayLength ?? ''}
+                      onChange={(e) => setDraft({ ...draft, dayLength: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-hint">
+                    Seconds of real time for one in-game day when the day/night
+                    cycle is playing (Zone panel). Default 60.
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <label className="form-label">Weather Transition</label>
+                  <div className="form-inline">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      spellCheck={false}
+                      style={{ flex: '0 0 auto', width: 100 }}
+                      value={draft.weatherFadeMs ?? ''}
+                      onChange={(e) => setDraft({ ...draft, weatherFadeMs: e.target.value })}
+                    />
+                    <span className="form-suffix">ms</span>
+                  </div>
+                  <div className="form-hint">
+                    How long a weather change takes to cross-fade — sky, fog,
+                    lighting, particles and the ambient bed. Default 3330
+                    (the game's 3.33s); 0 snaps straight over.
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <label className="form-label">UI Scale</label>
+                  <div className="form-inline ui-scale-row">
+                    <input
+                      type="range"
+                      className="vol-slider"
+                      min={-100}
+                      max={100}
+                      step={1}
+                      value={uiScaleToSlider(draft.uiScale)}
+                      style={{ '--fill': `${(uiScaleToSlider(draft.uiScale) + 100) / 2}%` }}
+                      aria-label="UI scale"
+                      title="Double-click to reset to 100%"
+                      onChange={(e) => setDraft({ ...draft, uiScale: sliderToUiScale(e.target.value) })}
+                      // Apply on release only — zooming mid-drag moves the
+                      // slider out from under the pointer.
+                      onPointerUp={(e) => backend.setUiScale(sliderToUiScale(e.currentTarget.value))}
+                      onKeyUp={(e) => backend.setUiScale(sliderToUiScale(e.currentTarget.value))}
+                      onDoubleClick={() => {
+                        setDraft({ ...draft, uiScale: 1 });
+                        backend.setUiScale(1);
+                      }}
+                    />
+                    <span className="mono ui-scale-num">{Math.round(clampUiScale(draft.uiScale) * 100)}%</span>
+                  </div>
+                  <div className="form-hint">
+                    Zoom the whole window, 20% – 200% in 5% steps. Centre is 100%; double-click to reset.
+                    Ctrl +/− and Ctrl 0 also work anywhere.
+                  </div>
+                </div>
+
+                <Tooltip content="Only the whole-DAT Notes window (status bar), not UiMenu notes.">
+                  <div className="form-row">
+                    <Field className="check-field">
+                      <Checkbox
+                        checked={!!draft.closeDatNotesOnSave}
+                        onChange={(v) => setDraft({ ...draft, closeDatNotesOnSave: v })}
+                        className="checkbox"
+                      >
+                        <span className="icon check-icon">check</span>
+                      </Checkbox>
+                      <Label className="check-label">Close DAT Notes on Save</Label>
+                    </Field>
+                  </div>
+                </Tooltip>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {tab === 'xitools' && (
+          <div className="settings-xitools">
+            <div className="settings-xitools-main">
+              <section className="settings-panel">
+                <div className="settings-panel-title">Install mode</div>
+                <div className="settings-panel-body">
+                  <div className="form-row">
+                    <label className="form-label">How xi-tools is provided</label>
+                    <Combo
+                      value={toolsMode}
+                      items={TOOLS_MODE_ITEMS}
+                      onChange={(id) => { if (!toolsBusy) switchToolsMode(id); }}
+                    />
+                  </div>
+                  <div className="form-hint">
+                    {toolsMode === 'managed'
+                      ? 'Downloads the latest GitHub release into AppData, sets up Python/uv, and checks for updates on launch (same as XI Zone Editor).'
+                      : 'Point at an xi-tools checkout you already built. The app will only verify it — no download or uv sync.'}
+                  </div>
                 </div>
               </section>
 
-              <section className="settings-panel settings-lists-table-panel">
-                <div className="settings-panel-title">The lists</div>
-                <div className="settings-panel-body">
-                  <div className="lists-table" role="table">
-                    {(lists?.files ?? []).map((f) => (
-                      <div className="lists-row" role="row" key={f.name}>
-                        <div className="lists-name mono">{f.name}</div>
-                        <div className="lists-blurb">{LIST_BLURBS[f.name] || ''}</div>
-                        <div className="lists-size mono">{fmtMb(f.bytes)}</div>
-                        <div className={`lists-src${f.source === 'downloaded' ? ' updated' : ''}`}>
-                          {f.source === 'downloaded' ? 'Updated' : 'In build'}
+              {toolsMode === 'managed' && (
+                <section className="settings-panel">
+                  <div className="settings-panel-title">Self-managed install</div>
+                  <div className="settings-panel-body">
+                    <div className={`xi-status${toolsBadge ? ` ${toolsBadge.cls}` : ''}${toolsBusy ? ' busy' : ''}`}>
+                      <span className={`icon${toolsBusy ? ' spin' : ''}`}>{toolsBadge?.icon || 'info'}</span>
+                      <span className="xi-status-msg">{toolsMsg || 'Checking…'}</span>
+                    </div>
+
+                    {tools?.toolsDir && !tools.usingLocalOverride && (
+                      <div className="form-hint mono">{tools.toolsDir}</div>
+                    )}
+
+                    {toolsProgress && (
+                      <div className="tools-progress">
+                        <div className="tools-progress-bar">
+                          <div className="tools-progress-fill" style={{ width: `${Math.min(100, toolsProgress.pct || 0)}%` }} />
+                        </div>
+                        <div className="tools-progress-meta mono">
+                          {toolsProgress.detail || toolsProgress.label}
                         </div>
                       </div>
-                    ))}
-                    {!lists && <div className="form-hint">Reading…</div>}
+                    )}
+
+                    <div className="form-inline tools-actions">
+                      <Button className="active" disabled={toolsBusy} onClick={doInstallOrUpdate}>
+                        <span className="icon">download</span>
+                        Install / Update
+                      </Button>
+                      <Button disabled={toolsBusy} onClick={doCheckReleases}>
+                        <span className="icon">travel_explore</span>
+                        Check for updates
+                      </Button>
+                      <Tooltip content="xi-tools on GitHub">
+                        <Button className="icon-btn" onClick={() => backend.openUrl(XI_README_HINT)}>
+                          <span className="icon">open_in_new</span>
+                        </Button>
+                      </Tooltip>
+                    </div>
+
+                    {toolsErr && (
+                      <div className="form-error settings-local-err" role="alert">
+                        <span className="icon">error</span>
+                        <span>{toolsErr}</span>
+                      </div>
+                    )}
+                    {toolsLog && (
+                      <pre className="xi-status-detail mono tools-log">{toolsLog}</pre>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {toolsMode === 'custom' && (
+                <section className="settings-panel">
+                  <div className="settings-panel-title">Custom install</div>
+                  <div className="settings-panel-body">
+                    <div className="form-row">
+                      <label className="form-label">xi-tools folder</label>
+                      <div className="form-inline">
+                        <input
+                          type="text"
+                          value={localPathDraft}
+                          spellCheck={false}
+                          placeholder="e.g. D:\xi-tools"
+                          disabled={toolsBusy}
+                          onChange={(e) => {
+                            setLocalPathDraft(e.target.value);
+                            if (toolsErr) setToolsErr('');
+                          }}
+                        />
+                        <Button disabled={toolsBusy} onClick={browseLocalTools}>
+                          <span className="icon">folder_open</span>
+                          Browse
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="form-inline tools-actions">
+                      <Button className="active" disabled={toolsBusy} onClick={applyCustomPath}>
+                        <span className="icon">verified</span>
+                        {toolsBusy ? 'Verifying…' : 'Verify & use'}
+                      </Button>
+                      <Tooltip content="Setup guide">
+                        <Button className="icon-btn" onClick={() => backend.openUrl(XI_README_HINT)}>
+                          <span className="icon">menu_book</span>
+                        </Button>
+                      </Tooltip>
+                      {xiStatus?.status === 'missing_uv' && (
+                        <Button onClick={() => backend.openUrl(UV_INSTALL_URL)}>
+                          <span className="icon">open_in_new</span>
+                          Install uv
+                        </Button>
+                      )}
+                    </div>
+
+                    {(toolsMsg || xiStatus?.message) && !toolsErr && (
+                      <div className={`xi-status${xiStatus?.ok || tools?.usingLocalOverride ? ' ok' : ''}${xiStatus?.busy || toolsBusy ? ' busy' : ''}`}>
+                        <span className={`icon${xiStatus?.busy || toolsBusy ? ' spin' : ''}`}>
+                          {xiStatus?.busy || toolsBusy ? 'progress_activity' : (xiStatus?.ok ? 'check_circle' : 'info')}
+                        </span>
+                        <span className="xi-status-msg">{xiStatus?.message || toolsMsg}</span>
+                      </div>
+                    )}
+                    {toolsErr && (
+                      <div className="form-error settings-local-err" role="alert">
+                        <span className="icon">error</span>
+                        <span>{toolsErr}</span>
+                      </div>
+                    )}
+                    {xiStatus?.detail && xiStatus.status === 'error' && (
+                      <pre className="xi-status-detail mono">{xiStatus.detail.slice(0, 600)}</pre>
+                    )}
+                  </div>
+                </section>
+              )}
+            </div>
+
+            <div className="settings-xitools-side">
+              <section className="settings-panel">
+                <div className="settings-panel-title">Console</div>
+                <div className="settings-panel-body">
+                  <div className="form-row">
+                    <Field className="check-field">
+                      <Checkbox
+                        checked={draft.showXiConsole !== false}
+                        onChange={(v) => setDraft({ ...draft, showXiConsole: v })}
+                        className="checkbox"
+                      >
+                        <span className="icon check-icon">check</span>
+                      </Checkbox>
+                      <Label className="check-label">Show console output</Label>
+                    </Field>
+                  </div>
+                  <div className="form-row">
+                    <Field className="check-field">
+                      <Checkbox
+                        checked={!!draft.autoCloseXiConsole}
+                        onChange={(v) => setDraft({ ...draft, autoCloseXiConsole: v })}
+                        className="checkbox"
+                        disabled={draft.showXiConsole === false}
+                      >
+                        <span className="icon check-icon">check</span>
+                      </Checkbox>
+                      <Label className="check-label">Auto-close console (10s)</Label>
+                    </Field>
                   </div>
                 </div>
               </section>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        <div className="modal-actions">
-          <Button onClick={cancel}>Cancel</Button>
-          <Button className="active" onClick={() => onSave({
-            ...draft,
-            // Prefer the active tools dir when the field is empty
-            xiPath: (draft.xiPath || tools?.toolsDir || '').trim(),
-          })}
-          >
-            Save
-          </Button>
-        </div>
+        {tab === 'lists' && (
+          <div className="settings-cols settings-lists">
+            <section className="settings-panel">
+              <div className="settings-panel-title">Where these come from</div>
+              <div className="settings-panel-body">
+                <div className="form-hint">
+                  The DAT lists are what turns raw DAT paths into names — races and
+                  gear, NPCs, zones, music, sound effects. They are generated by{' '}
+                  <a
+                    className="inline-link"
+                    href={LISTS_SOURCE_URL}
+                    onClick={(e) => { e.preventDefault(); backend.openUrl(LISTS_SOURCE_URL); }}
+                  >
+                    xi-tools
+                  </a>{' '}
+                  and ship inside this build, so the app works with no network at all.
+                </div>
+                <div className="form-hint">
+                  On launch it checks xi-tools for newer copies and downloads only the
+                  ones whose contents changed, so a model or gear row found after this
+                  release still shows up. Each download is checked against its
+                  published checksum before it replaces anything.
+                </div>
+              </div>
+            </section>
+
+            <section className="settings-panel">
+              <div className="settings-panel-title">Status</div>
+              <div className="settings-panel-body">
+                <div className={`xi-status${listsBusy ? ' busy' : ''}`}>
+                  <span className={`icon${listsBusy ? ' spin' : ''}`}>
+                    {listsBusy ? 'progress_activity' : 'inventory_2'}
+                  </span>
+                  <span className="xi-status-msg">
+                    {listsBusy
+                      ? (listsMsg || 'Checking…')
+                      : (listsMsg || (lists
+                        ? `${lists.files.length} lists, ${fmtMb(lists.bytes)}`
+                          + (lists.downloaded
+                            ? ` — ${lists.downloaded} updated since this build`
+                            : ' — all from this build')
+                        : 'Reading…'))}
+                  </span>
+                </div>
+
+                {lists?.generated && (
+                  <div className="form-hint">
+                    Built from xi-tools&rsquo; lists of{' '}
+                    <span className="mono">{fmtStamp(lists.generated)}</span>.
+                  </div>
+                )}
+                {!!lists?.downloaded && lists.dir && (
+                  <div className="form-hint mono lists-dir">{lists.dir}</div>
+                )}
+
+                <div className="form-inline tools-actions">
+                  <Button className="active" disabled={listsBusy} onClick={doUpdateLists}>
+                    <span className="icon">download</span>
+                    Check for list updates
+                  </Button>
+                  <Tooltip content="The published lists on GitHub">
+                    <Button
+                      className="icon-btn"
+                      onClick={() => backend.openUrl(LISTS_SOURCE_URL)}
+                    >
+                      <span className="icon">open_in_new</span>
+                    </Button>
+                  </Tooltip>
+                </div>
+
+                {listsErr && (
+                  <div className="form-error settings-local-err" role="alert">
+                    <span className="icon">error</span>
+                    <span>{listsErr}</span>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="settings-panel settings-lists-table-panel">
+              <div className="settings-panel-title">The lists</div>
+              <div className="settings-panel-body">
+                <div className="lists-table" role="table">
+                  {(lists?.files ?? []).map((f) => (
+                    <div className="lists-row" role="row" key={f.name}>
+                      <div className="lists-name mono">{f.name}</div>
+                      <div className="lists-blurb">{LIST_BLURBS[f.name] || ''}</div>
+                      <div className="lists-size mono">{fmtMb(f.bytes)}</div>
+                      <div className={`lists-src${f.source === 'downloaded' ? ' updated' : ''}`}>
+                        {f.source === 'downloaded' ? 'Updated' : 'In build'}
+                      </div>
+                    </div>
+                  ))}
+                  {!lists && <div className="form-hint">Reading…</div>}
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {tab === 'database' && db && (
+          <div className="settings-db">
+            <section className="settings-panel">
+              <div className="settings-panel-title">Database tables</div>
+              <div className="settings-panel-body">
+                <div className="form-hint">
+                  These are what the Database page shows — items, quests, spells and
+                  the rest. Building them once makes it open instantly; without them
+                  every table is read out of the game files each time.
+                </div>
+
+                <div className={`xi-status${db.updating ? ' busy' : ''}${!db.updating && dbState === 'ok' ? ' ok' : ''}`}>
+                  <span className={`icon${db.updating ? ' spin' : ''}`}>
+                    {db.updating ? 'progress_activity' : (dbState === 'ok' ? 'check_circle' : 'schedule')}
+                  </span>
+                  <span className="xi-status-msg">
+                    {db.updating ? 'Building… this takes a minute.' : dbStatusMsg}
+                  </span>
+                </div>
+
+                <div className="form-inline">
+                  <span className="form-hint mono lists-dir">{db.dir || '—'}</span>
+                  <Tooltip content="Show in Explorer">
+                    <Button
+                      className="icon-btn"
+                      aria-label="Show folder"
+                      onClick={() => backend.revealPath(db.dir).catch(() => {})}
+                      disabled={!db.dir}
+                    >
+                      <span className="icon">folder_open</span>
+                    </Button>
+                  </Tooltip>
+                </div>
+
+                <div className="form-inline tools-actions">
+                  <Button
+                    className="active"
+                    disabled={!db.xiConnected || db.updating}
+                    onClick={db.onUpdate}
+                  >
+                    <span className={`icon${db.updating ? ' spin' : ''}`}>
+                      {db.updating ? 'progress_activity' : 'refresh'}
+                    </span>
+                    {db.updating ? 'Building…' : (dbState === 'ok' ? 'Rebuild tables' : 'Build tables')}
+                  </Button>
+                  <Tooltip content="Copy tables already built somewhere else">
+                    <Button disabled={db.updating} onClick={db.onImport}>
+                      <span className="icon">drive_folder_upload</span>
+                      Import…
+                    </Button>
+                  </Tooltip>
+                </div>
+
+                {!db.xiConnected && (
+                  <div className="form-hint">
+                    Building needs xi-tools — set that up in the XI Tools tab.
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+        )}
+      </div>
+
+      <div className="modal-actions">
+        <Button onClick={cancel}>Cancel</Button>
+        <Button className="active" onClick={() => onSave({
+          ...draft,
+          // Prefer the active tools dir when the field is empty
+          xiPath: (draft.xiPath || tools?.toolsDir || '').trim(),
+        })}
+        >
+          Save
+        </Button>
       </div>
     </div>
   );
-}
-
-// Badge look per game-path verdict.
-const GAME_CHECK = {
-  checking: { cls: 'busy', icon: 'progress_activity' },
-  ok: { cls: 'ok', icon: 'check_circle' },
-  warn: { cls: 'warn', icon: 'warning' },
-  missing: { cls: 'err', icon: 'error' },
-};
-
-/**
- * Does this folder exist, and does it look like an FFXI install? A folder that
- * merely exists opens no DAT, so `ok` wants the ROM tree (or FFXiMain.dll) —
- * anything else is a warning, not a refusal, since odd layouts do exist.
- */
-async function checkGamePath(path) {
-  let entries;
-  try {
-    entries = await backend.listDir(path);
-  } catch {
-    return { state: 'missing', message: `Folder not found: ${path}` };
-  }
-  const names = new Set((entries || []).map((e) => String(e?.name || '').toLowerCase()));
-  if (names.has('rom') || names.has('ffximain.dll')) {
-    return { state: 'ok', message: 'FINAL FANTASY XI install found.' };
-  }
-  return {
-    state: 'warn',
-    message: 'Folder found, but no ROM folder or FFXiMain.dll inside — is this the install root?',
-  };
 }
 
 /** Bytes as MB/KB, for the list sizes. */
@@ -1139,6 +1228,22 @@ function fmtStamp(iso) {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+/** The manifest's language suffixes as words. */
+function langName(code) {
+  return { en: 'English', jp: 'Japanese' }[code] ?? String(code).toUpperCase();
+}
+
+/**
+ * A bake stamp (`2026-09-10 14:54`) as a local date and time. Falls back to the
+ * raw string — it is written by xi-tools, and an odd one still says something.
+ */
+function fmtBaked(stamp) {
+  if (!stamp) return '';
+  const d = new Date(String(stamp).includes('T') ? stamp : String(stamp).replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return String(stamp);
+  return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+}
+
 /** Make Rust path errors readable under Local checkout. */
 function friendlyLocalErr(raw, path) {
   const msg = String(raw || '').trim();
@@ -1150,30 +1255,6 @@ function friendlyLocalErr(raw, path) {
     return msg;
   }
   return msg;
-}
-
-function formatProgressDetail(p) {
-  const unit = p.unit || 'bytes';
-  const loaded = Number(p.loaded) || 0;
-  const total = p.total == null ? null : Number(p.total);
-  const pct = Number(p.pct);
-  if (unit === 'bytes' && (loaded > 0 || total > 0)) {
-    if (total > 0) return `${fmtBytes(loaded)} / ${fmtBytes(total)}  ·  ${Math.round(pct)}%`;
-    return `${fmtBytes(loaded)} downloaded`;
-  }
-  if (unit === 'files' && total > 0) {
-    return `${loaded} / ${total} files  ·  ${Math.round(pct)}%`;
-  }
-  if (p.detail) return p.detail;
-  return Number.isFinite(pct) && pct > 0 ? `${Math.round(pct)}%` : '';
-}
-
-function fmtBytes(n) {
-  const v = Number(n) || 0;
-  if (v < 1024) return `${v} B`;
-  if (v < 1024 * 1024) return `${(v / 1024).toFixed(1)} KB`;
-  if (v < 1024 * 1024 * 1024) return `${(v / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(v / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 function xiBadge(s) {

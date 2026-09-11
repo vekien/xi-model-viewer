@@ -11,7 +11,6 @@ import { isRestingClip } from '../js/pose.js';
 import { FileTree } from './FileTree.jsx';
 import { DatabaseList } from './DatabaseList.jsx';
 import { DatabaseViewer, invalidateDbCache, dbDataDir, importDbFolder } from './DatabaseViewer.jsx';
-import { DatabaseManagerModal } from './DatabaseManagerModal.jsx';
 import { ScenesPanel } from './ScenesPanel.jsx';
 import { ActorEditorModal } from './ActorEditorModal.jsx';
 import {
@@ -40,6 +39,8 @@ import { ZoneList } from './ZoneList.jsx';
 import { PlacementPanel } from './PlacementPanel.jsx';
 import { LoadingOverlay } from './LoadingOverlay.jsx';
 import { SettingsModal } from './SettingsModal.jsx';
+import { SetupWizard } from './SetupWizard.jsx';
+import { TutorialBalloon } from './TutorialBalloon.jsx';
 import { ExportModal, xiEnvFromSpec } from './ExportModal.jsx';
 import { BatchExportModal } from './BatchExportModal.jsx';
 import { ExportToast } from './ExportToast.jsx';
@@ -896,16 +897,19 @@ export default function App({ launch = null }) {
     setSettingsError('');
   }, []);
   // Greet first-time users with the About panel (controls + links), then never
-  // auto-open it again. A missing/false 'booted' flag means this install has
-  // never launched before.
-  const [helpOpen, setHelpOpen] = useState(() => {
-    if (minimal) return false;    // a preview window is not a first launch
-    const firstBoot = localStorage.getItem('booted') !== '1';
-    if (firstBoot) {
-      try { localStorage.setItem('booted', '1'); } catch { /* quota */ }
-    }
-    return firstBoot;
-  });
+  // auto-open it again. Startup decides: a first run with no game path gets the
+  // setup wizard instead, which is the greeting on that launch and consumes the
+  // 'booted' flag itself. A missing/false flag means this install has never
+  // launched before.
+  const [helpOpen, setHelpOpen] = useState(false);
+  // First-run setup, and the balloon that points at the Assets menu afterwards.
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
+  // Whether the background boot syncs (xi-tools, DAT lists) may run this
+  // launch. null until startup decides; false when the wizard is doing the
+  // asking, since it installs the same things and two writers of one folder is
+  // how xi-tools ends up half-extracted.
+  const [bootSync, setBootSync] = useState(null);
   // A newer GitHub release than this build, once the boot check finds one.
   const [update, setUpdate] = useState(null);
   // Background update check. Deliberately its own effect and never awaited by
@@ -937,17 +941,19 @@ export default function App({ launch = null }) {
   // a dev build asks exactly what a packaged one asks.
   useEffect(() => {
     if (minimal) return undefined;   // a zone-preview window is not the place for it
+    if (!bootSync) return undefined; // undecided, or the wizard is doing it
     let alive = true;
     updateListsOnBoot().then((info) => {
       if (alive && info) setListsUpdated(info);
     });
     return () => { alive = false; };
-  }, [minimal]);
+  }, [minimal, bootSync]);
 
   // xi-tools: auto-install / update from GitHub (same policy as xi-zone-editor).
   // Does not block the UI; status text only when something actually changed.
   useEffect(() => {
     if (minimal) return undefined;
+    if (!bootSync) return undefined; // undecided, or the wizard is doing it
     let alive = true;
     const xiPath = localStorage.getItem('xiPath') || '';
     ensureXiToolsOnBoot({ xiPath }).then((result) => {
@@ -973,7 +979,7 @@ export default function App({ launch = null }) {
       if (result.changed && result.message) setStatusText(result.message);
     });
     return () => { alive = false; };
-  }, [minimal]);
+  }, [minimal, bootSync]);
   const [exportSpec, setExportSpec] = useState(null);
   /** Finished File > Export, shown as a banner until it fades or is dismissed. */
   const [exportDone, setExportDone] = useState(null);
@@ -1014,8 +1020,7 @@ export default function App({ launch = null }) {
   // Bumped after `xi mv database` finishes so an open table re-reads its JSON.
   const [dbReloadTick, setDbReloadTick] = useState(0);
   const [dbExportTick, setDbExportTick] = useState(0);
-  // File › Database Manager: update / import the prebuilt tables.
-  const [dbManagerOpen, setDbManagerOpen] = useState(false);
+  // Settings › DAT Database: update / import the prebuilt tables.
   const [dbManagerDir, setDbManagerDir] = useState('');
   const [dbManagerTick, setDbManagerTick] = useState(0);
   const [dbUpdating, setDbUpdating] = useState(false);
@@ -2102,6 +2107,8 @@ export default function App({ launch = null }) {
    *   keepCamera  — don't re-fit the camera (gear swap on the same actor).
    *   actionChanged — the user picked a different action: lead with its own
    *                 routine and run it from frame 0 (see `freshAction`).
+   *   revisit     — the same look and action put back on stage (returning to
+   *                 the view): the motion that was showing leads.
    */
   const loadModel = useCallback(async (paths, displayName, opts = {}) => {
     const {
@@ -2113,6 +2120,10 @@ export default function App({ launch = null }) {
       // that carried it over, or the first load). Camera framing is unaffected
       // — this only governs which motion is chosen and how it starts.
       actionChanged = false,
+      // The actor going back on stage with the look and action it left with
+      // (returning to the view). The camera still re-fits; the motion it left
+      // running is what leads (see `resume`).
+      revisit = false,
     } = opts;
     // Keep framing when the caller asks (gear swap) or the user has already
     // orbit/pan/zoomed on an entity — browsing successive DATs shouldn't yank
@@ -2401,6 +2412,11 @@ export default function App({ launch = null }) {
       // playback restarts from the top.
       const freshAction = !keepCamera || actionChanged;
       const want = animSelRef.current ?? {};
+      // Coming back to the view is not a pick either: the action is the one the
+      // user left with, so the motion they left running leads. It only *leads*
+      // — a remembered pick this action hasn't got (it was made under another
+      // one) still falls through to the rules below.
+      const resume = revisit && !actionChanged;
       const pickSched = (id) => schedSrc.find((s) => s.id === id && s.clipIds.length);
       const pickAnim = (id) => grouped.find((g) => g.id === id);
       const hasBattlePack = !!allGrouped.find((g) => g.id === 'btl');
@@ -2411,6 +2427,13 @@ export default function App({ launch = null }) {
         // straight into Effects has no transition to hang it off, and would
         // otherwise restore the remembered action's routine.
         (leftViewRef.current === 'effects' && pickAnim('idl') && { anim: pickAnim('idl') })
+        // Back from another view with the same look and action: what was on
+        // screen when it left. Without this, opening the DAT Browser and
+        // clicking Characters again re-led with the action's own routine —
+        // the wave emote came back as em00, the first routine in the pack.
+        || (resume && want.schedule && pickSched(want.schedule)
+          && { schedule: pickSched(want.schedule) })
+        || (resume && want.anim && pickAnim(want.anim) && { anim: pickAnim(want.anim) })
         // A newly picked action leads with its own routine: `main` IS the
         // action, so choosing Eagle Eye Shot and landing on idle reads as
         // nothing having happened. Skipped on a gear swap (keepCamera), where
@@ -2641,7 +2664,7 @@ export default function App({ launch = null }) {
       setNpcPack(pack?.path ?? '');
       // What gets remembered across a reload: the list entry itself, not the
       // one-shot load flags.
-      const { keepCamera: _kc, actionChanged: _ac, ...persistable } = entry;
+      const { keepCamera: _kc, actionChanged: _ac, revisit: _rv, ...persistable } = entry;
       // A loaded pack rides last in `paths`, which is where the primary path
       // is read from — without a displayPath the status bar and the NPC tree
       // would point at the borrowed ROM/262 DAT instead of the NPC.
@@ -2665,6 +2688,7 @@ export default function App({ launch = null }) {
         rangedHandRef: entry.rangedHandRef ?? null,
         rodPaths: entry.rodPaths?.map(abs) ?? null,
         actionChanged: !!entry.actionChanged,
+        revisit: !!entry.revisit,
         npcEntry: persistable,
       });
     },
@@ -2849,11 +2873,22 @@ export default function App({ launch = null }) {
       const asked = opts.routineId
         ? routines.find((r) => r.id === opts.routineId)
         : null;
+      // An overlay on the character plays `main` or nothing.
+      //
+      // A weapon skill keeps its VFX under `main` — every one of the 1,869 PC
+      // actions that HAS a `main` plays generators through it, so the fallbacks
+      // never fire for a real one. The 430 that don't are motion packs, and
+      // theirs are event-keyed exactly like an NPC's: Dual Wield ships out0,
+      // in 0, atk0, cnt0, atl0, atr0 … — the schedules the server picks between
+      // when a swing lands. "First routine with content" grabbed one anyway, so
+      // standing in a battle stance played a damage routine: an attack-left hit
+      // burst over an idle character, whatever the Motion was set to.
+      const overlay = keepActorAnim && !asked;
       const routine = asked
         ?? (playable(named) ? named : null)
-        ?? routines.find(playable)
-        ?? routines[0]
-        ?? { id: 'main', flat: { commands: [], sounds: [] } };
+        ?? (overlay ? null : routines.find(playable))
+        ?? (overlay ? null : routines[0])
+        ?? { id: 'main', flat: { commands: [], sounds: [], anims: [], actorCalls: [] } };
 
       // Particle- and routine-driven SFX. WeatherAudio's play() is a generic
       // sound-pointer backend; passing no environment keeps its ambient bed out
@@ -3871,9 +3906,18 @@ export default function App({ launch = null }) {
   const [npcFxRoutines, setNpcFxRoutines] = useState([]);
   const [npcFxRoutine, setNpcFxRoutine] = useState('');
 
+  // An entity keeps its effect routines inside its own model DAT, which is as
+  // true of a DAT the browser opened as of one picked in Assets > NPCs — the
+  // Home Point is the same object either way, and the browser used to offer
+  // none of the controls for it. `browserKind === 'entity'` (classifyDat's name for
+  // a skeleton/mesh DAT) keeps zones, images and audio out; the pure effect DATs
+  // the browser opens already take the dedicated `effect` path in loadFromTree.
+  const entityFxSource = leftView === 'npc'
+    || (leftView === 'files' && browserKind === 'entity');
+
   useEffect(() => {
     setNpcFxRoutine('');
-    if (leftView !== 'npc' || !modelPath) { setNpcFxRoutines([]); return undefined; }
+    if (!entityFxSource || !modelPath) { setNpcFxRoutines([]); return undefined; }
     let live = true;
     (async () => {
       const settings = settingsRef.current;
@@ -3888,7 +3932,7 @@ export default function App({ launch = null }) {
       }
     })();
     return () => { live = false; };
-  }, [leftView, modelPath]);
+  }, [entityFxSource, modelPath]);
 
   /**
    * Is the loaded pack the motion actually selected?
@@ -3907,7 +3951,7 @@ export default function App({ launch = null }) {
   // An NPC keeps its effect routines inside the model DAT itself - a trust like
   // Iroha carries dozens - so the actor's own path is the effect source. A PC
   // keeps its routines in a separate DAT per action.
-  const fxPath = leftView === 'npc'
+  const fxPath = entityFxSource
     // A pack ships its skill's whole VFX bundle under a `main` routine, so it
     // is the effect source whenever one is loaded — the same shape as a PC
     // action DAT. Otherwise fall back to a routine picked out of the model.
@@ -3915,10 +3959,10 @@ export default function App({ launch = null }) {
     : ((!pc.action || String(pc.action).startsWith('syn:'))
       ? null
       : (fxEntry?.paths?.[0] ?? null));
-  const fxName = leftView === 'npc' ? 'NPC effect' : (fxEntry?.label ?? 'Action effect');
+  const fxName = entityFxSource ? 'NPC effect' : (fxEntry?.label ?? 'Action effect');
 
   useEffect(() => {
-    if (!FX_VIEWS.has(leftView) || pcFxMode === 'mesh' || !fxPath) return;
+    if (!(FX_VIEWS.has(leftView) || entityFxSource) || pcFxMode === 'mesh' || !fxPath) return;
     const r = rendererRef.current;
     if (r) {
       // Re-fire on every loop point. The previous pass is not torn down (see
@@ -3935,7 +3979,7 @@ export default function App({ launch = null }) {
       {
         keepActorAnim: true,
         armOnly,
-        routineId: leftView === 'npc' && !npcPackActive ? npcFxRoutine : null,
+        routineId: entityFxSource && !npcPackActive ? npcFxRoutine : null,
       });
     return () => {
       const rr = rendererRef.current;
@@ -3949,7 +3993,7 @@ export default function App({ launch = null }) {
     // fxName is only a label; leaving it out keeps a relabel from re-reading.
     // actorLoadTick is the ordering dependency — see setActorLoadTick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pcFxMode, fxPath, leftView, npcFxRoutine, npcPackActive, loadEffect, actorLoadTick]);
+  }, [pcFxMode, fxPath, leftView, entityFxSource, npcFxRoutine, npcPackActive, loadEffect, actorLoadTick]);
 
   /**
    * Stow the ranged weapon unless the current action uses it.
@@ -4368,11 +4412,28 @@ export default function App({ launch = null }) {
         // render, but loadImage() below reads settingsRef.current this tick.
         settingsRef.current = initialSettings;
 
+        // Nothing to read from yet: the first run walks them through it. A
+        // preview window has no room for a wizard, so it still gets Settings.
         if (!gamePath) {
-          showSettingsError('Game path not set. Browse to your FINAL FANTASY XI install folder.', 'gamepath');
-          setSettingsOpen(true);
-          setStatusText('Set a game path in Settings to get started.');
+          if (minimal) {
+            showSettingsError('Game path not set. Browse to your FINAL FANTASY XI install folder.', 'gamepath');
+            setSettingsOpen(true);
+            setStatusText('Set a game path in Settings to get started.');
+            return;
+          }
+          // The wizard is this launch's greeting; About must not stack on it.
+          try { localStorage.setItem('booted', '1'); } catch { /* quota */ }
+          setSetupOpen(true);
+          setBootSync(false);
+          setStatusText('Welcome — point the viewer at your FINAL FANTASY XI folder.');
           return;
+        }
+
+        // Past the wizard: the background syncs and the About greeting are on.
+        setBootSync(true);
+        if (!minimal && localStorage.getItem('booted') !== '1') {
+          try { localStorage.setItem('booted', '1'); } catch { /* quota */ }
+          setHelpOpen(true);
         }
 
         try {
@@ -4469,6 +4530,9 @@ export default function App({ launch = null }) {
         }
       } catch (err) {
         console.error(err);
+        // Fell over before the wizard/settings decision: the background syncs
+        // are not part of what failed, so let them run.
+        setBootSync((v) => (v === null ? true : v));
         setStatusText(`Startup failed: ${err.message ?? err}`);
       }
     })();
@@ -4540,6 +4604,7 @@ export default function App({ launch = null }) {
     };
     const onKey = (e) => {
       if (e.key !== 'Escape') return;
+      if (setupOpen) { e.preventDefault(); return; }   // first-run setup: no way out but finishing
       if (exitCinematicIfStuck()) { e.preventDefault(); return; }
       if (exitHiddenUi()) { e.preventDefault(); return; }
       if (batchOpen) {
@@ -4606,7 +4671,7 @@ export default function App({ launch = null }) {
       window.removeEventListener('keydown', onKey, true);
       document.removeEventListener('visibilitychange', onVis);
     };
-  }, [exportSpec, batchOpen, settingsOpen, helpOpen, datNotesOpen, texWindows.length, skelWindows.length, zdefWindows.length, zmeshWindows.length, routeWindows.length, uiMenuWindows.length, uiEgWindows.length, dataTableWindows.length, fxPreview, closeFxPreview, explorerOpen]);
+  }, [exportSpec, batchOpen, setupOpen, settingsOpen, helpOpen, datNotesOpen, texWindows.length, skelWindows.length, zdefWindows.length, zmeshWindows.length, routeWindows.length, uiMenuWindows.length, uiEgWindows.length, dataTableWindows.length, fxPreview, closeFxPreview, explorerOpen]);
 
   // --- handlers ------------------------------------------------------------
 
@@ -4792,7 +4857,7 @@ export default function App({ launch = null }) {
       const t = e.target;
       const tag = t?.tagName;
       if (t?.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      if (settingsOpen || helpOpen || datNotesOpen || exportSpec || batchOpen || fxPreview) return;
+      if (setupOpen || settingsOpen || helpOpen || datNotesOpen || exportSpec || batchOpen || fxPreview) return;
 
       if (leftView === 'effects') {
         if (!effectRoutinesRef.current?.length) return;
@@ -4825,13 +4890,16 @@ export default function App({ launch = null }) {
     // Mesh / VFX split, PC view only — an action DAT is the only thing here
     // that ships both, so the control is hidden elsewhere.
     fxMode: pcFxMode,
-    onFxMode: FX_VIEWS.has(leftView) ? setPcFxMode : null,
+    // In the browser the Mesh/VFX split and the routine picker only make sense
+    // once the DAT has actually got routines — most models have none.
+    onFxMode: (FX_VIEWS.has(leftView) || (entityFxSource && npcFxRoutines.length > 0))
+      ? setPcFxMode : null,
     // Resting clip the selection is laid over, montage-style.
     baseAnim,
     onBaseAnim: anims.length > 0 ? setBaseAnim : null,
     // NPC effect routines are event-keyed and server-fired, so the user picks
     // one rather than the view guessing from the current clip.
-    fxRoutines: leftView === 'npc' && !npcPackActive ? npcFxRoutines : null,
+    fxRoutines: entityFxSource && !npcPackActive ? npcFxRoutines : null,
     fxRoutine: npcFxRoutine,
     onFxRoutine: setNpcFxRoutine,
     // Borrowed skill packs — a trust's weapon skills, each its own DAT.
@@ -6317,7 +6385,7 @@ export default function App({ launch = null }) {
   }, []);
 
   /**
-   * File › Update Database: `xi mv database` through the connected xi-tools,
+   * Settings › DAT Database › Update: `xi mv database` through the connected xi-tools,
    * streamed to the console panel. Rebakes every table in both languages
    * into <xi-tools>/mv/db, then drops the viewer's cached tables.
    */
@@ -6371,7 +6439,7 @@ export default function App({ launch = null }) {
   }, []);
 
   /**
-   * File › Import Database…: copy a `mv/db` folder (e.g. from a checkout where
+   * Settings › DAT Database › Import: copy a `mv/db` folder (e.g. from a checkout where
    * `xi mv database` was run) into the app's db folder and reload.
    */
   const importDatabase = useCallback(async () => {
@@ -7326,16 +7394,19 @@ export default function App({ launch = null }) {
     return () => { zoneNpcGenRef.current++; };
   }, [showNpcs, zoneNpcTarget, buildActorModel]);
 
-  // Database Manager needs the app's db folder and whether xi-tools can run.
+  // The DAT Database tab needs the app's db folder and whether xi-tools can
+  // run. Resolved whenever Settings is open rather than when that tab is: which
+  // tab is showing is the modal's own state, so this would never hear about a
+  // click on it — and both are one cheap call.
   useEffect(() => {
-    if (!dbManagerOpen) return undefined;
+    if (!settingsOpen) return undefined;
     let alive = true;
     dbDataDir().then((d) => { if (alive) setDbManagerDir(d); }).catch(() => { if (alive) setDbManagerDir(''); });
     const xi = (settingsRef.current?.xiPath || '').trim();
     if (!xi) setDbXiConnected(false);
     else backend.xiAvailable(xi).then((ok) => { if (alive) setDbXiConnected(!!ok); }).catch(() => { if (alive) setDbXiConnected(false); });
     return () => { alive = false; };
-  }, [dbManagerOpen, dbManagerTick, settings?.xiPath]);
+  }, [settingsOpen, dbManagerTick, settings?.xiPath]);
 
   /** Database → DAT Browser: open the table's DAT the way File › Open DAT does. */
   const openDbPathInBrowser = useCallback(async (rel) => {
@@ -7858,6 +7929,37 @@ export default function App({ launch = null }) {
   };
 
   /**
+   * First-run wizard done. Save what it collected through the same path as
+   * Settings (so the game path is validated and the default model loads), then
+   * point at the Assets menu — the one control a new user has to find.
+   *
+   * The balloon waits for the save because that is when the app is usable;
+   * showing it over the loading overlay would be pointing at a busy window.
+   */
+  const finishSetup = async ({ gamePath, hdPath, xiPath }) => {
+    setSetupOpen(false);
+    try {
+      await saveSettings({
+        ...(settingsRef.current || {}),
+        gamePath,
+        hdPath,
+        hdEnabled: !!hdPath,
+        xiPath: xiPath || settingsRef.current?.xiPath || '',
+      });
+    } finally {
+      // A folder that vanished between the wizard's last check and the save
+      // leaves the app with no path and nothing on screen to fix it.
+      if (!settingsRef.current?.gamePath) setSettingsOpen(true);
+      else if (localStorage.getItem('tutorialAssets') !== '1') setTutorialOpen(true);
+    }
+  };
+
+  const dismissTutorial = () => {
+    setTutorialOpen(false);
+    try { localStorage.setItem('tutorialAssets', '1'); } catch { /* quota */ }
+  };
+
+  /**
    * The pose the viewport is actually showing, as the world transform of every joint —
    * what `xi gear pose --pose-file` bakes.
    *
@@ -8296,9 +8398,6 @@ export default function App({ launch = null }) {
       case 'assets-database':
         setLeftView('database');
         setExplorerOpen(true);
-        break;
-      case 'database-manager':
-        setDbManagerOpen(true);
         break;
       case 'assets-npcs':
         setLeftView('npc');
@@ -9666,18 +9765,6 @@ export default function App({ launch = null }) {
           }}
         />
       )}
-      {dbManagerOpen && (
-        <DatabaseManagerModal
-          dbDir={dbManagerDir}
-          xiConnected={dbXiConnected}
-          updating={dbUpdating}
-          refreshTick={dbManagerTick}
-          onUpdate={runDatabaseUpdate}
-          onImport={importDatabase}
-          onClose={() => setDbManagerOpen(false)}
-        />
-      )}
-
       {!dataStructOpen && objectGroups && plcOpen
         && (leftView === 'zones' || browserKind === 'zone') && (
         <PlacementPanel
@@ -10193,6 +10280,16 @@ export default function App({ launch = null }) {
         onGamePathValid={onGamePathValid}
         onSave={saveSettings}
         onClose={() => { setSettingsOpen(false); showSettingsError(''); }}
+        zIndex={modalZ('settings', 5000)}
+        onFocus={() => raiseModal('settings')}
+        db={{
+          dir: dbManagerDir,
+          xiConnected: dbXiConnected,
+          updating: dbUpdating,
+          refreshTick: dbManagerTick,
+          onUpdate: runDatabaseUpdate,
+          onImport: importDatabase,
+        }}
       />
 
       <ExportModal
@@ -10223,11 +10320,28 @@ export default function App({ launch = null }) {
         onRunning={(v) => { batchRunningRef.current = v; }}
       />
 
-      <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <HelpModal
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        zIndex={modalZ('about', 5000)}
+        onFocus={() => raiseModal('about')}
+      />
 
-      {/* Queued behind the first-launch About panel rather than stacked on it. */}
+      <SetupWizard open={setupOpen} onFinish={finishSetup} />
+
+      <TutorialBalloon
+        open={tutorialOpen}
+        anchor='#menubar [data-menu="Assets"]'
+        title="Everything lives in Assets"
+        onClose={dismissTutorial}
+      >
+        Characters, NPCs, Zones, Effects, Images, Music — pick what to browse from the
+        Assets menu up here.
+      </TutorialBalloon>
+
+      {/* Queued behind the first-run wizard / About panel rather than stacked on one. */}
       <UpdateModal
-        open={!!update && !helpOpen}
+        open={!!update && !helpOpen && !setupOpen}
         info={update}
         onClose={() => {
           // Only remember skip for a real available update, not "up to date".

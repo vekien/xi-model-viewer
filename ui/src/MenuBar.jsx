@@ -12,7 +12,6 @@ const MENUS = [
       { id: 'reload-dat', label: 'Reload DAT', icon: 'refresh' },
       { id: 'export', label: 'Export', icon: 'download' },
       { id: 'batch-export', label: 'Batch Export…', icon: 'library_add_check' },
-      { id: 'database-manager', label: 'Database Manager…', icon: 'database' },
       { id: 'settings', label: 'Settings', icon: 'settings' },
       { sep: true },
       { id: 'check-updates', label: 'Check for Updates…', icon: 'system_update_alt' },
@@ -210,6 +209,7 @@ export function MenuBar({
       {MENUS.map((menu) => (
         <button
           key={menu.label}
+          data-menu={menu.label}
           className={`menu-btn${active?.label === menu.label ? ' open' : ''}`}
           onClick={(e) => (active?.label === menu.label ? setActive(null) : openMenu(menu.label, e.currentTarget))}
           onMouseEnter={(e) => { if (active && active.label !== menu.label) openMenu(menu.label, e.currentTarget); }}

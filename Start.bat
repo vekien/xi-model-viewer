@@ -25,6 +25,10 @@ if errorlevel 1 (
     cargo install tauri-cli --version "^2" --locked || goto :error
 )
 
+REM Vite pins 5173 with strictPort, so a leftover dev server makes this fail
+REM on startup with "Port 5173 is already in use". Clear it first.
+call "%ROOT%scripts\free_dev_port.bat" 5173
+
 echo.
 echo Starting XI Model Viewer in dev mode - hot reload enabled.
 echo Close the app window ^(or press Ctrl+C here^) to stop.

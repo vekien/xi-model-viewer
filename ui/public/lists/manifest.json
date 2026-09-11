@@ -1,5 +1,5 @@
 {
- "generated": "2026-09-08T20:36:06Z",
+ "generated": "2026-09-10T09:13:19Z",
  "files": {
   "characters.json": {
    "sha256": "7030172799964641c4fa54818ad0f3d2beac1e6745d2de39936626b819c13cf7",
@@ -22,8 +22,8 @@
    "bytes": 8781
   },
   "npcs.json": {
-   "sha256": "079fa8fa616d287cdf0505ce3a801da412ea69a6e9e4c9bdb442adecd972a374",
-   "bytes": 2684764
+   "sha256": "cdd4da0749dcf08f02dcd6a7268d0fa3785666c1982ab078024a9a38efcf6dcb",
+   "bytes": 2688098
   },
   "sfx.json": {
    "sha256": "c27948a5c54cbbd7268e8fcc3ed708933b93f93d117524de0b8b8406f17641c4",

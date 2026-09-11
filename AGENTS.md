@@ -21,10 +21,14 @@ both running, `http://localhost:5173` is the real app with real game data.
 
 **Without `serve.py` every `/fs/*` request 500s**, no model ever loads, and the
 whole viewer looks superficially fine while being unable to open a single DAT.
-Stop both when finished: Vite uses `strictPort`, so a leftover dev server makes
-`Start.bat` fail, and a leftover browser tab pointed at 5173 keeps requesting
-`/fs` and fills the Tauri console with `ECONNREFUSED 127.0.0.1:8766` — noise that
-looks like an app bug and is not.
+**Stop both the moment you are done.** `Start.bat` now clears port 5173 for
+itself (`scripts/free_dev_port.bat`, which stops a listening `node`/`cargo`/app
+process and leaves anything else alone), so a leftover Vite server no longer
+blocks the user — but do not lean on that. `serve.py` on 8766 is not cleared by
+anything, and a leftover browser tab pointed at 5173 keeps requesting `/fs`,
+filling the Tauri console with `ECONNREFUSED 127.0.0.1:8766` — noise that looks
+like an app bug and is not. Leaving a dev server up also means the user's next
+`Start.bat` silently kills your session out from under you.
 
 ## Debug hooks
 
