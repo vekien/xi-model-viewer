@@ -1069,8 +1069,9 @@ export function SettingsModal({
                       : (listsMsg || (lists
                         ? `${lists.files.length} lists, ${fmtMb(lists.bytes)}`
                           + (lists.downloaded
-                            ? ` — ${lists.downloaded} updated since this build`
+                            ? ` — ${lists.downloaded} ${draft.listsLocalOnly ? 'from the lists folder' : 'updated since this build'}`
                             : ' — all from this build')
+                          + (draft.listsLocalOnly ? ' · startup check off' : '')
                         : 'Reading…'))}
                   </span>
                 </div>
@@ -1081,7 +1082,7 @@ export function SettingsModal({
                     <span className="mono">{fmtStamp(lists.generated)}</span>.
                   </div>
                 )}
-                {!!lists?.downloaded && lists.dir && (
+                {(!!lists?.downloaded || draft.listsLocalOnly) && lists?.dir && (
                   <div className="form-hint mono lists-dir">{lists.dir}</div>
                 )}
 
@@ -1098,7 +1099,32 @@ export function SettingsModal({
                       <span className="icon">open_in_new</span>
                     </Button>
                   </Tooltip>
+                  {lists?.dir && (
+                    <Tooltip content="Open the lists folder — a list dropped in here is what the app reads">
+                      <Button
+                        className="icon-btn"
+                        onClick={() => backend.revealPath(lists.dir).catch(() => {})}
+                      >
+                        <span className="icon">folder_open</span>
+                      </Button>
+                    </Tooltip>
+                  )}
                 </div>
+
+                <Tooltip content="Skip the GitHub check at startup and read the lists exactly as they are in the folder above. For checking an edited list before it is published — the published copy otherwise replaces it on every launch. The button above still syncs when pressed.">
+                  <div className="form-row">
+                    <Field className="check-field">
+                      <Checkbox
+                        checked={!!draft.listsLocalOnly}
+                        onChange={(v) => setDraft({ ...draft, listsLocalOnly: v })}
+                        className="checkbox"
+                      >
+                        <span className="icon check-icon">check</span>
+                      </Checkbox>
+                      <Label className="check-label">Local lists only — don&rsquo;t update at startup</Label>
+                    </Field>
+                  </div>
+                </Tooltip>
 
                 {listsErr && (
                   <div className="form-error settings-local-err" role="alert">

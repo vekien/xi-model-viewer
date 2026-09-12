@@ -2,7 +2,8 @@
 //
 // Everything here is derived from data the app already has, so a row can be
 // labelled without opening the file:
-//   • the baked lists/*.json (zones, maps, effects, NPCs)
+//   • lists/*.json (zones, maps, effects, NPCs) — read through loadList, so a
+//     downloaded update labels the rows too, not just the copy baked in
 //   • the merged FTABLE id map (path → file_id) the browser loads anyway
 //   • the static gear tables + zone-id math in js/dat/
 //
@@ -13,6 +14,7 @@
 import { ENTITY_MODEL_OFFSET, RACE_SKELETON_RELS, gearIndex } from './dat/modelids.js';
 import { matchTablePath } from './dat/ftable.js';
 import { zoneForFileId } from './dat/zonedat.js';
+import { loadListOrNull } from './lists.js';
 
 /**
  * Normalize any DAT reference — absolute, game-relative, `game/…`-prefixed,
@@ -26,15 +28,26 @@ export function datTypeKey(path) {
   return (m ? m[1] : p).replace(/\\/g, '/').toUpperCase();
 }
 
-/** Baked lists that name DATs outright. Order is priority — first hit wins. */
+/**
+ * Lists that name DATs outright. Order is priority — first hit wins. Models
+ * come before images and effects: an NPC's own VFX routines live in its model
+ * DAT, so hundreds of effects.json rows point at NPC variants, and a DAT with
+ * a skeleton is an NPC to the browser whatever else lists it.
+ */
 const LISTS = [
   {
-    url: 'lists/zones.json',
+    name: 'zones.json',
     // → [{ label, path }]
     entries: (j) => (Array.isArray(j) ? j.map((z) => ({ label: 'Zone', path: z.path })) : []),
   },
   {
-    url: 'lists/images.json',
+    name: 'npcs.json',
+    entries: (j) => (j?.categories ?? []).flatMap((c) => (c.entries ?? []).flatMap((e) => (
+      [...(e.variants ?? []), e.base].filter(Boolean).map((path) => ({ label: 'NPC', path }))
+    ))),
+  },
+  {
+    name: 'images.json',
     // Per-group labels: maps stay Map; UI/system/cutscene packs are not maps.
     entries: (j) => {
       if (!Array.isArray(j)) return [];
@@ -49,16 +62,10 @@ const LISTS = [
     },
   },
   {
-    url: 'lists/effects.json',
+    name: 'effects.json',
     entries: (j) => (j?.categories ?? []).flatMap((c) => (c.entries ?? []).map((e) => ({
       label: 'Effect', path: e.path,
     }))),
-  },
-  {
-    url: 'lists/npcs.json',
-    entries: (j) => (j?.categories ?? []).flatMap((c) => (c.entries ?? []).flatMap((e) => (
-      [...(e.variants ?? []), e.base].filter(Boolean).map((path) => ({ label: 'NPC', path }))
-    ))),
   },
 ];
 
@@ -75,7 +82,9 @@ function imageGroupLabel(name) {
 let listIndexPromise = null;
 
 /**
- * Fetch the baked lists once and fold them into one key → label map.
+ * Load the lists once and fold them into one key → label map. Downloaded copy
+ * first, baked copy otherwise (loadList), the same source every panel reads —
+ * a raw fetch here used to label rows from the baked file even after a sync.
  * A list that fails to load is skipped; the rest still label their files.
  * @returns {Promise<Map<string, string>>}
  */
@@ -85,9 +94,8 @@ export function loadDatTypeLists() {
     const index = new Map();
     const loaded = await Promise.all(LISTS.map(async (l) => {
       try {
-        const res = await fetch(l.url);
-        if (!res.ok) return null;
-        return l.entries(await res.json());
+        const json = await loadListOrNull(l.name);
+        return json == null ? null : l.entries(json);
       } catch {
         return null;
       }

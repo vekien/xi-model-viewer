@@ -522,6 +522,7 @@ const loadSettings = (gamePath) => {
     autoWeatherZones: localStorage.getItem('autoWeatherZones') !== '0',
     autoFocusZoneObject: localStorage.getItem('autoFocusZoneObject') !== '0',
     closeDatNotesOnSave: localStorage.getItem('closeDatNotesOnSave') === '1',
+    listsLocalOnly: localStorage.getItem('listsLocalOnly') === '1',
     dayLength: clampDayLength(localStorage.getItem('dayLength')),
     weatherFadeMs: clampWeatherFadeMs(localStorage.getItem('weatherFadeMs')),
     uiScale: clampUiScale(localStorage.getItem('uiScale')),
@@ -942,6 +943,11 @@ export default function App({ launch = null }) {
   useEffect(() => {
     if (minimal) return undefined;   // a zone-preview window is not the place for it
     if (!bootSync) return undefined; // undecided, or the wizard is doing it
+    // Settings › DAT Lists › "Local lists only": the sync is content-addressed
+    // and the published copy always wins, so a list edited in the lists folder
+    // to check it before publishing was overwritten one second into every
+    // boot. This skips the check; the button on the Settings tab still syncs.
+    if (localStorage.getItem('listsLocalOnly') === '1') return undefined;
     let alive = true;
     updateListsOnBoot().then((info) => {
       if (alive && info) setListsUpdated(info);
@@ -7818,6 +7824,7 @@ export default function App({ launch = null }) {
       localStorage.setItem('autoWeatherZones', draft.autoWeatherZones === false ? '0' : '1');
       localStorage.setItem('autoFocusZoneObject', draft.autoFocusZoneObject === false ? '0' : '1');
       localStorage.setItem('closeDatNotesOnSave', draft.closeDatNotesOnSave ? '1' : '0');
+      localStorage.setItem('listsLocalOnly', draft.listsLocalOnly ? '1' : '0');
       localStorage.setItem('dayLength', String(clampDayLength(draft.dayLength)));
       localStorage.setItem('weatherFadeMs', String(clampWeatherFadeMs(draft.weatherFadeMs)));
       localStorage.setItem('uiScale', String(clampUiScale(draft.uiScale)));
@@ -9298,7 +9305,7 @@ export default function App({ launch = null }) {
         <SettingsModal
           open={settingsOpen}
           initial={{
-            ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, navmeshPath: '', bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, autoWeatherZones: true, autoFocusZoneObject: true, closeDatNotesOnSave: false, dayLength: DAY_LENGTH_DEFAULT, weatherFadeMs: WEATHER_FADE_MS_DEFAULT, uiScale: 1, reframeOnSelect: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
+            ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, navmeshPath: '', bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, autoWeatherZones: true, autoFocusZoneObject: true, closeDatNotesOnSave: false, listsLocalOnly: false, dayLength: DAY_LENGTH_DEFAULT, weatherFadeMs: WEATHER_FADE_MS_DEFAULT, uiScale: 1, reframeOnSelect: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
             showGrid,
             showAxes,
           }}
@@ -10238,7 +10245,7 @@ export default function App({ launch = null }) {
       <SettingsModal
         open={settingsOpen}
         initial={{
-          ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, navmeshPath: '', bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, autoWeatherZones: true, autoFocusZoneObject: true, closeDatNotesOnSave: false, dayLength: DAY_LENGTH_DEFAULT, weatherFadeMs: WEATHER_FADE_MS_DEFAULT, uiScale: 1, reframeOnSelect: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
+          ...(settings ?? { gamePath: '', hdPath: '', hdEnabled: false, pivotPath: '', pivotEnabled: false, navmeshPath: '', bgColor: DEFAULT_BG, autoPlay: false, autoWasdZones: true, autoWeatherZones: true, autoFocusZoneObject: true, closeDatNotesOnSave: false, listsLocalOnly: false, dayLength: DAY_LENGTH_DEFAULT, weatherFadeMs: WEATHER_FADE_MS_DEFAULT, uiScale: 1, reframeOnSelect: false, showXiConsole: true, autoCloseXiConsole: false, xiPath: '' }),
           showGrid,
           showAxes,
         }}
