@@ -1151,11 +1151,6 @@
     "fileId": 5710
    },
    {
-    "name": "Phanauet Channel - 1",
-    "path": "ROM\\8\\31.DAT",
-    "fileId": 2178
-   },
-   {
     "name": "Phanauet Channel - 2",
     "path": "ROM\\283\\75.DAT",
     "fileId": 5689
@@ -6594,11 +6589,6 @@
   "id": "misc",
   "name": "Miscellaneous Maps",
   "entries": [
-   {
-    "name": "??? - 1",
-    "path": "ROM\\8\\104.DAT",
-    "fileId": 2251
-   },
    {
     "name": "??? - 2",
     "path": "ROM\\169\\10.DAT",

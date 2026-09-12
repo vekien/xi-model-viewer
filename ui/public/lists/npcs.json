@@ -16460,29 +16460,6 @@
         {
           "name": "Rabbit",
           "variants": [
-            "ROM\\3\\108.DAT",
-            "ROM\\172\\69.DAT",
-            "ROM\\353\\120.DAT",
-            "ROM\\4\\109.DAT",
-            "ROM\\261\\50.DAT",
-            "ROM\\4\\110.DAT",
-            "ROM\\286\\82.DAT"
-          ],
-          "base": null,
-          "fileId": 1434,
-          "fileIds": [
-            1434,
-            1568,
-            53250,
-            1569,
-            1635,
-            1570,
-            52232
-          ]
-        },
-        {
-          "name": "Rabbit",
-          "variants": [
             "ROM\\4\\108.DAT",
             "ROM\\172\\69.DAT",
             "ROM\\353\\120.DAT",

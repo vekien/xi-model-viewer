@@ -1032,13 +1032,6 @@
      "animId": 286
     },
     {
-     "name": "Cutting Cards",
-     "path": "ROM/309/2.DAT",
-     "fileId": 4699,
-     "abilityId": 339,
-     "animId": 287
-    },
-    {
      "name": "Heady Artifice",
      "path": "ROM/287/24.DAT",
      "fileId": 4700,
@@ -6446,16 +6439,6 @@
      "fileId": 51091
     },
     {
-     "name": "184/102-126 4",
-     "path": "ROM/184/105.DAT",
-     "fileId": 51500
-    },
-    {
-     "name": "184/102-126 5",
-     "path": "ROM/184/106.DAT",
-     "fileId": 51501
-    },
-    {
      "name": "184/102-126 6",
      "path": "ROM/184/107.DAT",
      "fileId": 51502
@@ -6464,11 +6447,6 @@
      "name": "184/102-126 7",
      "path": "ROM/184/108.DAT",
      "fileId": 51503
-    },
-    {
-     "name": "184/102-126 8",
-     "path": "ROM/184/109.DAT",
-     "fileId": 51504
     },
     {
      "name": "184/102-126 9",
@@ -6984,16 +6962,6 @@
      "name": "Update 28th",
      "path": "ROM/188/18.DAT",
      "fileId": 56810
-    },
-    {
-     "name": "Update 28th",
-     "path": "ROM/188/16.DAT",
-     "fileId": 57570
-    },
-    {
-     "name": "Update 28th",
-     "path": "ROM/188/14.DAT",
-     "fileId": 57568
     },
     {
      "name": "Update 28th",
@@ -19833,137 +19801,13 @@
      "fileId": 4936
     },
     {
-     "name": "ship",
-     "path": "ROM/19/126.DAT"
-    },
-    {
-     "name": "ship",
-     "path": "ROM/19/127.DAT"
-    },
-    {
-     "name": "Tonberry (Curse)",
-     "path": "ROM/23/72.DAT"
-    },
-    {
      "name": "Kam'lanaut (Fire Saber)",
      "path": "ROM/23/80.DAT",
      "fileId": 6435
     },
     {
-     "name": "Kam'lanaut (Ice Saber)",
-     "path": "ROM/23/81.DAT"
-    },
-    {
-     "name": "Kam'lanaut (Wind Saber)",
-     "path": "ROM/23/82.DAT"
-    },
-    {
-     "name": "Kam'lanaut (Earth Saber)",
-     "path": "ROM/23/83.DAT"
-    },
-    {
-     "name": "Kam'lanaut (Thunder Saber)",
-     "path": "ROM/23/84.DAT"
-    },
-    {
-     "name": "Kam'lanaut (Water Saber)",
-     "path": "ROM/23/85.DAT"
-    },
-    {
-     "name": "Kam'lanaut (Great Wheel)",
-     "path": "ROM/23/86.DAT"
-    },
-    {
-     "name": "Kam'lanaut (Light Blade)",
-     "path": "ROM/23/87.DAT"
-    },
-    {
-     "name": "Tonberry (Everyone's Grudge)",
-     "path": "ROM/23/88.DAT"
-    },
-    {
      "name": "Tonberry (Everyone's Rancor)",
      "path": "ROM/23/89.DAT"
-    },
-    {
-     "name": "teni",
-     "path": "ROM/23/90.DAT"
-    },
-    {
-     "name": "5s_s",
-     "path": "ROM/23/91.DAT"
-    },
-    {
-     "name": "kam_",
-     "path": "ROM/23/92.DAT"
-    },
-    {
-     "name": "kam_",
-     "path": "ROM/23/93.DAT"
-    },
-    {
-     "name": "jir_",
-     "path": "ROM/23/94.DAT"
-    },
-    {
-     "name": "jir_",
-     "path": "ROM/23/95.DAT"
-    },
-    {
-     "name": "cris",
-     "path": "ROM/23/96.DAT"
-    },
-    {
-     "name": "sins",
-     "path": "ROM/23/97.DAT"
-    },
-    {
-     "name": "ring",
-     "path": "ROM/23/98.DAT"
-    },
-    {
-     "name": "Hall of the Gods teleport",
-     "path": "ROM/23/99.DAT"
-    },
-    {
-     "name": "tonv",
-     "path": "ROM/23/100.DAT"
-    },
-    {
-     "name": "gene",
-     "path": "ROM/23/101.DAT"
-    },
-    {
-     "name": "Swift Blade",
-     "path": "ROM/23/102.DAT"
-    },
-    {
-     "name": "Tachi: Kasha",
-     "path": "ROM/23/103.DAT"
-    },
-    {
-     "name": "Blade: Ten",
-     "path": "ROM/23/104.DAT"
-    },
-    {
-     "name": "Decimation",
-     "path": "ROM/23/105.DAT"
-    },
-    {
-     "name": "Spiral Hell",
-     "path": "ROM/23/106.DAT"
-    },
-    {
-     "name": "yami",
-     "path": "ROM/23/107.DAT"
-    },
-    {
-     "name": "toba",
-     "path": "ROM/23/108.DAT"
-    },
-    {
-     "name": "siba",
-     "path": "ROM/23/109.DAT"
     },
     {
      "name": "karu",
@@ -19973,78 +19817,6 @@
     {
      "name": "fenn",
      "path": "ROM/23/111.DAT"
-    },
-    {
-     "name": "fyre",
-     "path": "ROM/23/112.DAT"
-    },
-    {
-     "name": "gura",
-     "path": "ROM/23/113.DAT"
-    },
-    {
-     "name": "kam_",
-     "path": "ROM/23/114.DAT"
-    },
-    {
-     "name": "kubi",
-     "path": "ROM/23/115.DAT"
-    },
-    {
-     "name": "tata",
-     "path": "ROM/23/116.DAT"
-    },
-    {
-     "name": "shoh",
-     "path": "ROM/23/117.DAT"
-    },
-    {
-     "name": "mao2",
-     "path": "ROM/23/118.DAT"
-    },
-    {
-     "name": "Ifrit Prime summon",
-     "path": "ROM/23/122.DAT"
-    },
-    {
-     "name": "Titan Prime summon",
-     "path": "ROM/23/123.DAT"
-    },
-    {
-     "name": "Leviathan Prime summon",
-     "path": "ROM/23/124.DAT"
-    },
-    {
-     "name": "Garuda Prime summon",
-     "path": "ROM/23/125.DAT"
-    },
-    {
-     "name": "Shiva Prime summon",
-     "path": "ROM/23/126.DAT"
-    },
-    {
-     "name": "Ramuh Prime summon",
-     "path": "ROM/23/127.DAT"
-    },
-    {
-     "name": "Ifrit Prime release",
-     "path": "ROM/24/0.DAT"
-    },
-    {
-     "name": "Titan Prime release",
-     "path": "ROM/24/1.DAT"
-    },
-    {
-     "name": "Leviathan Prime release",
-     "path": "ROM/24/2.DAT"
-    },
-    {
-     "name": "Garuda Prime release",
-     "path": "ROM/24/3.DAT"
-    },
-    {
-     "name": "Shiva Prime release",
-     "path": "ROM/24/4.DAT"
     },
     {
      "name": "Ramuh Prime release",
@@ -20171,14 +19943,6 @@
      "fileId": 6531
     },
     {
-     "name": "Leviathan Prime (Barracuda Dive)",
-     "path": "ROM/24/50.DAT"
-    },
-    {
-     "name": "Leviathan Prime (Water II)",
-     "path": "ROM/24/51.DAT"
-    },
-    {
      "name": "Leviathan Prime (Tail Whip)",
      "path": "ROM/24/52.DAT",
      "fileId": 6535
@@ -20209,29 +19973,9 @@
      "fileId": 6540
     },
     {
-     "name": "Garuda Prime (Claw)",
-     "path": "ROM/24/59.DAT"
-    },
-    {
-     "name": "Garuda Prime (Aero II)",
-     "path": "ROM/24/60.DAT"
-    },
-    {
-     "name": "Garuda Prime (Whispering Wind)",
-     "path": "ROM/24/61.DAT"
-    },
-    {
-     "name": "Garuda Prime (Hastega)",
-     "path": "ROM/24/62.DAT"
-    },
-    {
      "name": "Garuda Prime (Aero IV)",
      "path": "ROM/24/64.DAT",
      "fileId": 6547
-    },
-    {
-     "name": "Garuda Prime (Predator Claws)",
-     "path": "ROM/24/65.DAT"
     },
     {
      "name": "Garuda Prime (Wind Blade)",
@@ -20247,18 +19991,6 @@
      "name": "Shiva Prime (Bizzard II)",
      "path": "ROM/24/69.DAT",
      "fileId": 6552
-    },
-    {
-     "name": "Shiva Prime (Frost Armor)",
-     "path": "ROM/24/70.DAT"
-    },
-    {
-     "name": "Shiva Prime (Sleepga)",
-     "path": "ROM/24/71.DAT"
-    },
-    {
-     "name": "Shiva Prime (Double Slap)",
-     "path": "ROM/24/72.DAT"
     },
     {
      "name": "Shiva Prime (Blizzard IV)",
@@ -20316,22 +20048,6 @@
    "id": "Effect3",
    "label": "Chains of Promathia Effects",
    "entries": [
-    {
-     "name": "ship",
-     "path": "ROM/0/43.DAT"
-    },
-    {
-     "name": "ship",
-     "path": "ROM/0/44.DAT"
-    },
-    {
-     "name": "ship",
-     "path": "ROM/0/45.DAT"
-    },
-    {
-     "name": "ship",
-     "path": "ROM/0/46.DAT"
-    },
     {
      "name": "mou_",
      "path": "ROM/6/46.DAT",
@@ -20970,78 +20686,6 @@
      "fileId": 2903
     },
     {
-     "name": "mdi_",
-     "path": "ROM/8/115.DAT"
-    },
-    {
-     "name": "mdi_",
-     "path": "ROM/8/116.DAT"
-    },
-    {
-     "name": "mdi_",
-     "path": "ROM/8/117.DAT"
-    },
-    {
-     "name": "mdi_",
-     "path": "ROM/8/118.DAT"
-    },
-    {
-     "name": "utm_",
-     "path": "ROM/8/119.DAT"
-    },
-    {
-     "name": "utm_",
-     "path": "ROM/8/120.DAT"
-    },
-    {
-     "name": "utm_",
-     "path": "ROM/8/121.DAT"
-    },
-    {
-     "name": "utm_",
-     "path": "ROM/8/122.DAT"
-    },
-    {
-     "name": "utm_",
-     "path": "ROM/8/123.DAT"
-    },
-    {
-     "name": "utm_",
-     "path": "ROM/8/124.DAT"
-    },
-    {
-     "name": "omp_",
-     "path": "ROM/8/125.DAT"
-    },
-    {
-     "name": "omp_",
-     "path": "ROM/8/126.DAT"
-    },
-    {
-     "name": "omp_",
-     "path": "ROM/8/127.DAT"
-    },
-    {
-     "name": "omp_",
-     "path": "ROM/9/0.DAT"
-    },
-    {
-     "name": "omp_",
-     "path": "ROM/9/1.DAT"
-    },
-    {
-     "name": "omp_",
-     "path": "ROM/9/2.DAT"
-    },
-    {
-     "name": "omp_",
-     "path": "ROM/9/3.DAT"
-    },
-    {
-     "name": "bahm",
-     "path": "ROM/9/4.DAT"
-    },
-    {
      "name": "bh_e",
      "path": "ROM/9/5.DAT",
      "fileId": 2300
@@ -21491,11 +21135,6 @@
      "name": "npc_",
      "path": "ROM/2/44.DAT",
      "fileId": 506
-    },
-    {
-     "name": "npc_",
-     "path": "ROM/2/45.DAT",
-     "fileId": 507
     },
     {
      "name": "npc_",
@@ -22072,16 +21711,6 @@
    "label": "Wings Of the Goddess  Effects",
    "entries": [
     {
-     "name": "obj_",
-     "path": "ROM/8/89.DAT",
-     "fileId": 2236
-    },
-    {
-     "name": "obj_",
-     "path": "ROM/8/90.DAT",
-     "fileId": 2237
-    },
-    {
      "name": "smn_",
      "path": "ROM/9/18.DAT",
      "fileId": 2315
@@ -22250,392 +21879,6 @@
     {
      "name": "Gnole (????)",
      "path": "ROM/9/105.DAT"
-    }
-   ]
-  },
-  {
-   "id": "Effect6",
-   "label": "A Crystalline Prophecy Effects",
-   "entries": [
-    {
-     "name": "eve_",
-     "path": "ROM/0/1.DAT",
-     "fileId": 1
-    },
-    {
-     "name": "eve_",
-     "path": "ROM/0/2.DAT",
-     "fileId": 2
-    },
-    {
-     "name": "eve_",
-     "path": "ROM/0/3.DAT",
-     "fileId": 3
-    },
-    {
-     "name": "eve_",
-     "path": "ROM/0/4.DAT",
-     "fileId": 4
-    },
-    {
-     "name": "eve_",
-     "path": "ROM/0/5.DAT",
-     "fileId": 5
-    },
-    {
-     "name": "eve_",
-     "path": "ROM/0/6.DAT",
-     "fileId": 6
-    },
-    {
-     "name": "eve_",
-     "path": "ROM/0/7.DAT",
-     "fileId": 7
-    },
-    {
-     "name": "ald_",
-     "path": "ROM/0/91.DAT"
-    },
-    {
-     "name": "ald_",
-     "path": "ROM/0/92.DAT",
-     "fileId": 293
-    },
-    {
-     "name": "hf_u",
-     "path": "ROM/0/93.DAT"
-    },
-    {
-     "name": "zou_",
-     "path": "ROM/0/94.DAT"
-    },
-    {
-     "name": "Title (Japanese)",
-     "path": "ROM/0/95.DAT",
-     "fileId": 240
-    },
-    {
-     "name": "Title (English)",
-     "path": "ROM/0/96.DAT"
-    },
-    {
-     "name": "Title (Spanish)",
-     "path": "ROM/0/97.DAT",
-     "fileId": 32927
-    },
-    {
-     "name": "Title (German)",
-     "path": "ROM/0/98.DAT"
-    },
-    {
-     "name": "niji",
-     "path": "ROM/0/99.DAT",
-     "fileId": 249
-    },
-    {
-     "name": "eve_",
-     "path": "ROM/0/100.DAT",
-     "fileId": 250
-    },
-    {
-     "name": "eve_",
-     "path": "ROM/0/101.DAT",
-     "fileId": 219
-    },
-    {
-     "name": "ald_",
-     "path": "ROM/0/102.DAT",
-     "fileId": 203
-    },
-    {
-     "name": "eve_",
-     "path": "ROM/0/103.DAT"
-    },
-    {
-     "name": "eve_",
-     "path": "ROM/0/104.DAT",
-     "fileId": 245
-    },
-    {
-     "name": "eve_",
-     "path": "ROM/0/105.DAT",
-     "fileId": 246
-    },
-    {
-     "name": "eve_",
-     "path": "ROM/0/106.DAT"
-    },
-    {
-     "name": "eve_",
-     "path": "ROM/0/107.DAT"
-    }
-   ]
-  },
-  {
-   "id": "Effect7",
-   "label": "A Moogle Kupo d'Etat Effects",
-   "entries": [
-    {
-     "name": "Flowerpot",
-     "path": "ROM/0/0.DAT",
-     "fileId": 0
-    },
-    {
-     "name": "Mog Shrapnel",
-     "path": "ROM/0/1.DAT",
-     "fileId": 1
-    },
-    {
-     "name": "Mog Bomb",
-     "path": "ROM/0/2.DAT",
-     "fileId": 2
-    },
-    {
-     "name": "Bill Toss",
-     "path": "ROM/0/3.DAT",
-     "fileId": 3
-    },
-    {
-     "name": "Mog Bomb",
-     "path": "ROM/0/4.DAT",
-     "fileId": 4
-    },
-    {
-     "name": "Washtub",
-     "path": "ROM/0/5.DAT",
-     "fileId": 5
-    },
-    {
-     "name": "Crystalline Flare",
-     "path": "ROM/0/6.DAT",
-     "fileId": 6
-    },
-    {
-     "name": "Raindrop",
-     "path": "ROM/0/42.DAT"
-    },
-    {
-     "name": "Mog House repairs",
-     "path": "ROM/0/43.DAT"
-    },
-    {
-     "name": "Title (Japenese)",
-     "path": "ROM/0/44.DAT"
-    },
-    {
-     "name": "Title (English)",
-     "path": "ROM/0/45.DAT"
-    },
-    {
-     "name": "Title (Spanish)",
-     "path": "ROM/0/46.DAT"
-    },
-    {
-     "name": "Title (German)",
-     "path": "ROM/0/47.DAT"
-    },
-    {
-     "name": "Confetti",
-     "path": "ROM/0/48.DAT"
-    },
-    {
-     "name": "mail",
-     "path": "ROM/0/49.DAT"
-    },
-    {
-     "name": "port",
-     "path": "ROM/0/50.DAT"
-    },
-    {
-     "name": "Invisible box",
-     "path": "ROM/0/51.DAT"
-    },
-    {
-     "name": "mog_",
-     "path": "ROM/0/52.DAT",
-     "fileId": 291
-    },
-    {
-     "name": "Confetti",
-     "path": "ROM/0/53.DAT"
-    },
-    {
-     "name": "mogb",
-     "path": "ROM/0/54.DAT"
-    },
-    {
-     "name": "mogz",
-     "path": "ROM/0/55.DAT"
-    },
-    {
-     "name": "Riko's magicite 1",
-     "path": "ROM/0/56.DAT",
-     "fileId": 257
-    },
-    {
-     "name": "Riko's magicite 2",
-     "path": "ROM/0/57.DAT",
-     "fileId": 212
-    },
-    {
-     "name": "gob_",
-     "path": "ROM/0/58.DAT",
-     "fileId": 226
-    },
-    {
-     "name": "rk_d",
-     "path": "ROM/0/59.DAT"
-    },
-    {
-     "name": "Riko's magicite",
-     "path": "ROM/0/60.DAT",
-     "fileId": 261
-    },
-    {
-     "name": "btl_",
-     "path": "ROM/0/61.DAT",
-     "fileId": 247
-    },
-    {
-     "name": "Nanaa (Wasp Sting)",
-     "path": "ROM/0/62.DAT",
-     "fileId": 248
-    },
-    {
-     "name": "Nanaa (Dancing Edge)",
-     "path": "ROM/0/63.DAT",
-     "fileId": 251
-    },
-    {
-     "name": "Nanaa (King Cobra Clamp)",
-     "path": "ROM/0/64.DAT",
-     "fileId": 252
-    },
-    {
-     "name": "mog_",
-     "path": "ROM/0/65.DAT",
-     "fileId": 269
-    }
-   ]
-  },
-  {
-   "id": "Effect8",
-   "label": "A Shantotto Ascension Effects",
-   "entries": [
-    {
-     "name": "kaki",
-     "path": "ROM/0/24.DAT",
-     "fileId": 24
-    },
-    {
-     "name": "gate",
-     "path": "ROM/0/25.DAT",
-     "fileId": 25
-    },
-    {
-     "name": "shnh",
-     "path": "ROM/0/26.DAT",
-     "fileId": 26
-    },
-    {
-     "name": "Title (Japanese)",
-     "path": "ROM/0/27.DAT",
-     "fileId": 27
-    },
-    {
-     "name": "Title (English)",
-     "path": "ROM/0/28.DAT",
-     "fileId": 100
-    },
-    {
-     "name": "Title (Spanish)",
-     "path": "ROM/0/29.DAT"
-    },
-    {
-     "name": "Title (German)",
-     "path": "ROM/0/30.DAT"
-    },
-    {
-     "name": "dol_",
-     "path": "ROM/0/31.DAT"
-    },
-    {
-     "name": "cry_",
-     "path": "ROM/0/32.DAT"
-    },
-    {
-     "name": "dol_",
-     "path": "ROM/0/33.DAT"
-    },
-    {
-     "name": "rmv_",
-     "path": "ROM/0/34.DAT"
-    },
-    {
-     "name": "dol_",
-     "path": "ROM/0/36.DAT"
-    },
-    {
-     "name": "dol_",
-     "path": "ROM/0/37.DAT"
-    },
-    {
-     "name": "cry_",
-     "path": "ROM/0/38.DAT"
-    },
-    {
-     "name": "shnb",
-     "path": "ROM/0/39.DAT"
-    },
-    {
-     "name": "shn_",
-     "path": "ROM/0/40.DAT",
-     "fileId": 149
-    },
-    {
-     "name": "shn_",
-     "path": "ROM/0/41.DAT"
-    },
-    {
-     "name": "shn_",
-     "path": "ROM/0/42.DAT"
-    },
-    {
-     "name": "shn_",
-     "path": "ROM/0/43.DAT"
-    },
-    {
-     "name": "gate",
-     "path": "ROM/0/44.DAT"
-    },
-    {
-     "name": "shn_",
-     "path": "ROM/0/45.DAT"
-    },
-    {
-     "name": "mog_",
-     "path": "ROM/0/46.DAT"
-    },
-    {
-     "name": "shn_",
-     "path": "ROM/0/62.DAT",
-     "fileId": 248
-    },
-    {
-     "name": "shn_",
-     "path": "ROM/0/65.DAT",
-     "fileId": 269
-    }
-   ]
-  },
-  {
-   "id": "Effect9",
-   "label": "Seekers of Adoulin Effects",
-   "entries": [
-    {
-     "name": "placeholder",
-     "path": "ROM/0/0.DAT",
-     "fileId": 0
     }
    ]
   },
