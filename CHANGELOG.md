@@ -12,6 +12,18 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ### Zones
 - **Region Culling is gone.** It drew only the objects the zone’s own visibility set lists for the region the camera stands in — the client’s occlusion, applied to a free camera. The region was resolved from the orbit target, which in fly mode is wherever the initial fit left it and never moves, so any zone whose centre sat inside one region’s box was cut down to that region from every camera position: Qufim Island lost 1,315 of its 1,756 objects and Beadeaux was one floating chunk. A viewer wants the whole zone, so the View item, the setting and the 0x1C visibility-set decode behind it are removed rather than repaired
+- **NPCs and monsters are framed on the pose you see.** Reset Camera and F measured the model in its rest pose and aimed at the rest-pose hips, which is fine for a standing character and wrong for a monster whose idle is nowhere near rest — the Sea Monk’s idle lifts its body two units above its rest box, so the camera aimed below it and the model left through the top of the frame. The frame is now measured at frame 0 of the clip on screen, and a model without a race skeleton is framed on its box centre rather than on whatever its rig calls joint 1
+
+### DAT Browser
+- **A DAT with a skeleton opens as a model.** 23 model DATs that also carry zone placements — the Sunbreeze and Harvest Festival NPCs, Lair Reive, `ROM/146/71` — were classified as zones and opened as an empty stage
+- **Badges follow the downloaded lists**, not the copy baked into the build, and a DAT listed as an NPC is badged NPC even when an effects row names it — an NPC’s own VFX routines live in its model DAT, so some 400 effects rows point at NPC variants and `ROM/9/5` (an Orc) read as an Effect
+- **Raw hex view.** The Structure panel has a toggle at the right of its title bar that swaps the section tree for the file as a hex editor shows it — offset, sixteen bytes, ASCII — over the whole DAT, windowed so a 9 MB zone file scrolls without mapping its half a million rows
+
+### Settings
+- **DAT Lists ’ "Local lists only — don’t update at startup".** The startup check is content-addressed and the published copy always wins, so a list edited in the lists folder to check it before publishing was overwritten a second into every launch. The box skips the check and reads the folder as-is; "Check for list updates" still syncs when pressed, and the folder path and an open-folder button sit beside it
+
+### Lists
+- The baked lists are synced from xi-tools: the Rabbit row that pointed at an Elvaan Bishop (`ROM/3/108`, a typo for `ROM/4/108`) and the "Phanauet Channel - 1" map that was an NPC model are gone, along with 170 effect rows that could never play — four-byte stubs, empty shells, zone files, and the four 2009 add-on categories whose effect index had been resolved as an absolute file id
 
 ## [1.5.0] — 2026-09-11
 
