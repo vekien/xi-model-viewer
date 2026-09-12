@@ -9566,6 +9566,7 @@ export default function App({ launch = null }) {
           )}
           <DataViewer
             doc={dataDoc}
+            rawBytes={dataBufRef.current}
             sources={dataSources}
             onSelectSource={selectDataSource}
             onOpenTexture={openDataTexture}

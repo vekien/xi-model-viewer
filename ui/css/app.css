@@ -6170,6 +6170,53 @@ button.uimenu-btn.has-note:not(.on) {
   border-radius: 999px;
   padding: 1px 7px;
 }
+/* Raw hex toggle — sits after .data-card-note, which holds the right edge with
+   margin-left:auto. Deliberately not .icon-btn (30px square is too heavy for a
+   card title); same bare-glyph shape as .pc-tbtn, so it beats global `button`. */
+button.data-hex-toggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  margin: -4px -4px -4px 4px;
+  padding: 0;
+  gap: 0;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  box-shadow: none;
+  color: var(--gray-600);
+  cursor: pointer;
+}
+button.data-hex-toggle:hover,
+button.data-hex-toggle:active {
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+  box-shadow: none;
+  color: var(--gray-200);
+}
+button.data-hex-toggle .icon { font-size: 15px; }
+button.data-hex-toggle.on { color: var(--accent); background: transparent; }
+button.data-hex-toggle.on:hover { background: rgba(255, 255, 255, 0.06); }
+
+/* Windowed variant of the hex dump (RawHexPane — the Structure panel's toggle).
+   Colours and columns come from the .data-hex-* rules above; this only adds the
+   scroll box and the absolute row placement the windowing needs. The row height
+   must equal HEX_ROW_H in DataViewer.jsx or the rows drift off the scrollbar. */
+.data-hex-window {
+  flex: 1 1 auto; min-height: 0;
+  overflow: auto;
+  padding: 4px 0 10px;
+}
+.data-hex-window .data-hex-spacer { position: relative; }
+.data-hex-window .data-hex-row {
+  position: absolute; left: 0; right: 0;
+  height: 17px; line-height: 17px;
+}
+
 .data-op-row { padding-left: 44px; font-size: 11px; }
 .data-op-off { color: var(--gray-600); flex: 0 0 36px; }
 .data-op-hex { color: var(--gray-500); flex: 0 0 20px; }

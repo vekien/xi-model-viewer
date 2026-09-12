@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { fmtBytes } from '../js/dat/inspect.js';
 import { ENTITY_MODEL_OFFSET, GEAR_SLOTS, GEAR_TABLES, RACE_LABELS, gearIndex } from '../js/dat/modelids.js';
 import { Combo } from './Combo.jsx';
@@ -79,7 +79,7 @@ function ZoneTabs({ tabs, activeKey, onSelect }) {
 }
 
 export function DataViewer({
-  doc, sources, onSelectSource, onOpenTexture, onOpenSkeleton, onOpenZoneDef,
+  doc, rawBytes, sources, onSelectSource, onOpenTexture, onOpenSkeleton, onOpenZoneDef,
   onOpenRoute, onOpenUiMenu, onOpenUiElementGroup, onOpenDataTable, onOpenParticle, onOpenZoneMesh, onPlaySound, playingSoundKey, onRevealPath, onOpenDat, onRenderFile,
 }) {
   if (!doc) {
@@ -252,6 +252,7 @@ export function DataViewer({
   return (
     <SectionsView
       doc={doc}
+      rawBytes={rawBytes}
       sourceItems={sourceItems}
       activeSource={activeSource}
       zoneChrome={zoneChrome}
@@ -270,6 +271,105 @@ export function DataViewer({
       onRevealPath={onRevealPath}
       onRenderFile={onRenderFile}
     />
+  );
+}
+
+const HEX_ROW_H = 17;     // must match .data-hex-window .data-hex-row in app.css
+const HEX_OVERSCAN = 12;  // rows drawn above/below the viewport
+
+const HEX_PAIRS = Array.from(
+  { length: 256 },
+  (_, b) => b.toString(16).toUpperCase().padStart(2, '0'),
+);
+// Printable ASCII only. Everything else is a dot, as every hex editor does it —
+// rendering raw control bytes would break the column grid.
+const HEX_ASCII = Array.from(
+  { length: 256 },
+  (_, b) => (b >= 0x20 && b < 0x7f ? String.fromCharCode(b) : '.'),
+);
+
+/**
+ * Raw byte dump over a whole DAT — the Structure panel's hex toggle.
+ *
+ * Same three columns as the HexView fallback further down, and the same CSS, but
+ * that one renders a capped slice in one pass; this covers the entire file, so a
+ * 13 MB zone DAT is 830k rows and mapping them all locks the tab. Only the rows
+ * the viewport covers are mounted, placed absolutely inside a spacer of the full
+ * height so the scrollbar still measures the real file.
+ */
+function RawHexPane({ bytes }) {
+  const boxRef = useRef(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewH, setViewH] = useState(0);
+
+  // Height drives how many rows are live, so it has to be measured before paint
+  // and re-measured when the panel resizes (window, overlay open, splitter).
+  useLayoutEffect(() => {
+    const el = boxRef.current;
+    if (!el) return undefined;
+    const measure = () => setViewH(el.clientHeight);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const total = bytes?.length ?? 0;
+  const rows = Math.ceil(total / HEX_COLS);
+  const first = Math.max(0, Math.floor(scrollTop / HEX_ROW_H) - HEX_OVERSCAN);
+  const last = Math.min(rows, Math.ceil((scrollTop + viewH) / HEX_ROW_H) + HEX_OVERSCAN);
+  // Offsets are 8 digits until the file needs more, so the column never jitters.
+  const offWidth = Math.max(8, (total - 1 > 0 ? (total - 1).toString(16).length : 1));
+
+  const lines = useMemo(() => {
+    if (!bytes || last <= first) return [];
+    const out = [];
+    for (let r = first; r < last; r++) {
+      const start = r * HEX_COLS;
+      const end = Math.min(start + HEX_COLS, total);
+      let hex = '';
+      let ascii = '';
+      for (let i = start; i < end; i++) {
+        const b = bytes[i];
+        hex += HEX_PAIRS[b];
+        hex += (i - start) === 7 ? '  ' : ' ';
+        ascii += HEX_ASCII[b];
+      }
+      out.push({
+        row: r,
+        off: start.toString(16).toUpperCase().padStart(offWidth, '0'),
+        hex: hex.trimEnd(),
+        ascii,
+      });
+    }
+    return out;
+  }, [bytes, first, last, total, offWidth]);
+
+  if (!bytes || !total) {
+    return <div className="data-filter-empty">No bytes to show for this file.</div>;
+  }
+
+  return (
+    <div
+      className="data-hex data-hex-window"
+      ref={boxRef}
+      onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+    >
+      <div className="data-hex-spacer" style={{ height: `${rows * HEX_ROW_H}px` }}>
+        {lines.map((l) => (
+          <div
+            className="data-hex-row mono"
+            key={l.row}
+            style={{ top: `${l.row * HEX_ROW_H}px` }}
+          >
+            <span className="data-hex-off">{l.off}</span>
+            <span className="data-hex-bytes">{l.hex}</span>
+            <span className="data-hex-ascii">{l.ascii}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -378,16 +478,27 @@ function countRes(node) {
 }
 
 function SectionsView({
-  doc, sourceItems, activeSource, zoneChrome, onSelectSource,
+  doc, rawBytes, sourceItems, activeSource, zoneChrome, onSelectSource,
   onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOpenRoute, onOpenUiMenu,
   onOpenUiElementGroup, onOpenDataTable,
   onOpenParticle, onOpenZoneMesh, onPlaySound, playingSoundKey,
   onRevealPath, onRenderFile,
 }) {
   const [query, setQuery] = useState('');
+  const [hexMode, setHexMode] = useState(false);
   // Reset filter when switching DAT / reloading structure.
   const docKey = doc.fullPath || doc.path || '';
   useEffect(() => { setQuery(''); }, [docKey]);
+
+  // Raw bytes for the hex dump. The buffer is whatever the reader returned, and
+  // parseZone decrypts 0x2E/0x1C in place — App.jsx hands over the copy taken
+  // before that, so this is the file as it sits on disk.
+  const hexBytes = useMemo(() => {
+    if (!rawBytes) return null;
+    if (rawBytes instanceof Uint8Array) return rawBytes;
+    if (rawBytes instanceof ArrayBuffer) return new Uint8Array(rawBytes);
+    return rawBytes.buffer ? new Uint8Array(rawBytes.buffer) : null;
+  }, [rawBytes]);
 
   const { root: shownRoot, matchCount } = useMemo(
     () => filterStructureTree(doc.root, query),
@@ -406,18 +517,34 @@ function SectionsView({
         <div className="data-card-title">
           <span className="icon">account_tree</span>Structure
           {doc.zoneName && <span className="data-zone-tag">{doc.zoneName}</span>}
-          <span className="data-card-note mono">{structureNote}</span>
+          <span className="data-card-note mono">
+            {hexMode && hexBytes ? fmtBytes(hexBytes.length) : structureNote}
+          </span>
+          {hexBytes && (
+            <Tooltip content={hexMode ? 'Back to the section tree' : 'Raw hex — offset, bytes, ASCII'}>
+              <button
+                type="button"
+                className={`data-hex-toggle${hexMode ? ' on' : ''}`}
+                aria-label="Toggle raw hex view"
+                aria-pressed={hexMode}
+                onClick={() => setHexMode((v) => !v)}
+              >
+                <span className="icon">data_array</span>
+              </button>
+            </Tooltip>
+          )}
         </div>
         {zoneChrome}
         <StructureToolbar
           sourceItems={sourceItems}
           activeSource={activeSource}
           onSelectSource={onSelectSource}
-          query={query}
-          setQuery={setQuery}
+          query={hexMode ? undefined : query}
+          setQuery={hexMode ? undefined : setQuery}
           matchCount={matchCount}
           totalHint={`${totalRes.toLocaleString()} total`}
         />
+        {hexMode ? <RawHexPane bytes={hexBytes} /> : (
         <div className="data-tree">
           {query.trim() && matchCount === 0 ? (
             <div className="data-filter-empty">No sections match “{query.trim()}”.</div>
@@ -440,6 +567,7 @@ function SectionsView({
             />
           )}
         </div>
+        )}
       </div>
 
       <div className="data-side">
