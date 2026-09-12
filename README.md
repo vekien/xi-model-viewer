@@ -26,10 +26,6 @@ viewport.
 - **Linux:** [Latest release](https://github.com/vekien/xi-model-viewer/releases/latest) (`.deb` / `.AppImage`, see [Linux](#linux))
 - [All releases](https://github.com/vekien/xi-model-viewer/releases)
 
-The app checks for a newer release in the background on start — nothing waits on
-it, and if one is out you get a notice with a link to it. **OK** dismisses that
-notice until the next release.
-
 ### Linux
 
 Two packages, self-contained in the same sense the .exe is — the frontend, the
