@@ -4,12 +4,6 @@ A FFXI asset browser — **zones, NPCs & monsters, playable characters, spell
 effects, textures, music, sound effects and raw DAT data** — in a **WebGL2**
 viewport.
 
-- One standalone ~38 MB exe. **Tauri 2**, not Electron.
-- Embeds vgmstream, the baked asset lists and the viewport backgrounds — nothing to install.
-- Skinning runs on the GPU: the vertex shader rotates pre-weighted joint-local
-  positions by per-joint pose quaternions, so the CPU only evaluates the skeleton
-  pose (one quat/trans/scale triplet per joint per frame).
-
 <p align="center">
   <a href="https://github.com/vekien/xi-model-viewer/releases/latest/download/xi-model-viewer.exe">
     <img alt="Download xi-model-viewer.exe (Windows, latest release)" src="https://img.shields.io/badge/%E2%AC%87%20Download%20for%20Windows-xi--model--viewer.exe-2ea44f?style=for-the-badge&logo=windows&logoColor=white">
