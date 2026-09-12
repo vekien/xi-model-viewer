@@ -52,11 +52,13 @@ const ENTITY_ROT_M = new Float32Array([
 /** The matrix above applied to a point — for anything comparing against raw DAT. */
 const toEntityPt = (p) => [p[0], -p[1], -p[2]];
 
-// Joint every entity is framed on — boot, Assets view switches, Reset Camera and
-// F alike. FFXI skeletons carry no names — a joint is an index — and 1 is
-// `bone0001` in the Skeleton panel's numbering: the hips, one up from the root at
-// the feet. (The Camera Sequencer's actor lock aims one further up at bone0002,
-// the pelvis, which tracks better through a jump.)
+// Joint a model on a race skeleton is framed on — boot, Assets view switches,
+// Reset Camera and F alike. FFXI skeletons carry no names — a joint is an index —
+// and 1 is `bone0001` in the Skeleton panel's numbering: the hips, one up from
+// the root at the feet. Only meaningful on the seven race skeletons; a monster's
+// joint 1 is whatever its rig put there, so everything else frames on its box
+// centre instead (see restBounds). (The Camera Sequencer's actor lock aims one
+// further up at bone0002, the pelvis, which tracks better through a jump.)
 const FOCUS_JOINT = 1;
 
 const IDENTITY_M = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
@@ -1634,8 +1636,9 @@ export class Renderer {
     this.actorFollowsEffect = false;   // a new actor is not driven by any routine
     // Always drop isolation — caller re-applies after PC gear swaps.
     this.meshSourceFilter = null;
-    // New geometry (including a gear swap) invalidates the cached rest bounds.
+    // New geometry (including a gear swap) invalidates the cached framing bounds.
     this._restBounds = undefined;
+    this._restBoundsClip = undefined;
     this._restFocus = undefined;
     for (const b of this.batches) {
       gl.deleteBuffer(b.vbo);
@@ -2368,9 +2371,11 @@ export class Renderer {
       // Entities frame around a FIXED POINT ON THE SKELETON, not the mesh box
       // centre: the box centre wanders with pose and gear (see restBounds), so
       // framing off it put the same character somewhere new every load. The
-      // point is the rest hips (FOCUS_JOINT) — the DAT origin, used here before,
-      // is down at the model's FEET, which left the character hanging in the top
-      // half of the viewport on boot and on every Assets view switch.
+      // point is restFocusPoint() — the hips on a race skeleton, the box centre
+      // otherwise — measured at frame 0 of the clip on screen. The DAT origin,
+      // used here before, is down at the model's FEET, which left the character
+      // hanging in the top half of the viewport on boot and on every Assets view
+      // switch.
       // Only the distance comes from the bounds: far enough that the whole box
       // fits, measured from the centre to its farthest corner so a model that
       // stands entirely above its feet is not cut off.
@@ -2387,7 +2392,10 @@ export class Renderer {
       this.camera.fit(
         [c[0] - reach, c[1] - reach, c[2] - reach],
         [c[0] + reach, c[1] + reach, c[2] + reach],
-        { distance: reach * 2.4 },
+        // The hips sit above a character's box centre, so their reach to the
+        // far corners carries its own headroom; a box centre's does not, and a
+        // standing NPC clipped at the head. The extra 12% is the zone fit's pad.
+        { distance: reach * (this.model.raceId ? 2.4 : 2.7) },
       );
       this.snapFloorToFeet();
       return;
@@ -2419,14 +2427,15 @@ export class Renderer {
   }
 
   /**
-   * The point an entity is framed on: the hips (FOCUS_JOINT) in the model's REST
-   * pose. The DAT origin, used here before, sits at the model's FEET (see
+   * The point an entity is framed on, at frame 0 of the current clip: the hips
+   * (FOCUS_JOINT) for a model on a race skeleton, the box centre for anything
+   * else. The DAT origin, used here before, sits at the model's FEET (see
    * getOrbitPivot), which left the character hanging in the top half of the
    * viewport; the hips put the body's middle at screen centre for every race.
    *
-   * Rest, not live, for the reason restBounds is: read off the running clip it
-   * would drift with the animation and no two re-frames would agree. Null when
-   * there is no posed entity skeleton to read.
+   * A fixed frame, not live, for the reason restBounds is: read off the running
+   * clip it would drift with the animation and no two re-frames would agree.
+   * Null when there is no posed entity skeleton to read.
    */
   restFocusPoint() {
     if (this.effectMode || !this.pose || !this.model || this.model.kind === 'zone') return null;
@@ -2587,16 +2596,23 @@ export class Renderer {
    * past the near-foot cluster the plane may drop so bosses don't hover.
    */
   /**
-   * Bounds in the model's REST pose, computed once per model.
+   * Bounds at frame 0 of the current clip (the rest pose when there is none),
+   * computed once per model and clip.
    *
    * `computeBounds` skins every vertex through the *current* pose, so it moves
    * with the animation — measured on Hume Male running Eagle Eye Shot the box
    * width swings from 0.38 to 0.72 across the clip. Framing off that meant
-   * every press of F landed somewhere new. Framing and the orbit pivot use this
-   * instead; the floor plane still tracks the live pose, because feet do move.
+   * every press of F landed somewhere new. A fixed frame of the clip is as
+   * stable and, unlike the rest pose this used to measure, it is the pose on
+   * screen: a Sea Monk's idle lifts the whole body about two units above its
+   * rest box, so a rest-pose frame aimed the camera below the model and it left
+   * through the top of the viewport. Framing and the orbit pivot use this; the
+   * floor plane still tracks the live pose, because feet do move.
    */
   restBounds() {
-    if (this._restBounds !== undefined) return this._restBounds;
+    if (this._restBounds !== undefined && this._restBoundsClip === this.currentAnimation) {
+      return this._restBounds;
+    }
     if (!this.pose || !this.model) return null;
     if (this.model.kind === 'zone') {
       this._restBounds = this.computeBounds();
@@ -2604,13 +2620,24 @@ export class Renderer {
     }
     const clip = this.currentAnimation;
     const frame = this.animFrame;
-    this.pose.evaluate(null, 0);
+    this.pose.evaluate(clip ?? null, 0);
     // Body only: equipped weapons (tagged at load) are left out so the frame
     // and orbit pivot sit on the character, not on a box a polearm doubles.
     this._restBounds = this.computeBounds({ bodyOnly: true });
-    // Framing centre, read in the same rest pose for the same reason the box is:
-    // taken live it would drift with the clip and every re-fit would land somewhere new.
-    this._restFocus = this.getJointPosition(FOCUS_JOINT);
+    this._restBoundsClip = clip;
+    // Framing centre, read in the same pose for the same reason the box is:
+    // taken live it would drift with the clip and every re-fit would land
+    // somewhere new. The hips on a race skeleton (raceId), where joint 1 is
+    // known to be the hips; the box centre for everything else, where joint 1
+    // is whatever the rig put there.
+    const b = this._restBounds;
+    this._restFocus = (this.model.raceId || !b)
+      ? this.getJointPosition(FOCUS_JOINT)
+      : toEntityPt([
+        (b.min[0] + b.max[0]) / 2,
+        (b.min[1] + b.max[1]) / 2,
+        (b.min[2] + b.max[2]) / 2,
+      ]);
     this.pose.evaluate(clip ?? null, clip ? frame : 0);
     this.poseDirty = true;
     return this._restBounds;

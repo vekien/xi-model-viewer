@@ -2172,6 +2172,9 @@ export default function App({ launch = null }) {
       });
       if (!stillCurrent()) { releaseOverlay(); return; }
       const model = parsed.length === 1 ? parsed[0].model : mergeModels(parsed.map((e) => e.model), displayName);
+      // Race skeleton or not decides how the renderer frames the model (hips vs
+      // box centre, see Renderer#restBounds); the composer passes the race.
+      model.raceId = opts.raceId ?? null;
       // Fishing rod: a rigged prop (own skeleton + bend clips), grafted onto
       // the actor rather than merged like gear. The client spawns it as a
       // separate actor at the character's position and rotation (xim
