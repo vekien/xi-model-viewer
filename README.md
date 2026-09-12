@@ -22,16 +22,9 @@ viewport.
 
 ## Download
 
-**Windows:** [**⬇ Download xi-model-viewer.exe**](https://github.com/vekien/xi-model-viewer/releases/latest/download/xi-model-viewer.exe)
-— one ~38 MB file, no installer. That link always points at the exe on the
-newest release; save it anywhere and run it.
-
-**Linux:** grab the `.deb` or `.AppImage` from the
-[latest release](https://github.com/vekien/xi-model-viewer/releases/latest) —
-see [Linux](#linux) below for which one to pick.
-
-Every release also carries a `SHA256SUMS` file covering all of its assets, and
-the full history is on the [Releases](https://github.com/vekien/xi-model-viewer/releases) page.
+- **Windows:** [Download xi-model-viewer.exe](https://github.com/vekien/xi-model-viewer/releases/latest/download/xi-model-viewer.exe)
+- **Linux:** [Latest release](https://github.com/vekien/xi-model-viewer/releases/latest) (`.deb` / `.AppImage`, see [Linux](#linux))
+- [All releases](https://github.com/vekien/xi-model-viewer/releases)
 
 The app checks for a newer release in the background on start — nothing waits on
 it, and if one is out you get a notice with a link to it. **OK** dismisses that
