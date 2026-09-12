@@ -20,7 +20,7 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 - **Raw hex view.** The Structure panel has a toggle at the right of its title bar that swaps the section tree for the file as a hex editor shows it — offset, sixteen bytes, ASCII — over the whole DAT, windowed so a 9 MB zone file scrolls without mapping its half a million rows
 
 ### Settings
-- **DAT Lists ’ "Local lists only — don’t update at startup".** The startup check is content-addressed and the published copy always wins, so a list edited in the lists folder to check it before publishing was overwritten a second into every launch. The box skips the check and reads the folder as-is; "Check for list updates" still syncs when pressed, and the folder path and an open-folder button sit beside it
+- **DAT Lists › "Local lists only — don’t update at startup".** The startup check is content-addressed and the published copy always wins, so a list edited in the lists folder to check it before publishing was overwritten a second into every launch. The box skips the check and reads the folder as-is; "Check for list updates" still syncs when pressed, and the folder path and an open-folder button sit beside it
 
 ### Lists
 - The baked lists are synced from xi-tools: the Rabbit row that pointed at an Elvaan Bishop (`ROM/3/108`, a typo for `ROM/4/108`) and the "Phanauet Channel - 1" map that was an NPC model are gone, along with 170 effect rows that could never play — four-byte stubs, empty shells, zone files, and the four 2009 add-on categories whose effect index had been resolved as an absolute file id
