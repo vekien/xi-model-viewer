@@ -86,10 +86,15 @@ export function classifyDat(buffer, path = '') {
   const counts = sectionTypeCounts(bytes);
   if (counts) {
     const has = (t) => (counts.get(t) ?? 0) > 0;
+    // Skinned actors (NPCs, PCs, gear, monsters). Tested BEFORE the zone
+    // sections: 23 DATs game-wide carry both a skeleton/mesh and zone
+    // placements (the Sunbreeze and Harvest Festival NPCs, Lair Reive,
+    // ROM/146/71, ROM9/2/49 …), and every one of them is a model — no entry in
+    // zones.json has a 0x29/0x2A. With the zone test first they all opened as a
+    // Zone that draws nothing.
+    if (has(0x29) || has(0x2a)) return { kind: 'entity', label: 'Model' };
     // Zone geometry / placements win over everything else in the same DAT.
     if (has(0x2e) || has(0x1c)) return { kind: 'zone', label: 'Zone' };
-    // Skinned actors (NPCs, PCs, gear, monsters).
-    if (has(0x29) || has(0x2a)) return { kind: 'entity', label: 'Model' };
     // Spell/ability VFX: routines + particle generators/meshes.
     if (has(0x07) && (has(0x05) || has(0x1f) || has(0x19))) {
       return { kind: 'effect', label: 'Effect' };
