@@ -10,9 +10,28 @@ viewport.
   positions by per-joint pose quaternions, so the CPU only evaluates the skeleton
   pose (one quat/trans/scale triplet per joint per frame).
 
+<p align="center">
+  <a href="https://github.com/vekien/xi-model-viewer/releases/latest/download/xi-model-viewer.exe">
+    <img alt="Download xi-model-viewer.exe (Windows, latest release)" src="https://img.shields.io/badge/%E2%AC%87%20Download%20for%20Windows-xi--model--viewer.exe-2ea44f?style=for-the-badge&logo=windows&logoColor=white">
+  </a>
+  &nbsp;
+  <a href="https://github.com/vekien/xi-model-viewer/releases/latest">
+    <img alt="Latest release" src="https://img.shields.io/github/v/release/vekien/xi-model-viewer?style=for-the-badge&label=Latest&color=555">
+  </a>
+</p>
+
 ## Download
 
-Get the latest release by going to: [Github Releases](https://github.com/vekien/xi-model-viewer/releases)
+**Windows:** [**⬇ Download xi-model-viewer.exe**](https://github.com/vekien/xi-model-viewer/releases/latest/download/xi-model-viewer.exe)
+— one ~38 MB file, no installer. That link always points at the exe on the
+newest release; save it anywhere and run it.
+
+**Linux:** grab the `.deb` or `.AppImage` from the
+[latest release](https://github.com/vekien/xi-model-viewer/releases/latest) —
+see [Linux](#linux) below for which one to pick.
+
+Every release also carries a `SHA256SUMS` file covering all of its assets, and
+the full history is on the [Releases](https://github.com/vekien/xi-model-viewer/releases) page.
 
 The app checks for a newer release in the background on start — nothing waits on
 it, and if one is out you get a notice with a link to it. **OK** dismisses that
