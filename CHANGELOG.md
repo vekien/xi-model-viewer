@@ -10,6 +10,12 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [1.6.0] — 2026-09-12
+
+[Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.5.0...v1.6.0)
+
 ### Zones
 - **Region Culling is gone.** It drew only the objects the zone’s own visibility set lists for the region the camera stands in — the client’s occlusion, applied to a free camera. The region was resolved from the orbit target, which in fly mode is wherever the initial fit left it and never moves, so any zone whose centre sat inside one region’s box was cut down to that region from every camera position: Qufim Island lost 1,315 of its 1,756 objects and Beadeaux was one floating chunk. A viewer wants the whole zone, so the View item, the setting and the 0x1C visibility-set decode behind it are removed rather than repaired
 - **NPCs and monsters are framed on the pose you see.** Reset Camera and F measured the model in its rest pose and aimed at the rest-pose hips, which is fine for a standing character and wrong for a monster whose idle is nowhere near rest — the Sea Monk’s idle lifts its body two units above its rest box, so the camera aimed below it and the model left through the top of the frame. The frame is now measured at frame 0 of the clip on screen, and a model without a race skeleton is framed on its box centre rather than on whatever its rig calls joint 1
