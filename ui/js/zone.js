@@ -454,8 +454,6 @@ function parseZoneDef(bytes, dv, section, table1) {
     placements.push({
       meshId,
       index: i,   // stable DAT object index — lets edits target the EXACT instance of a shared mesh name
-      // Region-visibility set pointer at +0x48 (see parsePvsRegions).
-      regionPtr: stride >= OBJ_STRIDE_MODERN ? (dv.getUint32(b + 0x48, true) || 0) : 0,
       // Sub-area id at +0x50 in the modern 0x64 record; absent on 0x54 proto.
       // Same id space as the 0x36 'm' trigger volumes — verified equal set on
       // every zone that has any (Ru'Aun 524–539, Lower Jeuno 454–466, …).
@@ -471,43 +469,6 @@ function parseZoneDef(bytes, dv, section, table1) {
     });
   }
   return placements;
-}
-
-// ── 0x1C region visibility sets ("PVS") ─────────────────────────────────────
-// Record +0x48 points (section-relative) at `count:u32` followed by `count`
-// object indices: the potentially-visible set for the region that object sits
-// in. The client draws exactly one of these at a time, picked by where the
-// camera is, which is why a zone can carry two copies of the same geometry
-// without ever showing both — Ru'Aun's `m_bri_pol` is in ten far-region lists
-// and the `bri_pol_h` it sits inside is in three near ones, never together.
-//
-// 246 retail zones ship these; dungeons use them as room occlusion (Pso'Xja
-// 202 regions, Gusgen 122), open zones as distance culling. Objects sharing a
-// pointer are one region, and their placements bound it.
-function parsePvsRegions(dv, section, placements) {
-  const ds = section.dataStart;
-  const sectionEnd = section.start + section.size;
-  const n = placements.length;
-  const byPtr = new Map();
-  for (const p of placements) {
-    const ptr = p.regionPtr;
-    if (!ptr) continue;
-    const seen = byPtr.get(ptr);
-    if (seen) { seen.owners.push(p.index); continue; }
-    const base = ds + ptr;
-    if (base + 4 > sectionEnd) continue;
-    const count = u32at(dv, base);
-    // Hostile input: a bogus pointer must not allocate a huge set.
-    if (count < 1 || count > n || base + 4 + count * 4 > sectionEnd) continue;
-    const members = new Set();
-    for (let k = 0; k < count; k++) {
-      const v = u32at(dv, base + 4 + k * 4);
-      if (v < n) members.add(v);
-    }
-    if (!members.size) continue;
-    byPtr.set(ptr, { ptr, members, owners: [p.index] });
-  }
-  return [...byPtr.values()];
 }
 
 /**
@@ -1036,11 +997,8 @@ export function parseZone(datBuffer, keyTables) {
 
   let placements = [];
   let collision = null;
-  let pvsRegions = [];
   for (const s of sections) if (s.typeCode === 0x1C) {
     const all = parseZoneDef(bytes, dv, s, table1);  // decrypts the 0x1C in place
-    // Region sets index the FULL table, so build them before filtering.
-    pvsRegions = parsePvsRegions(dv, s, all);
     // Filter placements hidden by xi's delete mechanism (moved to y ≈ -100000).
     // Without this, hidden "deleted" duplicates load as real placements, occupy a
     // Three.js .NNN suffix, and confuse the adopt-or-reinstantiate logic on restore.
@@ -1078,6 +1036,6 @@ export function parseZone(datBuffer, keyTables) {
 
   return {
     meshes, meshNames, placements, textures, meshIdToName, meshSections,
-    collision, interactions, subAreas, weatherSky, pvsRegions,
+    collision, interactions, subAreas, weatherSky,
   };
 }

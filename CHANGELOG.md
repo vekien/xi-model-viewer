@@ -10,7 +10,8 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ## [Unreleased]
 
-_Nothing yet._
+### Zones
+- **Region Culling is gone.** It drew only the objects the zone’s own visibility set lists for the region the camera stands in — the client’s occlusion, applied to a free camera. The region was resolved from the orbit target, which in fly mode is wherever the initial fit left it and never moves, so any zone whose centre sat inside one region’s box was cut down to that region from every camera position: Qufim Island lost 1,315 of its 1,756 objects and Beadeaux was one floating chunk. A viewer wants the whole zone, so the View item, the setting and the 0x1C visibility-set decode behind it are removed rather than repaired
 
 ## [1.5.0] — 2026-09-11
 

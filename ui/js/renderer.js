@@ -4661,9 +4661,9 @@ export class Renderer {
     if (!spinners?.length) return;
     for (const sp of spinners) {
       // The wheel's Objects row is this spinner's row — the static pass skips
-      // it — so its eye (and PVS/drag hiding) has to gate the live copy too.
+      // it — so its eye (and drag hiding) has to gate the live copy too.
       const pl = sp.placement;
-      if (pl && (pl.userHidden || pl.dragHidden || pl.pvsHidden)) continue;
+      if (pl && (pl.userHidden || pl.dragHidden)) continue;
       const angle = this.zoneSpinnerAngle * (sp.spinY || 0);
       for (const draw of bakeSpinnerDraws(sp, angle)) {
         const batch = this.buildZoneBatch(draw);

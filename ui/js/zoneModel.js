@@ -634,8 +634,6 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
     zoneBounds,
     zonePlacements,
     objectGroups,
-    pvsRegions: buildPvsRegions(parsed.pvsRegions, zonePlacements),
-    activeRegion: null,
     // Local mesh prims for Live Selection triangle picks (name → prim[]).
     zoneMeshes: meshes,
     collision,
@@ -725,88 +723,6 @@ export function bakeSpinnerDraws(spinner, angleY = 0) {
   return out;
 }
 
-// ── region visibility (PVS) ─────────────────────────────────────────────────
-// parseZone hands back the raw sets (object indices + the objects that own each
-// one). Give every region the display-space box its owners occupy so a camera
-// position can be resolved to a region, and keep the member set for the cull.
-function buildPvsRegions(raw, zonePlacements) {
-  if (!raw?.length) return [];
-  const boundsByIndex = new Map();
-  for (const p of zonePlacements) {
-    if (p.index >= 0 && p.bounds) boundsByIndex.set(p.index, p.bounds);
-  }
-  const out = [];
-  for (const r of raw) {
-    let min = [Infinity, Infinity, Infinity];
-    let max = [-Infinity, -Infinity, -Infinity];
-    let n = 0;
-    for (const i of r.owners) {
-      const b = boundsByIndex.get(i);
-      if (!b) continue;
-      n++;
-      for (let a = 0; a < 3; a++) {
-        if (b.min[a] < min[a]) min[a] = b.min[a];
-        if (b.max[a] > max[a]) max[a] = b.max[a];
-      }
-    }
-    if (!n) continue;
-    const volume = (max[0] - min[0]) * (max[1] - min[1]) * (max[2] - min[2]);
-    out.push({ ptr: r.ptr, members: r.members, bounds: { min, max }, volume, ownerCount: n });
-  }
-  return out;
-}
-
-/**
- * Region the point stands over, or null for "no region — draw everything".
- *
- * A region's box is the extent of the objects that own it, so it hugs the
- * geometry: an exact containment test almost never fires for a viewer camera,
- * which sits above and outside. XZ is therefore tested exactly and Y with the
- * box's own height as slack, so hovering over an island counts as being on it
- * while looking at a zone from altitude does not. Nested boxes resolve to the
- * smallest, so a room wins over the corridor around it.
- *
- * Falling back to the *nearest* region when outside them all would be wrong:
- * regions need not tile a zone. North Gustaberg carries a single 206-object set
- * among 4654 placements, and snapping to it would erase the zone.
- */
-export function pickPvsRegion(model, point) {
-  const regions = model?.pvsRegions;
-  if (!regions?.length || !point) return null;
-  let best = null;
-  for (const r of regions) {
-    const { min, max } = r.bounds;
-    if (point[0] < min[0] || point[0] > max[0]) continue;
-    if (point[2] < min[2] || point[2] > max[2]) continue;
-    const padY = Math.max(20, max[1] - min[1]);
-    if (point[1] < min[1] - padY || point[1] > max[1] + padY) continue;
-    if (!best || r.volume < best.volume) best = r;
-  }
-  return best;
-}
-
-/**
- * Mark every world placement outside `region` as `pvsHidden` (null region =
- * draw everything). Returns true when something changed, i.e. the caller needs
- * a rebuildZoneDraws + reloadZoneBatches.
- */
-export function applyPvsRegion(model, region) {
-  const list = model?.zonePlacements;
-  if (!list) return false;
-  const members = region?.members ?? null;
-  let changed = false;
-  for (const p of list) {
-    // World geometry and sub-area sets are region-gated — both carry a DAT index
-    // the sets refer to. Sky/water/unplaced/collision rows carry their own
-    // visibility instead and never appear in a set.
-    const gated = p.kind == null || p.kind === 'subarea';
-    const hide = !!members && gated && p.index >= 0 && !members.has(p.index);
-    if (!!p.pvsHidden !== hide) { p.pvsHidden = hide; changed = true; }
-  }
-  model.activeRegion = region?.ptr ?? null;
-  return changed;
-}
-
 /** Strip leveleditor `game/` prefix → path relative to the install root. */
 export function zoneDatRelPath(zonePath) {
   return String(zonePath || '')
@@ -881,7 +797,7 @@ export function rebuildZoneDraws(model) {
     // Same for a mesh the spinner pass turns (the windmill wheel): a static
     // copy here would sit inside the turning one, permanently out of phase.
     if (p.spinner) continue;
-    if (p.dragHidden || p.userHidden || p.pvsHidden) continue;
+    if (p.dragHidden || p.userHidden) continue;
     if (!p.mesh) continue;
     const prims = meshes.get(p.mesh);
     if (!prims?.length) continue;
@@ -954,7 +870,7 @@ export function buildPlacementDraws(model, placement) {
   // Temporary mini-model path via rebuild helper with one placement.
   const tmp = {
     zoneMeshes: model.zoneMeshes,
-    zonePlacements: [{ ...placement, kind: null, dragHidden: false, pvsHidden: false }],
+    zonePlacements: [{ ...placement, kind: null, dragHidden: false }],
     textures: model.textures,
     zoneStats: {},
   };

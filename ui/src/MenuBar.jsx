@@ -41,7 +41,6 @@ const MENUS = [
       { id: 'toggle-navmesh', label: 'Toggle Navmesh', icon: 'polyline', check: 'navmesh', disableWhen: 'noNavmesh' },
       { id: 'toggle-sound-markers', label: 'Toggle Sound Markers', icon: 'sound_detection_loud_sound', check: 'soundMarkers' },
       { id: 'toggle-skybox', label: 'Toggle Skybox', icon: 'cloud', check: 'skybox', disableWhen: 'noSkybox' },
-      { id: 'toggle-region-cull', label: 'Toggle Region Culling', icon: 'visibility_lock', check: 'regionCull', disableWhen: 'noRegions' },
       { id: 'toggle-effects', label: 'Toggle Effects', icon: 'auto_awesome', check: 'effects' },
       { id: 'toggle-npcs', label: 'Toggle NPCs (Experimental)', icon: 'groups', check: 'npcs', disableWhen: 'noZone' },
       { id: 'toggle-axes', label: 'Toggle Axes', icon: 'open_with', check: 'axes' },
@@ -69,7 +68,7 @@ const MENUS = [
 ];
 
 /** Quick-toggle strip next to the menus — View checks minus a few menu-only items. */
-const TOOLBAR_SKIP = new Set(['toggle-blend-lequal', 'toggle-region-cull', 'toggle-ortho']);
+const TOOLBAR_SKIP = new Set(['toggle-blend-lequal', 'toggle-ortho']);
 const VIEW_TOOLBAR = MENUS.find((m) => m.label === 'View').items
   .filter((i) => i.toolbarSep || (i.check && !TOOLBAR_SKIP.has(i.id)));
 

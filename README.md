@@ -62,7 +62,6 @@ instead (`pacman -S vgmstream`, or build it) — everything else works without i
 - Zone BGM and ambient sound effects play with it; adjustable brightness and scene background.
 - Object browser groups every placement by kind (sky, water, collision, sub-areas, unplaced), with per-object and per-group visibility, plus the zone's VFX and sound groups.
 - **Live Selection** — click an object in the world, drag it on an XYZ gizmo, undo.
-- **Region Culling** — draw only what the zone's own PVS regions say is visible.
 - **Enable LOD** — draw objects at the detail level the zone actually placed them at.
 - **Toggle NPCs** — stand the server's NPC placements (from CatsEyeXI's `npc_list`) on the zone, each at its position and heading, wearing its look.
 

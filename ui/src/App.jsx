@@ -62,7 +62,7 @@ import { armGeneratorPreview } from '../js/particlePreview.js';
 import { checkForUpdate, checkForUpdateManual, dismissUpdate } from '../js/update.js';
 import {
   zoneDatRelPath, zoneToModel, rebuildZoneDraws, buildPlacementDraws, translatePlacementDisplay,
-  clonePlacementPose, applyPlacementPose, posesEqual, pickPvsRegion, applyPvsRegion,
+  clonePlacementPose, applyPlacementPose, posesEqual,
   yieldPlacementsToEffects, setZoneLodMode,
 } from '../js/zoneModel.js';
 import { pickZoneAt, pickZoneGroundAt, pickActorAt } from '../js/zonePick.js';
@@ -1271,14 +1271,6 @@ export default function App({ launch = null }) {
   const [zoneBrightness, setZoneBrightness] = useState(0); // 0 = zone default, 1 = unlit
   const [showCollision, setShowCollision] = useState(false);
   const [showEffects, setShowEffects] = useState(true);
-  // Region culling: draw only the MZB visibility set for the region the camera
-  // is in, the way the client does. Off = every placement at once, which is
-  // what a viewer wants for an overview but stacks the far-region copies of
-  // geometry that zones like Ru'Aun Gardens carry.
-  const [regionCull, setRegionCull] = useState(() => localStorage.getItem('regionCull') !== '0');
-  const regionCullRef = useRef(regionCull);
-  regionCullRef.current = regionCull;
-  const [hasRegions, setHasRegions] = useState(false);
   // Camera readouts for the toolbar. Fly speed is mirrored from the camera each
   // frame; FOV is owned here and pushed down, since nothing else writes it.
   const [flySpeed, setFlySpeed] = useState(0);
@@ -1826,24 +1818,6 @@ export default function App({ launch = null }) {
     let shownFps = -1;
     let fpsFrames = 0;
     let fpsWindowStart = last;
-    let lastRegionCheck = 0;
-    // Resolve the camera to an MZB visibility set and re-bake only when the
-    // region actually changes — you have to cross a region boundary for that,
-    // so the steady-state cost is one box test per region every 150 ms.
-    const updateRegions = () => {
-      const model = modelRef.current;
-      if (!model || model.kind !== 'zone' || !model.pvsRegions?.length) return;
-      const want = regionCullRef.current ? pickPvsRegion(model, renderer.camera.target) : null;
-      if ((want?.ptr ?? null) === (model.activeRegion ?? null)) return;
-      if (!applyPvsRegion(model, want)) return;
-      rebuildZoneDraws(model);
-      renderer.reloadZoneBatches(model);
-      // Culling can drop two thirds of a zone, so say so rather than leaving it
-      // looking like geometry went missing.
-      setStatusText(want
-        ? `Region ${model.pvsRegions.indexOf(want) + 1}/${model.pvsRegions.length} — ${want.members.size} objects visible`
-        : 'No region — drawing every object');
-    };
     const frame = (now) => {
       raf = requestAnimationFrame(frame);
       // FPS cap (0 = uncapped): skip the draw when under the target interval.
@@ -1859,7 +1833,6 @@ export default function App({ launch = null }) {
         renderer.camera.flyUpdate(dt, heldKeys.current);
       }
       if (!renderer.camera.sequenceLock) renderer.camera.rollUpdate?.(dt, heldKeys.current);
-      if (now - lastRegionCheck > 150) { lastRegionCheck = now; updateRegions(); }
       renderer.render(dt);
       // Screenshot: the context has no preserveDrawingBuffer, so the pixels
       // must be read in the same task as the draw — toBlob copies the bitmap
@@ -3720,7 +3693,6 @@ export default function App({ launch = null }) {
       );
       const hasSky = !!skyDome || hasClouds;
       setHasCollision(!!model.collision?.positions?.length);
-      setHasRegions(!!model.pvsRegions?.length);
       setHasSkybox(hasSky);
       setWeatherList(envs ? listWeathers(envs) : []);
       setWeather(weather0 || '');
@@ -8361,13 +8333,6 @@ export default function App({ launch = null }) {
       case 'toggle-skybox':
         setSkybox(!showSkybox);
         break;
-      case 'toggle-region-cull':
-        setRegionCull((v) => {
-          const next = !v;
-          try { localStorage.setItem('regionCull', next ? '1' : '0'); } catch { /* quota */ }
-          return next;
-        });
-        break;
       case 'toggle-axes':
         setShowAxes((v) => {
           const next = !v;
@@ -9371,14 +9336,12 @@ export default function App({ launch = null }) {
           navmesh: showNavmesh,
           soundMarkers: showSoundMarkers,
           skybox: showSkybox,
-          regionCull,
           effects: showEffects,
           axes: showAxes,
           grid: showGrid,
           npcs: showNpcs,
           noZone: !modelInfo?.zone,
           noCollision: !hasCollision,
-          noRegions: !hasRegions,
           noNavmesh: !hasNavmesh,
           noSkybox: !hasSkybox,
           noHdPath: !settings?.hdPath,

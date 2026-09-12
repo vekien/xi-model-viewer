@@ -193,7 +193,7 @@ export function pickZonePlacement(placements, origin, dir, meshes = null) {
     // sky rows are particle-system geometry with no zone batch at all, and the
     // ocean shells are zone-wide planes that would swallow every click.
     if (p.kind === 'sky' || p.kind === 'water') continue;
-    if (p.userHidden || p.dragHidden || p.pvsHidden) continue;
+    if (p.userHidden || p.dragHidden) continue;
     const b = p.bounds;
     if (!b?.min || !b?.max) continue;
     const m = boundsMetrics(b.min, b.max);
@@ -289,7 +289,7 @@ export function raycastZoneGround(model, origin, dir) {
   if (bestT === Infinity && model.zonePlacements?.length && model.zoneMeshes) {
     for (const p of model.zonePlacements) {
       if (p.kind === 'sky' || p.kind === 'water') continue;
-      if (p.userHidden || p.dragHidden || p.pvsHidden) continue;
+      if (p.userHidden || p.dragHidden) continue;
       const b = p.bounds;
       if (b?.min && b?.max && rayAabb(origin, dir, b.min, b.max) == null) continue;
       const t = rayPlacementMeshAll(origin, dir, p, model.zoneMeshes);
