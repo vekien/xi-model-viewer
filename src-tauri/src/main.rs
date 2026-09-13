@@ -680,7 +680,7 @@ fn xi_setup(folder: String, install: bool) -> XiSetupReport {
 
 #[tauri::command]
 fn pick_file(initial: Option<String>) -> Option<String> {
-    let mut dialog = rfd::FileDialog::new().set_title("Select the xi executable");
+    let mut dialog = rfd::FileDialog::new().set_title("Open a DAT file");
     if let Some(p) = initial {
         if let Some(dir) = Path::new(&p).parent() {
             if dir.is_dir() {

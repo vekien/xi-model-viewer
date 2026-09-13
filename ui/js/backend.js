@@ -11,6 +11,21 @@ async function tauriInvoke(cmd, args) {
   return window.__TAURI__.core.invoke(cmd, args);
 }
 
+// One native picker at a time. They block until the user answers, so a second
+// request while one is open would stack another dialog on top of it and the
+// user would be answering pickers they never asked for. Late callers get null,
+// the same as a cancel.
+let pickerOpen = false;
+async function pickOnce(cmd, initial) {
+  if (!isTauri() || pickerOpen) return null;
+  pickerOpen = true;
+  try {
+    return await tauriInvoke(cmd, { initial: initial || null });
+  } finally {
+    pickerOpen = false;
+  }
+}
+
 export const backend = {
   /**
    * Scale the whole UI (1 = 100%). In Tauri this is real webview zoom — same as
@@ -95,8 +110,7 @@ export const backend = {
 
   /** Native folder picker. Returns the chosen path, or null (cancelled / browser mode). */
   async pickFolder(initial) {
-    if (!isTauri()) return null;
-    return tauriInvoke('pick_folder', { initial: initial || null });
+    return pickOnce('pick_folder', initial);
   },
 
   /** Decodes any .bgw/.spw (incl. ATRAC3) to WAV bytes via bundled vgmstream. */
@@ -263,8 +277,7 @@ export const backend = {
   },
 
   async pickToolsFolder(initial) {
-    if (!isTauri()) return null;
-    return tauriInvoke('pick_tools_folder', { initial: initial || null });
+    return pickOnce('pick_tools_folder', initial);
   },
 
   /** Listen for tools-progress events during install. Returns unlisten fn. */
@@ -283,10 +296,9 @@ export const backend = {
     });
   },
 
-  /** Native file picker (Tauri only). Returns the chosen path or null. */
+  /** Native file picker (Tauri only) for opening a DAT. Returns the chosen path or null. */
   async pickFile(initial) {
-    if (!isTauri()) return null;
-    return tauriInvoke('pick_file', { initial: initial || null });
+    return pickOnce('pick_file', initial);
   },
 
   /** Writes bytes to a file (creates parent dirs). */
