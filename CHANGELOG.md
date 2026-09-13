@@ -12,6 +12,26 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 _Nothing yet._
 
+## [1.6.1] — 2026-09-13
+
+[Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.6.0...v1.6.1)
+
+Hotfix for the 10 September 2026 retail update.
+
+### Database
+- **Item tables from the 10 September 2026 retail update decode.** That update grew every item record from `0xC00` to `0x1400` bytes and widened the header, so a patched client's item tables came up empty. The record stride is now detected per file and the header offsets follow it, so a legacy install and a current retail one show the same rows; the icon and hex view read the block at the right stride, including for JSON baked by an older `xi mv database` (legacy by construction) and by the current one (which records the stride)
+- The new item table `ROM/387/14` / `ROM/387/13` (ids 30720–31743, added by the same update) is registered but kept out of the Database tree until it holds a real item — every slot is a placeholder today, and a legacy install has no such file. The DAT browser still recognises the two files
+
+### DAT Browser
+- **Item tables are recognised.** A file the Database registry names is badged Items / Armor / Weapons and opens as an item table with its format in the label; any other file laid out as item records (either stride, `0xFF`-terminated) is badged Item table too instead of Unknown DAT
+- **String tables are badged Strings**: the d_msg tables, the `XISTRING` menu-string pools under `ROM/97`, and the monster ability name tables `ROM/27/79–80` (which share the zone dialog format and used to read as Dialog). The emote command table and the two small lookup tables at file ids 96–98 (`ROM/327/122`, `ROM/384/118–119`) are badged Data
+
+### Lists
+- Synced from xi-tools: the **Colibri Scythe** (main-hand model 969, added by the same update) for all seven races
+
+### DAT Browser
+- **The file picker says what it opens.** The Browse button and File > Open DAT shared a native picker still titled "Select the xi executable" from when it did pick the xi executable, which read as the app demanding xi.exe. It is titled "Open a DAT file" now, and only one picker can be open at a time — a second request while one is up gets a cancel instead of a stacked dialog
+
 ## [1.6.0] — 2026-09-12
 
 [Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.5.0...v1.6.0)
