@@ -616,7 +616,7 @@ function DetailCard({ row, entry, table, lang, settings, fileIdOf, onStatus }) {
     if (!isItem) { setBlock(null); return undefined; }
     setBlock(null);
     partBuffer(entry, row.part ?? 0, settings)
-      .then((buf) => { if (alive && buf) setBlock(itemBlockAt(buf, row.idx)); })
+      .then((buf) => { if (alive && buf) setBlock(itemBlockAt(buf, row.idx, row.stride)); })
       .catch(() => {});
     return () => { alive = false; };
   }, [row, entry, isItem, settings]);

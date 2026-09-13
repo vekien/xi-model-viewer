@@ -6,6 +6,9 @@
 //     downloaded update labels the rows too, not just the copy baked in
 //   • the merged FTABLE id map (path → file_id) the browser loads anyway
 //   • the static gear tables + zone-id math in js/dat/
+//   • the record tables the Database page decodes (item tables → Items /
+//     Armor / Weapons, d_msg tables → Strings) and a short list of string and
+//     lookup DATs (js/dat/known.js)
 //
 // A miss is normal and returns null — an unlisted DAT stays unlabelled rather
 // than guessing. Only classifyDat() (which reads the bytes) is authoritative;
@@ -15,6 +18,7 @@ import { ENTITY_MODEL_OFFSET, RACE_SKELETON_RELS, gearIndex } from './dat/modeli
 import { matchTablePath } from './dat/ftable.js';
 import { zoneForFileId } from './dat/zonedat.js';
 import { loadListOrNull } from './lists.js';
+import { knownDatLabels } from './dat/known.js';
 
 /**
  * Normalize any DAT reference — absolute, game-relative, `game/…`-prefixed,
@@ -129,6 +133,10 @@ export function makeDatTypeLookup(listIndex, byPath) {
 
     const listed = listIndex?.get(key);
     if (listed) return listed;
+
+    // Record tables the Database page decodes, string pools, lookup tables.
+    const known = knownDatLabels().get(key);
+    if (known) return known;
 
     // Before the extension rules — a USER save's .DAT/.TTL is not a table.
     if (key.includes('/USER/')) return 'Save';

@@ -1,9 +1,9 @@
 {
- "generated": "2026-09-11T23:26:16Z",
+ "generated": "2026-09-13T13:36:34Z",
  "files": {
   "characters.json": {
-   "sha256": "7030172799964641c4fa54818ad0f3d2beac1e6745d2de39936626b819c13cf7",
-   "bytes": 5470086
+   "sha256": "9a3dfd393876a4ff4dceb4775562bfd707592b9e8f4376582e1883afd159daf8",
+   "bytes": 5471430
   },
   "effects.json": {
    "sha256": "9a8a98c4805203ee1b379bb249c92acfe85075be9143c94af3be5afa62eac49a",

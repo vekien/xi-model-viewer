@@ -3,9 +3,14 @@
  *
  * Two record formats live here:
  *
- *  - Item DATs — fixed 0xC00-byte blocks, each byte rotated left 3 bits
- *    (Windower's ResourceExtractor calls the inverse "rotate right 5"). The
- *    plaintext block is a small typed header (layout differs per category:
+ *  - Item DATs — fixed-size blocks, each byte rotated left 3 bits (Windower's
+ *    ResourceExtractor calls the inverse "rotate right 5"). A legacy install
+ *    (any client before the 10 September 2026 update) uses 0xC00-byte blocks;
+ *    retail since that update uses 0x1400-byte blocks with a wider header
+ *    (flags became a u32, and the equipment layouts gained a pad after races).
+ *    The stride is detected per file (detectItemStride) and the header
+ *    offsets follow it (HEADER_OFFSETS), so both installs decode the same.
+ *    The plaintext block is a small typed header (layout differs per category:
  *    weapons keep DMG/Delay, armor keeps Level/Slots/Jobs, …), a string block
  *    (u32 count, count × {offset u32, flag u32}; flag 0 = text sub-string
  *    with a 0x1C prefix, flag 1 = a bare number) and, at 0x280, the 32×32
@@ -66,6 +71,14 @@ export const ITEM_TABLES = [
   {
     key: 'monst1', label: 'Monstrosity Instincts', layout: 'instinct',
     parts: [{ en: 'ROM/288/80.DAT', jp: 'ROM/288/79.DAT', range: [29696, 30719] }],
+  },
+  {
+    // Added by the 10 September 2026 retail update: a fresh 1024-slot general
+    // table, all placeholders at launch. A legacy install has no such file.
+    // Hidden from the Database tree until the table has a real entry; the
+    // registry row stays so the DAT browser can badge and open the files.
+    key: 'items7', label: 'Items 7 (Sept 10, 2026)', layout: 'general', hidden: true,
+    parts: [{ en: 'ROM/387/14.DAT', jp: 'ROM/387/13.DAT', range: [30720, 31743] }],
   },
   {
     key: 'roeObj', label: 'RoE Objectives', layout: 'roe',
@@ -175,11 +188,11 @@ export const DMSG_GROUPS = [
   },
 ];
 
-/** Tree shown in the explorer: Items then the d_msg groups. */
+/** Tree shown in the explorer: Items then the d_msg groups. `hidden` tables stay out of it. */
 export const DB_TREE = [
   {
     key: 'items', label: 'Items', icon: 'inventory_2',
-    tables: ITEM_TABLES.map((t) => ({ ...t, kind: 'items' })),
+    tables: ITEM_TABLES.filter((t) => !t.hidden).map((t) => ({ ...t, kind: 'items' })),
   },
   ...DMSG_GROUPS.map((g) => ({ ...g, tables: g.tables.map((t) => ({ ...t, kind: 'dmsg' })) })),
 ];
@@ -271,8 +284,105 @@ export function flagsLabel(flags) {
 
 // ── bytes & text ────────────────────────────────────────────────────────────
 
+/** Legacy record stride — every client before the 10 September 2026 update. */
 export const ITEM_BLOCK = 0xc00;
+/** Retail record stride from 10 September 2026 on. */
+export const ITEM_BLOCK_RETAIL = 0x1400;
+export const ITEM_STRIDES = [ITEM_BLOCK_RETAIL, ITEM_BLOCK];
 const ICON_OFFSET = 0x280;
+/** Every record ends in 0xFF — before and after the rotate cipher. */
+const RECORD_TERMINATOR = 0xff;
+
+export function itemFormat(stride) {
+  return stride === ITEM_BLOCK_RETAIL ? 'retail' : 'legacy';
+}
+
+function terminatorRatio(bytes, stride) {
+  const count = Math.floor(bytes.length / stride);
+  if (!count) return 0;
+  let hits = 0;
+  for (let i = stride - 1; i < bytes.length; i += stride) if (bytes[i] === RECORD_TERMINATOR) hits++;
+  return hits / count;
+}
+
+function idsSequential(bytes, stride, probe = 8) {
+  const count = Math.min(probe, Math.floor(bytes.length / stride));
+  if (count < 2) return false;
+  let prev = null;
+  for (let k = 0; k < count; k++) {
+    const o = k * stride;
+    const id = decodeItemBlock(bytes.subarray(o, o + 4));
+    const v = (id[0] | (id[1] << 8) | (id[2] << 16) | (id[3] << 24)) >>> 0;
+    if (prev != null && v !== prev + 1) return false;
+    prev = v;
+  }
+  return true;
+}
+
+/**
+ * Record stride of an item DAT from its bytes: 0x1400 (retail) or 0xC00
+ * (legacy), or 0 when the size fits neither. File size decides when only one
+ * stride divides it; sizes both divide (multiples of 15360) fall back to the
+ * record-terminator census, then to the record ids counting up by one.
+ */
+export function detectItemStride(bytes) {
+  const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const n = u8.length;
+  const cands = ITEM_STRIDES.filter((s) => n >= s && n % s === 0);
+  if (cands.length === 1) return cands[0];
+  if (!cands.length) return 0;
+  const scored = cands.map((s) => [terminatorRatio(u8, s), s]).sort((a, b) => b[0] - a[0]);
+  if (scored[0][0] > 0 && scored[0][0] > scored[1][0]) return scored[0][1];
+  for (const s of cands) if (idsSequential(u8, s)) return s;
+  return ITEM_BLOCK;
+}
+
+/**
+ * Does this look like an item DAT at all? Size fits a stride and the record
+ * terminators are where that stride says (or the ids count up). Used by the
+ * DAT browser's sniff for files the registry does not name.
+ */
+export function sniffItemDat(bytes) {
+  const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const stride = detectItemStride(u8);
+  if (!stride) return 0;
+  if (terminatorRatio(u8, stride) >= 0.5) return stride;
+  return idsSequential(u8, stride) ? stride : 0;
+}
+
+/**
+ * Header field offsets per record format. The retail change is mechanical —
+ * flags widened to a u32 at 0x04 (everything after it moves by 2) and the
+ * equipment layouts gained a 2-byte pad after races (everything after moves
+ * by 4) — but the spots differ per layout, so they are tabulated. Verified
+ * field by field against 30,000+ records present in both formats.
+ */
+const HEADER_OFFSETS = {
+  legacy: {
+    common: { flags: 0x04, stack: 0x06, type: 0x08, resourceId: 0x0a, targets: 0x0c },
+    equip: { level: 0x0e, slots: 0x10, races: 0x12, jobs: 0x14, superiorLevel: 0x18 },
+    armor: { shieldSize: 0x1a, maxCharges: 0x1c, castTime: 0x1e, useDelay: 0x20, reuseDelay: 0x22, itemLevel: 0x26 },
+    weapon: {
+      damage: 0x1c, delay: 0x1e, dps: 0x20, skill: 0x22, jugSize: 0x23,
+      maxCharges: 0x28, castTime: 0x2a, useDelay: 0x2c, reuseDelay: 0x2e, baseItemId: 0x30, itemLevel: 0x32,
+    },
+    usable: { castTime: 0x0e },
+    puppet: { puppetSlot: 0x0e, elementCharge: 0x10 },
+    instinct: { level: 0x0e, instinctCost: 0x18 },
+  },
+  retail: {
+    common: { flags: 0x04, stack: 0x08, type: 0x0a, resourceId: 0x0c, targets: 0x0e },
+    equip: { level: 0x10, slots: 0x12, races: 0x14, jobs: 0x18, superiorLevel: 0x1c },
+    armor: { shieldSize: 0x1e, maxCharges: 0x20, castTime: 0x22, useDelay: 0x24, reuseDelay: 0x26, itemLevel: 0x2a },
+    weapon: {
+      damage: 0x20, delay: 0x22, dps: 0x24, skill: 0x26, jugSize: 0x27,
+      maxCharges: 0x2c, castTime: 0x2e, useDelay: 0x30, reuseDelay: 0x32, baseItemId: 0x34, itemLevel: 0x36,
+    },
+    usable: { castTime: 0x10 },
+    puppet: { puppetSlot: 0x10, elementCharge: 0x14 },
+    instinct: { level: 0x10, instinctCost: 0x1c },
+  },
+};
 
 /** Rotate every byte left by 3 (the client's item "encryption"). */
 export function decodeItemBlock(src, dst = new Uint8Array(src.length)) {
@@ -408,52 +518,61 @@ const i32 = (dv, o) => dv.getInt32(o, true);
 /** Layouts that are real item records (header + strings + icon). */
 export const ITEM_LAYOUTS = new Set(['general', 'usable', 'puppet', 'armor', 'weapon', 'maze', 'instinct', 'roe']);
 
-/** Typed header fields for a decoded block; layout name from ITEM_TABLES. */
-function readItemHeader(dv, layout) {
+/**
+ * Typed header fields for a decoded block; layout name from ITEM_TABLES,
+ * `fmt` the record format ('legacy' | 'retail'). The RoE objective table is
+ * the one layout whose header did not move in the retail update.
+ */
+function readItemHeader(dv, layout, fmt = 'legacy') {
+  const T = (fmt === 'retail' && layout !== 'roe') ? HEADER_OFFSETS.retail : HEADER_OFFSETS.legacy;
+  const c = T.common;
   const h = {
     id: u32(dv, 0x00),
-    flags: u16(dv, 0x04),
-    stack: u16(dv, 0x06),
-    type: u16(dv, 0x08),
-    resourceId: u16(dv, 0x0a),
-    targets: u16(dv, 0x0c),
+    flags: u16(dv, c.flags),
+    stack: u16(dv, c.stack),
+    type: u16(dv, c.type),
+    resourceId: u16(dv, c.resourceId),
+    targets: u16(dv, c.targets),
   };
   if (layout === 'armor' || layout === 'weapon') {
-    h.level = u16(dv, 0x0e);
-    h.slots = u16(dv, 0x10);
-    h.races = u16(dv, 0x12);
-    h.jobs = u32(dv, 0x14);
-    h.superiorLevel = u16(dv, 0x18);
+    const e = T.equip;
+    h.level = u16(dv, e.level);
+    h.slots = u16(dv, e.slots);
+    h.races = u16(dv, e.races);
+    h.jobs = u32(dv, e.jobs);
+    h.superiorLevel = u16(dv, e.superiorLevel);
   }
   if (layout === 'armor') {
-    h.shieldSize = u16(dv, 0x1a);
-    h.maxCharges = u16(dv, 0x1c);
-    h.castTime = u16(dv, 0x1e);
-    h.useDelay = u16(dv, 0x20);
-    h.reuseDelay = u16(dv, 0x22);
-    h.itemLevel = u16(dv, 0x26);
+    const a = T.armor;
+    h.shieldSize = u16(dv, a.shieldSize);
+    h.maxCharges = u16(dv, a.maxCharges);
+    h.castTime = u16(dv, a.castTime);
+    h.useDelay = u16(dv, a.useDelay);
+    h.reuseDelay = u16(dv, a.reuseDelay);
+    h.itemLevel = u16(dv, a.itemLevel);
   } else if (layout === 'weapon') {
-    h.damage = u16(dv, 0x1c);
-    h.delay = u16(dv, 0x1e);
-    h.dps = u16(dv, 0x20);
-    h.skill = dv.getUint8(0x22);
-    h.jugSize = dv.getUint8(0x23);
-    h.maxCharges = u16(dv, 0x28);
-    h.castTime = u16(dv, 0x2a);
-    h.useDelay = u16(dv, 0x2c);
-    h.reuseDelay = u16(dv, 0x2e);
+    const w = T.weapon;
+    h.damage = u16(dv, w.damage);
+    h.delay = u16(dv, w.delay);
+    h.dps = u16(dv, w.dps);
+    h.skill = dv.getUint8(w.skill);
+    h.jugSize = dv.getUint8(w.jugSize);
+    h.maxCharges = u16(dv, w.maxCharges);
+    h.castTime = u16(dv, w.castTime);
+    h.useDelay = u16(dv, w.useDelay);
+    h.reuseDelay = u16(dv, w.reuseDelay);
     // Relic/mythic/empyrean tiers all point at the chain's first item here
     // (every Excalibur → 18276); 0 for everything else.
-    h.baseItemId = u16(dv, 0x30);
-    h.itemLevel = u16(dv, 0x32);
+    h.baseItemId = u16(dv, w.baseItemId);
+    h.itemLevel = u16(dv, w.itemLevel);
   } else if (layout === 'usable') {
-    h.castTime = u16(dv, 0x0e);
+    h.castTime = u16(dv, T.usable.castTime);
   } else if (layout === 'puppet') {
-    h.puppetSlot = u16(dv, 0x0e);
-    h.elementCharge = u32(dv, 0x10);
+    h.puppetSlot = u16(dv, T.puppet.puppetSlot);
+    h.elementCharge = u32(dv, T.puppet.elementCharge);
   } else if (layout === 'instinct') {
-    h.level = u16(dv, 0x0e);
-    h.instinctCost = u16(dv, 0x18);
+    h.level = u16(dv, T.instinct.level);
+    h.instinctCost = u16(dv, T.instinct.instinctCost);
   }
   return h;
 }
@@ -463,10 +582,10 @@ function readItemHeader(dv, layout) {
  * slot. This is exactly what `xi mv database` writes to JSON; hydrateItemRow
  * adds the display fields.
  */
-export function rawItemRow(block, layout, lang = 'en') {
+export function rawItemRow(block, layout, lang = 'en', fmt = itemFormat(block.byteLength)) {
   const dv = new DataView(block.buffer, block.byteOffset, block.byteLength);
   if (ITEM_LAYOUTS.has(layout)) {
-    const h = readItemHeader(dv, layout);
+    const h = readItemHeader(dv, layout, fmt);
     const sb = findStringBlock(dv);
     if (!sb) return null;
     const subs = readStrings(dv, block, sb);
@@ -613,8 +732,8 @@ export function decodeSpecialBlock(block, layout) {
  * the same shape from the JSON database); `part`/`idx` say where the block
  * lives so the icon can be pulled from the DAT later.
  */
-export function hydrateItemRow(raw, layout, part, idx) {
-  const row = { ...raw, part, idx, offset: idx * ITEM_BLOCK, layout };
+export function hydrateItemRow(raw, layout, part, idx, stride = ITEM_BLOCK) {
+  const row = { ...raw, part, idx, offset: idx * stride, stride, format: itemFormat(stride), layout };
   if (ITEM_LAYOUTS.has(layout)) {
     const s = raw.strings || {};
     row.name = typeof s.name === 'string' ? s.name : '';
@@ -643,18 +762,24 @@ export function hydrateItemRow(raw, layout, part, idx) {
   return row;
 }
 
-/** Parse one item DAT (one `part`) into raw rows: [{ idx, raw }]. */
+/**
+ * Parse one item DAT (one `part`) into raw rows: [{ idx, raw }]. The record
+ * stride is detected from the bytes (legacy 0xC00 / retail 0x1400) and
+ * returned so callers can find a row's block again.
+ */
 export function parseItemDatRaw(buffer, layout, lang = 'en') {
   const bytes = new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
-  const count = Math.floor(bytes.length / ITEM_BLOCK);
+  const stride = detectItemStride(bytes) || ITEM_BLOCK;
+  const fmt = itemFormat(stride);
+  const count = Math.floor(bytes.length / stride);
   const out = [];
-  const block = new Uint8Array(ITEM_BLOCK);
+  const block = new Uint8Array(stride);
   for (let i = 0; i < count; i++) {
-    decodeItemBlock(bytes.subarray(i * ITEM_BLOCK, (i + 1) * ITEM_BLOCK), block);
-    const raw = rawItemRow(block, layout, lang);
+    decodeItemBlock(bytes.subarray(i * stride, (i + 1) * stride), block);
+    const raw = rawItemRow(block, layout, lang, fmt);
     if (raw) out.push({ idx: i, raw });
   }
-  return { rows: out, blocks: count };
+  return { rows: out, blocks: count, stride, format: fmt };
 }
 
 /**
@@ -664,21 +789,30 @@ export function parseItemDatRaw(buffer, layout, lang = 'en') {
 export function parseItemTable(buffers, table, lang = 'en') {
   const layout = table.layout || 'general';
   const rows = [];
+  const strides = [];
   let blocks = 0;
   buffers.forEach((buf, part) => {
-    if (!buf) return;
+    if (!buf) { strides.push(null); return; }
     const r = parseItemDatRaw(buf, layout, lang);
+    strides.push(r.stride);
     blocks += r.blocks;
-    for (const { idx, raw } of r.rows) rows.push(hydrateItemRow(raw, layout, part, idx));
+    for (const { idx, raw } of r.rows) rows.push(hydrateItemRow(raw, layout, part, idx, r.stride));
   });
-  return { kind: 'items', layout, rows, blocks, table };
+  const stride = strides.find(Boolean) ?? ITEM_BLOCK;
+  return { kind: 'items', layout, rows, blocks, stride, strides, format: itemFormat(stride), table };
 }
 
-/** Same document from the JSON `xi mv database` wrote. */
+/**
+ * Same document from the JSON `xi mv database` wrote. Older JSON (before the
+ * stride was recorded) is legacy-format by construction.
+ */
 export function itemTableFromJson(json, table) {
   const layout = table.layout || 'general';
-  const rows = (json.rows || []).map((r) => hydrateItemRow(r.raw ?? r, layout, r.part ?? 0, r.idx));
-  return { kind: 'items', layout, rows, blocks: json.blocks ?? rows.length, table };
+  const strides = Array.isArray(json.strides) ? json.strides : [];
+  const stride = json.stride ?? strides.find(Boolean) ?? ITEM_BLOCK;
+  const strideFor = (part) => strides[part] ?? stride;
+  const rows = (json.rows || []).map((r) => hydrateItemRow(r.raw ?? r, layout, r.part ?? 0, r.idx, strideFor(r.part ?? 0)));
+  return { kind: 'items', layout, rows, blocks: json.blocks ?? rows.length, stride, strides, format: itemFormat(stride), table };
 }
 
 /**
@@ -739,12 +873,16 @@ export function decodeItemIcon(block) {
   return { width, height, data: pixels };
 }
 
-/** Decoded block for one row (for the icon and the raw hex view). */
-export function itemBlockAt(buffer, idx) {
+/**
+ * Decoded block for one row (for the icon and the raw hex view). `stride` is
+ * the DAT's record stride; when unknown it is detected from the buffer.
+ */
+export function itemBlockAt(buffer, idx, stride = 0) {
   const bytes = new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
-  const start = idx * ITEM_BLOCK;
-  if (start + ITEM_BLOCK > bytes.length) return null;
-  return decodeItemBlock(bytes.subarray(start, start + ITEM_BLOCK));
+  const step = stride || detectItemStride(bytes) || ITEM_BLOCK;
+  const start = idx * step;
+  if (start + step > bytes.length) return null;
+  return decodeItemBlock(bytes.subarray(start, start + step));
 }
 
 // ── d_msg ───────────────────────────────────────────────────────────────────

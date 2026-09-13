@@ -5,6 +5,8 @@
 import { sniffZoneDat } from './zonedat.js';
 import { matchTablePath } from './ftable.js';
 import { matchUserPath } from './userdat.js';
+import { itemTableForPath, knownDatLabels, knownDatKey } from './known.js';
+import { sniffItemDat, itemFormat } from '../database.js';
 
 const strAt = (bytes, p, n) => {
   let s = '';
@@ -83,6 +85,27 @@ export function classifyDat(buffer, path = '') {
     return { kind: 'data', label: 'd_msg string table', dataKind: 'dmsg' };
   }
 
+  // Item record tables: the ones the Database page knows by path first (so
+  // the label carries the table name), then any file whose bytes are laid out
+  // as item records — 0xC00-byte (legacy) or 0x1400-byte (retail, 10 Sept
+  // 2026) blocks each ending in 0xFF.
+  const itemTable = itemTableForPath(path || lower);
+  if (itemTable) {
+    const stride = sniffItemDat(bytes);
+    const fmt = stride ? ` · ${itemFormat(stride)} 0x${stride.toString(16)}` : '';
+    return {
+      kind: 'data', label: `Item table — ${itemTable.label}${fmt}`, dataKind: 'items',
+      table: itemTable.key, lang: itemTable.lang, stride: stride || null,
+    };
+  }
+  const itemStride = sniffItemDat(bytes);
+  if (itemStride) {
+    return {
+      kind: 'data', label: `Item table (${itemFormat(itemStride)}, 0x${itemStride.toString(16)}-byte records)`,
+      dataKind: 'items', stride: itemStride,
+    };
+  }
+
   const counts = sectionTypeCounts(bytes);
   if (counts) {
     const has = (t) => (counts.get(t) ?? 0) > 0;
@@ -111,6 +134,12 @@ export function classifyDat(buffer, path = '') {
   const zkind = sniffZoneDat(bytes);
   if (zkind) {
     const labels = { npclist: 'NPC list', events: 'Events', dialog: 'Dialog' };
+    // The monster ability name tables share the dialog format but are not
+    // zone dialog; name them from the known-DAT list when it has them.
+    const known = knownDatLabels().get(knownDatKey(path || lower));
+    if (zkind === 'dialog' && known === 'Strings') {
+      return { kind: 'data', label: 'String table (dialog format)', dataKind: zkind };
+    }
     return { kind: 'data', label: labels[zkind] ?? zkind, dataKind: zkind };
   }
 
