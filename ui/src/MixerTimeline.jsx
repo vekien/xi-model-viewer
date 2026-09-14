@@ -18,6 +18,7 @@ const RULER_H = 22;
 const MIN_W = 700;
 const DEFAULT_W = 940;
 const MIN_H = 200;
+const MAX_H = 700;                    // the window fits its content up to this (see #mixer-seq)
 const MIN_LEN = 120;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 8;
@@ -115,6 +116,12 @@ export function TimelineWindow({
   };
   const endDrag = () => { panelDrag.current = null; };
 
+  // Height fits the content (up to MAX_H, see #mixer-seq). The bottom edge can
+  // only pull the window shorter than that — the body then scrolls — never open
+  // a gap below the bar; dragging back down past the content lets it go auto.
+  const headerRef = useRef(null);
+  const bodyRef = useRef(null);
+  const naturalH = () => (headerRef.current?.offsetHeight ?? 0) + (bodyRef.current?.scrollHeight ?? 0);
   const startResize = (axis) => (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -129,10 +136,17 @@ export function TimelineWindow({
     if (r.axis === 'w') {
       setSize((s) => ({ ...s, w: clamp(Math.round(r.w0 + (e.clientX - r.x0)), MIN_W, Math.max(MIN_W, window.innerWidth - 16)) }));
     } else {
-      setSize((s) => ({ ...s, h: clamp(Math.round(r.h0 + (e.clientY - r.y0)), MIN_H, Math.max(MIN_H, window.innerHeight - 16)) }));
+      const cap = Math.min(naturalH(), MAX_H, window.innerHeight - 16);
+      const h = Math.round(r.h0 + (e.clientY - r.y0));
+      setSize((s) => ({ ...s, h: h >= cap ? null : Math.max(MIN_H, h) }));
     }
   };
   const endResize = () => { resizeRef.current = null; };
+  // Content that shrank below a remembered height would leave a gap: let go of it.
+  useEffect(() => {
+    if (!size.h || !open) return;
+    if (size.h >= naturalH()) setSize((s) => ({ ...s, h: null }));
+  });
 
   // Keep the window reachable after a resolution change.
   useEffect(() => {
@@ -359,7 +373,7 @@ export function TimelineWindow({
   if (!open) return null;
   return createPortal(
     <div id="mixer-seq" className="panel" ref={panelRef} style={style}>
-      <div className="cseq-header" onPointerDown={startDrag} onPointerMove={onPanelDrag} onPointerUp={endDrag}>
+      <div className="cseq-header" ref={headerRef} onPointerDown={startDrag} onPointerMove={onPanelDrag} onPointerUp={endDrag}>
         <span className="icon">timeline</span>
         <span className="cseq-title">Timeline</span>
         <span className="mono mseq-name">{recipeName}</span>
@@ -371,7 +385,7 @@ export function TimelineWindow({
         </Tooltip>
       </div>
 
-      <div className="cseq-body">
+      <div className="cseq-body" ref={bodyRef}>
         {failed && (
           <div className="form-error mseq-error" role="alert">
             <span className="icon">error</span>
@@ -522,8 +536,9 @@ export function TimelineWindow({
       <Tooltip content="Resize width" placement="left">
         <div className="cseq-resize" onPointerDown={startResize('w')} onPointerMove={onResizeMove} onPointerUp={endResize} onPointerCancel={endResize} />
       </Tooltip>
-      <Tooltip content="Resize height" placement="top">
-        <div className="mseq-resize-v" onPointerDown={startResize('h')} onPointerMove={onResizeMove} onPointerUp={endResize} onPointerCancel={endResize} />
+      <Tooltip content="Drag to make the window shorter (double-click: fit the content again)" placement="top">
+        <div className="mseq-resize-v" onPointerDown={startResize('h')} onPointerMove={onResizeMove} onPointerUp={endResize} onPointerCancel={endResize}
+          onDoubleClick={() => setSize((s) => ({ ...s, h: null }))} />
       </Tooltip>
     </div>,
     document.body,
