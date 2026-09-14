@@ -1080,16 +1080,16 @@ function GearSetsPanel({ race, sel, slots, races, onApply }) {
 
       <div className="gs-list">
         {BUILTIN_GEARSETS.map((s) => (
-          <div
-            key={s.id}
-            className={`gs-row gs-builtin${activeSet === s.id ? ' on' : ''}`}
-            onClick={() => { setActiveSet(s.id); onApply({ ...s, race }); }}
-            title="Built-in look — slots it doesn't name keep the current pick"
-          >
-            <span className="icon gs-kind">auto_awesome</span>
-            <span className="gs-name">{s.name}</span>
-            <span className="gs-meta">preset</span>
-          </div>
+          <Tooltip key={s.id} content="Built-in look — slots it doesn't name keep the current pick" placement="left">
+            <div
+              className={`gs-row gs-builtin${activeSet === s.id ? ' on' : ''}`}
+              onClick={() => { setActiveSet(s.id); onApply({ ...s, race }); }}
+            >
+              <span className="icon gs-kind">auto_awesome</span>
+              <span className="gs-name">{s.name}</span>
+              <span className="gs-meta">preset</span>
+            </div>
+          </Tooltip>
         ))}
         {sets.length === 0 && !mode && (
           <div className="gs-empty">Save the current look to add your own.</div>

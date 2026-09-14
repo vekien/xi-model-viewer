@@ -11,6 +11,14 @@ import {
 
 const TRACKS = [...LANES, KEEP_LANE];
 const MIN_LEN = 120;
+const SHUFFLE_KINDS = [{ id: 'ws', label: 'WS' }, { id: 'ja', label: 'Ability' }, { id: 'spell', label: 'Spell' }];
+
+/** The lines of a `dats build --dry-run` that name the slot and the DATs — the
+ *  rest (the SQL, the command echo) stays in the console. */
+function planExcerpt(text) {
+  const lines = String(text ?? '').split('\n').filter((l) => /animation|file_id|-> ROM|occupied|Error/i.test(l));
+  return (lines.length ? lines : String(text ?? '').split('\n').slice(-6)).slice(0, 12).join('\n');
+}
 
 /** The sound id an event plays, recorded from the inspector (the pointer's name is
  *  not the id: Raging Rush's `8049` plays se018049, so no guessing from digits). */
@@ -237,11 +245,12 @@ function Timeline({ events, selectedIds, onSelect, onMoveMany, onShiftLane, onPr
                 if (ev.ghost && t.id === 'vfx') {
                   const w = Math.max(1.2, ((ev.dur || 0) / len) * 100);
                   return (
-                    <span key={ev._id} className="mixer-block ghost fx"
-                      style={{ left: `${(ev.start / len) * 100}%`, width: `${w}%`, ...(stacked ? { top: 3 + rowOf(ev) * SOUND_ROW, height: SOUND_ROW - 4 } : {}) }}
-                      title={`${ev.count} generator${ev.count === 1 ? '' : 's'} via shared routine ${ev.via} @${ev.start} — the game runs this from ROM/0/0.DAT; mute or move the ${ev.via} link to change it`}>
-                      <span className="icon mixer-spk">link</span> {ev.via} · {ev.count} gen{ev.count === 1 ? '' : 's'}
-                    </span>
+                    <Tooltip key={ev._id} content={`${ev.count} generator${ev.count === 1 ? '' : 's'} via shared routine ${ev.via} @${ev.start} — the game runs this from ROM/0/0.DAT; mute or move the ${ev.via} link to change it`}>
+                      <span className="mixer-block ghost fx"
+                        style={{ left: `${(ev.start / len) * 100}%`, width: `${w}%`, ...(stacked ? { top: 3 + rowOf(ev) * SOUND_ROW, height: SOUND_ROW - 4 } : {}) }}>
+                        <span className="icon mixer-spk">link</span> {ev.via} · {ev.count} gen{ev.count === 1 ? '' : 's'}
+                      </span>
+                    </Tooltip>
                   );
                 }
                 if (waves && ev.ghost) {
@@ -250,17 +259,18 @@ function Timeline({ events, selectedIds, onSelect, onMoveMany, onShiftLane, onPr
                   const w = Math.max(2.4, (ticks / len) * 100);
                   const row = rowOf(ev);
                   return (
-                    <span key={ev._id} className="mixer-block wave ghost"
-                      style={{ left: `${(ev.start / len) * 100}%`, width: `${w}%`, top: 3 + row * SOUND_ROW, height: SOUND_ROW - 4 }}
-                      title={`${ev.ref} via shared routine ${ev.via} @${ev.start}${pk ? ` · ${pk.seconds.toFixed(2)}s` : ''} — the game plays this from ROM/0/0.DAT; mute or move the ${ev.via} link to change it`}>
-                      <span className="icon mixer-spk">link</span>
-                      {pk?.peaks && (
-                        <svg className="mixer-wave" viewBox="0 0 96 20" preserveAspectRatio="none">
-                          <path d={wavePath(pk.peaks)} stroke="#0d1012" strokeWidth="0.9" fill="none" />
-                        </svg>
-                      )}
-                      <span className="mixer-wave-label">{ev.via} · {ev.ref}</span>
-                    </span>
+                    <Tooltip key={ev._id} content={`${ev.ref} via shared routine ${ev.via} @${ev.start}${pk ? ` · ${pk.seconds.toFixed(2)}s` : ''} — the game plays this from ROM/0/0.DAT; mute or move the ${ev.via} link to change it`}>
+                      <span className="mixer-block wave ghost"
+                        style={{ left: `${(ev.start / len) * 100}%`, width: `${w}%`, top: 3 + row * SOUND_ROW, height: SOUND_ROW - 4 }}>
+                        <span className="icon mixer-spk">link</span>
+                        {pk?.peaks && (
+                          <svg className="mixer-wave" viewBox="0 0 96 20" preserveAspectRatio="none">
+                            <path d={wavePath(pk.peaks)} stroke="#0d1012" strokeWidth="0.9" fill="none" />
+                          </svg>
+                        )}
+                        <span className="mixer-wave-label">{ev.via} · {ev.ref}</span>
+                      </span>
+                    </Tooltip>
                   );
                 }
                 if (waves && ev.op === 0x1e) {
@@ -268,13 +278,14 @@ function Timeline({ events, selectedIds, onSelect, onMoveMany, onShiftLane, onPr
                   // a marker, not a sound of its own.
                   const row = rowOf(ev);
                   return (
-                    <span key={ev._id}
-                      className={`mixer-block${selectedIds.has(ev._id) ? ' on' : ''}${ev.enabled === false ? ' off' : ''}`}
-                      style={{ left: `${(ev.start / len) * 100}%`, width: '2.4%', background: color, top: 3 + row * SOUND_ROW, height: SOUND_ROW - 4, opacity: 0.7 }}
-                      onPointerDown={(e) => startDrag(e, ev)}
-                      title={`Stop ${ev.ref} @${ev.start} — ends the sustained sound`}>
-                      ■ stop {ev.ref}
-                    </span>
+                    <Tooltip key={ev._id} content={`Stop ${ev.ref} @${ev.start} — ends the sustained sound`}>
+                      <span
+                        className={`mixer-block${selectedIds.has(ev._id) ? ' on' : ''}${ev.enabled === false ? ' off' : ''}`}
+                        style={{ left: `${(ev.start / len) * 100}%`, width: '2.4%', background: color, top: 3 + row * SOUND_ROW, height: SOUND_ROW - 4, opacity: 0.7 }}
+                        onPointerDown={(e) => startDrag(e, ev)}>
+                        ■ stop {ev.ref}
+                      </span>
+                    </Tooltip>
                   );
                 }
                 if (waves) {
@@ -283,31 +294,33 @@ function Timeline({ events, selectedIds, onSelect, onMoveMany, onShiftLane, onPr
                   const w = Math.max(2.4, (ticks / len) * 100);
                   const row = rowOf(ev);
                   return (
-                    <span key={ev._id}
-                      className={`mixer-block wave${selectedIds.has(ev._id) ? ' on' : ''}${ev.enabled === false ? ' off' : ''}`}
-                      style={{ left: `${(ev.start / len) * 100}%`, width: `${w}%`, background: color, top: 3 + row * SOUND_ROW, height: SOUND_ROW - 4 }}
-                      onPointerDown={(e) => startDrag(e, ev)}
-                      title={`${opName(ev.op)} ${ev.ref ?? ''} @${ev.start}${pk ? ` · ${pk.seconds.toFixed(2)}s` : ''}`}>
-                      <span className="icon mixer-spk" title={ev.enabled === false ? 'Muted (M to unmute) · click to play' : 'Play this sound'}
-                        onPointerDown={(e) => { e.stopPropagation(); onPreview?.(ev); }}>{ev.enabled === false ? 'volume_off' : 'volume_up'}</span>
-                      {pk?.peaks && (
-                        <svg className="mixer-wave" viewBox="0 0 96 20" preserveAspectRatio="none">
-                          <path d={wavePath(pk.peaks)} stroke="#0d1012" strokeWidth="0.9" fill="none" />
-                        </svg>
-                      )}
-                      <span className="mixer-wave-label">{ev.ref ?? opName(ev.op)}</span>
-                    </span>
+                    <Tooltip key={ev._id} content={`${opName(ev.op)} ${ev.ref ?? ''} @${ev.start}${pk ? ` · ${pk.seconds.toFixed(2)}s` : ''} · click the speaker to hear it${ev.enabled === false ? ' · muted (M to unmute)' : ''}`}>
+                      <span
+                        className={`mixer-block wave${selectedIds.has(ev._id) ? ' on' : ''}${ev.enabled === false ? ' off' : ''}`}
+                        style={{ left: `${(ev.start / len) * 100}%`, width: `${w}%`, background: color, top: 3 + row * SOUND_ROW, height: SOUND_ROW - 4 }}
+                        onPointerDown={(e) => startDrag(e, ev)}>
+                        <span className="icon mixer-spk" role="button" aria-label="Play this sound"
+                          onPointerDown={(e) => { e.stopPropagation(); onPreview?.(ev); }}>{ev.enabled === false ? 'volume_off' : 'volume_up'}</span>
+                        {pk?.peaks && (
+                          <svg className="mixer-wave" viewBox="0 0 96 20" preserveAspectRatio="none">
+                            <path d={wavePath(pk.peaks)} stroke="#0d1012" strokeWidth="0.9" fill="none" />
+                          </svg>
+                        )}
+                        <span className="mixer-wave-label">{ev.ref ?? opName(ev.op)}</span>
+                      </span>
+                    </Tooltip>
                   );
                 }
                 const w = Math.max(1.2, ((ev.dur || 0) / len) * 100);
                 return (
-                  <span key={ev._id}
-                    className={`mixer-block${selectedIds.has(ev._id) ? ' on' : ''}${ev.enabled === false ? ' off' : ''}`}
-                    style={{ left: `${(ev.start / len) * 100}%`, width: `${w}%`, background: color, ...(stacked ? { top: 3 + rowOf(ev) * SOUND_ROW, height: SOUND_ROW - 4 } : {}) }}
-                    onPointerDown={(e) => startDrag(e, ev)}
-                    title={`${opName(ev.op)} ${ev.ref ?? ''} @${ev.start}${ev.dur ? ` for ${ev.dur}` : ''}`}>
-                    {ev.ref ?? opName(ev.op)}
-                  </span>
+                  <Tooltip key={ev._id} content={`${opName(ev.op)} ${ev.ref ?? ''} @${ev.start}${ev.dur ? ` for ${ev.dur}` : ''}`}>
+                    <span
+                      className={`mixer-block${selectedIds.has(ev._id) ? ' on' : ''}${ev.enabled === false ? ' off' : ''}`}
+                      style={{ left: `${(ev.start / len) * 100}%`, width: `${w}%`, background: color, ...(stacked ? { top: 3 + rowOf(ev) * SOUND_ROW, height: SOUND_ROW - 4 } : {}) }}
+                      onPointerDown={(e) => startDrag(e, ev)}>
+                      {ev.ref ?? opName(ev.op)}
+                    </span>
+                  </Tooltip>
                 );
               })}
             </div>
@@ -339,7 +352,7 @@ function Scrubber({ onSeek, getPlayhead, fallbackLen }) {
     <div className="mixer-scrub">
       <Tooltip content="Back one frame"><button type="button" className="icon-btn" onClick={() => step(-1)}><span className="icon">chevron_left</span></button></Tooltip>
       <input type="range" min={0} max={len} value={frame} className="mixer-scrub-range"
-        onChange={(e) => { console.info('[mixer] seek', e.target.value); onSeek(Number(e.target.value)); }} />
+        onChange={(e) => onSeek(Number(e.target.value))} />
       <Tooltip content="Forward one frame"><button type="button" className="icon-btn" onClick={() => step(1)}><span className="icon">chevron_right</span></button></Tooltip>
       <span className="mono mixer-scrub-num">{String(frame).padStart(3, '0')} / {len}</span>
     </div>
@@ -455,8 +468,7 @@ function RecipeRow({ r, current, onStage, onOpen, onRename, onDuplicate, onDelet
   const srcs = ['motion', 'vfx', 'sound'].map((l) => r.sources?.[l]?.name ?? r.sources?.[l]?.spec).filter(Boolean).join(' · ');
   const stop = (e) => { e.stopPropagation(); };
   return (
-    <div className={`mixer-recipe-row${current ? ' on' : ''}${mode ? ' busy' : ''}`} onClick={() => !mode && onOpen(r.name)}
-      title={current ? 'Open in the editor' : 'Click to open'}>
+    <div className={`mixer-recipe-row${current ? ' on' : ''}${mode ? ' busy' : ''}`} onClick={() => !mode && onOpen(r.name)}>
       <div className="mixer-recipe-main">
         {mode === 'rename'
           ? (
@@ -497,7 +509,7 @@ function RecipeRow({ r, current, onStage, onOpen, onRename, onDuplicate, onDelet
 
 export function MixerPanel({
   recipe, onRecipe, lane, laneInfo, laneEntry,
-  transport, onPlay, onStop, onPublish, onSaveAs, onOpen, onReset, recipes, busy, note,
+  transport, onPlay, onStop, onPublish, publishPlan = null, onSaveAs, onOpen, onReset, recipes, busy, note,
   onDelete, onRename, onDuplicate, onShuffle, stageName,
   onPause, onResume, onSeek, getPlayhead, mixLoaded, mixDirty,
   onSolo, onPlaySound, onTake, viewerRace, onClose, getSoundPeaks, speed = 1, onSpeed, loop = true, onLoop, ghosts = null,
@@ -581,36 +593,27 @@ export function MixerPanel({
     onRecipe({ ...recipe, events: [...events, ...copies] });
     setSelectedIds(new Set(copies.map((c) => c._id)));
   };
-  // Keyboard transport and editing. Capture phase + stopPropagation so the
-  // Characters view's own Space toggle (App) does not also fire.
-  const spaceAt = useRef(0);
+  // Editing keys for the selection. Space is not handled here: the app has one
+  // Space handler for whichever transport is on screen (App.jsx), and the mixer
+  // is a branch of it — so it cannot double up with the Characters view's
+  // toggle, and the Camera Sequencer's capture-phase handler still wins.
   useEffect(() => {
     const typing = (t) => /^(input|select|textarea)$/i.test(t?.tagName) || t?.isContentEditable;
     const onKey = (e) => {
-      if (typing(e.target)) return;
+      if (typing(e.target) || !selectedIds.size) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
-        if (!selectedIds.size) return;
-        e.preventDefault(); e.stopPropagation();
+        e.preventDefault();
         duplicateMany(selectedIds);
-      } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.size) {
-        e.preventDefault(); e.stopPropagation();
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
         removeMany(selectedIds);
-      } else if (e.key.toLowerCase() === 'm' && !e.ctrlKey && !e.altKey && !e.metaKey && selectedIds.size) {
-        e.preventDefault(); e.stopPropagation();
+      } else if (e.key.toLowerCase() === 'm' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
         toggleMute(selectedIds);
-      } else if ((e.code === 'Space' || e.key === ' ') && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
-        e.preventDefault(); e.stopPropagation();
-        e.target?.blur?.();   // a focused Play button would "click" again on keyup
-        const now = performance.now();
-        const twice = now - spaceAt.current < 400;
-        spaceAt.current = twice ? 0 : now;
-        if (twice) { if (mixLoaded) onSeek?.(0); return; }   // stop: rewound, paused at f0
-        if (!mixLoaded) { if (!busy && events.length) onPlay?.(); return; }
-        if (transport === 'playing') onPause?.(); else onResume?.();
       }
     };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   });
   const shift = (laneId, delta) => onRecipe({ ...recipe, events: shiftLane(events, laneId === 'keep' ? 'keep' : laneId, delta) });
   const snapLane = (laneId) => {
@@ -640,47 +643,67 @@ export function MixerPanel({
 
   const statusNote = busy ? 'working…' : (mixLoaded && mixDirty ? 'edited · Play mix to hear the change' : (events.length ? note : 'pick a motion, effect or sound on the left to start'));
 
+  // The transport is the Animation panel's: one Play/Pause with a label, then
+  // bare glyphs (stop, rewind, loop) in a group — same classes, same shapes.
+  const armed = mixLoaded && !mixDirty;
+  const playLabel = armed ? (transport === 'playing' ? 'Pause' : transport === 'paused' ? 'Resume' : 'Play again') : 'Play mix';
+  const playTip = armed ? (transport === 'playing' ? 'Pause the mix' : 'Run the composed mix again (no recompose)') : 'Compose the recipe for this race and play it';
+  const onPlayPause = () => {
+    if (!armed) return onPlay?.();
+    return transport === 'playing' ? onPause?.() : onResume?.();
+  };
   const transportButtons = (
     <>
-      {mixLoaded && transport === 'playing' && !mixDirty
-        ? <button type="button" className="mixer-btn" onClick={onStop}><span className="icon">stop</span> Stop</button>
-        : mixLoaded && !mixDirty && transport !== 'playing'
-          // Paused, or a play-once mix that reached its end: run the same
-          // composed mix again without a recompose.
-          ? <button type="button" className="mixer-btn primary" onClick={onResume}><span className="icon">play_arrow</span> {transport === 'paused' ? 'Resume' : 'Play again'}</button>
-          : <button type="button" className="mixer-btn primary" disabled={busy || !events.length} onClick={onPlay}><span className="icon">play_arrow</span> Play mix</button>}
-      {mixLoaded && transport === 'playing' && mixDirty && (
-        <Tooltip content="Stop the stale mix"><button type="button" className="icon-btn" onClick={onStop}><span className="icon">stop</span></button></Tooltip>
-      )}
-      {mixLoaded && transport === 'playing' && (
-        <Tooltip content="Pause"><button type="button" className="icon-btn" onClick={onPause}><span className="icon">pause</span></button></Tooltip>
-      )}
-      {onLoop && (
-        <Tooltip content={loop ? 'Looping: the mix restarts when it ends (click for play once)' : 'Play once: the mix parks at its end (click to loop)'}>
-          <button type="button" className={`icon-btn${loop ? ' on' : ''}`} onClick={() => onLoop(!loop)}><span className="icon">{loop ? 'repeat' : 'repeat_one'}</span></button>
+      <Tooltip content={playTip}>
+        <button type="button" className="pc-play" disabled={busy || (!armed && !events.length)} onClick={onPlayPause}>
+          <span className="icon fill">{armed && transport === 'playing' ? 'pause' : 'play_arrow'}</span>
+          <span>{playLabel}</span>
+        </button>
+      </Tooltip>
+      <div className="pc-tgroup">
+        <Tooltip content={mixDirty ? 'Stop the stale mix' : 'Stop'}>
+          <button type="button" className="pc-tbtn" aria-label="Stop" disabled={!mixLoaded || transport === 'stopped'} onClick={onStop}>
+            <span className="icon">stop_circle</span>
+          </button>
         </Tooltip>
-      )}
+        <Tooltip content="Rewind to frame 0 (paused)">
+          <button type="button" className="pc-tbtn" aria-label="Rewind" disabled={!mixLoaded} onClick={() => onSeek?.(0)}>
+            <span className="icon">replay</span>
+          </button>
+        </Tooltip>
+        {onLoop && (
+          <Tooltip content={loop ? 'Loop on: the mix restarts when it ends' : 'Loop off: the mix parks at its end'}>
+            <button type="button" className={`pc-tbtn${loop ? ' on' : ''}`} aria-label="Loop" aria-pressed={loop ? 'true' : 'false'} onClick={() => onLoop(!loop)}>
+              <span className="icon">repeat</span>
+            </button>
+          </Tooltip>
+        )}
+      </div>
       {onSpeed && (
-        <Tooltip content="Playback speed of the stage (effect, sound and motion together)"><span>
-          <select className="mixer-open" value={String(speed)} onChange={(e) => onSpeed(Number(e.target.value))}>
-            {[0.1, 0.25, 0.5, 0.75, 1, 1.5, 2].map((v) => <option key={v} value={String(v)}>{v}×</option>)}
-          </select>
-        </span></Tooltip>
+        <Tooltip content="Playback speed of the stage (effect, sound and motion together)">
+          <span className="mixer-speed">
+            <input type="range" className="vol-slider pc-frame-slider" min="10" max="200" step="5"
+              value={Math.round(speed * 100)} style={{ '--fill': `${((Math.round(speed * 100) - 10) / 190) * 100}%` }}
+              onInput={(e) => onSpeed(+e.target.value / 100)} />
+            <span className="mono pc-frame-num">{Math.round(speed * 100)}%</span>
+          </span>
+        </Tooltip>
       )}
     </>
   );
 
   const dock = createPortal(
     <div id="mixer-dock" className={`panel${dockOpen ? '' : ' collapsed'}`} style={dockOpen ? { height: dockH } : undefined}>
-      {dockOpen && <div className="mixer-dock-grip" onPointerDown={startDockResize} title="Drag to resize" />}
+      {dockOpen && <div className="mixer-dock-grip" onPointerDown={startDockResize} aria-label="Drag to resize" />}
       <div className="details-header">
         <span className="icon">timeline</span>
-        <span className="details-title">Timeline · {recipe.name}</span>
+        <span className="details-title">Timeline</span>
+        <span className="mono mixer-dock-name">{recipe.name}</span>
         <span className="mixer-dock-note">{statusNote}</span>
         <span className="sp" />
         {!dockOpen && transportButtons}
         <Tooltip content={dockOpen ? 'Collapse the timeline (stage only)' : 'Show the timeline'}>
-          <button type="button" className="icon-btn" onClick={toggleDock}><span className="icon">{dockOpen ? 'expand_more' : 'expand_less'}</span></button>
+          <button type="button" className="icon-btn details-close" aria-label={dockOpen ? 'Collapse' : 'Expand'} onClick={toggleDock}><span className="icon">{dockOpen ? 'expand_more' : 'expand_less'}</span></button>
         </Tooltip>
       </div>
       {dockOpen && (
@@ -701,9 +724,15 @@ export function MixerPanel({
               ? <Scrubber onSeek={onSeek} getPlayhead={getPlayhead} fallbackLen={recipeLength(events)} />
               : <span className="sp" />}
             <span className="mono-small">strike f{strike}</span>
-            {LANES.filter((l) => l.id !== 'motion').map((l) => (
-              <button key={l.id} type="button" className="mixer-chip" onClick={() => snapLane(l.id)}>snap {l.label.toLowerCase()}</button>
-            ))}
+            <div className="pc-tgroup">
+              {LANES.filter((l) => l.id !== 'motion').map((l) => (
+                <Tooltip key={l.id} content={`Snap the ${l.label.toLowerCase()} lane to the strike frame (its first generator lands on f${strike})`}>
+                  <button type="button" className="pc-tbtn" aria-label={`Snap ${l.label}`} style={{ color: l.color }} onClick={() => snapLane(l.id)}>
+                    <span className="icon">align_horizontal_left</span>
+                  </button>
+                </Tooltip>
+              ))}
+            </div>
             <span className="mono-small">{viewerRace}</span>
           </div>
           <div className="mono-small mixer-keys">
@@ -721,13 +750,49 @@ export function MixerPanel({
       <div className="panel mixer-panel">
         <div className="details-header">
           <span className="icon">tune</span>
-          <input className="mixer-name" value={recipe.name} spellCheck={false}
-            onChange={(e) => onRecipe({ ...recipe, name: e.target.value.replace(/[^A-Za-z0-9_-]/g, '_') })} />
+          <span className="details-title">Ability Mixer</span>
           <span className="sp" />
-          <Tooltip content="Save the recipe (asks for a name)"><button type="button" className="icon-btn" onClick={beginSave}><span className="icon">save</span></button></Tooltip>
-          <Tooltip content="Start over: clear every lane and put the character back to idle"><button type="button" className="icon-btn" onClick={onReset}><span className="icon">restart_alt</span></button></Tooltip>
-          {onClose && <button type="button" className="icon-btn details-close" onClick={onClose}><span className="icon">close</span></button>}
+          <Tooltip content="Save the recipe (asks for a name)"><button type="button" className="icon-btn" aria-label="Save" onClick={beginSave}><span className="icon">save</span></button></Tooltip>
+          <Tooltip content="Start over: clear every lane and put the character back to idle"><button type="button" className="icon-btn" aria-label="Reset" onClick={onReset}><span className="icon">restart_alt</span></button></Tooltip>
+          {onShuffle && (
+            <Tooltip content={`Shuffle: a random ${SHUFFLE_KINDS.find((k) => k.id === shuffleKind)?.label ?? ''} motion + random effects + a random sound, then play`}>
+              <button type="button" className="icon-btn" aria-label="Shuffle" disabled={busy} onClick={() => onShuffle(shuffleKind)}><span className="icon">casino</span></button>
+            </Tooltip>
+          )}
+          <Tooltip content="Publish: prepare the xi dats action for this recipe and show the build plan">
+            <button type="button" className="icon-btn" aria-label="Publish" disabled={busy || !events.length || !!publishPlan} onClick={() => onPublish?.('plan')}><span className="icon">publish</span></button>
+          </Tooltip>
+          {onClose && <button type="button" className="icon-btn details-close" aria-label="Close" onClick={onClose}><span className="icon">close</span></button>}
         </div>
+
+        <div className="pc-ctrl">
+          <span className="pc-ctrl-label">Recipe</span>
+          <input className="mixer-name" value={recipe.name} spellCheck={false} aria-label="Recipe name"
+            onChange={(e) => onRecipe({ ...recipe, name: e.target.value.replace(/[^A-Za-z0-9_-]/g, '_') })} />
+        </div>
+        {onShuffle && (
+          <div className="pc-ctrl">
+            <span className="pc-ctrl-label">Shuffle as</span>
+            <div className="seg-tabs" role="tablist" aria-label="Shuffle kind">
+              {SHUFFLE_KINDS.map((k) => (
+                <button key={k.id} type="button" role="tab" aria-selected={shuffleKind === k.id}
+                  className={`seg-tab${shuffleKind === k.id ? ' on' : ''}`} onClick={() => setShuffleKind(k.id)}>{k.label}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {publishPlan && (
+          <div className="mixer-publish">
+            <div className="fx-actor-sec-title">Publish · {publishPlan.name}</div>
+            <pre className="mono-small mixer-plan">{planExcerpt(publishPlan.text)}</pre>
+            <div className="mixer-save">
+              <span className="side-note mixer-publish-note">Writes the DAT(s) into ROM10 and registers their file ids (xi dats build). Full plan in the console.</span>
+              <button type="button" className="mixer-chip danger" disabled={busy} onClick={() => onPublish?.('go')}>publish</button>
+              <button type="button" className="mixer-chip" onClick={() => onPublish?.('cancel')}>cancel</button>
+            </div>
+          </div>
+        )}
 
         {saving && (
           <form className="mixer-save" onSubmit={(e) => { e.preventDefault(); commitSave(); }}>
@@ -736,29 +801,10 @@ export function MixerPanel({
               onKeyDown={(e) => { if (e.key === 'Escape') { setSaving(false); setOverwrite(null); } }} />
             {overwrite
               ? <button type="submit" className="mixer-chip danger">overwrite {overwrite}</button>
-              : <button type="submit" className="mixer-btn primary">Save</button>}
-            <button type="button" className="icon-btn" onClick={() => { setSaving(false); setOverwrite(null); }}><span className="icon">close</span></button>
+              : <Tooltip content="Save"><button type="submit" className="icon-btn" aria-label="Save"><span className="icon">check</span></button></Tooltip>}
+            <Tooltip content="Cancel"><button type="button" className="icon-btn" aria-label="Cancel" onClick={() => { setSaving(false); setOverwrite(null); }}><span className="icon">close</span></button></Tooltip>
           </form>
         )}
-
-        <div className="mixer-transport">
-          {onShuffle && (
-            <>
-              <Tooltip content="What the shuffled mix publishes as — its motion is drawn from this kind; effects and sound from anything"><span>
-                <select className="mixer-open" value={shuffleKind} onChange={(e) => setShuffleKind(e.target.value)}>
-                  <option value="ws">weapon skill</option>
-                  <option value="ja">job ability</option>
-                  <option value="spell">spell</option>
-                </select>
-              </span></Tooltip>
-              <Tooltip content="Random motion of that kind + random effects + random sound, then play">
-                <button type="button" className="mixer-btn" disabled={busy} onClick={() => onShuffle(shuffleKind)}><span className="icon">casino</span> Shuffle</button>
-              </Tooltip>
-            </>
-          )}
-          <span className="sp" />
-          <button type="button" className="mixer-btn" disabled={busy || !events.length} onClick={onPublish}>Publish…</button>
-        </div>
 
         <div className="fx-actor-sec-title">Recipes · {(recipes ?? []).length}</div>
         <div className="mixer-recipes">

@@ -1083,7 +1083,10 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
 #img-sprites,
 #scenes,
 #details,
-#skeleton {
+#skeleton,
+#mixer-dock,
+.mixer-panel,
+.mixer-parts-panel {
   box-sizing: border-box;
   width: 320px;
   padding: 12px !important;
@@ -1116,7 +1119,10 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
 #img-sprites .plc-header,
 #details .details-header,
 #skeleton .details-header,
-#effect-actors .details-header {
+#effect-actors .details-header,
+#mixer-dock .details-header,
+.mixer-panel .details-header,
+.mixer-parts-panel .details-header {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1130,7 +1136,10 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
 #img-sprites .plc-header > .icon,
 #details .details-header > .icon,
 #skeleton .details-header > .icon,
-#effect-actors .details-header > .icon {
+#effect-actors .details-header > .icon,
+#mixer-dock .details-header > .icon,
+.mixer-panel .details-header > .icon,
+.mixer-parts-panel .details-header > .icon {
   color: var(--accent);
   font-size: 18px;
   flex: 0 0 auto;
@@ -6699,12 +6708,14 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mixer-panel { flex: 0 0 auto; }
 .mixer-parts-panel { flex: 1 1 auto; min-height: 120px; max-height: 40vh; overflow: hidden; }
 .mixer-parts-body { overflow: auto; min-height: 0; }
-.mixer-name { font: 600 13px/1.3 var(--font-mono); color: var(--text); background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 2px 6px; min-width: 120px; }
+.mixer-name { flex: 1 1 auto; min-width: 0; font: 600 12px/1.3 var(--font-mono); color: var(--text); background: var(--gray-900); border: 1px solid var(--ring); border-radius: 6px; padding: 3px 6px; }
 .mixer-name:focus { outline: none; border-color: var(--accent); }
-.mixer-open { font: 500 11px/1.2 var(--font-ui); color: var(--muted); background: var(--gray-900); border: 1px solid var(--ring); border-radius: 6px; padding: 3px 6px; }
-.mixer-transport { display: flex; align-items: center; gap: 8px; }
-.mixer-transport .icon-btn.on { color: var(--accent); }
-.mixer-note { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.mixer-dock-name { color: var(--text); font-size: 12px; }
+.mixer-speed { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; width: 150px; }
+.mixer-speed .pc-frame-slider { flex: 1 1 auto; min-width: 0; }
+.mixer-publish { display: flex; flex-direction: column; gap: 6px; }
+.mixer-plan { margin: 0; padding: 6px 8px; max-height: 140px; overflow: auto; background: var(--gray-900); border: 1px solid var(--ring); border-radius: 6px; white-space: pre; }
+.mixer-publish-note { flex: 1 1 auto; padding: 0; }
 .sp { flex: 1 1 auto; }
 
 .mixer-timeline { display: flex; flex-direction: column; gap: 4px; user-select: none; touch-action: none; }
@@ -6728,7 +6739,10 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 #mixer-dock { position: fixed; left: 12px; right: 12px; bottom: 48px; z-index: 26; display: flex; flex-direction: column; gap: 8px; min-height: 140px; }
 /* Everything that reaches the bottom of the window stops above the dock. */
 body.mixer-docked #tree { bottom: calc(var(--mixer-dock, 280px) + 60px); }
-body.mixer-docked #mixer-stack, body.mixer-docked #mixer-actors { max-height: calc(100vh - 76px - var(--mixer-dock, 280px)); }
+body.mixer-docked #mixer-stack { max-height: calc(100vh - 76px - var(--mixer-dock, 280px)); }
+body.mixer-docked #mixer-actors { max-height: calc(100vh - 124px - var(--mixer-dock, 280px)); }
+/* In the dock's bar the Play button keeps the panel's shape, not the whole row. */
+.mixer-dock-bar .pc-play { flex: 0 0 auto; min-width: 132px; }
 .mixer-dock-grip { position: absolute; top: 0; left: 0; right: 0; height: 8px; cursor: ns-resize; }
 #mixer-dock.collapsed { min-height: 0; height: auto; padding: 6px 12px; }
 /* Transport lives in the dock's bottom bar: one row, never wraps. */
@@ -6738,6 +6752,8 @@ body.mixer-docked #mixer-stack, body.mixer-docked #mixer-actors { max-height: ca
 .mixer-dock-bar .icon-btn.on { color: var(--accent); }
 .mixer-dock-note { color: var(--muted); font: 500 11px/1.2 var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #mixer-dock .mixer-editor { border-top: 0; padding-top: 0; }
+#mixer-dock { width: auto; }
+#mixer-dock .details-header .mixer-dock-note { margin-left: 6px; }
 /* Recipe organizer (the side panel's main body now that the timeline is docked). */
 .mixer-recipes { display: flex; flex-direction: column; gap: 2px; overflow: auto; max-height: 40vh; }
 .mixer-recipe-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
@@ -6795,7 +6811,9 @@ body.mixer-docked #mixer-stack, body.mixer-docked #mixer-actors { max-height: ca
 .mixer-btn:disabled { opacity: 0.5; cursor: default; }
 .mixer-btn.primary { border-color: var(--accent); color: var(--accent); }
 .mixer-btn .icon { font-size: 16px; }
-#mixer-actors { position: fixed; top: 12px; right: 484px; width: 320px; max-height: calc(100vh - 64px); z-index: 25; display: flex; flex-direction: column; gap: 12px; pointer-events: none; }
+/* The stance/actors column sits left of the mixer stack, under the menubar's
+   row — at the tree's top (60px), so a wide toolbar never covers its header. */
+#mixer-actors { position: fixed; top: 60px; right: 484px; width: 320px; max-height: calc(100vh - 112px); z-index: 25; display: flex; flex-direction: column; gap: 12px; pointer-events: none; }
 #mixer-actors > .panel { width: 100%; pointer-events: auto; }
 #mixer-actors #animbar { position: relative !important; top: auto !important; right: auto !important; left: auto !important; bottom: auto !important; width: 100% !important; flex: 0 0 auto; z-index: auto !important; }
 #mixer-actors #effect-actors { flex: 1 1 auto; min-height: 160px; }

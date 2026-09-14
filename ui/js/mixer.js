@@ -6,6 +6,7 @@
 // so Save writes exactly what Play composes.
 
 import { backend } from './backend.js';
+import { loadListOrNull } from './lists.js';
 
 export const LANES = [
   { id: 'motion', label: 'Motion', color: '#3FBDBB', ops: new Set([0x05, 0x2c, 0x76, 0x77, 0x79, 0x8c, 0xa4, 0xa5]) },
@@ -48,6 +49,9 @@ export function laneForEvent(e) {
 
 // ── Recipe ──────────────────────────────────────────────────────────────────────
 
+/** schema/ability_recipe.json in xi-tools — what compose, publish and dats prepare validate against. */
+export const RECIPE_SCHEMA = 'xi.ability.v1';
+
 export function emptyRecipe(name = 'new_ability') {
   return { name, sources: {}, events: [] };
 }
@@ -63,7 +67,7 @@ export function serializeRecipe(recipe) {
   const events = recipe.events
     .filter((e) => e.enabled !== false)
     .map(({ _id, enabled, label, kind, sound, ...rest }) => rest);
-  return JSON.stringify({ ...recipe, events }, null, 2);
+  return JSON.stringify({ schema: RECIPE_SCHEMA, ...recipe, events }, null, 2);
 }
 
 /**
@@ -144,21 +148,39 @@ export function shiftLane(events, lane, delta) {
 
 // ── Catalog ─────────────────────────────────────────────────────────────────────
 
-export const CATALOG_REL = 'exports\\ability\\catalog.json';
+/** The list file `xi mv update --only abilities` bakes (`{ races, entries }`). */
+export const CATALOG_LIST = 'abilities.json';
 
-export function catalogPath(xiPath) {
-  return `${String(xiPath).replace(/[\\/]+$/, '')}\\${CATALOG_REL}`;
-}
-
-/** Load the catalog written by `xi ability catalog`, or null when it isn't there yet. */
-export async function loadCatalog(xiPath) {
-  try {
-    const text = await backend.readTextFile(catalogPath(xiPath));
-    return JSON.parse(text);
-  } catch {
-    return null;
+/**
+ * The pick list, through the same door as every other list: the copy
+ * downloaded into the viewer's lists folder, else the one baked into the build.
+ * Null when neither exists (an install older than the list, and no build yet).
+ * `fresh` reads the downloaded copy directly, for right after Build catalog
+ * wrote it — the lists door caches its directory listing per session.
+ */
+export async function loadCatalog({ fresh = false } = {}) {
+  if (fresh) {
+    try {
+      const dir = await backend.listsDir();
+      const text = dir ? await backend.readTextFile(joinPath(dir, CATALOG_LIST)) : '';
+      if (text) return JSON.parse(text);
+    } catch { /* fall through to the lists door */ }
   }
+  const cat = await loadListOrNull(CATALOG_LIST);
+  return cat && Array.isArray(cat.entries) ? cat : null;
 }
+
+/** `xi mv update --only abilities --lists <viewer lists folder>` — the bake, written
+ *  where the viewer reads downloaded lists from (falls back to xi-tools' mv/lists). */
+export async function buildCatalogArgs() {
+  const args = ['mv', 'update', '--only', 'abilities'];
+  let dir = null;
+  try { dir = await backend.listsDir(); } catch { dir = null; }
+  if (dir) args.push('--lists', dir);
+  return args;
+}
+
+const joinPath = (dir, name) => `${dir}${dir.includes('\\') ? '\\' : '/'}${name}`;
 
 /** Filter catalog entries by kind chips and a text query; ranked by name match. */
 export function filterCatalog(entries, { query = '', kinds = null, lane = null } = {}) {
@@ -233,14 +255,33 @@ export async function composeForPreview(recipe, xiRace, xiPath, env, onLine) {
   return { recipePath, datPath: row.dat, report: row };
 }
 
-export async function publishRecipe(recipe, { dryRun, target = 'pivot', animation = null }, xiPath, env, onLine) {
+/**
+ * Publish through `xi dats`: the recipe becomes an `ability` action in
+ * projects/<name>.json (`dats prepare … --type ability --replace`, which keeps
+ * a slot an earlier build took), then `dats build <name>` — with --dry-run for
+ * the plan, without to write the DATs and register the file ids. Same manifest
+ * the wizard and the CLI use, so the ability is rebuilt, listed and undone with
+ * the rest of the project.
+ */
+export async function publishRecipe(recipe, { dryRun, animation = null, kind = null }, xiPath, env, onLine) {
   const dir = mixerDir(xiPath);
   const recipePath = `${dir}\\${recipe.name}.recipe.json`;
   await backend.writeTextFile(recipePath, serializeRecipe(recipe));
-  const args = ['ability', 'publish', recipePath, '--target', target];
-  if (animation != null) args.push('--animation', String(animation));
-  if (dryRun) args.push('--dry-run');
   const lines = [];
-  const code = await backend.xiRunStream(args, xiPath, env, (line) => { lines.push(line); onLine?.(line); });
-  return { ok: !code, text: lines.join('\n') };
+  const run = async (args) => {
+    lines.push(`$ xi ${args.join(' ')}`);
+    const code = await backend.xiRunStream(args, xiPath, env, (line) => { lines.push(line); onLine?.(line); });
+    return !code;
+  };
+  const prep = ['dats', 'prepare', recipePath, '--project', recipe.name, '--type', 'ability', '--replace'];
+  if (animation != null) prep.push('--animation', String(animation));
+  if (kind && kind !== 'auto') prep.push('--kind', kind);
+  if (!(await run(prep))) return { ok: false, text: lines.join('\n') };
+  const build = ['dats', 'build', recipe.name, '--only', `ability.${slug(recipe.name)}`];
+  if (dryRun) build.push('--dry-run');
+  const ok = await run(build);
+  return { ok, text: lines.join('\n') };
 }
+
+/** xi_dats._slug: lowercase, runs of anything but a-z0-9 → `_`. */
+const slug = (v) => String(v).replace(/\\/g, '/').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'action';
