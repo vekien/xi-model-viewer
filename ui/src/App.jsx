@@ -6588,12 +6588,19 @@ export default function App({ launch = null }) {
     setMixerError(null);
     let next = null;
     try {
-      const info = await mixerInfoFor(entry);
       const lane = mixerLane;
+      // A bare clip from a clip pack has no routine to inspect: it is one
+      // PlayClip for the clip's own length, which compose builds from the
+      // template (the lane's `routine` is null).
+      const info = entry.clip
+        ? { timeline: [{ op: 0x05, ref: entry.clip.ref, start: 0, dur: entry.clip.frames, name: 'PlayClip', summary: `${entry.clip.frames} f` }] }
+        : await mixerInfoFor(entry);
       const fresh = eventsFromInspect(info, lane, { keep: lane === 'motion' });
       const r = mixerRecipeRef.current;
       const keptEvents = r.events.filter((e) => e.from !== lane && !(lane === 'motion' && e.kind === 'keep'));
-      const sources = { ...r.sources, [lane]: { spec: entry.spec, routine: entry.routine || 'main', name: entry.name } };
+      // routine: a tag, or null for a bare clip pack (no routine at all) — not 'main'.
+      const routine = entry.routine === undefined ? 'main' : entry.routine;
+      const sources = { ...r.sources, [lane]: { spec: entry.spec, routine, name: entry.name } };
       const name = r.events.length ? r.name : entry.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || r.name;
       next = { ...r, name, sources, events: [...keptEvents, ...fresh] };
       mixerRecipeRef.current = next;

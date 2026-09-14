@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Tooltip } from './Tooltip.jsx';
 import { LANES, filterCatalog, entryPathForRace } from '../js/mixer.js';
-import { walkSections } from '../js/dat.js';
+import { parseEntity, groupAnimations } from '../js/dat.js';
+import { CLIP_NAMES } from './AnimationPanel.jsx';
 
 // The mixer's picker: one lane at a time, drawn as the same collapsible tree the
 // other lists use. On the Motion lane the character's own animation catalog comes
@@ -86,9 +87,22 @@ function catalogGroups(entries, prefix) {
     .map(([cat, list]) => ({ id: `cat:${cat}`, label: `${prefix}${cat}`, icon: KIND_ICON[list[0]?.kind] ?? 'auto_awesome', entries: list }));
 }
 
-/** 0x07 routine tags in a DAT, in file order. */
-function routinesIn(buffer) {
-  return walkSections(buffer).filter((s) => s.typeCode === 0x07).map((s) => s.id.replace(/[\0 ]+$/, ''));
+/**
+ * What a motion DAT holds, the way the Animation panel's Motion combo lists it:
+ * `clips` are the animations grouped by base id (idl0/idl1/idl2 → idl, played
+ * with the client's `idl?` wildcard), `routines` the 0x07 schedules that play
+ * clips. Effect-only routines are left out — they are no motion.
+ */
+function packContents(buffer) {
+  const m = parseEntity(buffer);
+  const clips = groupAnimations(m.animations).map((g) => ({
+    id: g.id,
+    ref: g.id.length >= 4 ? g.id : `${g.id}?`,
+    frames: g.clip.lengthInFrames || 1,
+    parts: g.clip.parts?.length ?? 1,
+  }));
+  const routines = m.schedules.filter((s) => s.clipIds?.length).map((s) => ({ id: s.id, clips: s.clipIds.length }));
+  return { clips, routines };
 }
 
 // One line per row: the name, and while searching the group it came from. The
@@ -184,17 +198,20 @@ export function MixerList({
     return n;
   });
 
-  /** The routines an action's DAT(s) hold, read once; 'loading' while the read is out. */
+  /** The clips and routines an action's DAT(s) hold, read once; 'loading' while the
+   *  read is out. Each carries the DAT it came from — a set (the emotes) spans several. */
   const routinesFor = (entry) => {
     const have = routineCache.get(entry.spec);
     if (have) return have;
     routineCache.set(entry.spec, 'loading');
     (async () => {
-      const out = [];
+      const out = { clips: [], routines: [] };
       for (const path of entry.datPaths) {
         try {
-          for (const id of routinesIn(await readDat(path))) out.push({ id, path });
-        } catch { /* unreadable DAT: no routines from it */ }
+          const { clips, routines } = packContents(await readDat(path));
+          out.clips.push(...clips.map((c) => ({ ...c, path })));
+          out.routines.push(...routines.map((r) => ({ ...r, path })));
+        } catch { /* unreadable DAT: nothing from it */ }
       }
       routineCache.set(entry.spec, out);
       bump((n) => n + 1);
@@ -217,6 +234,11 @@ export function MixerList({
     ...entry, spec: r.path, path: r.path, routine: r.id,
     name: r.id === 'main' ? entry.name : `${entry.name} · ${r.id}`,
   });
+  /** A bare clip: no routine to inspect — the app makes it one PlayClip event. */
+  const pickClip = (entry, c) => onPick({
+    ...entry, spec: c.path, path: c.path, routine: null,
+    clip: { ref: c.ref, frames: c.frames }, name: `${entry.name} · ${c.id}`,
+  });
 
   // A click that landed while the DAT was still being read: finished when it arrives.
   const pendingPick = useRef(null);
@@ -226,7 +248,7 @@ export function MixerList({
     // An action plays its `main` when it has one; a clip pack opens to its routines.
     const rs = routinesFor(entry);
     if (rs === 'loading') { pendingPick.current = entry.spec; return; }
-    const main = rs.find((r) => r.id === 'main');
+    const main = rs.routines.find((r) => r.id === 'main');
     if (main) pickRoutine(entry, main);
     else setOpenActions((s) => new Set(s).add(entry.spec));
   };
@@ -272,9 +294,23 @@ export function MixerList({
         onPick={pick} expandable={expandable} open={open} onToggle={toggleAction}>
         {open && (
           <div className="children">
-            {rs === 'loading' && <div className="side-note">Reading routines…</div>}
-            {Array.isArray(rs) && rs.length === 0 && <div className="side-note">No routines in this DAT.</div>}
-            {Array.isArray(rs) && rs.map((r) => (
+            {rs === 'loading' && <div className="side-note">Reading the DAT…</div>}
+            {rs && rs !== 'loading' && !rs.clips.length && !rs.routines.length && <div className="side-note">No motion in this DAT.</div>}
+            {rs && rs !== 'loading' && rs.clips.length > 0 && <div className="side-separator">Animations</div>}
+            {rs && rs !== 'loading' && rs.clips.map((c) => (
+              <div key={`${c.path}:${c.id}`} className="node">
+                <div className={`row mixer-row${current?.name === `${e.name} · ${c.id}` && current?.spec === c.path ? ' taken' : ''}`}
+                  onClick={() => pickClip(e, c)}>
+                  <span className="caret"><span className="icon" /></span>
+                  <span className="kind icon">animation</span>
+                  <span className="effect-name mono">{CLIP_NAMES[c.id] ? `${c.id} — ${CLIP_NAMES[c.id]}` : c.id}</span>
+                  {e.datPaths.length > 1 && <span className="mono-small effect-sub">{c.path.replace(/^ROM\//, '').replace(/\.DAT$/i, '')}</span>}
+                  {c.parts > 1 && <span className="badge">{c.parts}</span>}
+                </div>
+              </div>
+            ))}
+            {rs && rs !== 'loading' && rs.routines.length > 0 && <div className="side-separator">Schedules</div>}
+            {rs && rs !== 'loading' && rs.routines.map((r) => (
               <div key={`${r.path}:${r.id}`} className="node">
                 <div className={`row mixer-row${current?.spec === r.path && (current?.routine ?? 'main') === r.id ? ' taken' : ''}`}
                   onClick={() => pickRoutine(e, r)}>
@@ -282,6 +318,7 @@ export function MixerList({
                   <span className="kind icon">schedule</span>
                   <span className="effect-name mono">{r.id}</span>
                   {e.datPaths.length > 1 && <span className="mono-small effect-sub">{r.path.replace(/^ROM\//, '').replace(/\.DAT$/i, '')}</span>}
+                  {r.clips > 1 && <span className="badge">{r.clips}</span>}
                 </div>
               </div>
             ))}

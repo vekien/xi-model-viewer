@@ -12,7 +12,7 @@ import { Tooltip } from './Tooltip.jsx';
  * the character is struck down (ded), lies there (cor), and is raised back to
  * its feet (std) — that last one is the raise, not a standing idle.
  */
-const CLIP_NAMES = {
+export const CLIP_NAMES = {
   idl: 'idle',
   btl: 'battle stance',
   ded: 'death',
