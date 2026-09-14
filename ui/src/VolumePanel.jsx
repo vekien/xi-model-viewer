@@ -29,7 +29,7 @@ export function VolumePanel({
   zoneLoaded = false,
 }) {
   return (
-    <div className="tool-pop-body">
+    <div className="tool-pop-body vol-pop">
       <h3>VOLUME</h3>
       <Slider label="Volume" value={effectVolume} onChange={onEffectVolume} />
       <Slider label="Music" value={musicVolume} onChange={onMusicVolume} />

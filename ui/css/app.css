@@ -358,6 +358,8 @@ body:has(#img-sprites) #placements {
 }
 
 .tool-pop-body strong { color: #6fb9ff; }
+/* The Volume popover ends on a slider: room for the thumb below the last track. */
+.tool-pop-body.vol-pop { padding-bottom: 8px; }
 
 /* Universal tool-pop row label (alias: cam-label) */
 .gfx-lab,
