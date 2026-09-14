@@ -817,6 +817,7 @@ button.gs-tool:focus-visible {
   font: 500 11px/1.35 var(--font-ui);
   padding: 4px 2px 6px;
 }
+.gs-row.gs-builtin .gs-kind { color: var(--accent); }
 .gs-row {
   display: flex;
   align-items: center;
@@ -6677,3 +6678,140 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .actor-light .gfx-ctrl { justify-self: start; }
 .actor-seg .seg-tab { flex: 0 0 auto; min-height: 24px; padding: 0 10px; font-size: 11px; white-space: nowrap; }
 .actor-light-swatch { justify-self: start; width: 28px; height: 16px; border-radius: 4px; border: 1px solid var(--ring); }
+
+/* --- Ability Mixer ------------------------------------------------------- */
+.mixer-lane-tabs { margin: 8px 10px 0; }
+.mixer-lane-tabs .seg-tab { --lane: var(--accent); }
+.mixer-lane-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--lane); margin-right: 6px; vertical-align: 0; }
+.mixer-current { display: flex; align-items: center; gap: 8px; padding: 8px 10px 4px; min-height: 30px; }
+.mixer-current-name { font-weight: 600; }
+.mixer-current .icon-btn { margin-left: auto; }
+.mixer-kinds { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--ring); }
+.mixer-chip { font: 500 11px/1.2 var(--font-ui); color: var(--muted); background: transparent; border: 1px solid var(--ring); border-radius: 10px; padding: 3px 8px; cursor: pointer; }
+.mixer-chip.on { color: var(--accent); border-color: var(--accent); }
+.mixer-count { margin-left: auto; }
+.mixer-row.taken .effect-name { color: var(--accent); }
+.mixer-empty { padding: 14px 12px; display: flex; flex-direction: column; gap: 10px; }
+.mixer-hint { padding: 6px 10px; border-top: 1px solid var(--ring); color: var(--muted); }
+
+#mixer-stack { position: fixed; top: 12px; right: 12px; width: 460px; max-height: calc(100vh - 64px); display: flex; flex-direction: column; gap: 12px; z-index: 25; pointer-events: none; }
+#mixer-stack > .panel { pointer-events: auto; display: flex; flex-direction: column; gap: 8px; }
+.mixer-panel { flex: 0 0 auto; }
+.mixer-parts-panel { flex: 1 1 auto; min-height: 120px; max-height: 40vh; overflow: hidden; }
+.mixer-parts-body { overflow: auto; min-height: 0; }
+.mixer-name { font: 600 13px/1.3 var(--font-mono); color: var(--text); background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 2px 6px; min-width: 120px; }
+.mixer-name:focus { outline: none; border-color: var(--accent); }
+.mixer-open { font: 500 11px/1.2 var(--font-ui); color: var(--muted); background: var(--gray-900); border: 1px solid var(--ring); border-radius: 6px; padding: 3px 6px; }
+.mixer-transport { display: flex; align-items: center; gap: 8px; }
+.mixer-transport .icon-btn.on { color: var(--accent); }
+.mixer-note { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.sp { flex: 1 1 auto; }
+
+.mixer-timeline { display: flex; flex-direction: column; gap: 4px; user-select: none; touch-action: none; }
+.mixer-ruler, .mixer-track { display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: 6px; }
+.mixer-track-label { font: 600 10px/1 var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; cursor: ew-resize; }
+.mixer-track-labelcell { display: flex; flex-direction: row; align-items: center; gap: 4px; min-width: 0; align-self: start; padding-top: 8px; }
+.mixer-track-labelcell .mixer-track-label { white-space: nowrap; }
+.mixer-lane-toggle { display: inline-flex; align-items: center; gap: 2px; font: 600 9px/1 var(--font-ui); color: var(--muted); background: transparent; border: 1px solid var(--ring); border-radius: 8px; padding: 1px 5px; min-height: 0; cursor: pointer; }
+.mixer-lane-toggle .icon { font-size: 12px; }
+.mixer-lane-toggle:hover { color: var(--accent); border-color: var(--accent); }
+.mixer-rail { position: relative; height: 22px; background: var(--gray-900); border-radius: 4px; overflow: hidden; }
+.mixer-ruler .mixer-rail { height: 14px; background: transparent; border-bottom: 1px solid var(--ring); border-radius: 0; overflow: visible; }
+.mixer-tick { position: absolute; top: 0; font: 400 9px/1 var(--font-mono); color: var(--muted); transform: translateX(-50%); }
+.mixer-block { position: absolute; top: 3px; height: 16px; border-radius: 3px; font: 500 10px/16px var(--font-mono); color: #0d1012; padding: 0 4px; white-space: nowrap; overflow: hidden; cursor: grab; min-width: 6px; box-sizing: border-box; }
+.mixer-block.on { outline: 2px solid #fff; outline-offset: -1px; }
+.mixer-block.off { opacity: 0.35; }
+.mixer-timeline { position: relative; }
+
+/* Timeline dock: the mixer's timeline broken out along the bottom of the stage,
+   above the status bars, resizable from its top edge. */
+#mixer-dock { position: fixed; left: 12px; right: 12px; bottom: 48px; z-index: 26; display: flex; flex-direction: column; gap: 8px; min-height: 140px; }
+/* Everything that reaches the bottom of the window stops above the dock. */
+body.mixer-docked #tree { bottom: calc(var(--mixer-dock, 280px) + 60px); }
+body.mixer-docked #mixer-stack, body.mixer-docked #mixer-actors { max-height: calc(100vh - 76px - var(--mixer-dock, 280px)); }
+.mixer-dock-grip { position: absolute; top: 0; left: 0; right: 0; height: 8px; cursor: ns-resize; }
+#mixer-dock.collapsed { min-height: 0; height: auto; padding: 6px 12px; }
+/* Transport lives in the dock's bottom bar: one row, never wraps. */
+.mixer-dock-bar { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; border-top: 1px solid var(--ring); padding-top: 8px; }
+.mixer-dock-bar .mixer-btn { white-space: nowrap; }
+.mixer-dock-bar .mixer-scrub { flex: 1 1 auto; min-width: 160px; }
+.mixer-dock-bar .icon-btn.on { color: var(--accent); }
+.mixer-dock-note { color: var(--muted); font: 500 11px/1.2 var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#mixer-dock .mixer-editor { border-top: 0; padding-top: 0; }
+/* Recipe organizer (the side panel's main body now that the timeline is docked). */
+.mixer-recipes { display: flex; flex-direction: column; gap: 2px; overflow: auto; max-height: 40vh; }
+.mixer-recipe-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
+.mixer-recipe-row:hover { background: var(--gray-900); }
+.mixer-recipe-row.on { background: var(--gray-850); outline: 1px solid var(--ring); }
+.mixer-recipe-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.mixer-recipe-name { display: flex; align-items: center; gap: 6px; font: 600 12px/1.3 var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mixer-recipe-src { color: var(--muted); font: 500 10px/1.3 var(--font-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mixer-recipe-badge { font: 600 9px/1 var(--font-ui); color: var(--accent); border: 1px solid var(--accent); border-radius: 8px; padding: 2px 5px; letter-spacing: 0.04em; }
+.mixer-recipe-acts { display: none; gap: 2px; }
+.mixer-recipe-row:hover .mixer-recipe-acts, .mixer-recipe-row.busy .mixer-recipe-acts { display: inline-flex; }
+.mixer-recipe-acts .mixer-chip.danger { color: #e06c6c; border-color: #e06c6c; }
+.mixer-save { display: flex; align-items: center; gap: 6px; }
+.mixer-save input { flex: 1 1 auto; min-width: 0; font: 600 12px/1.3 var(--font-mono); color: var(--text); background: var(--gray-900); border: 1px solid var(--accent); border-radius: 6px; padding: 3px 6px; }
+.mixer-dock-body { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+#mixer-dock .mixer-timeline { flex: 0 0 auto; gap: 6px; }
+#mixer-dock .mixer-ruler, #mixer-dock .mixer-track { grid-template-columns: 124px 1fr; }
+#mixer-dock .mixer-rail { height: 32px; }
+#mixer-dock .mixer-ruler .mixer-rail { height: 16px; }
+#mixer-dock .mixer-track-label { font-size: 11px; }
+#mixer-dock .mixer-tick { font-size: 10px; }
+#mixer-dock .mixer-block { top: 5px; height: 22px; font: 500 11px/22px var(--font-mono); padding: 0 6px; }
+/* Sound blocks in the dock: real length, waveform, speaker to audition. Overlapping
+   sounds are laid out in sub-rows (inline top/height) so none hides another. */
+.mixer-block.wave { display: flex; align-items: center; gap: 4px; padding: 0 4px 0 2px; }
+.mixer-block.wave .mixer-spk { font-size: 14px; line-height: 1; cursor: pointer; flex: 0 0 auto; }
+.mixer-block.wave .mixer-wave { flex: 1 1 auto; min-width: 0; height: 100%; opacity: 0.8; }
+.mixer-block.wave .mixer-wave-label { flex: 0 0 auto; }
+.mixer-block.ghost.fx { background: repeating-linear-gradient(45deg, rgba(217, 123, 196, 0.45) 0 6px, rgba(217, 123, 196, 0.2) 6px 12px) !important; border: 1px dashed rgba(217, 123, 196, 0.9); color: var(--text); pointer-events: none; display: inline-flex; align-items: center; gap: 4px; }
+.mixer-block.ghost { background: repeating-linear-gradient(45deg, rgba(224, 168, 62, 0.45) 0 6px, rgba(224, 168, 62, 0.2) 6px 12px) !important; border: 1px dashed rgba(224, 168, 62, 0.9); color: var(--text); pointer-events: none; cursor: default; }
+.mixer-marquee { position: absolute; border: 1px dashed #fff; background: rgba(255, 255, 255, 0.12); pointer-events: none; z-index: 2; }
+.mixer-strike { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px solid #fff; opacity: 0.55; pointer-events: none; }
+/* Loop restart marker + the "rings past restart" zone after it. */
+.mixer-loopend { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px dashed var(--accent); opacity: 0.8; pointer-events: none; }
+.mixer-past-loop { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, rgba(255,255,255,0.05) 0 6px, rgba(255,255,255,0.11) 6px 12px); pointer-events: none; }
+.mixer-loop-label { position: absolute; top: -1px; transform: translateX(2px); font: 600 9px/1 var(--font-ui); color: var(--accent); white-space: nowrap; cursor: help; }
+.mixer-snaps { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.mixer-keys { opacity: 0.6; padding: 2px 0; }
+
+.mixer-editor { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--ring); padding-top: 8px; }
+.mixer-editor-title { display: flex; align-items: center; gap: 8px; }
+.mixer-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.mixer-field { display: flex; flex-direction: column; gap: 2px; font: 500 10px/1.2 var(--font-ui); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.mixer-field input { font: 400 12px/1.3 var(--font-mono); color: var(--text); background: var(--gray-900); border: 1px solid var(--ring); border-radius: 5px; padding: 3px 6px; width: 100%; box-sizing: border-box; }
+.mixer-editor-note { color: var(--muted); }
+
+.mixer-parts { display: flex; flex-direction: column; gap: 2px; }
+.mixer-part { display: flex; align-items: center; gap: 8px; padding: 2px 4px; border-radius: 4px; }
+.mixer-part:hover { background: var(--gray-850); }
+.mixer-part-note { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mixer-take { margin-left: auto; font: 500 11px/1 var(--font-ui); color: var(--muted); display: flex; align-items: center; gap: 4px; }
+
+.mixer-btn { display: inline-flex; align-items: center; gap: 4px; font: 500 12px/1.2 var(--font-ui); color: var(--text); background: linear-gradient(180deg, var(--gray-850), var(--gray-900)); border: 1px solid var(--ring); border-radius: 7px; padding: 5px 10px; cursor: pointer; }
+.mixer-btn:hover { border-color: var(--accent); }
+.mixer-btn:disabled { opacity: 0.5; cursor: default; }
+.mixer-btn.primary { border-color: var(--accent); color: var(--accent); }
+.mixer-btn .icon { font-size: 16px; }
+#mixer-actors { position: fixed; top: 12px; right: 484px; width: 320px; max-height: calc(100vh - 64px); z-index: 25; display: flex; flex-direction: column; gap: 12px; pointer-events: none; }
+#mixer-actors > .panel { width: 100%; pointer-events: auto; }
+#mixer-actors #animbar { position: relative !important; top: auto !important; right: auto !important; left: auto !important; bottom: auto !important; width: 100% !important; flex: 0 0 auto; z-index: auto !important; }
+#mixer-actors #effect-actors { flex: 1 1 auto; min-height: 160px; }
+#mixer-stack > .panel, #mixer-actors > .panel { position: relative !important; top: auto !important; right: auto !important; left: auto !important; bottom: auto !important; width: 100% !important; z-index: auto !important; }
+#mixer-stack .mixer-panel { flex: 0 0 auto; }
+/* A pick must not shift the rows under the pointer: the lane header keeps one height. */
+.mixer-current { min-height: 34px; max-height: 34px; overflow: hidden; }
+.mixer-current .side-note, .mixer-current-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Picker rows: the name gets the full width; counts drop to a second line. */
+.mixer-row { flex-wrap: wrap; row-gap: 1px; }
+.mixer-row .effect-name { flex: 1 1 0; white-space: nowrap; }
+.mixer-row .effect-id { flex: 0 0 auto; }
+.mixer-row .effect-sub { flex: 0 0 100%; padding-left: 44px; font-size: 10px; line-height: 1.2; opacity: 0.7; }
+
+/* Mixer playhead + scrubber */
+.mixer-playhead { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px solid var(--accent); pointer-events: none; }
+.mixer-scrub { display: flex; align-items: center; gap: 4px; }
+.mixer-scrub-range { flex: 1 1 auto; min-width: 0; accent-color: var(--accent); }
+.mixer-scrub-num { font-size: 11px; color: var(--muted); min-width: 70px; text-align: right; font-variant-numeric: tabular-nums; }

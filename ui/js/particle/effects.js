@@ -97,6 +97,32 @@ export class EffectManager {
     this.routines.delete(association.key);
   }
 
+  /**
+   * DampenGenerator (routine op 0x1E): every generator of `datId` under the
+   * association stops emitting and its live particles end now, audio included.
+   * Retail sustains a charge-up sound with an audio generator and cuts it this
+   * way; without it the particle re-triggers its one-shot until it dies.
+   */
+  stopGenerator(association, datId) {
+    const routines = this.routines.get(association.key);
+    if (!routines) return 0;
+    const want = String(datId ?? '').replace(/[\s\0]+$/, '');
+    let n = 0;
+    const end = (p) => {
+      for (const a of p.emittedAudio ?? []) a.stop?.();
+      p.emittedAudio = [];
+      p.forceExpired = true;
+      for (const c of p.getChildrenRecursively?.() ?? []) end(c);
+    };
+    for (const g of routines.generators) {
+      if (String(g.datId ?? '').replace(/[\s\0]+$/, '') !== want) continue;
+      g.stopEmitting();
+      for (const p of g.getActiveParticles()) end(p);
+      n++;
+    }
+    return n;
+  }
+
   clearAll() {
     for (const routines of this.routines.values()) {
       for (const g of routines.generators) g.stopEmitting();

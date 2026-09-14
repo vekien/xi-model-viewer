@@ -448,7 +448,9 @@ export function SettingsModal({
         setToolsMsg('');
         return;
       }
-      const st = await backend.toolsSetLocalPath(path);
+      // The desktop app records the override natively; the browser dev build has
+      // no such store, so the path lives in settings (xiPath) alone.
+      const st = window.__TAURI__ ? await backend.toolsSetLocalPath(path) : { toolsDir: path, mode: 'custom' };
       setTools(st);
       setDraft((d) => ({ ...d, xiPath: st.toolsDir }));
       setLocalPathDraft(st.toolsDir);

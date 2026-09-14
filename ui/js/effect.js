@@ -39,6 +39,7 @@ const SOUND_OPS = new Set([0x0a, 0x0b, 0x4a, 0x53, 0x60]);
  * op above rather than being read here.)
  */
 const ANIM_OP = 0x05;
+const DAMPEN_OP = 0x1e;   // DampenGenerator: end a generator (and its audio) now
 
 /**
  * Control flow. sec2 is a PROGRAM, not a list: 0x69/0x6A bracket a block,
@@ -164,6 +165,7 @@ function parseRoutineCommands(bytes, dv, section) {
   const calls = [];
   const sounds = [];
   const anims = [];
+  const stops = [];
   const regs = new Map();                        // bound as conditions are decided
   let stack = [];                                // operands awaiting the next 0x64
   let clock = 0;                                 // Σ delays of the entries BEFORE this one
@@ -185,7 +187,15 @@ function parseRoutineCommands(bytes, dv, section) {
     if (op === CMD_SPAWN_GENERATOR) commands.push({ genId: ref, delay: at, dur: u16(p + 6) });
     else if (CALL_OPS.has(op)) calls.push({ routineId: ref, delay: at });
     else if (SOUND_OPS.has(op)) sounds.push({ soundId: ref, delay: at });
-    else if (op === ANIM_OP) anims.push({ ref, delay: at, dur: u16(p + 6) });
+    else if (op === ANIM_OP) {
+      // transIn/transOut are the scheduler's blend windows in ticks (u16 @+24 /
+      // @+28), maxLoops @+30 (0 = loop forever).
+      const long = p + 32 <= end;
+      anims.push({
+        ref, delay: at, dur: u16(p + 6),
+        transIn: long ? u16(p + 24) : 0, transOut: long ? u16(p + 28) : 0, loops: long ? u16(p + 30) : 1,
+      });
+    } else if (op === DAMPEN_OP) stops.push({ genId: ref, delay: at });
   };
 
   const run = (nodes) => {
@@ -230,7 +240,7 @@ function parseRoutineCommands(bytes, dv, section) {
   };
 
   run(nestBlocks(readEntries(bytes, base + (sec2 - 16), end)));
-  return { commands, calls, sounds, anims };
+  return { commands, calls, sounds, anims, stops };
 }
 
 /** Frames the routine spans, from its last generator's start + emit window. */
@@ -250,9 +260,9 @@ export function parseEffectRoutines(buf) {
   const routines = [];
   for (const s of parseSections(dv)) {
     if (s.typeCode !== EFFECT_ROUTINE) continue;
-    const { commands, calls, sounds, anims } = parseRoutineCommands(bytes, dv, s);
+    const { commands, calls, sounds, anims, stops } = parseRoutineCommands(bytes, dv, s);
     routines.push({
-      id: cleanId(s.id) || 'main', commands, calls, sounds, anims, length: routineLength(commands),
+      id: cleanId(s.id) || 'main', commands, calls, sounds, anims, stops, length: routineLength(commands),
     });
   }
   return routines;
@@ -278,6 +288,7 @@ export function flattenRoutine(routine, byId, globalById = null) {
   const commands = [];
   const sounds = [];
   const anims = [];
+  const stops = [];
   const actorCalls = [];
   const seen = new Set();
 
@@ -287,6 +298,7 @@ export function flattenRoutine(routine, byId, globalById = null) {
     for (const c of r.commands) commands.push({ ...c, delay: c.delay + offset });
     for (const s of r.sounds) sounds.push({ ...s, delay: s.delay + offset });
     for (const a of r.anims ?? []) anims.push({ ...a, delay: a.delay + offset });
+    for (const st of r.stops ?? []) stops.push({ ...st, delay: st.delay + offset });
     for (const call of r.calls) {
       const next = byId.get(call.routineId) ?? globalById?.get(call.routineId) ?? null;
       if (!next) {
@@ -319,5 +331,5 @@ export function flattenRoutine(routine, byId, globalById = null) {
   // schedules meet clips in dat.js resolveScheduleClip.
   anims.sort((a, b) => a.delay - b.delay);
   actorCalls.sort((a, b) => a.delay - b.delay);
-  return { commands, sounds: deduped, anims, actorCalls, length: routineLength(commands) };
+  return { commands, sounds: deduped, anims, stops, actorCalls, length: routineLength(commands) };
 }

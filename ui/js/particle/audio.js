@@ -105,6 +105,7 @@ export class WeatherAudio {
     this._current = null;        // { soundId, voice }
     this._pending = null;        // soundId currently being loaded
     this._buffers = new Map();   // soundId -> { buffer, loopStart } | null
+    this._peaks = new Map();     // `${soundId}:${bins}` -> Promise<{ seconds, peaks } | null>
     this._lastKey = null;
     // Voices mid-crossfade are detached from _current so a mute/stop must still
     // reach them — otherwise "toggle off" leaves the fading bed audible.
@@ -279,6 +280,33 @@ export class WeatherAudio {
    * Pre-decode a sound so its first play() starts on the scheduled frame.
    */
   warm(soundId) { return this._buffer(soundId); }
+
+  /**
+   * Peak envelope for the mixer's timeline: `bins` max-abs samples over the
+   * first channel plus the length in seconds. Cached per id; null when the
+   * sound cannot be decoded (no game path, vgmstream missing…).
+   */
+  peaks(soundId, bins = 96) {
+    const key = `${soundId}:${bins}`;
+    if (this._peaks.has(key)) return this._peaks.get(key);
+    const p = this._buffer(soundId).then((sound) => {
+      const buf = sound?.buffer;
+      if (!buf) return null;
+      const data = buf.getChannelData(0);
+      const out = new Float32Array(bins);
+      const per = data.length / bins;
+      for (let i = 0; i < bins; i++) {
+        const a = Math.floor(i * per);
+        const b = Math.min(data.length, Math.floor((i + 1) * per));
+        let m = 0;
+        for (let j = a; j < b; j++) { const v = Math.abs(data[j]); if (v > m) m = v; }
+        out[i] = m;
+      }
+      return { seconds: buf.duration, peaks: out };
+    });
+    this._peaks.set(key, p);
+    return p;
+  }
 
   async _buffer(soundId) {
     if (this._buffers.has(soundId)) return this._buffers.get(soundId);

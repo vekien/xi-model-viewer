@@ -317,6 +317,60 @@ function loadGearSets() {
   }
 }
 
+/**
+ * Built-in gear sets: retail artifact / relic armor and a few classic looks,
+ * named by item label (identical on every playable race, so one table serves
+ * all — matchSlotRef resolves a bare label). Slots a preset doesn't name keep
+ * the current pick, so a body-only look layers over what is worn. Read-only:
+ * they cannot be renamed, overwritten or deleted, and they never persist.
+ */
+const AF = (job, head, body, hands, legs, feet) => ({
+  head: `${job} - ${head}`, body: `${job} - ${body}`, hands: `${job} - ${hands}`, legs: `${job} - ${legs}`, feet: `${job} - ${feet}`,
+});
+export const BUILTIN_GEARSETS = [
+  // Artifact (AF1) + the job's relic weapon
+  { name: 'AF · WAR Fighter\'s', gear: { ...AF('WAR', "Fighter's Mask", "Fighter's Lorica", "Fighter's Mufflers", "Fighter's Cuisses", "Fighter's Calligae"), main: 'Bravura' } },
+  { name: 'AF · MNK Temple', gear: { ...AF('MNK', 'Temple Crown', 'Temple Cyclas', 'Temple Gloves', 'Temple Gaiters', 'Temple Hose'), main: 'Spharai' } },
+  { name: 'AF · WHM Cleric\'s', gear: { ...AF('WHM', "Cleric's Cap", "Cleric's Briault", "Cleric's Mitts", "Cleric's Pantaloons", "Cleric's Duckbills"), main: 'Mjollnir' } },
+  { name: 'AF · BLM Sorcerer\'s', gear: { ...AF('BLM', "Sorcerer's Petasos", "Sorcerer's Coat", "Sorcerer's Gloves", "Sorcerer's Tonban", "Sorcerer's Sabots"), main: 'Claustrum' } },
+  { name: 'AF · RDM Warlock\'s', gear: { ...AF('RDM', "Warlock's Chapeau", "Warlock's Tabard", "Warlock's Gloves", "Warlock's Tights", "Warlock's Boots"), main: 'Excalibur' } },
+  { name: 'AF · THF Rogue\'s', gear: { ...AF('THF', "Rogue's Bonnet", "Rogue's Vest", "Rogue's Armlets", "Rogue's Culotte", "Rogue's Poulaines"), main: 'Mandau' } },
+  { name: 'AF · PLD Gallant', gear: { ...AF('PLD', 'Gallant Coronet', 'Gallant Surcoat', 'Gallant Gauntlets', 'Gallant Breeches', 'Gallant Leggings'), main: 'Excalibur', sub: 'Aegis' } },
+  { name: 'AF · DRK Chaos', gear: { ...AF('DRK', 'Chaos Burgeonet', 'Chaos Cuirass', 'Chaos Gauntlets', 'Chaos Flanchard', 'Chaos Sollerets'), main: 'Apocalypse' } },
+  { name: 'AF · BST Beast', gear: { ...AF('BST', 'Beast Helm', 'Beast JackCoat', 'Beast Gloves', 'Beast Trousers', 'Beast Gaiters'), main: 'Guttler' } },
+  { name: 'AF · BRD Choral', gear: { ...AF('BRD', 'Choral Roundlet', 'Choral Jstcorps', 'Choral Cuffs', 'Choral Cannions', 'Choral Slippers'), range: 'Gjallarhorn' } },
+  { name: 'AF · RNG Hunter\'s', gear: { ...AF('RNG', "Hunter's Beret", "Hunter's Justaucorps", "Hunter's Bracers", "Hunter's Braccae", "Hunter's Socks"), range: 'Annihilator' } },
+  { name: 'AF · SAM Myochin', gear: { ...AF('SAM', 'Myochin Kabuto', 'Myochin Domaru', 'Myochin Kote', 'Myochin Haidate', 'Myochin Sune-Ate'), main: 'Amanomurakumo' } },
+  { name: 'AF · NIN Ninja', gear: { ...AF('NIN', 'Ninja Hatsuburi', 'Ninja Chainmail', 'Ninja Tekko', 'Ninja Hakama', 'Ninja Kyahan'), main: 'Kikoku', sub: 'Kikoku' } },
+  { name: 'AF · DRG Drachen', gear: { ...AF('DRG', 'Drachen Armet', 'Drachen Mail', 'Drachen Finger Gauntlets', 'Drachen Brais', 'Drachen Greaves'), main: 'Gungnir' } },
+  { name: 'AF · SMN Evoker\'s', gear: { ...AF('SMN', "Evoker's Horn", "Evoker's Doublet", "Evoker's Bracers", "Evoker's Spats", "Evoker's Pigaches"), main: 'Nirvana' } },
+  { name: 'AF · SCH Argute', gear: { ...AF('SCH', 'Argute Mortarboard', 'Argute Gown', 'Argute Bracers', 'Argute Pants', 'Argute Loafers'), main: 'Tupsimati' } },
+  // Relic (AF2)
+  { name: 'Relic · MNK Melee', gear: AF('MNK', 'Melee Crown', 'Melee Cyclas', 'Melee Gloves', 'Melee Hose', 'Melee Gaiters') },
+  { name: 'Relic · RDM Duelist\'s', gear: AF('RDM', "Duelist's Chapeau", "Duelist's Tabard", "Duelist's Gloves", "Duelist's Tights", "Duelist's Boots") },
+  { name: 'Relic · THF Assassin\'s', gear: AF('THF', "Assassin's Bonnet", "Assassin's Vest", "Assassin's Armlets", "Assassin's Culotte", "Assassin's Poulaines") },
+  { name: 'Relic · PLD Valor', gear: AF('PLD', 'Valor Coronet', 'Valor Surcoat', 'Valor Gauntlets', 'Valor Breeches', 'Valor Leggings') },
+  { name: 'Relic · DRK Abyss', gear: AF('DRK', 'Abyss Burgeonet', 'Abyss Cuirass', 'Abyss Gauntlets', 'Abyss Flanchard', 'Abyss Sollerets') },
+  { name: 'Relic · BST Monster', gear: AF('BST', 'Monster Helm', 'Monster JackCoat', 'Monster Gloves', 'Monster Trousers', 'Monster Gaiters') },
+  { name: 'Relic · BRD Bard\'s', gear: AF('BRD', "Bard's Roundlet", "Bard's Justaucorps", "Bard's Cuffs", "Bard's Cannions", "Bard's Slippers") },
+  { name: 'Relic · RNG Scout\'s', gear: AF('RNG', "Scout's Beret", "Scout's Jerkin", "Scout's Bracers", "Scout's Braccae", "Scout's Socks") },
+  { name: 'Relic · SAM Saotome', gear: AF('SAM', 'Saotome Kabuto', 'Saotome Domaru', 'Saotome Kote', 'Saotome Haidate', 'Saotome Sune-Ate') },
+  { name: 'Relic · NIN Koga', gear: AF('NIN', 'Koga Hatsuburi', 'Koga Chainmail', 'Koga Tekko', 'Koga Hakama', 'Koga Kyahan') },
+  { name: 'Relic · DRG Wyrm', gear: AF('DRG', 'Wyrm Armet', 'Wyrm Mail', 'Wyrm Finger Gauntlets', 'Wyrm Brais', 'Wyrm Greaves') },
+  { name: 'Relic · SMN Summoner\'s', gear: AF('SMN', "Summoner's Horn", "Summoner's Doublet", "Summoner's Bracers", "Summoner's Spats", "Summoner's Pigaches") },
+  // Classic looks
+  { name: 'Koenig + Ragnarok', gear: { head: 'Koenig Schaller', body: 'Koenig Cuirass', hands: 'Koenig Handschuhs', legs: 'Koenig Diechlings', feet: 'Koenig Schuhs', main: 'Ragnarok' } },
+  { name: 'Crimson + Apocalypse', gear: { head: 'Crimson Mask', body: 'Crimson Scale Mail', hands: 'Crimson Finger Gauntlets', legs: 'Crimson Cuisses', feet: 'Crimson Greaves', main: 'Apocalypse' } },
+  { name: 'Hachiryu + Amanomurakumo', gear: { body: 'Hachiryu Haramaki', hands: 'Hachiryu Kote', legs: 'Hachiryu Haidate', feet: 'Hachiryu Sune-Ate', main: 'Amanomurakumo' } },
+  { name: 'Homam', gear: { head: 'Homam Zucchetto', body: 'Homam Corazza', hands: 'Homam Manopolas', legs: 'Homam Cosciales', feet: 'Homam Gambieras' } },
+  { name: 'Nashira', gear: { head: 'Nashira Turban', body: 'Nashira Manteel', hands: 'Nashira Gages', legs: 'Nashira Seraweels', feet: 'Nashira Crackows' } },
+  { name: 'Sha\'ir', gear: { head: "Sha'ir Turban", body: "Sha'ir Manteel", hands: "Sha'ir Gages", legs: "Sha'ir Seraweels", feet: "Sha'ir Crackows" } },
+  { name: 'Zenith + Dalmatica', gear: { head: 'Zenith Crown', body: 'Dalmatica', hands: 'Zenith Mitts', legs: 'Zenith Slacks', feet: 'Zenith Pumps', main: 'Claustrum' } },
+  { name: 'Kirin\'s Osode (body)', gear: { body: "Kirin's Osode" } },
+  { name: 'Scorpion Harness (body)', gear: { body: 'Scorpion Harness' } },
+  { name: 'Haubergeon (body)', gear: { body: 'Haubergeon' } },
+].map((g, i) => ({ id: `builtin:${i}`, builtin: true, ...g }));
+
 function saveGearSets(sets) {
   try { localStorage.setItem(GEARSETS_KEY, JSON.stringify({ version: 3, sets })); } catch { /* quota */ }
 }
@@ -782,6 +836,7 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
   return {
     races, race, setRace, slots, sel, setSel,
     actionGroups, actionGroupItems, actionGroup, setActionGroup, actionEntries, action, setAction,
+    actions,
     applyGearSet, reload,
     isolated, toggleIsolate,
     // Read from characters.json alongside the races; the list is already
@@ -1024,8 +1079,20 @@ function GearSetsPanel({ race, sel, slots, races, onApply }) {
       )}
 
       <div className="gs-list">
+        {BUILTIN_GEARSETS.map((s) => (
+          <div
+            key={s.id}
+            className={`gs-row gs-builtin${activeSet === s.id ? ' on' : ''}`}
+            onClick={() => { setActiveSet(s.id); onApply({ ...s, race }); }}
+            title="Built-in look — slots it doesn't name keep the current pick"
+          >
+            <span className="icon gs-kind">auto_awesome</span>
+            <span className="gs-name">{s.name}</span>
+            <span className="gs-meta">preset</span>
+          </div>
+        ))}
         {sets.length === 0 && !mode && (
-          <div className="gs-empty">Save the current look to add a gear set.</div>
+          <div className="gs-empty">Save the current look to add your own.</div>
         )}
         {sets.map((s) => (
           <div
