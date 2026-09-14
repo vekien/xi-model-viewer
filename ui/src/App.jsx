@@ -6484,13 +6484,15 @@ export default function App({ launch = null }) {
   /** `xi ability inspect --json` for a catalog entry, cached per spec. */
   const mixerInfoFor = useCallback(async (entry) => {
     const cache = mixerInfoCache.current;
-    if (cache.has(entry.spec)) return cache.get(entry.spec);
+    const routine = entry.routine || 'main';
+    const key = `${entry.spec}#${routine}`;
+    if (cache.has(key)) return cache.get(key);
     const ctx = xiCtx();
     if (!ctx) throw new Error('xi-tools not configured');
     const xiRace = RACE_TO_XI[pc.race] ?? 'HumeMale';
     const spec = /^ws:\d+$/.test(entry.spec) ? `${entry.spec}:${xiRace}` : entry.spec;
-    const info = await inspectSpec(spec, ctx.xiPath, ctx.env);
-    cache.set(entry.spec, info);
+    const info = await inspectSpec(spec, ctx.xiPath, ctx.env, routine);
+    cache.set(key, info);
     return info;
   }, [xiCtx, pc.race]);
 
@@ -6501,7 +6503,9 @@ export default function App({ launch = null }) {
    * the character already carries. Returns true when the action was (or is) set.
    */
   const mixerSyncAction = useCallback((entry) => {
-    if (!entry?.paths) return { found: false, changed: false };
+    // A catalog weapon skill carries a DAT per race; an animation-catalog action
+    // carries this race's DAT as `path`. Either names the Action to set.
+    if (!entry?.paths && !entry?.path) return { found: false, changed: false };
     const want = normRel(entryPathForRace(entry, pc.race)).toLowerCase();
     const hit = (pc.actions ?? []).find((a) => normRel(a.paths?.[0] ?? '').toLowerCase() === want);
     if (!hit) return { found: false, changed: false };
@@ -6589,7 +6593,7 @@ export default function App({ launch = null }) {
       const fresh = eventsFromInspect(info, lane, { keep: lane === 'motion' });
       const r = mixerRecipeRef.current;
       const keptEvents = r.events.filter((e) => e.from !== lane && !(lane === 'motion' && e.kind === 'keep'));
-      const sources = { ...r.sources, [lane]: { spec: entry.spec, routine: 'main', name: entry.name } };
+      const sources = { ...r.sources, [lane]: { spec: entry.spec, routine: entry.routine || 'main', name: entry.name } };
       const name = r.events.length ? r.name : entry.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || r.name;
       next = { ...r, name, sources, events: [...keptEvents, ...fresh] };
       mixerRecipeRef.current = next;
@@ -10350,6 +10354,9 @@ export default function App({ launch = null }) {
           catalog={mixerCatalog}
           catalogBusy={mixerCatalogBusy}
           onBuildCatalog={buildMixerCatalog}
+          actions={pc.actions}
+          race={pc.race}
+          readDat={async (rel) => backend.readFile(await backend.resolvePrefer(gameCandidates(rel, settingsRef.current)))}
           lane={mixerLane}
           onLane={setMixerLane}
           sources={mixerRecipe.sources}

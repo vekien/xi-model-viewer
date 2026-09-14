@@ -6830,6 +6830,9 @@ body.mixer-docked #mixer-actors { max-height: calc(100vh - 124px - var(--mixer-d
 /* One line per row: the name fills, the search-mode group tag trails; spec and counts are the tip. */
 .mixer-row .effect-name { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mixer-row .effect-sub { flex: 0 0 auto; opacity: 0.7; }
+/* Rules between the motion list blocks: general groups | weapon and job groups | the ability catalog. */
+.mixer-list .tree-sep { border-top: 1px solid var(--ring); margin: 6px 12px; }
+.mixer-list .node .children .node .children { margin-left: 15px; }
 
 /* Mixer playhead + scrubber */
 .mixer-playhead { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px solid var(--accent); pointer-events: none; }

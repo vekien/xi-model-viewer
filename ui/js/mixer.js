@@ -261,8 +261,10 @@ export function firstJsonValue(text) {
   return JSON.parse(s.slice(start));
 }
 
-export async function inspectSpec(spec, xiPath, env) {
-  const info = await xiJson(['ability', 'inspect', spec, '--json'], xiPath, env);
+export async function inspectSpec(spec, xiPath, env, routine = 'main') {
+  const args = ['ability', 'inspect', spec, '--json'];
+  if (routine && routine !== 'main') args.push('--routine', routine);
+  const info = await xiJson(args, xiPath, env);
   return Array.isArray(info) ? info[0] : info;
 }
 
