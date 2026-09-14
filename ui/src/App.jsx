@@ -59,7 +59,7 @@ import { ZoneDefModal } from './ZoneDefModal.jsx';
 import { ParticlePreviewModal } from './ParticlePreviewModal.jsx';
 import { MixerList } from './MixerList.jsx';
 import { MixerPanel } from './MixerPanel.jsx';
-import { RACE_TO_XI, composeForPreview, emptyRecipe, entryPathForRace, eventsFromInspect, inspectSpec, loadCatalog, mixerDir, publishRecipe, serializeRecipe, soundIdsFromInfo, withIds } from '../js/mixer.js';
+import { RACE_TO_XI, buildCatalogArgs, composeForPreview, emptyRecipe, entryPathForRace, eventsFromInspect, inspectSpec, loadCatalog, mixerDir, publishRecipe, serializeRecipe, soundIdsFromInfo, withIds } from '../js/mixer.js';
 import { ZoneMeshPreviewModal } from './ZoneMeshPreviewModal.jsx';
 import { armGeneratorPreview } from '../js/particlePreview.js';
 import { checkForUpdate, checkForUpdateManual, dismissUpdate } from '../js/update.js';
@@ -4969,6 +4969,20 @@ export default function App({ launch = null }) {
         if (effectTransport === 'playing') pauseEffect(); else playEffect();
         return;
       }
+      if (leftView === 'mixer') {
+        // The mix's own transport: Space plays / pauses the composed mix (or
+        // composes it when nothing is armed yet); a second press within 400 ms
+        // stops it — rewound to frame 0, paused. Never the bare character clip.
+        e.preventDefault();
+        e.target?.blur?.();   // a focused Play button would "click" again on keyup
+        const now = performance.now();
+        const twice = now - mixerSpaceAtRef.current < 400;
+        mixerSpaceAtRef.current = twice ? 0 : now;
+        if (twice) { if (mixerLoaded) mixerSeek(0); return; }
+        if (!mixerLoaded) { if (!mixerBusy && mixerRecipe.events.length) mixerPlay(); return; }
+        if (effectTransport === 'playing') pauseEffect(); else playEffect();
+        return;
+      }
       if (!rendererRef.current?.currentAnimation) return;
       e.preventDefault();
       if (playing) pcPause(); else pcPlay();
@@ -4976,6 +4990,7 @@ export default function App({ launch = null }) {
     window.addEventListener('keydown', onSpace);
     return () => window.removeEventListener('keydown', onSpace);
   });
+  const mixerSpaceAtRef = useRef(0);
 
   const animControls = {
     anims, currentAnim, onAnimChange: handleAnimChange,
@@ -6428,7 +6443,7 @@ export default function App({ launch = null }) {
     const ctx = xiCtx();
     if (!ctx) return;
     let cancelled = false;
-    loadCatalog(ctx.xiPath).then((cat) => { if (!cancelled && cat) setMixerCatalog(cat); });
+    loadCatalog().then((cat) => { if (!cancelled && cat) setMixerCatalog(cat); });
     refreshMixerRecipes();
     // The stage needs an actor for motion previews; bring the composer up.
     if (effectActorTabRef.current === 'none') pickEffectActorTab('pc');
@@ -6444,12 +6459,18 @@ export default function App({ launch = null }) {
     setMixerCatalogBusy(true);
     const lines = [];
     try {
-      const code = await backend.xiRunStream(['ability', 'catalog'], ctx.xiPath, ctx.env, (l) => {
+      // The list is baked by `xi mv update --only abilities` like every other
+      // list the viewer ships; here it is written straight into the viewer's
+      // own lists folder (the one boot-time downloads land in), so the panel
+      // reads it back the same way it reads the bundled copy.
+      const args = await buildCatalogArgs();
+      const code = await backend.xiRunStream(args, ctx.xiPath, ctx.env, (l) => {
         lines.push(l);
-        setCliOutput({ title: 'xi ability catalog', text: lines.join('\n') });
+        setCliOutput({ title: `xi ${args.join(' ')}`, text: lines.join('\n') });
       });
       if (code && code !== 0) throw new Error(`xi exited with ${code}`);
-      const cat = await loadCatalog(ctx.xiPath);
+      const cat = await loadCatalog({ fresh: true });
+      if (!cat) throw new Error('abilities.json was not written — see the console');
       setMixerCatalog(cat);
       setStatusText(`Catalog: ${cat?.entries?.length ?? 0} abilities, spells and weapon skills`);
     } catch (e) {
@@ -6845,26 +6866,39 @@ export default function App({ launch = null }) {
     }
   }, [xiCtx, mixerCatalog, mixerInfoFor, stopEffect]);
 
-  /** Dry-run first so the plan (slot, file ids, server row) is on screen before anything is written. */
-  const mixerPublish = useCallback(async () => {
+  /**
+   * Publishing is the `xi dats` ability action: the recipe is prepared into
+   * projects/<name>.json and built like any gear or mount placement. Two steps
+   * so the plan (slot, file ids, server SQL) is on screen before anything is
+   * written: `plan` runs the dry-run build and parks its text on the panel,
+   * `go` runs the real build once the user confirms there.
+   */
+  const [mixerPlan, setMixerPlan] = useState(null);   // { name, text } awaiting confirmation
+  const mixerPublish = useCallback(async (step = 'plan') => {
     const ctx = xiCtx();
     if (!ctx) return;
     const recipe = mixerRecipeRef.current;
+    if (step === 'cancel') { setMixerPlan(null); return; }
     setMixerBusy(true);
     try {
-      const plan = await publishRecipe(recipe, { dryRun: true }, ctx.xiPath, ctx.env);
-      setCliOutput({ title: `xi ability publish · plan`, text: plan.text });
-      if (!plan.ok) { setStatusText('Publish plan failed — see the console.'); return; }
-      const go = window.confirm(`Publish "${recipe.name}" into ROM10?\n\n${plan.text.split('\n').slice(0, 6).join('\n')}\n\nThis writes DATs and patches the file tables in the pivot overlay.`);
-      if (!go) return;
+      if (step === 'plan') {
+        const plan = await publishRecipe(recipe, { dryRun: true }, ctx.xiPath, ctx.env);
+        setCliOutput({ title: `xi dats build ${recipe.name} · plan`, text: plan.text });
+        if (!plan.ok) { setStatusText('Publish plan failed — see the console.'); setMixerPlan(null); return; }
+        setMixerPlan({ name: recipe.name, text: plan.text });
+        return;
+      }
+      setMixerPlan(null);
       const res = await publishRecipe(recipe, { dryRun: false }, ctx.xiPath, ctx.env);
-      setCliOutput({ title: `xi ability publish · ${res.ok ? 'done' : 'failed'}`, text: res.text });
-      setStatusText(res.ok ? `Published ${recipe.name}` : 'Publish failed — see the console.');
+      setCliOutput({ title: `xi dats build ${recipe.name} · ${res.ok ? 'done' : 'failed'}`, text: res.text });
+      setStatusText(res.ok ? `Published ${recipe.name} — restart the client to see it` : 'Publish failed — see the console.');
       refreshMixerRecipes();
     } finally {
       setMixerBusy(false);
     }
   }, [xiCtx, refreshMixerRecipes]);
+  // A plan is for one recipe as it was; any edit or switch voids it.
+  useEffect(() => { setMixerPlan(null); }, [mixerRecipe]);
 
   // One view on screen at a time, each arriving clean. Without this a model
   // keeps rendering (and animating) behind the Images page, music plays on under
@@ -10588,6 +10622,7 @@ export default function App({ launch = null }) {
             onStop={() => { stopEffect(); setMixerLoaded(false); setMixerDirty(false); setMixerStageName(null); mixerComposeRef.current = null; }}
             mixLoaded={mixerLoaded}
             onPublish={mixerPublish}
+            publishPlan={mixerPlan}
             onSaveAs={mixerSaveAs}
             onDelete={mixerDelete}
             onRename={mixerRename}

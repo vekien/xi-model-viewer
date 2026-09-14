@@ -105,7 +105,7 @@ export function MixerList({
             <span className="mixer-current-name">{current.name ?? current.spec}</span>
             <span className="mono-small">{current.spec}</span>
             <Tooltip content="Clear this lane">
-              <button type="button" className="icon-btn" onClick={() => onClearLane(lane)}>
+              <button type="button" className="pc-tbtn" onClick={() => onClearLane(lane)}>
                 <span className="icon">close</span>
               </button>
             </Tooltip>
@@ -137,7 +137,7 @@ export function MixerList({
       <div className="list-scroll" ref={scrollRef} tabIndex={0} onKeyDown={onKey}>
         {!catalog && (
           <div className="side-note mixer-empty">
-            <p>The pick list comes from <span className="mono">xi ability catalog</span> — every job ability, spell and weapon skill with its generators, sounds and clips. It takes a minute the first time.</p>
+            <p>The pick list is <span className="mono">abilities.json</span>, baked by <span className="mono">xi mv update --only abilities</span> like the other lists — every job ability, spell and weapon skill with its generators, sounds and clips. This build has none yet; building it here takes about a minute.</p>
             <button type="button" className="mixer-btn" disabled={catalogBusy} onClick={onBuildCatalog}>
               {catalogBusy ? 'Building…' : 'Build catalog'}
             </button>
