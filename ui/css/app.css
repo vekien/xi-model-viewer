@@ -6827,10 +6827,9 @@ body.mixer-docked #mixer-actors { max-height: calc(100vh - 124px - var(--mixer-d
 .mixer-current { min-height: 34px; max-height: 34px; overflow: hidden; }
 .mixer-current .side-note, .mixer-current-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Picker rows: the name gets the full width; counts drop to a second line. */
-.mixer-row { flex-wrap: wrap; row-gap: 1px; }
-.mixer-row .effect-name { flex: 1 1 0; white-space: nowrap; }
-.mixer-row .effect-id { flex: 0 0 auto; }
-.mixer-row .effect-sub { flex: 0 0 100%; padding-left: 44px; font-size: 10px; line-height: 1.2; opacity: 0.7; }
+/* One line per row: the name fills, the search-mode group tag trails; spec and counts are the tip. */
+.mixer-row .effect-name { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mixer-row .effect-sub { flex: 0 0 auto; opacity: 0.7; }
 
 /* Mixer playhead + scrubber */
 .mixer-playhead { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px solid var(--accent); pointer-events: none; }

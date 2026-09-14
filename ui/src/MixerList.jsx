@@ -26,16 +26,19 @@ function counts(e) {
   return bits.join(' · ');
 }
 
+// One line per row: the name, and while searching the group it came from. The
+// spec and section counts are the tip — useful when choosing, noise as a column.
 function Row({ entry, sub, focused, taken, onPick }) {
   return (
     <div className={`node${focused ? ' selected' : ''}`} data-spec={entry.spec}>
-      <div className={`row mixer-row${taken ? ' taken' : ''}`} onClick={() => onPick(entry)}>
-        <span className="caret"><span className="icon" /></span>
-        <span className="kind icon">{KIND_ICON[entry.kind] ?? 'bolt'}</span>
-        <span className="effect-name">{entry.name}</span>
-        <span className="mono-small effect-id">{entry.spec}</span>
-        <span className="mono-small effect-sub">{sub ? `${sub} · ` : ''}{counts(entry)}</span>
-      </div>
+      <Tooltip content={[entry.spec, counts(entry)].filter(Boolean).join(' · ')} placement="right" delay={[350, 0]}>
+        <div className={`row mixer-row${taken ? ' taken' : ''}`} onClick={() => onPick(entry)}>
+          <span className="caret"><span className="icon" /></span>
+          <span className="kind icon">{KIND_ICON[entry.kind] ?? 'bolt'}</span>
+          <span className="effect-name">{entry.name}</span>
+          {sub && <span className="mono-small effect-sub">{sub}</span>}
+        </div>
+      </Tooltip>
     </div>
   );
 }
