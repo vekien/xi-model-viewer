@@ -411,7 +411,7 @@ export function TimelineWindow({
         <div className="cseq-row cseq-settings mseq-toolbar">
           <span className="cseq-label">Add track</span>
           <div className="cseq-load mseq-add-track">
-            <Combo value="" items={LANES.map((l) => ({ id: l.id, label: l.label }))} placeholder="Motion, Effects, Sound…"
+            <Combo value="" items={LANES.map((l) => ({ id: l.id, label: l.label, color: l.color }))} placeholder="Motion, Effects, Sound…"
               onChange={(kind) => kind && onAddTrack?.(kind)} />
           </div>
           <div className="cseq-bar-group cseq-zoom">

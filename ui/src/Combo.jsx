@@ -57,7 +57,8 @@ function optionRows(items, Option) {
         ? <div key={r.key} className="combo-rule" />
         : <div key={r.key} className="combo-group">{r.header}</div>)
       : (
-        <Option key={r.key} value={r.item.id} className="combo-option">
+        <Option key={r.key} value={r.item.id} className="combo-option" style={r.item.color ? { color: r.item.color } : undefined}>
+          {r.item.color && <span className="opt-dot" style={{ background: r.item.color }} />}
           {r.item.label}
           {r.item.badge != null && <span className="opt-badge">{r.item.badge}</span>}
         </Option>

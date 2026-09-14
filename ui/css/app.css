@@ -2658,6 +2658,8 @@ button.details-path-link.mono { font-family: var(--font-mono); font-size: 11px; 
   white-space: nowrap;
 }
 .combo-option[data-focus] { background: rgba(255, 255, 255, 0.09); }
+/* An option with a colour (the timeline's track kinds): a swatch before the label, the label in it. */
+.combo-option .opt-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 8px; vertical-align: 0; flex: 0 0 auto; }
 .combo-option[data-selected] { color: var(--accent); font-weight: 600; }
 .opt-badge {
   margin-left: auto;
