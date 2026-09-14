@@ -8934,9 +8934,17 @@ export default function App({ launch = null }) {
       case 'reset-camera':
         focusOrResetCamera({ refit: true });
         break;
-      case 'toggle-wasd':
-        setWasd(!wasdRef.current);
+      case 'toggle-wasd': {
+        const next = !wasdRef.current;
+        setWasd(next);
+        // Leaving fly: setMode('orbit') drops the pivot ahead of the camera's nose
+        // at the old orbit distance — wherever the flight ended, often behind the
+        // actor. Re-centre exactly as F does (hips at the current distance on a
+        // character, the fit otherwise), without the zone-selection framing
+        // switching WASD straight back on.
+        if (!next) focusOrResetCamera({ autoFly: false });
         break;
+      }
       case 'toggle-ortho':
         setOrtho(!orthoRef.current);
         break;
@@ -9206,11 +9214,11 @@ export default function App({ launch = null }) {
   };
 
   /** Frame camera on a zone placement (or all instances of a mesh type). */
-  const focusBounds = useCallback((min, max) => {
+  const focusBounds = useCallback((min, max, { autoFly = true } = {}) => {
     const r = rendererRef.current;
     const cam = r?.camera;
     if (!cam || !min || !max) return;
-    if (!wasdRef.current && settingsRef.current?.autoWasdZones !== false) setWasd(true);
+    if (autoFly && !wasdRef.current && settingsRef.current?.autoWasdZones !== false) setWasd(true);
     const canvas = r.canvas;
     const aspect = canvas?.clientWidth > 0 && canvas?.clientHeight > 0
       ? canvas.clientWidth / canvas.clientHeight
@@ -9225,8 +9233,10 @@ export default function App({ launch = null }) {
    *
    * `refit` forces the full framing (Shift+F, View > Reset Camera, Assets view
    * switches). Plain F on a character only re-centres — see r.focusJoint().
+   * `autoFly: false` keeps the framing in the current camera mode (leaving WASD
+   * must not have the zone-selection path turn it back on).
    */
-  const focusOrResetCamera = useCallback(({ refit = false } = {}) => {
+  const focusOrResetCamera = useCallback(({ refit = false, autoFly = true } = {}) => {
     const r = rendererRef.current;
     if (!r) return;
     // A selected actor wins: frame it, whatever else is picked.
@@ -9238,6 +9248,7 @@ export default function App({ launch = null }) {
         focusBounds(
           [b.min[0] - pad, b.min[1] - pad, b.min[2] - pad],
           [b.max[0] + pad, b.max[1] + pad, b.max[2] + pad],
+          { autoFly },
         );
         return;
       }
@@ -9250,7 +9261,7 @@ export default function App({ launch = null }) {
         const name = key.slice(5);
         const p = placements.find((x) => x.name === name);
         if (p?.bounds) {
-          focusBounds(p.bounds.min, p.bounds.max);
+          focusBounds(p.bounds.min, p.bounds.max, { autoFly });
           return;
         }
       } else if (key.startsWith('mesh:')) {
@@ -9267,7 +9278,7 @@ export default function App({ launch = null }) {
           }
         }
         if (any) {
-          focusBounds(min, max);
+          focusBounds(min, max, { autoFly });
           return;
         }
       }
