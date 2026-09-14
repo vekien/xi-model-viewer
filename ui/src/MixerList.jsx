@@ -142,8 +142,8 @@ function Group({ group, open, onToggle, children }) {
 export function MixerList({
   catalog, catalogBusy, onBuildCatalog,
   actions, race, readDat,
-  lane, onLane, sources,
-  onPick, onClearLane,
+  lane, onLane,
+  onPick,
 }) {
   const [query, setQuery] = useState(() => mixerListUi.query);
   const [openCats, setOpenCats] = useState(() => new Set(mixerListUi.openCats));
@@ -279,7 +279,7 @@ export function MixerList({
     }
   };
 
-  const current = sources?.[lane];
+  const current = null;   // the track's source is on the timeline's label, with its own X
   const focusedSpec = focus >= 0 ? visible[focus]?.spec : null;
   const isTaken = (entry) => (entry.kind === 'action'
     ? entry.datPaths.includes(current?.spec)
@@ -348,22 +348,6 @@ export function MixerList({
             <span className="mixer-lane-dot" />{l.label}
           </button>
         ))}
-      </div>
-
-      <div className="mixer-current">
-        {current ? (
-          <>
-            <span className="mixer-current-name">{current.name ?? current.spec}</span>
-            <span className="mono-small">{current.routine && current.routine !== 'main' ? `${current.spec} · ${current.routine}` : current.spec}</span>
-            <Tooltip content="Clear this lane">
-              <button type="button" className="pc-tbtn" onClick={() => onClearLane(lane)}>
-                <span className="icon">close</span>
-              </button>
-            </Tooltip>
-          </>
-        ) : (
-          <span className="side-note">No {LANES.find((l) => l.id === lane)?.label.toLowerCase()} source yet — open a group and click a row to take it.</span>
-        )}
       </div>
 
       <div className="list-search-wrap">

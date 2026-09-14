@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Tooltip } from './Tooltip.jsx';
-import { KEEP_LANE, LANES, LANE_BY_ID, opName, recipeLength } from '../js/mixer.js';
+import { KEEP_LANE, LANES, LANE_BY_ID, kindOf, opName, recipeLength, trackLabel } from '../js/mixer.js';
 
 // The mixer's timeline as a floating window built from the Camera Sequencer's
 // chrome (#camseq / .cseq-*): the same title bar, dragged by it; the same inset
@@ -22,7 +22,6 @@ const MAX_H = 700;                    // the window fits its content up to this 
 const MIN_LEN = 120;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 8;
-const TRACKS = [...LANES, KEEP_LANE];
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const readJson = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } };
@@ -56,7 +55,7 @@ function stackRows(evs, endOf) {
   return { rowOf, count: Math.max(1, rows.length) };
 }
 
-/** Peak envelope as one path of vertical bars, drawn in a 96×20 box. */
+/** Peak envelope as one path of vertical bars, one per bin, drawn in a bins×20 box. */
 function wavePath(peaks) {
   let d = '';
   for (let i = 0; i < peaks.length; i++) {
@@ -79,6 +78,7 @@ export function TimelineWindow({
   open, onClose,
   recipeName, note, failed, error, onDismissError,
   events, selectedIds, onSelect, onMoveMany, onShiftLane, onPreview,
+  tracks = [], activeTrack = 'motion', sources = {}, onActivateTrack, onAddTrack, onRemoveTrack,
   strike, playhead, mixLoaded, loopEnd = 0, minLen = 0,
   getSoundPeaks = null, ghosts = null,
   transport, canPlay, playTip, onPlayPause, onStop, onSeek,
@@ -198,13 +198,23 @@ export function TimelineWindow({
     return next;
   });
 
-  const lanes = TRACKS.map((t) => {
+  // One lane per track, in kind order, then the keep lane. Ghosts from the linked
+  // shared routines draw on the first track of their kind.
+  const laneDefs = [
+    ...tracks.map((t) => ({
+      ...LANE_BY_ID.get(t.kind), id: t.id, kind: t.kind, label: trackLabel(t.id),
+      first: tracks.find((x) => x.kind === t.kind)?.id === t.id,
+      last: [...tracks].reverse().find((x) => x.kind === t.kind)?.id === t.id,
+    })),
+    { ...KEEP_LANE, kind: 'keep', first: true, last: true },
+  ];
+  const lanes = laneDefs.map((t) => {
     const own = events.filter((e) => e.from === t.id && e.kind !== 'keep');
-    const laneEvents = t.id === 'keep' ? events.filter((e) => e.kind === 'keep')
-      : t.id === 'sound' ? [...own, ...ghostEvents]
-        : t.id === 'vfx' ? [...own, ...ghostGenEvents] : own;
+    const laneEvents = t.kind === 'keep' ? events.filter((e) => e.kind === 'keep')
+      : t.kind === 'sound' && t.first ? [...own, ...ghostEvents]
+        : t.kind === 'vfx' && t.first ? [...own, ...ghostGenEvents] : own;
     const minTicks = len * 0.012;
-    const endOf = (e) => e.start + (t.id === 'sound'
+    const endOf = (e) => e.start + (t.kind === 'sound'
       ? (e.op === 0x1e ? 8 : Math.max(soundTicks(e), 8))
       : Math.max(e.dur || 0, minTicks));
     const rows = stackRows(laneEvents, endOf);
@@ -309,9 +319,9 @@ export function TimelineWindow({
     const { t, rows, stacked } = lane;
     const row = stacked ? (rows.rowOf.get(ev._id) ?? 0) : 0;
     const top = row * LANE_H + LANE_H / 2;
-    const color = (t.id === 'keep' ? KEEP_LANE : LANE_BY_ID.get(ev.from) ?? KEEP_LANE).color;
+    const color = (t.kind === 'keep' ? KEEP_LANE : LANE_BY_ID.get(kindOf(ev.from)) ?? KEEP_LANE).color;
     const state = `${selectedIds.has(ev._id) ? ' on' : ''}${ev.enabled === false ? ' off' : ''}`;
-    if (ev.ghost && t.id === 'vfx') {
+    if (ev.ghost && t.kind === 'vfx') {
       return (
         <Tooltip key={ev._id} content={`${ev.count} generator${ev.count === 1 ? '' : 's'} via shared routine ${ev.via} @${ev.start} — the game runs this from ROM/0/0.DAT; mute or move the ${ev.via} link to change it`}>
           <span className="mseq-pill ghost fx" style={{ left: x(ev.start), width: `${Math.max(1.2, ((ev.dur || 0) / len) * 100)}%`, top }}>
@@ -320,19 +330,19 @@ export function TimelineWindow({
         </Tooltip>
       );
     }
-    if (t.id === 'sound' && ev.ghost) {
+    if (t.kind === 'sound' && ev.ghost) {
       const pk = peaks.get(soundIdOf(ev));
       return (
         <Tooltip key={ev._id} content={`${ev.ref} via shared routine ${ev.via} @${ev.start}${pk ? ` · ${pk.seconds.toFixed(2)}s` : ''} — the game plays this from ROM/0/0.DAT; mute or move the ${ev.via} link to change it`}>
           <span className="mseq-pill wave ghost" style={{ left: x(ev.start), width: `${Math.max(2.4, (soundTicks(ev) / len) * 100)}%`, top }}>
             <span className="icon mseq-spk">link</span>
-            {pk?.peaks && <svg className="mseq-wave" viewBox="0 0 96 20" preserveAspectRatio="none"><path d={wavePath(pk.peaks)} stroke="#0d1012" strokeWidth="0.9" fill="none" /></svg>}
+            {pk?.peaks && <svg className="mseq-wave" viewBox={`0 0 ${pk.peaks.length} 20`} preserveAspectRatio="none"><path d={wavePath(pk.peaks)} stroke="#fff" strokeWidth="0.75" strokeOpacity="0.9" fill="none" /></svg>}
             <span className="mseq-wave-label">{ev.via} · {ev.ref}</span>
           </span>
         </Tooltip>
       );
     }
-    if (t.id === 'sound' && ev.op === 0x1e) {
+    if (t.kind === 'sound' && ev.op === 0x1e) {
       return (
         <Tooltip key={ev._id} content={`Stop ${ev.ref} @${ev.start} — ends the sustained sound`}>
           <span className={`mseq-pill${state}`} style={{ left: x(ev.start), width: '2.4%', background: color, top, opacity: 0.7 }}
@@ -340,7 +350,7 @@ export function TimelineWindow({
         </Tooltip>
       );
     }
-    if (t.id === 'sound') {
+    if (t.kind === 'sound') {
       const pk = peaks.get(soundIdOf(ev));
       return (
         <Tooltip key={ev._id} content={`${opName(ev.op)} ${ev.ref ?? ''} @${ev.start}${pk ? ` · ${pk.seconds.toFixed(2)}s` : ''} · click the speaker to hear it${ev.enabled === false ? ' · muted (M to unmute)' : ''}`}>
@@ -348,7 +358,7 @@ export function TimelineWindow({
             onPointerDown={(e) => startDragBlock(e, ev)}>
             <span className="icon mseq-spk" role="button" aria-label="Play this sound"
               onPointerDown={(e) => { e.stopPropagation(); onPreview?.(ev); }}>{ev.enabled === false ? 'volume_off' : 'volume_up'}</span>
-            {pk?.peaks && <svg className="mseq-wave" viewBox="0 0 96 20" preserveAspectRatio="none"><path d={wavePath(pk.peaks)} stroke="#0d1012" strokeWidth="0.9" fill="none" /></svg>}
+            {pk?.peaks && <svg className="mseq-wave" viewBox={`0 0 ${pk.peaks.length} 20`} preserveAspectRatio="none"><path d={wavePath(pk.peaks)} stroke="#fff" strokeWidth="0.75" strokeOpacity="0.9" fill="none" /></svg>}
             <span className="mseq-wave-label">{ev.ref ?? opName(ev.op)}</span>
           </span>
         </Tooltip>
@@ -401,15 +411,34 @@ export function TimelineWindow({
           <div className="cseq-tl-labels">
             <div className="cseq-tl-spacer" />
             {lanes.map(({ t, rows, stacked, height }) => (
-              <div key={t.id} className="cseq-tl-label mseq-label" style={{ height, color: t.color }}>
-                <Tooltip content={`Drag to shift the whole ${t.label.toLowerCase()} lane`}>
-                  <span className="mseq-label-text" onPointerDown={(e) => startLaneDrag(e, t.id)}>{t.label}</span>
+              <div key={t.id}
+                className={`cseq-tl-label mseq-label${t.kind === 'keep' ? '' : ' track'}${t.id === activeTrack ? ' active' : ''}`}
+                style={{ height, color: t.color }}
+                onClick={() => t.kind !== 'keep' && onActivateTrack?.(t.id)}>
+                <Tooltip content={t.kind === 'keep' ? 'Drag to shift the lane'
+                  : `${sources[t.id]?.name ? `${sources[t.id].name} · ` : ''}click: a pick lands on this track · drag: shift it`}>
+                  <span className="mseq-label-text" onPointerDown={(e) => startLaneDrag(e, t.id)}>
+                    {t.label}
+                    {sources[t.id]?.name && <i className="mseq-label-src">{sources[t.id].name}</i>}
+                  </span>
                 </Tooltip>
                 {rows.count > 1 && (
                   <Tooltip content={stacked ? `Collapse to one row (${rows.count} rows of overlapping pills)` : `Expand overlapping pills into ${rows.count} rows`}>
                     <button type="button" className="mseq-rows" onPointerDown={(e) => e.stopPropagation()} onClick={() => toggleLaneRows(t.id)}>
                       <span className="icon">{stacked ? 'unfold_less' : 'unfold_more'}</span>{rows.count}
                     </button>
+                  </Tooltip>
+                )}
+                {t.kind !== 'keep' && (sources[t.id] || !t.first) && (
+                  <Tooltip content={t.first ? 'Clear this track' : 'Remove this track'}>
+                    <button type="button" className="mseq-x" aria-label="Remove" onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => { e.stopPropagation(); onRemoveTrack?.(t.id); }}><span className="icon">close</span></button>
+                  </Tooltip>
+                )}
+                {t.kind !== 'keep' && t.last && (
+                  <Tooltip content={`Add a ${LANE_BY_ID.get(t.kind)?.label.toLowerCase()} track`}>
+                    <button type="button" className="mseq-add" aria-label="Add track" onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => { e.stopPropagation(); onAddTrack?.(t.kind); }}><span className="icon">add</span></button>
                   </Tooltip>
                 )}
               </div>
@@ -533,13 +562,9 @@ export function TimelineWindow({
         </div>
       </div>
 
-      <Tooltip content="Resize width" placement="left">
-        <div className="cseq-resize" onPointerDown={startResize('w')} onPointerMove={onResizeMove} onPointerUp={endResize} onPointerCancel={endResize} />
-      </Tooltip>
-      <Tooltip content="Drag to make the window shorter (double-click: fit the content again)" placement="top">
-        <div className="mseq-resize-v" onPointerDown={startResize('h')} onPointerMove={onResizeMove} onPointerUp={endResize} onPointerCancel={endResize}
-          onDoubleClick={() => setSize((s) => ({ ...s, h: null }))} />
-      </Tooltip>
+      <div className="cseq-resize" onPointerDown={startResize('w')} onPointerMove={onResizeMove} onPointerUp={endResize} onPointerCancel={endResize} />
+      <div className="mseq-resize-v" onPointerDown={startResize('h')} onPointerMove={onResizeMove} onPointerUp={endResize} onPointerCancel={endResize}
+        onDoubleClick={() => setSize((s) => ({ ...s, h: null }))} />
     </div>,
     document.body,
   );

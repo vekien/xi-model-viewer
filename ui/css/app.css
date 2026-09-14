@@ -6703,8 +6703,8 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mixer-panel { flex: 0 0 auto; }
 .mixer-parts-panel { flex: 1 1 auto; min-height: 120px; max-height: 40vh; overflow: hidden; }
 .mixer-parts-body { overflow: auto; min-height: 0; }
-.mixer-name { flex: 1 1 auto; min-width: 0; font: 600 12px/1.3 var(--font-mono); color: var(--text); background: var(--gray-900); border: 1px solid var(--ring); border-radius: 6px; padding: 3px 6px; }
-.mixer-name:focus { outline: none; border-color: var(--accent); }
+/* A plain text input (theme.css input[type='text']); only its place in the row is ours. */
+.mixer-name { flex: 1 1 auto; min-width: 0; font-family: var(--font-mono); }
 .mixer-publish { display: flex; flex-direction: column; gap: 6px; }
 .mixer-plan { margin: 0; padding: 6px 8px; max-height: 140px; overflow: auto; background: var(--gray-900); border: 1px solid var(--ring); border-radius: 6px; white-space: pre; }
 .mixer-publish-note { flex: 1 1 auto; padding: 0; }
@@ -6714,7 +6714,8 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 /* Timeline dock: the mixer's timeline broken out along the bottom of the stage,
    above the status bars, resizable from its top edge. */
 /* Recipe organizer (the side panel's main body now that the timeline is docked). */
-.mixer-recipes { display: flex; flex-direction: column; gap: 2px; overflow: auto; max-height: 40vh; }
+/* The organizer is an inset like the timeline's track. */
+.mixer-recipes { display: flex; flex-direction: column; gap: 2px; overflow: auto; max-height: 40vh; padding: 6px; border-radius: 8px; background: rgba(0, 0, 0, 0.28); box-shadow: inset 0 0 10px #00000070; }
 .mixer-recipe-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
 .mixer-recipe-row:hover { background: var(--gray-900); }
 .mixer-recipe-row.on { background: var(--gray-850); outline: 1px solid var(--ring); }
@@ -6861,3 +6862,16 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .float-host .mixer-parts-panel { max-height: calc(100vh - 80px); }
 /* Weather panel audio rows: the toggle and a label; the sliders live in the nav's Volume popover. */
 .wx-audio-label { flex: 1 1 auto; min-width: 0; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Parts: clips, generators and sounds under their own small headings. */
+.mixer-parts .side-separator { padding: 8px 0 2px; }
+/* Timeline tracks: a click makes the track the one a pick lands on; the source's
+   name rides under the label; X clears or removes it, + adds one of the kind. */
+.mseq-label.track { cursor: pointer; }
+.mseq-label.active { background: rgba(255, 255, 255, 0.06); box-shadow: inset 2px 0 0 currentColor; }
+.mseq-label-src { display: block; font: 500 9px/1.1 var(--font-ui); color: var(--muted); text-transform: none; letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-style: normal; }
+.mseq-x, .mseq-add { flex: 0 0 auto; width: 16px; height: 16px; min-height: 0; padding: 0; display: grid; place-items: center; background: transparent; border: none; box-shadow: none; border-radius: 50%; color: var(--muted); cursor: pointer; }
+.mseq-x:hover, .mseq-add:hover { color: var(--text); background: rgba(255, 255, 255, 0.1); }
+.mseq-x .icon, .mseq-add .icon { font-size: 12px; }
+.pc-look-label { margin-top: 8px; }
+.gs-tabs { margin: 4px 0 6px; }

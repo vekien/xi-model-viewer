@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Tooltip } from './Tooltip.jsx';
 import { TimelineWindow } from './MixerTimeline.jsx';
 import { Floating } from './Floating.jsx';
-import { LANE_BY_ID, opName, shiftLane, strikeFrame, withIds } from '../js/mixer.js';
+import { kindOf, opName, shiftLane, strikeFrame, trackLabel, withIds } from '../js/mixer.js';
 
 // The mixer's side panel: the recipe (name, save, publish, the organizer), the parts
 // of the picked source (solo / take), the selected event's numbers, and the state
@@ -68,6 +68,7 @@ function EventEditor({ ev, onChange, onRemove }) {
 /** The parts of the source shown for `lane`: generators (solo / take), sounds (play / take), clips. */
 function Parts({ lane, entry, info, events, onSolo, onPlaySound, onTake }) {
   if (!entry) return null;
+  const kind = kindOf(lane);
   const taken = new Set(events.filter((e) => e.from === lane && e.enabled !== false).map((e) => e.ref));
   const gens = (info?.timeline ?? []).filter((e) => e.op === 0x02 && !e.detail?.sound);
   const genRows = gens.length ? gens.map((g) => ({ ref: g.ref, start: g.start, dur: g.dur }))
@@ -87,14 +88,16 @@ function Parts({ lane, entry, info, events, onSolo, onPlaySound, onTake }) {
     <div className="mixer-parts">
       <div className="fx-actor-sec-title">{entry.name} · {entry.spec}</div>
       {!info && <div className="side-note">Reading the timeline…</div>}
-      {lane === 'motion' && clipRows.map((c) => (
+      {kind === 'motion' && clipRows.length > 0 && <div className="side-separator">Clips</div>}
+      {kind === 'motion' && clipRows.map((c) => (
         <div className="mixer-part" key={`c${c.ref}${c.start}`}>
           <span className="mono">{c.ref}</span>
           <span className="mono-small">f{c.start}{c.dur ? ` · ${c.dur}` : ''}</span>
           <span className="mixer-part-note mono-small">{c.summary}</span>
         </div>
       ))}
-      {lane !== 'sound' && genRows.map((g) => (
+      {kind !== 'sound' && genRows.length > 0 && <div className="side-separator">Generators</div>}
+      {kind !== 'sound' && genRows.map((g) => (
         <div className="mixer-part" key={`g${g.ref}${g.start ?? ''}`}>
           <Tooltip content="Play only this generator on the stage (Play mix brings the mix back)">
             <button type="button" className="pc-tbtn" onClick={() => onSolo(g.ref)}><span className="icon">play_arrow</span></button>
@@ -106,7 +109,8 @@ function Parts({ lane, entry, info, events, onSolo, onPlaySound, onTake }) {
           </label>
         </div>
       ))}
-      {lane === 'sound' && [...soundRows, ...audioRows].map((s) => (
+      {kind === 'sound' && (soundRows.length + audioRows.length) > 0 && <div className="side-separator">Sounds</div>}
+      {kind === 'sound' && [...soundRows, ...audioRows].map((s) => (
         <div className="mixer-part" key={`s${s.ref}${s.start ?? ''}`}>
           <Tooltip content="Play this sound">
             <button type="button" className="pc-tbtn" onClick={() => onPlaySound(s)}><span className="icon">volume_up</span></button>
@@ -167,6 +171,7 @@ export function MixerPanel({
   onPause, onResume, onSeek, getPlayhead, mixLoaded, mixDirty,
   onSolo, onPlaySound, onTake, viewerRace, onClose, getSoundPeaks, speed = 1, onSpeed, loop = true, onLoop, ghosts = null,
   panels = { mixer: true, parts: true, timeline: true }, onPanel,
+  tracks = [], onActivateTrack, onAddTrack, onRemoveTrack,
 }) {
   // Selection is a set: a marquee or ctrl-click builds a group that drags,
   // duplicates and deletes as one. The editor below shows a lone selection.
@@ -291,6 +296,7 @@ export function MixerPanel({
     <TimelineWindow open={!!panels.timeline} onClose={() => onPanel?.('timeline', false)}
       recipeName={recipe.name} note={statusNote} failed={failed} error={error} onDismissError={onDismissError}
       events={events} selectedIds={selectedIds} onSelect={select} onMoveMany={moveMany} onShiftLane={shift}
+      tracks={tracks} activeTrack={lane} sources={recipe.sources} onActivateTrack={onActivateTrack} onAddTrack={onAddTrack} onRemoveTrack={onRemoveTrack}
       onPreview={(ev) => onPlaySound?.({ id: ev.sound, ref: ev.ref })}
       strike={strike} playhead={mixLoaded ? head : null} mixLoaded={mixLoaded}
       minLen={getPlayhead ? getPlayhead().length : 0} loopEnd={mixLoaded && getPlayhead ? getPlayhead().length : 0}
@@ -328,7 +334,7 @@ export function MixerPanel({
 
         <div className="pc-ctrl">
           <span className="pc-ctrl-label">Recipe</span>
-          <input className="mixer-name" value={recipe.name} spellCheck={false} aria-label="Recipe name"
+          <input type="text" className="mixer-name" value={recipe.name} spellCheck={false} aria-label="Recipe name"
             onChange={(e) => onRecipe({ ...recipe, name: e.target.value.replace(/[^A-Za-z0-9_-]/g, '_') })} />
         </div>
         {onShuffle && (
@@ -382,7 +388,7 @@ export function MixerPanel({
       <div className="panel mixer-parts-panel">
         <div className="details-header">
           <span className="icon">segment</span>
-          <span className="details-title">Parts · {LANE_BY_ID.get(lane)?.label}</span>
+          <span className="details-title">Parts · {trackLabel(lane)}</span>
           <span className="sp" />
           <button type="button" className="pc-tbtn details-close" aria-label="Close" onClick={() => onPanel?.('parts', false)}><span className="icon">close</span></button>
         </div>

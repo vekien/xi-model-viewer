@@ -1869,15 +1869,13 @@ export function CameraSequencer({
 
       </div>
 
-      <Tooltip content="Resize width" placement="left">
-        <div
-          className="cseq-resize"
-          onPointerDown={startResize}
-          onPointerMove={onResizeMove}
-          onPointerUp={endResize}
-          onPointerCancel={endResize}
-        />
-      </Tooltip>
+      <div
+        className="cseq-resize"
+        onPointerDown={startResize}
+        onPointerMove={onResizeMove}
+        onPointerUp={endResize}
+        onPointerCancel={endResize}
+      />
     </div>
   );
 }

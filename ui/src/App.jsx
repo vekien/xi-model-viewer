@@ -61,7 +61,7 @@ import { MixerList } from './MixerList.jsx';
 import { MixerPanel } from './MixerPanel.jsx';
 import { Floating } from './Floating.jsx';
 import { RightRail } from './RightRail.jsx';
-import { RACE_TO_XI, buildCatalogArgs, composeForPreview, emptyRecipe, entryPathForRace, eventsFromInspect, inspectSpec, laneForEvent, loadCatalog, mixerDir, publishRecipe, serializeRecipe, soundIdsFromInfo, withIds } from '../js/mixer.js';
+import { RACE_TO_XI, buildCatalogArgs, composeForPreview, emptyRecipe, entryPathForRace, eventsFromInspect, inspectSpec, kindOf, laneForEvent, loadCatalog, mixerDir, publishRecipe, recipeTracks, serializeRecipe, soundIdsFromInfo, trackLabel, withIds } from '../js/mixer.js';
 import { ZoneMeshPreviewModal } from './ZoneMeshPreviewModal.jsx';
 import { armGeneratorPreview } from '../js/particlePreview.js';
 import { checkForUpdate, checkForUpdateManual, dismissUpdate } from '../js/update.js';
@@ -160,7 +160,6 @@ const VIEWS = ['files', 'database', 'npc', 'pc', 'creation', 'music', 'sfx', 'zo
 /** Views that browse individual models, where fly controls are a hindrance. */
 /** The mixer view's rail, top to bottom: the Animation panel is the main one. */
 const MIXER_RAIL = [
-  { id: 'anim', icon: 'animation', label: 'Animation' },
   { id: 'actors', icon: 'groups', label: 'Actors' },
   { id: 'mixer', icon: 'tune', label: 'Ability Mixer' },
   { id: 'parts', icon: 'segment', label: 'Parts' },
@@ -6283,16 +6282,21 @@ export default function App({ launch = null }) {
   // DAT on the stage through the ordinary effect pipeline; Play composes the
   // recipe to a temp DAT and plays that the same way.
   const [mixerRecipe, setMixerRecipe] = useState(() => emptyRecipe());
+  // The active track: the one a pick lands on. Tracks are `motion`, `vfx`, `sound`
+  // and any extra ones added (motion2…); an extra track that holds nothing yet
+  // lives only in mixerExtraTracks.
   const [mixerLane, setMixerLane] = useState('motion');
+  const [mixerExtraTracks, setMixerExtraTracks] = useState([]);
   const [mixerCatalog, setMixerCatalog] = useState(null);
   const [mixerCatalogBusy, setMixerCatalogBusy] = useState(false);
   const [mixerLaneInfo, setMixerLaneInfo] = useState({});
+  const mixerTracks = useMemo(() => recipeTracks(mixerRecipe, mixerExtraTracks), [mixerRecipe, mixerExtraTracks]);
   const [mixerBusy, setMixerBusy] = useState(false);
   const [mixerNote, setMixerNote] = useState('');
   // The mixer view's right rail: one glyph per panel, the Animation panel first.
   // Which are open is remembered; a panel's own close glyph reports back here.
   const [mixerPanels, setMixerPanels] = useState(() => {
-    const d = { anim: true, actors: false, mixer: true, parts: false, timeline: true };
+    const d = { actors: false, mixer: true, parts: false, timeline: true };
     try { return { ...d, ...JSON.parse(localStorage.getItem('mixerPanels') || '{}') }; } catch { return d; }
   });
   const setMixerPanel = useCallback((id, v) => setMixerPanels((m) => {
@@ -6549,7 +6553,8 @@ export default function App({ launch = null }) {
     setMixerError(null);
     try {
       const xiRace = RACE_TO_XI[pc.race] ?? 'HumeMale';
-      const motionSpec = recipe.sources?.motion?.spec;
+      const motionKey = Object.keys(recipe.sources ?? {}).find((k) => kindOf(k) === 'motion');
+      const motionSpec = motionKey ? recipe.sources[motionKey]?.spec : null;
       const motionEntry = motionSpec ? (mixerCatalog?.entries ?? []).find((e) => e.spec === motionSpec) : null;
       // A weapon-skill motion needs the character's Action set to it (its clips
       // live in that DAT). That switch reloads the model asynchronously; arming
@@ -6612,9 +6617,9 @@ export default function App({ launch = null }) {
       const info = entry.clip
         ? { timeline: [{ op: 0x05, ref: entry.clip.ref, start: 0, dur: entry.clip.frames, name: 'PlayClip', summary: `${entry.clip.frames} f` }] }
         : await mixerInfoFor(entry);
-      const fresh = eventsFromInspect(info, lane, { keep: lane === 'motion' });
+      const fresh = eventsFromInspect(info, lane, { keep: kindOf(lane) === 'motion' });
       const r = mixerRecipeRef.current;
-      const keptEvents = r.events.filter((e) => e.from !== lane && !(lane === 'motion' && e.kind === 'keep'));
+      const keptEvents = r.events.filter((e) => e.from !== lane);
       // routine: a tag, or null for a bare clip pack (no routine at all) — not 'main'.
       const routine = entry.routine === undefined ? 'main' : entry.routine;
       const sources = { ...r.sources, [lane]: { spec: entry.spec, routine, name: entry.name } };
@@ -6623,7 +6628,7 @@ export default function App({ launch = null }) {
       mixerRecipeRef.current = next;
       setMixerRecipe(next);
       setMixerLaneInfo((m) => ({ ...m, [lane]: { entry, info } }));
-      setMixerNote(`${entry.name} → ${lane}`);
+      setMixerNote(`${entry.name} → ${trackLabel(lane)}`);
     } catch (e) {
       setMixerError({ title: `Pick failed · ${entry.name}`, text: String(e?.message ?? e) });
       setStatusText(`pick failed: ${e?.message ?? e}`);
@@ -6689,6 +6694,24 @@ export default function App({ launch = null }) {
     setMixerLaneInfo((m) => { const n = { ...m }; delete n[lane]; return n; });
   }, []);
 
+  /** A new empty track of a kind (motion2, motion3…), made the active one. */
+  const mixerAddTrack = useCallback((kind) => {
+    const used = new Set(recipeTracks(mixerRecipeRef.current, mixerExtraTracks).map((t) => t.id));
+    let n = 2;
+    while (used.has(`${kind}${n}`)) n++;
+    const id = `${kind}${n}`;
+    setMixerExtraTracks((x) => [...x, id]);
+    setMixerLane(id);
+  }, [mixerExtraTracks]);
+  /** Clear a base track, or drop an extra one — its source and events go either way. */
+  const mixerRemoveTrack = useCallback((track) => {
+    mixerClearLane(track);
+    if (kindOf(track) !== track) {
+      setMixerExtraTracks((x) => x.filter((t) => t !== track));
+      setMixerLane((cur) => (cur === track ? kindOf(track) : cur));
+    }
+  }, [mixerClearLane]);
+
   /** Parts list checkbox: add (or drop) every root-level event with that ref from the lane's source. */
   const mixerTake = useCallback((lane, ref, on) => {
     const src = mixerLaneInfo[lane];
@@ -6699,7 +6722,7 @@ export default function App({ launch = null }) {
     else if (r.events.some((e) => e.from === lane && e.ref === ref)) {
       next = { ...r, events: r.events.map((e) => (e.from === lane && e.ref === ref ? { ...e, enabled: true } : e)) };
     } else {
-      const fresh = eventsFromInspect(src.info, lane, { keep: false }).filter((e) => e.ref === ref);
+      const fresh = eventsFromInspect(src.info, lane, { refs: new Set([ref]) });
       next = { ...r, events: [...r.events, ...withIds(fresh)] };
     }
     mixerRecipeRef.current = next;
@@ -6724,7 +6747,7 @@ export default function App({ launch = null }) {
   }, [mixerLaneInfo, mixerLane, pc.race, mixerLoadEntryOnStage]);
 
   /** Peak envelope + length of a sound id, for the docked timeline's waveforms. */
-  const mixerSoundPeaks = useCallback((soundId) => getWeatherAudio().peaks(soundId), [getWeatherAudio]);
+  const mixerSoundPeaks = useCallback((soundId) => getWeatherAudio().peaks(soundId, 256), [getWeatherAudio]);
 
   const mixerPlaySound = useCallback((s) => {
     let id = s?.id;
@@ -6785,6 +6808,8 @@ export default function App({ launch = null }) {
     mixerRecipeRef.current = fresh;
     setMixerRecipe(fresh);
     setMixerLaneInfo({});
+    setMixerExtraTracks([]);
+    setMixerLane('motion');
     setMixerNote('');
     setMixerLoaded(false);
     setMixerStageName(null);
@@ -6864,10 +6889,11 @@ export default function App({ launch = null }) {
       // The file does not carry `kind`: locks, hits and links are the keep lane
       // whatever lane they came from, everything else draws in its own lane.
       const events = withIds((r.events ?? []).map((e) => ({
-        ...e, enabled: true, kind: e.kind ?? (laneForEvent(e) === 'keep' ? 'keep' : (e.from ?? 'keep')),
+        ...e, enabled: true, kind: e.kind ?? (laneForEvent(e) === 'keep' ? 'keep' : (kindOf(e.from) || 'keep')),
       })));
       const loaded = { name: r.name ?? name, sources: r.sources ?? {}, events, target: r.target };
       mixerRecipeRef.current = loaded;
+      setMixerExtraTracks([]);
       setMixerRecipe(loaded);
       setMixerLaneInfo({});
       // Nothing composed for this recipe yet: clear the stage mix and mark it
@@ -9225,6 +9251,7 @@ export default function App({ launch = null }) {
       case 'assets-mixer':
         setLeftView('mixer');
         setExplorerOpen(true);
+        setMixerPanel('timeline', true);   // the timeline is the view; it comes up every time
         break;
       case 'open-dat':
         // Sniff the type and open it the way a click in the tree would.
@@ -10387,11 +10414,9 @@ export default function App({ launch = null }) {
           actions={pc.actions}
           race={pc.race}
           readDat={async (rel) => backend.readFile(await backend.resolvePrefer(gameCandidates(rel, settingsRef.current)))}
-          lane={mixerLane}
-          onLane={setMixerLane}
-          sources={mixerRecipe.sources}
+          lane={kindOf(mixerLane)}
+          onLane={(kind) => { if (kindOf(mixerLane) !== kind) setMixerLane(kind); }}
           onPick={mixerPick}
-          onClearLane={mixerClearLane}
         />
       )}
 
@@ -10671,6 +10696,10 @@ export default function App({ launch = null }) {
             lane={mixerLane}
             laneInfo={mixerLaneInfo[mixerLane]?.info ?? null}
             laneEntry={mixerLaneInfo[mixerLane]?.entry ?? null}
+            tracks={mixerTracks}
+            onActivateTrack={setMixerLane}
+            onAddTrack={mixerAddTrack}
+            onRemoveTrack={mixerRemoveTrack}
             transport={effectTransport}
             onPlay={mixerPlay}
             onStop={() => { stopEffect(); setMixerLoaded(false); setMixerDirty(false); setMixerStageName(null); mixerComposeRef.current = null; }}
@@ -10707,11 +10736,6 @@ export default function App({ launch = null }) {
             panels={mixerPanels}
             onPanel={setMixerPanel}
           />
-          {/* Stance and transport: Category / Action (Battle: Sword…), Show
-              Character Animation, speed — the Characters view's own panel. */}
-          <Floating id="mixer-anim" open={!!mixerPanels.anim} defaultPos={{ right: 68, top: 60 }}>
-            <AnimationPanel pc={pc} anim={mixerAnim} />
-          </Floating>
           <Floating id="mixer-actors" open={!!mixerPanels.actors} defaultPos={{ right: 68, top: 330 }}>
             <EffectActorsPanel
               tab={effectActorTab}

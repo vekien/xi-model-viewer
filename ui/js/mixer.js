@@ -16,6 +16,29 @@ export const LANES = [
 export const LANE_BY_ID = new Map(LANES.map((l) => [l.id, l]));
 export const KEEP_LANE = { id: 'keep', label: 'Locks · hits · links', color: '#8B949A' };
 
+// A recipe's lanes are tracks: the three kinds each start with one track named
+// after the kind (motion, vfx, sound) and can grow more (motion2, motion3…). An
+// event's `from` is its track; its `kind` is the lane kind it draws in.
+export const kindOf = (track) => String(track ?? '').replace(/\d+$/, '');
+export function trackLabel(track) {
+  const kind = kindOf(track);
+  const base = LANE_BY_ID.get(kind);
+  const n = String(track ?? '').slice(kind.length);
+  return base ? (n ? `${base.label} ${n}` : base.label) : String(track ?? '');
+}
+/** The recipe's tracks in lane order: the base track of each kind always, then the
+ *  extra keys its sources or events name (or `extra` holds while still empty). */
+export function recipeTracks(recipe, extra = []) {
+  const keys = new Set([...Object.keys(recipe?.sources ?? {}), ...(recipe?.events ?? []).map((e) => e.from), ...extra]);
+  const out = [];
+  for (const l of LANES) {
+    const more = [...keys].filter((k) => kindOf(k) === l.id && k !== l.id)
+      .sort((a, b) => Number(a.slice(l.id.length)) - Number(b.slice(l.id.length)));
+    out.push({ id: l.id, kind: l.id }, ...more.map((id) => ({ id, kind: l.id })));
+  }
+  return out;
+}
+
 /** Viewer race id (characters.json) → xi race name (RACE_NAMES). Tarutaru is one skeleton. */
 export const RACE_TO_XI = {
   HumeM: 'HumeMale', HumeF: 'HumeFemale', ElvaanM: 'ElvaanMale', ElvaanF: 'ElvaanFemale',
@@ -90,8 +113,10 @@ export function serializeRecipe(recipe) {
  */
 const LINK_OPS = new Set([0x03, 0x09, 0x3b, 0x3c, 0x57]);
 
-export function eventsFromInspect(info, lane, opts = {}) {
+export function eventsFromInspect(info, track, opts = {}) {
   const wantKeep = opts.keep !== false;
+  const kind = opts.kind ?? kindOf(track);
+  const refs = opts.refs ?? null;     // a Set: take the events naming these refs, whatever their kind
   const out = [];
   for (const e of info.timeline) {
     // The inspector already expands local sub-routines at absolute frames, so
@@ -101,9 +126,9 @@ export function eventsFromInspect(info, lane, opts = {}) {
     // the client's shared routines.
     if (LINK_OPS.has(e.op) && e.detail?.local) continue;
     const laneOf = laneForEvent(e);
-    if (laneOf !== lane && !(wantKeep && laneOf === 'keep')) continue;
+    if (refs ? !refs.has(e.ref) : (laneOf !== kind && !(wantKeep && laneOf === 'keep'))) continue;
     out.push({
-      from: lane,
+      from: track,
       op: e.op,
       ref: e.ref,
       start: e.start,
@@ -146,7 +171,7 @@ export function recipeLength(events) {
 /** The strike frame: the first hit/impact-ish event in the motion lane, else the first
  *  generator, else 0. The mixer shows it as the snap target for the other lanes. */
 export function strikeFrame(events) {
-  const motion = events.filter((e) => e.from === 'motion');
+  const motion = events.filter((e) => kindOf(e.from) === 'motion');
   const hit = motion.find((e) => e.op === 0x25 || e.op === 0x21 || e.op === 0x2c)
     ?? motion.find((e) => e.op === 0x03 && e.ref === 'mdam');
   if (hit) return hit.start;

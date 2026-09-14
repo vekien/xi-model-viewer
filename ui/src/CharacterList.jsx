@@ -957,7 +957,7 @@ export function CharacterList({ pc }) {
             {section('Armor')}
             {lookHex && (
               <>
-                <div className="side-separator">Look String</div>
+                <label className="form-label pc-look-label">Look string</label>
                 <div className="pc-look-field">
                   <input
                     className="pc-look-input"
@@ -996,6 +996,7 @@ function GearSetsPanel({ race, sel, slots, races, onApply }) {
   const [draft, setDraft] = useState('');
   // null | 'save' | { rename: id }
   const [mode, setMode] = useState(null);
+  const [tab, setTab] = useState('custom');   // 'custom' (saved looks) | 'presets' (built in)
   const draftRef = useRef(null);
 
   const persist = (next) => {
@@ -1058,6 +1059,12 @@ function GearSetsPanel({ race, sel, slots, races, onApply }) {
         <span className="gs-spacer" />
         <button type="button" className="gs-save" onClick={beginSave}>Save</button>
       </div>
+      <div className="seg-tabs gs-tabs" role="tablist" aria-label="Gear sets">
+        {[['custom', 'Custom'], ['presets', 'Presets']].map(([id, label]) => (
+          <button key={id} type="button" role="tab" aria-selected={tab === id}
+            className={`seg-tab${tab === id ? ' on' : ''}`} onClick={() => setTab(id)}>{label}</button>
+        ))}
+      </div>
 
       {(mode === 'save' || mode?.rename) && (
         <form className="gs-draft" onSubmit={(e) => { e.preventDefault(); commitDraft(); }}>
@@ -1079,7 +1086,7 @@ function GearSetsPanel({ race, sel, slots, races, onApply }) {
       )}
 
       <div className="gs-list">
-        {BUILTIN_GEARSETS.map((s) => (
+        {tab === 'presets' && BUILTIN_GEARSETS.map((s) => (
           <Tooltip key={s.id} content="Built-in look — slots it doesn't name keep the current pick" placement="left">
             <div
               className={`gs-row gs-builtin${activeSet === s.id ? ' on' : ''}`}
@@ -1091,10 +1098,10 @@ function GearSetsPanel({ race, sel, slots, races, onApply }) {
             </div>
           </Tooltip>
         ))}
-        {sets.length === 0 && !mode && (
+        {tab === 'custom' && sets.length === 0 && !mode && (
           <div className="gs-empty">Save the current look to add your own.</div>
         )}
-        {sets.map((s) => (
+        {tab === 'custom' && sets.map((s) => (
           <div
             key={s.id}
             className={`gs-row${activeSet === s.id ? ' on' : ''}`}
