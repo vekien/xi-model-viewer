@@ -59,6 +59,8 @@ import { ZoneDefModal } from './ZoneDefModal.jsx';
 import { ParticlePreviewModal } from './ParticlePreviewModal.jsx';
 import { MixerList } from './MixerList.jsx';
 import { MixerPanel } from './MixerPanel.jsx';
+import { Floating } from './Floating.jsx';
+import { RightRail } from './RightRail.jsx';
 import { RACE_TO_XI, buildCatalogArgs, composeForPreview, emptyRecipe, entryPathForRace, eventsFromInspect, inspectSpec, laneForEvent, loadCatalog, mixerDir, publishRecipe, serializeRecipe, soundIdsFromInfo, withIds } from '../js/mixer.js';
 import { ZoneMeshPreviewModal } from './ZoneMeshPreviewModal.jsx';
 import { armGeneratorPreview } from '../js/particlePreview.js';
@@ -156,6 +158,14 @@ function readZoneCamera(key) {
 }
 const VIEWS = ['files', 'database', 'npc', 'pc', 'creation', 'music', 'sfx', 'zones', 'images', 'effects', 'mixer'];
 /** Views that browse individual models, where fly controls are a hindrance. */
+/** The mixer view's rail, top to bottom: the Animation panel is the main one. */
+const MIXER_RAIL = [
+  { id: 'anim', icon: 'animation', label: 'Animation' },
+  { id: 'actors', icon: 'groups', label: 'Actors' },
+  { id: 'mixer', icon: 'tune', label: 'Ability Mixer' },
+  { id: 'parts', icon: 'segment', label: 'Parts' },
+  { id: 'timeline', icon: 'timeline', label: 'Timeline' },
+];
 const ORBIT_VIEWS = new Set(['files', 'npc', 'pc', 'creation']);
 // Seconds of real time one in-game day takes when the day/night cycle is
 // playing. 60 is what the button did before it was configurable.
@@ -6283,6 +6293,17 @@ export default function App({ launch = null }) {
   const [mixerLaneInfo, setMixerLaneInfo] = useState({});
   const [mixerBusy, setMixerBusy] = useState(false);
   const [mixerNote, setMixerNote] = useState('');
+  // The mixer view's right rail: one glyph per panel, the Animation panel first.
+  // Which are open is remembered; a panel's own close glyph reports back here.
+  const [mixerPanels, setMixerPanels] = useState(() => {
+    const d = { anim: true, actors: false, mixer: true, parts: false, timeline: true };
+    try { return { ...d, ...JSON.parse(localStorage.getItem('mixerPanels') || '{}') }; } catch { return d; }
+  });
+  const setMixerPanel = useCallback((id, v) => setMixerPanels((m) => {
+    const next = { ...m, [id]: typeof v === 'boolean' ? v : !m[id] };
+    try { localStorage.setItem('mixerPanels', JSON.stringify(next)); } catch { /* quota */ }
+    return next;
+  }), []);
   const [mixerError, setMixerError] = useState(null); // { title, text } — xi's message, shown in the timeline dock
   const [mixerRecipes, setMixerRecipes] = useState([]);
   const [mixerStageName, setMixerStageName] = useState(null);   // recipe composed on the stage
@@ -10644,6 +10665,7 @@ export default function App({ launch = null }) {
 
       {!dataStructOpen && leftView === 'mixer' && (
         <>
+          <RightRail items={MIXER_RAIL} open={mixerPanels} onToggle={setMixerPanel} />
           <MixerPanel
             recipe={mixerRecipe}
             onRecipe={mixerEdit}
@@ -10684,22 +10706,24 @@ export default function App({ launch = null }) {
             onLoop={setEffectLoop}
             onTake={mixerTake}
             viewerRace={RACE_TO_XI[pc.race] ?? 'HumeMale'}
+            panels={mixerPanels}
+            onPanel={setMixerPanel}
           />
-          <div id="mixer-actors">
-            {/* Stance and transport: Category / Action (Battle: Sword…), Show
-                Character Animation, speed — the Characters view's own panel. */}
+          {/* Stance and transport: Category / Action (Battle: Sword…), Show
+              Character Animation, speed — the Characters view's own panel. */}
+          <Floating id="mixer-anim" open={!!mixerPanels.anim} defaultPos={{ right: 68, top: 60 }}>
             <AnimationPanel pc={pc} anim={mixerAnim} />
-            {actorsOpen && (
-              <EffectActorsPanel
-                tab={effectActorTab}
-                onTab={pickEffectActorTab}
-                pc={pc}
-                selectedPath={selectedDat}
-                onSelectNpc={loadEffectNpc}
-                onClose={() => setActorsOpenPersist(false)}
-              />
-            )}
-          </div>
+          </Floating>
+          <Floating id="mixer-actors" open={!!mixerPanels.actors} defaultPos={{ right: 68, top: 330 }}>
+            <EffectActorsPanel
+              tab={effectActorTab}
+              onTab={pickEffectActorTab}
+              pc={pc}
+              selectedPath={selectedDat}
+              onSelectNpc={loadEffectNpc}
+              onClose={() => setMixerPanel('actors', false)}
+            />
+          </Floating>
         </>
       )}
 

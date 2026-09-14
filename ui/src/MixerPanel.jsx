@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Tooltip } from './Tooltip.jsx';
 import { TimelineWindow } from './MixerTimeline.jsx';
+import { Floating } from './Floating.jsx';
 import { LANE_BY_ID, opName, shiftLane, strikeFrame, withIds } from '../js/mixer.js';
 
 // The mixer's side panel: the recipe (name, save, publish, the organizer), the parts
@@ -165,6 +166,7 @@ export function MixerPanel({
   onDelete, onRename, onDuplicate, onShuffle, stageName,
   onPause, onResume, onSeek, getPlayhead, mixLoaded, mixDirty,
   onSolo, onPlaySound, onTake, viewerRace, onClose, getSoundPeaks, speed = 1, onSpeed, loop = true, onLoop, ghosts = null,
+  panels = { mixer: true, parts: true, timeline: true }, onPanel,
 }) {
   // Selection is a set: a marquee or ctrl-click builds a group that drags,
   // duplicates and deletes as one. The editor below shows a lone selection.
@@ -181,12 +183,10 @@ export function MixerPanel({
   });
   const selectedId = selectedIds.size === 1 ? [...selectedIds][0] : null;
 
-  // The timeline is a floating window (MixerTimeline.jsx, the Camera Sequencer's
-  // chrome); the side panel is the recipe: name, save, publish, the organizer and
-  // the parts of the picked source. Closing the window is remembered; the header's
-  // timeline glyph brings it back.
-  const [tlOpen, setTlOpen] = useState(() => { try { return localStorage.getItem('mixerDockOpen') !== '0'; } catch { return true; } });
-  const toggleTl = () => setTlOpen((o) => { try { localStorage.setItem('mixerDockOpen', o ? '0' : '1'); } catch { /* private mode */ } return !o; });
+  // Three windows, each a glyph on the right rail (App.jsx): the timeline
+  // (MixerTimeline.jsx, the Camera Sequencer's chrome), the recipe — name, save,
+  // publish, the organizer — and the parts of the picked source. `panels` says
+  // which are open; closing one tells the rail through onPanel.
 
   const [head, setHead] = useState(0);
   useEffect(() => {
@@ -288,7 +288,7 @@ export function MixerPanel({
     return transport === 'playing' ? onPause?.() : onResume?.();
   };
   const timeline = (
-    <TimelineWindow open={tlOpen} onClose={toggleTl}
+    <TimelineWindow open={!!panels.timeline} onClose={() => onPanel?.('timeline', false)}
       recipeName={recipe.name} note={statusNote} failed={failed} error={error} onDismissError={onDismissError}
       events={events} selectedIds={selectedIds} onSelect={select} onMoveMany={moveMany} onShiftLane={shift}
       onPreview={(ev) => onPlaySound?.({ id: ev.sound, ref: ev.ref })}
@@ -303,8 +303,9 @@ export function MixerPanel({
   );
 
   return (
-    <div id="mixer-stack">
+    <>
       {timeline}
+      <Floating id="mixer-main" open={!!panels.mixer} width={460} defaultPos={{ right: 400, top: 60 }}>
       <div className="panel mixer-panel">
         <div className="details-header">
           <span className="icon">tune</span>
@@ -318,14 +319,11 @@ export function MixerPanel({
                 <button type="button" className="pc-tbtn" aria-label="Shuffle" disabled={busy} onClick={() => onShuffle(shuffleKind)}><span className="icon">casino</span></button>
               </Tooltip>
             )}
-            <Tooltip content={tlOpen ? 'Hide the timeline window' : 'Show the timeline window'}>
-              <button type="button" className={`pc-tbtn${tlOpen ? ' on' : ''}`} aria-label="Timeline" aria-pressed={tlOpen ? 'true' : 'false'} onClick={toggleTl}><span className="icon">timeline</span></button>
-            </Tooltip>
             <Tooltip content="Publish: prepare the xi dats action for this recipe and show the build plan">
               <button type="button" className="pc-tbtn" aria-label="Publish" disabled={busy || !events.length || !!publishPlan} onClick={() => onPublish?.('plan')}><span className="icon">publish</span></button>
             </Tooltip>
           </div>
-          {onClose && <button type="button" className="pc-tbtn details-close" aria-label="Close" onClick={onClose}><span className="icon">close</span></button>}
+          <button type="button" className="pc-tbtn details-close" aria-label="Close" onClick={() => onPanel?.('mixer', false)}><span className="icon">close</span></button>
         </div>
 
         <div className="pc-ctrl">
@@ -379,10 +377,14 @@ export function MixerPanel({
         </div>
       </div>
 
+      </Floating>
+      <Floating id="mixer-parts" open={!!panels.parts} width={460} defaultPos={{ right: 400, top: 430 }}>
       <div className="panel mixer-parts-panel">
         <div className="details-header">
           <span className="icon">segment</span>
           <span className="details-title">Parts · {LANE_BY_ID.get(lane)?.label}</span>
+          <span className="sp" />
+          <button type="button" className="pc-tbtn details-close" aria-label="Close" onClick={() => onPanel?.('parts', false)}><span className="icon">close</span></button>
         </div>
         <div className="mixer-parts-body">
           {!laneEntry && <div className="side-note">Pick a source for this lane to see what it is made of.</div>}
@@ -390,6 +392,7 @@ export function MixerPanel({
             onSolo={onSolo} onPlaySound={onPlaySound} onTake={onTake} />
         </div>
       </div>
-    </div>
+      </Floating>
+    </>
   );
 }

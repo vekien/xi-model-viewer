@@ -6698,8 +6698,6 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mixer-empty { padding: 14px 12px; display: flex; flex-direction: column; gap: 10px; }
 .mixer-hint { padding: 6px 10px; border-top: 1px solid var(--ring); color: var(--muted); }
 
-#mixer-stack { position: fixed; top: 12px; right: 12px; width: 460px; max-height: calc(100vh - 64px); display: flex; flex-direction: column; gap: 12px; z-index: 25; pointer-events: none; }
-#mixer-stack > .panel { pointer-events: auto; display: flex; flex-direction: column; gap: 8px; }
 .mixer-panel { flex: 0 0 auto; }
 .mixer-parts-panel { flex: 1 1 auto; min-height: 120px; max-height: 40vh; overflow: hidden; }
 .mixer-parts-body { overflow: auto; min-height: 0; }
@@ -6751,12 +6749,6 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mixer-btn .icon { font-size: 16px; }
 /* The stance/actors column sits left of the mixer stack, under the menubar's
    row — at the tree's top (60px), so a wide toolbar never covers its header. */
-#mixer-actors { position: fixed; top: 60px; right: 484px; width: 320px; max-height: calc(100vh - 112px); z-index: 25; display: flex; flex-direction: column; gap: 12px; pointer-events: none; }
-#mixer-actors > .panel { width: 100%; pointer-events: auto; }
-#mixer-actors #animbar { position: relative !important; top: auto !important; right: auto !important; left: auto !important; bottom: auto !important; width: 100% !important; flex: 0 0 auto; z-index: auto !important; }
-#mixer-actors #effect-actors { flex: 1 1 auto; min-height: 160px; }
-#mixer-stack > .panel, #mixer-actors > .panel { position: relative !important; top: auto !important; right: auto !important; left: auto !important; bottom: auto !important; width: 100% !important; z-index: auto !important; }
-#mixer-stack .mixer-panel { flex: 0 0 auto; }
 /* A pick must not shift the rows under the pointer: the lane header keeps one height. */
 .mixer-current { min-height: 34px; max-height: 34px; overflow: hidden; }
 .mixer-current .side-note, .mixer-current-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -6830,3 +6822,38 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mseq-help { display: flex; flex-direction: column; gap: 3px; text-align: left; }
 .mseq-resize-v { position: absolute; left: 0; right: 0; bottom: 0; height: 7px; cursor: ns-resize; z-index: 2; }
 #mixer-seq .mixer-editor { flex: 0 0 auto; border-top: 1px solid var(--ring); padding-top: 8px; }
+
+/* ── Right rail: one round glyph per panel; the panels are floating hosts dragged by their header ── */
+#right-rail {
+  position: fixed; top: 60px; right: 12px;
+  z-index: 30;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.rail-btn {
+  width: 36px; height: 36px; padding: 0;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  color: var(--gray-300);
+  background: linear-gradient(180deg, var(--gray-850), var(--gray-900));
+  border: 1px solid var(--ring);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+.rail-btn .icon { font-size: 18px; }
+.rail-btn:hover { color: var(--text); border-color: var(--gray-500); }
+.rail-btn.on { color: var(--accent); border-color: var(--accent); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35), inset 0 0 0 1px var(--accent); }
+.float-host { position: fixed; width: 320px; box-sizing: border-box; }
+.float-host > .panel {
+  position: relative !important;
+  top: auto !important; right: auto !important; left: auto !important; bottom: auto !important;
+  width: 100% !important;
+  max-height: calc(100vh - 80px);
+  z-index: auto !important;
+  box-sizing: border-box;
+}
+.float-host .details-header, .float-host .panel-title, .float-host .plc-header, .float-host .wx-header { cursor: grab; }
+.float-host.dragging .details-header, .float-host.dragging .panel-title { cursor: grabbing; }
+/* A drag must not sweep the header text into a selection. */
+.float-host .details-header, .float-host .panel-title, .float-host .plc-header, .float-host .wx-header { user-select: none; -webkit-user-select: none; }
+.float-host.dragging, .float-host.dragging * { user-select: none !important; -webkit-user-select: none !important; }
+.float-host .mixer-parts-panel { max-height: calc(100vh - 80px); }
