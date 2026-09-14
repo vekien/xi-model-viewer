@@ -59,7 +59,7 @@ import { ZoneDefModal } from './ZoneDefModal.jsx';
 import { ParticlePreviewModal } from './ParticlePreviewModal.jsx';
 import { MixerList } from './MixerList.jsx';
 import { MixerPanel } from './MixerPanel.jsx';
-import { RACE_TO_XI, buildCatalogArgs, composeForPreview, emptyRecipe, entryPathForRace, eventsFromInspect, inspectSpec, loadCatalog, mixerDir, publishRecipe, serializeRecipe, soundIdsFromInfo, withIds } from '../js/mixer.js';
+import { RACE_TO_XI, buildCatalogArgs, composeForPreview, emptyRecipe, entryPathForRace, eventsFromInspect, inspectSpec, laneForEvent, loadCatalog, mixerDir, publishRecipe, serializeRecipe, soundIdsFromInfo, withIds } from '../js/mixer.js';
 import { ZoneMeshPreviewModal } from './ZoneMeshPreviewModal.jsx';
 import { armGeneratorPreview } from '../js/particlePreview.js';
 import { checkForUpdate, checkForUpdateManual, dismissUpdate } from '../js/update.js';
@@ -6844,7 +6844,11 @@ export default function App({ launch = null }) {
     if (!text) { setStatusText(`Could not read recipe ${name}`); return; }
     try {
       const r = JSON.parse(text);
-      const events = withIds((r.events ?? []).map((e) => ({ ...e, enabled: true, kind: e.kind ?? (e.from ?? 'keep') })));
+      // The file does not carry `kind`: locks, hits and links are the keep lane
+      // whatever lane they came from, everything else draws in its own lane.
+      const events = withIds((r.events ?? []).map((e) => ({
+        ...e, enabled: true, kind: e.kind ?? (laneForEvent(e) === 'keep' ? 'keep' : (e.from ?? 'keep')),
+      })));
       const loaded = { name: r.name ?? name, sources: r.sources ?? {}, events, target: r.target };
       mixerRecipeRef.current = loaded;
       setMixerRecipe(loaded);
