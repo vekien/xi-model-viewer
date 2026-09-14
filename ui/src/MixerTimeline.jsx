@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Tooltip } from './Tooltip.jsx';
+import { Combo } from './Combo.jsx';
 import { KEEP_LANE, LANES, LANE_BY_ID, kindOf, opName, recipeLength, trackLabel } from '../js/mixer.js';
 
 // The mixer's timeline as a floating window built from the Camera Sequencer's
@@ -406,6 +407,27 @@ export function TimelineWindow({
           </div>
         )}
 
+        {/* Above the track, the sequencer's settings row: add a track on the left, zoom on the right */}
+        <div className="cseq-row cseq-settings mseq-toolbar">
+          <span className="cseq-label">Add track</span>
+          <div className="cseq-load mseq-add-track">
+            <Combo value="" items={LANES.map((l) => ({ id: l.id, label: l.label }))} placeholder="Motion, Effects, Sound…"
+              onChange={(kind) => kind && onAddTrack?.(kind)} />
+          </div>
+          <div className="cseq-bar-group cseq-zoom">
+            <Tooltip content="Zoom out" placement="top">
+              <button type="button" className="icon-btn cseq-icon" aria-label="Zoom out" disabled={zoom <= MIN_ZOOM} onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z / 2))}>
+                <span className="icon">zoom_out</span>
+              </button>
+            </Tooltip>
+            <Tooltip content="Zoom in" placement="top">
+              <button type="button" className="icon-btn cseq-icon" aria-label="Zoom in" disabled={zoom >= MAX_ZOOM} onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z * 2))}>
+                <span className="icon">zoom_in</span>
+              </button>
+            </Tooltip>
+          </div>
+        </div>
+
         {/* The inset track: labels on the left, the scrolling ruler and lanes on the right */}
         <div className="cseq-tl mseq-tl" style={{ height: trackH + 8 }} ref={rootRef} onPointerMove={onPointerMove} onPointerUp={endPointer} onPointerCancel={endPointer}>
           <div className="cseq-tl-labels">
@@ -433,12 +455,6 @@ export function TimelineWindow({
                   <Tooltip content={t.first ? 'Clear this track' : 'Remove this track'}>
                     <button type="button" className="mseq-x" aria-label="Remove" onPointerDown={(e) => e.stopPropagation()}
                       onClick={(e) => { e.stopPropagation(); onRemoveTrack?.(t.id); }}><span className="icon">close</span></button>
-                  </Tooltip>
-                )}
-                {t.kind !== 'keep' && t.last && (
-                  <Tooltip content={`Add a ${LANE_BY_ID.get(t.kind)?.label.toLowerCase()} track`}>
-                    <button type="button" className="mseq-add" aria-label="Add track" onPointerDown={(e) => e.stopPropagation()}
-                      onClick={(e) => { e.stopPropagation(); onAddTrack?.(t.kind); }}><span className="icon">add</span></button>
                   </Tooltip>
                 )}
               </div>
@@ -536,19 +552,6 @@ export function TimelineWindow({
             <Tooltip content={<div className="mseq-help">{HELP.map((h) => <div key={h}>{h}</div>)}</div>} placement="top" interactive>
               <button type="button" className="icon-btn cseq-icon" aria-label="Help">
                 <span className="icon">help</span>
-              </button>
-            </Tooltip>
-          </div>
-
-          <div className="cseq-bar-group cseq-zoom">
-            <Tooltip content="Zoom out" placement="top">
-              <button type="button" className="icon-btn cseq-icon" aria-label="Zoom out" disabled={zoom <= MIN_ZOOM} onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z / 2))}>
-                <span className="icon">zoom_out</span>
-              </button>
-            </Tooltip>
-            <Tooltip content="Zoom in" placement="top">
-              <button type="button" className="icon-btn cseq-icon" aria-label="Zoom in" disabled={zoom >= MAX_ZOOM} onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z * 2))}>
-                <span className="icon">zoom_in</span>
               </button>
             </Tooltip>
           </div>

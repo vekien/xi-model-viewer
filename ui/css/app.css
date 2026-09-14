@@ -6873,5 +6873,8 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mseq-x, .mseq-add { flex: 0 0 auto; width: 16px; height: 16px; min-height: 0; padding: 0; display: grid; place-items: center; background: transparent; border: none; box-shadow: none; border-radius: 50%; color: var(--muted); cursor: pointer; }
 .mseq-x:hover, .mseq-add:hover { color: var(--text); background: rgba(255, 255, 255, 0.1); }
 .mseq-x .icon, .mseq-add .icon { font-size: 12px; }
+/* Timeline toolbar: the Add track combo is the sequencer's Load combo, wider for its placeholder. */
+.mseq-add-track { width: 200px; }
+.mseq-toolbar .cseq-zoom { margin-left: auto; }
 .pc-look-label { margin-top: 8px; }
 .gs-tabs { margin: 4px 0 6px; }
