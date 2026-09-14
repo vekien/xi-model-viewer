@@ -353,6 +353,13 @@ export const backend = {
     return this.writeFile(path, bytes);
   },
 
+  /** Delete one file; a missing file is not an error. */
+  async deleteFile(path) {
+    if (isTauri()) return tauriInvoke('delete_file', { path });
+    const res = await fetch(`/fs/delete?path=${encodeURIComponent(path)}`, { method: 'POST' });
+    if (!res.ok) throw new Error(await res.text());
+  },
+
 
   /** Lists filenames (not dirs) directly in a directory. Returns [] if missing. */
   async listFiles(path) {

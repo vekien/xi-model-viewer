@@ -70,6 +70,17 @@ fn write_file(path: String, contents: Vec<u8>) -> Result<(), String> {
     std::fs::write(&path, contents).map_err(|e| e.to_string())
 }
 
+/// Delete one file (the mixer's recipe organizer). Missing is not an error.
+#[tauri::command]
+fn delete_file(path: String) -> Result<(), String> {
+    let path = norm(&path);
+    match std::fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 /// Persistent user data dir: `%LOCALAPPDATA%\XiModelViewer` (or XDG/HOME fallback).
 /// Created on first call. Used for notes.json and similar editable JSON.
 fn user_data_dir_path() -> Result<std::path::PathBuf, String> {
@@ -1192,6 +1203,7 @@ fn main() {
             read_file,
             file_exists,
             write_file,
+            delete_file,
             user_data_dir,
             lists_dir,
             lists_status,

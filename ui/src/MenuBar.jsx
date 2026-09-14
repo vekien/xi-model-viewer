@@ -56,6 +56,7 @@ const MENUS = [
       { id: 'assets-npcs', label: 'NPCs', icon: 'pets' },
       { id: 'assets-zones', label: 'Zones', icon: 'map' },
       { id: 'assets-effects', label: 'Effects', icon: 'auto_awesome' },
+      { id: 'assets-mixer', label: 'Ability Mixer', icon: 'tune' },
       { id: 'assets-images', label: 'Images', icon: 'image' },
       { id: 'assets-music', label: 'Music', icon: 'music_note' },
       { id: 'assets-sfx', label: 'Sound FX', icon: 'graphic_eq' },

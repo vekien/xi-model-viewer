@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Combo } from './Combo.jsx';
 import { NpcList } from './NpcList.jsx';
+import { BUILTIN_GEARSETS } from './CharacterList.jsx';
 import { Tooltip } from './Tooltip.jsx';
 
 /**
@@ -102,6 +103,7 @@ export function EffectPcStrip({ pc, gearsetsFirst = false }) {
       const sets = Array.isArray(raw?.sets) ? raw.sets : (Array.isArray(raw) ? raw : []);
       return [
         { id: '', label: '— none —' },
+        ...BUILTIN_GEARSETS.map((s) => ({ id: s.id, label: `★ ${s.name}`, set: { ...s, race } })),
         ...sets
           .filter((s) => s?.id && s?.name)
           .map((s) => ({

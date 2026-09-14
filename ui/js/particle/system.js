@@ -601,7 +601,7 @@ export class ParticleSystem {
    * and voices keep running under the same association and expire on their own
    * lifespan, so consecutive passes overlap instead of cutting each other off.
    */
-  playEffectRoutine(commands, { loop = true, sounds = [], anims = [], onAnim = null, onFinished = null, overlap = false } = {}) {
+  playEffectRoutine(commands, { loop = true, sounds = [], anims = [], stops = [], onAnim = null, onFinished = null, overlap = false, loopAt = null } = {}) {
     if (overlap) this._effect = null;   // drop the routine state, keep its particles
     else this.clearEffect();
     const cmds = commands ?? [];
@@ -609,15 +609,23 @@ export class ParticleSystem {
     this._effect = {
       commands: cmds,
       sounds,
+      // Optional hard loop point (frames): re-arm here whether or not particles
+      // are still alive. The Ability Mixer uses it so a mix restarts on its
+      // routine length — an aura that never drains must not freeze the caster
+      // in idle after one pass.
+      loopAt,
       // Caster animations the routine schedules (0x05). Fired on the same
       // playhead as the generators, so they follow loop, pause and speed for
       // free rather than needing their own timers.
       anims,
+      // DampenGenerator commands (0x1E): cut a generator at its tick.
+      stops,
       onAnim,
       playhead: 0,
       fired: new Set(),
       firedSounds: new Set(),
       firedAnims: new Set(),
+      firedStops: new Set(),
       voices: [],
       loop,
       // Parked states — both leave the routine armed so Play/Reset can run it
@@ -649,6 +657,31 @@ export class ParticleSystem {
   }
 
   /** Restart the armed routine from its first frame (Reset). */
+  /**
+   * Re-time the armed routine in place (the Ability Mixer editing a playing
+   * mix): new command / sound / anim lists and loop point, keeping the
+   * playhead. Entries already behind the playhead count as fired so nothing
+   * replays mid-pass; the next pass runs the new schedule from the top.
+   */
+  retimeEffect({ commands, sounds, anims, stops, loopAt }) {
+    const e = this._effect;
+    if (!e) return false;
+    e.commands = commands ?? [];
+    e.sounds = sounds ?? [];
+    e.anims = anims ?? [];
+    e.stops = stops ?? [];
+    e.loopAt = loopAt ?? e.loopAt;
+    const emitSpan = Math.max(1, ...e.commands.map((c) => c.delay + Math.max(c.dur, 1)));
+    e.length = emitSpan;
+    e.expectedEnd = Math.max(e.expectedEnd, emitSpan);
+    const passed = (list) => new Set(list.map((x, i) => (x.delay <= e.playhead ? i : -1)).filter((i) => i >= 0));
+    e.fired = passed(e.commands);
+    e.firedSounds = passed(e.sounds);
+    e.firedAnims = passed(e.anims);
+    e.firedStops = passed(e.stops);
+    return true;
+  }
+
   restartEffect() {
     if (!this._effect) return;
     this.effectManager.clearEffects(this._effectAssociation);
@@ -679,6 +712,7 @@ export class ParticleSystem {
     e.fired.clear();
     e.firedSounds.clear();
     e.firedAnims.clear();
+    e.firedStops?.clear();
     e.stopped = true;
   }
 
@@ -751,6 +785,15 @@ export class ParticleSystem {
       e.onAnim?.(a);
     }
 
+    // DampenGenerator: end the named generator now (its audio with it).
+    for (let i = 0; i < (e.stops?.length ?? 0); i++) {
+      if (e.firedStops.has(i)) continue;
+      const st = e.stops[i];
+      if (e.playhead < st.delay) continue;
+      e.firedStops.add(i);
+      this.effectManager.stopGenerator(this._effectAssociation, st.genId);
+    }
+
     /*
      * Re-arm when the effect is genuinely finished, not on a fixed timer.
      *
@@ -766,13 +809,20 @@ export class ParticleSystem {
      */
     const allFired = e.fired.size >= e.commands.length
       && e.firedSounds.size >= e.sounds.length
-      && e.firedAnims.size >= e.anims.length;
-    if (!allFired) return;
+      && e.firedAnims.size >= e.anims.length
+      && e.firedStops.size >= (e.stops?.length ?? 0);
+    // A hard loop point is the authored end of the mix: nothing is finished
+    // before it, however quiet the stage is — a motion-only mix has no
+    // particles at all, and its second clip must not be cut off the frame it
+    // fires just because everything has now fired and nothing is alive.
+    if (e.loopAt != null && e.playhead < e.loopAt) return;
+    const hardLoop = e.loop && e.loopAt != null;
+    if (!allFired && !hardLoop) return;
 
     e.voices = e.voices.filter((v) => !v.isComplete());
     const finished = this.effectManager.countParticles() === 0 && e.voices.length === 0;
 
-    if (finished || e.playhead >= e.expectedEnd + LOOP_TAIL_FRAMES) {
+    if (hardLoop || finished || e.playhead >= e.expectedEnd + LOOP_TAIL_FRAMES) {
       if (!e.loop) {
         // Play-once: drop the particles and any tail sound, but keep the
         // routine armed. Tearing `_effect` down here left Reset and Play with
@@ -796,6 +846,7 @@ export class ParticleSystem {
       e.fired.clear();
       e.firedSounds.clear();
     e.firedAnims.clear();
+    e.firedStops?.clear();
     }
   }
 

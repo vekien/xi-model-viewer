@@ -630,6 +630,14 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._text("ok")
             except Exception as e:
                 return self._error(e)
+        if url.path == "/fs/delete":
+            try:
+                p = self._resolve_any(parse_qs(url.query).get("path", [""])[0])
+                if p.is_file():
+                    p.unlink()
+                return self._text("ok")
+            except Exception as e:
+                return self._error(e)
         # Dev helper: POST /capture with a data-URL body saves a screenshot
         # next to this script for automated visual verification.
         if urlparse(self.path).path == "/capture":
