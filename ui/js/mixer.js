@@ -183,7 +183,7 @@ export async function buildCatalogArgs() {
 const joinPath = (dir, name) => `${dir}${dir.includes('\\') ? '\\' : '/'}${name}`;
 
 /** Filter catalog entries by kind chips and a text query; ranked by name match. */
-export function filterCatalog(entries, { query = '', kinds = null, lane = null } = {}) {
+export function filterCatalog(entries, { query = '', kinds = null, lane = null, limit = 400 } = {}) {
   const q = query.trim().toLowerCase();
   const out = [];
   for (const e of entries) {
@@ -195,7 +195,7 @@ export function filterCatalog(entries, { query = '', kinds = null, lane = null }
       if (!hay.includes(q)) continue;
     }
     out.push(e);
-    if (out.length >= 400) break;
+    if (out.length >= limit) break;
   }
   return out;
 }

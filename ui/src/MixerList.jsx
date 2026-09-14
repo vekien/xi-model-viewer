@@ -2,17 +2,19 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Tooltip } from './Tooltip.jsx';
 import { LANES, filterCatalog } from '../js/mixer.js';
 
-// The mixer's picker: one lane at a time, a searchable list of every job ability,
-// spell and weapon skill, and — the point of it — the row under the cursor plays on
-// the stage. Hover or arrow to browse, click or Enter to take it for the lane.
+// The mixer's picker: one lane at a time, the catalog as the same collapsible
+// tree the other lists draw (one group per category — Job Ability, Spell, Weapon
+// Skill…), a flat cross-group list while searching, and the row you click is
+// taken for the lane and played on the stage with the mix so far.
 
-const KINDS = [
-  { id: 'ja', label: 'Ability' },
-  { id: 'spell', label: 'Spell' },
-  { id: 'ws', label: 'Weapon Skill' },
-];
+const MAX_RESULTS = 400;   // cap the flat search list so a broad query stays snappy
 
-const mixerListUi = { query: '', kinds: new Set(), lane: 'motion' };
+// Category order in the tree; anything the catalog adds later sorts after these.
+const CAT_ORDER = ['Job Ability', 'Spell', 'Weapon Skill', 'Weapon Skill (extended)'];
+const KIND_ICON = { ja: 'bolt', spell: 'auto_fix_high', ws: 'swords' };
+
+// Survive Mixer ↔ other views: search, open groups and lane stay where you left them.
+const mixerListUi = { query: '', openCats: new Set(), lane: 'motion' };
 
 function counts(e) {
   const bits = [];
@@ -24,19 +26,32 @@ function counts(e) {
   return bits.join(' · ');
 }
 
-function Row({ entry, focused, taken, onPick }) {
+function Row({ entry, sub, focused, taken, onPick }) {
   return (
-    <div className={`node${focused ? ' selected' : ''}`}>
-      <div className={`row mixer-row${taken ? ' taken' : ''}`}
-        onClick={() => onPick(entry)}>
+    <div className={`node${focused ? ' selected' : ''}`} data-spec={entry.spec}>
+      <div className={`row mixer-row${taken ? ' taken' : ''}`} onClick={() => onPick(entry)}>
         <span className="caret"><span className="icon" /></span>
-        <span className="kind icon">{entry.kind === 'ws' ? 'swords' : entry.kind === 'spell' ? 'auto_fix_high' : 'bolt'}</span>
+        <span className="kind icon">{KIND_ICON[entry.kind] ?? 'bolt'}</span>
         <span className="effect-name">{entry.name}</span>
-        <span className="mono-small effect-sub">{counts(entry)}</span>
         <span className="mono-small effect-id">{entry.spec}</span>
+        <span className="mono-small effect-sub">{sub ? `${sub} · ` : ''}{counts(entry)}</span>
       </div>
     </div>
   );
+}
+
+/** Entries grouped by catalog category, in CAT_ORDER, each group already lane-filtered. */
+function groupByCat(entries) {
+  const byCat = new Map();
+  for (const e of entries) {
+    const cat = e.cat || 'Other';
+    if (!byCat.has(cat)) byCat.set(cat, []);
+    byCat.get(cat).push(e);
+  }
+  const rank = (c) => { const i = CAT_ORDER.indexOf(c); return i < 0 ? CAT_ORDER.length : i; };
+  return [...byCat.entries()]
+    .sort((a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0]))
+    .map(([cat, list]) => ({ id: cat, label: cat, kind: list[0]?.kind, entries: list }));
 }
 
 export function MixerList({
@@ -45,45 +60,64 @@ export function MixerList({
   onPick, onClearLane,
 }) {
   const [query, setQuery] = useState(() => mixerListUi.query);
-  const [kinds, setKinds] = useState(() => new Set(mixerListUi.kinds));
+  const [openCats, setOpenCats] = useState(() => new Set(mixerListUi.openCats));
   const [focus, setFocus] = useState(-1);
   const scrollRef = useRef(null);
 
   useEffect(() => { mixerListUi.query = query; }, [query]);
-  useEffect(() => { mixerListUi.kinds = kinds; }, [kinds]);
+  useEffect(() => { mixerListUi.openCats = openCats; }, [openCats]);
   useEffect(() => { mixerListUi.lane = lane; }, [lane]);
 
   const entries = catalog?.entries ?? [];
+  const q = query.trim();
+
+  // Everything this lane can use, in catalog order — the tree's population.
+  const usable = useMemo(() => filterCatalog(entries, { lane, limit: Infinity }), [entries, lane]);
+  const groups = useMemo(() => groupByCat(usable), [usable]);
+
+  // Flat, cross-group matches while searching; null means "not searching",
+  // which switches the view back to the collapsible tree.
   const results = useMemo(
-    () => filterCatalog(entries, { query, kinds, lane }),
-    [entries, query, kinds, lane],
+    () => (q ? filterCatalog(entries, { query: q, lane, limit: MAX_RESULTS }) : null),
+    [entries, q, lane],
   );
 
-  useEffect(() => { setFocus(-1); }, [query, kinds, lane]);
+  // The rows on screen, in order — what the arrow keys walk.
+  const visible = useMemo(() => {
+    if (results) return results;
+    const out = [];
+    for (const g of groups) if (openCats.has(g.id)) out.push(...g.entries);
+    return out;
+  }, [results, groups, openCats]);
+
+  useEffect(() => { setFocus(-1); }, [query, lane]);
 
   const onKey = (e) => {
-    if (!results.length) return;
+    if (!visible.length) return;
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       const next = e.key === 'ArrowDown'
-        ? Math.min(results.length - 1, focus + 1)
+        ? Math.min(visible.length - 1, focus + 1)
         : Math.max(0, focus - 1);
       setFocus(next);
-      const el = scrollRef.current?.querySelectorAll('.node')[next];
+      const spec = visible[next]?.spec;
+      const el = spec ? scrollRef.current?.querySelector(`.node[data-spec="${CSS.escape(spec)}"]`) : null;
       el?.scrollIntoView({ block: 'nearest' });
     } else if (e.key === 'Enter' && focus >= 0) {
       e.preventDefault();
-      onPick(results[focus]);
+      onPick(visible[focus]);
     }
   };
 
-  const toggleKind = (id) => setKinds((s) => {
+  const toggle = (id) => setOpenCats((s) => {
     const n = new Set(s);
     if (n.has(id)) n.delete(id); else n.add(id);
     return n;
   });
 
   const current = sources?.[lane];
+  const focusedSpec = focus >= 0 ? visible[focus]?.spec : null;
+  const pick = (entry) => { setFocus(visible.findIndex((v) => v.spec === entry.spec)); onPick(entry); };
 
   return (
     <div id="tree" className="panel list-panel mixer-list">
@@ -111,7 +145,7 @@ export function MixerList({
             </Tooltip>
           </>
         ) : (
-          <span className="side-note">No {LANES.find((l) => l.id === lane)?.label.toLowerCase()} source yet — hover a row to preview, click to take it.</span>
+          <span className="side-note">No {LANES.find((l) => l.id === lane)?.label.toLowerCase()} source yet — open a group and click a row to take it.</span>
         )}
       </div>
 
@@ -126,13 +160,6 @@ export function MixerList({
           </Tooltip>
         )}
       </div>
-      <div className="mixer-kinds">
-        {KINDS.map((k) => (
-          <button key={k.id} type="button" className={`mixer-chip${kinds.has(k.id) ? ' on' : ''}`}
-            onClick={() => toggleKind(k.id)}>{k.label}</button>
-        ))}
-        <span className="mono-small mixer-count">{results.length}</span>
-      </div>
 
       <div className="list-scroll" ref={scrollRef} tabIndex={0} onKeyDown={onKey}>
         {!catalog && (
@@ -143,12 +170,35 @@ export function MixerList({
             </button>
           </div>
         )}
-        {catalog && results.length === 0 && <div className="side-note">Nothing matches.</div>}
-        {catalog && results.map((e, i) => (
-          <Row key={e.spec} entry={e}
-            focused={i === focus}
-            taken={current?.spec === e.spec}
-            onPick={(entry) => { setFocus(i); onPick(entry); }} />
+
+        {catalog && results && results.length === 0 && (
+          <div className="side-note">Nothing matches “{query}”.</div>
+        )}
+        {catalog && results && results.map((e) => (
+          <Row key={e.spec} entry={e} sub={e.cat}
+            focused={e.spec === focusedSpec} taken={current?.spec === e.spec} onPick={pick} />
+        ))}
+        {catalog && results?.length >= MAX_RESULTS && (
+          <div className="side-note">Showing first {MAX_RESULTS} — refine your search.</div>
+        )}
+
+        {catalog && !results && groups.map((g) => (
+          <div key={g.id} className={`node${openCats.has(g.id) ? ' open' : ''}`}>
+            <div className="row" onClick={() => toggle(g.id)}>
+              <span className="caret icon">chevron_right</span>
+              <span className="kind icon">{KIND_ICON[g.kind] ?? 'auto_awesome'}</span>
+              <span>{g.label}</span>
+              <span className="badge">{g.entries.length}</span>
+            </div>
+            {openCats.has(g.id) && (
+              <div className="children">
+                {g.entries.map((e) => (
+                  <Row key={e.spec} entry={e}
+                    focused={e.spec === focusedSpec} taken={current?.spec === e.spec} onPick={pick} />
+                ))}
+              </div>
+            )}
+          </div>
         ))}
       </div>
       <div className="mixer-hint mono-small">click a row to use it for this lane · the stage plays the mix so far</div>

@@ -6695,10 +6695,8 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mixer-current { display: flex; align-items: center; gap: 8px; padding: 8px 10px 4px; min-height: 30px; }
 .mixer-current-name { font-weight: 600; }
 .mixer-current .pc-tbtn { margin-left: auto; }
-.mixer-kinds { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--ring); }
 .mixer-chip { font: 500 11px/1.2 var(--font-ui); color: var(--muted); background: transparent; border: 1px solid var(--ring); border-radius: 10px; padding: 3px 8px; cursor: pointer; }
 .mixer-chip.on { color: var(--accent); border-color: var(--accent); }
-.mixer-count { margin-left: auto; }
 .mixer-row.taken .effect-name { color: var(--accent); }
 .mixer-empty { padding: 14px 12px; display: flex; flex-direction: column; gap: 10px; }
 .mixer-hint { padding: 6px 10px; border-top: 1px solid var(--ring); color: var(--muted); }
