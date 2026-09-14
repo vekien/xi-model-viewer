@@ -32,7 +32,6 @@ export function WeatherPanel({
   bgColor, onBg,
   brightness = 0, onBrightness,
   fogOn = true, onFogOn, fogScale = 1, onFogScale,
-  musicVolume = 0.8, onMusicVolume, sfxVolume = 0.6, onSfxVolume,
   sfxOn = true, onToggleSfx,
   zoneTrack = null, zoneTrackPlaying = false, onToggleZoneMusic,
 }) {
@@ -41,8 +40,6 @@ export function WeatherPanel({
   // which have weather all the same.
   const showSkyControls = weathers.length > 0;
   const brightPct = Math.round((brightness ?? 0) * 100);
-  const musicPct = Math.round((musicVolume ?? 0) * 100);
-  const sfxPct = Math.round((sfxVolume ?? 0) * 100);
   // Fog distance spans 0.1x to 20x the authored range. A zone is authored for a
   // camera standing in it (Altepa fogs out at 450 units), so the fitted overview
   // camera sits well beyond that and everything washes to fog — pushing the
@@ -197,14 +194,7 @@ export function WeatherPanel({
               <span className="icon">music_note</span>
             </button>
           </Tooltip>
-          <input
-            type="range" min="0" max="100" step="1" value={zoneTrack ? musicPct : 0}
-            disabled={!zoneTrack}
-            onChange={(e) => onMusicVolume?.(+e.target.value / 100)}
-            className="vol-slider"
-            style={{ '--fill': `${zoneTrack ? musicPct : 0}%` }}
-          />
-          <span className="wx-bright-val mono">{zoneTrack ? `${musicPct}%` : '—'}</span>
+          <span className="wx-audio-label">{zoneTrack ? trackLabel : 'No music in this zone'}</span>
         </div>
 
         <div className="wx-row wx-bright-row">
@@ -217,14 +207,7 @@ export function WeatherPanel({
               <span className="icon eq">airwave</span>
             </button>
           </Tooltip>
-          <input
-            type="range" min="0" max="100" step="1" value={sfxPct}
-            disabled={!sfxOn}
-            onChange={(e) => onSfxVolume?.(+e.target.value / 100)}
-            className="vol-slider"
-            style={{ '--fill': `${sfxPct}%` }}
-          />
-          <span className="wx-bright-val mono">{sfxPct}%</span>
+          <span className="wx-audio-label">{sfxOn ? 'Ambient and weather sound' : 'Ambient muted'}</span>
         </div>
 
         <div className="wx-row wx-bright-row">

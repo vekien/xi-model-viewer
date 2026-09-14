@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Tooltip } from './Tooltip.jsx';
 import { ViewportPanel } from './ViewportPanel.jsx';
 import { GraphicsPanel } from './GraphicsPanel.jsx';
+import { VolumePanel } from './VolumePanel.jsx';
 
 const MENUS = [
   {
@@ -91,6 +92,7 @@ export function MenuBar({
   shadowsOn = false, shadowDistance = 90, onShadowDistance,
   renderHeight = 0, onRenderHeight, bufferSize = null,
   fpsCap = 0, onFpsCap, onGraphicsOpenChange,
+  effectVolume = 1, onEffectVolume, musicVolume = 0.8, onMusicVolume, ambientVolume = 0.6, onAmbientVolume,
   renderDistance = 5000, onRenderDistance,
   effectDistanceScale = 1, onEffectDistanceScale,
   zoneLod = false, onZoneLod,
@@ -98,10 +100,12 @@ export function MenuBar({
   const [active, setActive] = useState(null);   // { label, left, top } | null
   const [viewport, setViewport] = useState(null);     // { left, top } | null
   const [graphics, setGraphics] = useState(null); // { left, top } | null
+  const [volume, setVolume] = useState(null);     // { left, top } | null
   const barRef = useRef(null);
   const panelRef = useRef(null);
   const viewportRef = useRef(null);
   const gfxRef = useRef(null);
+  const volRef = useRef(null);
 
   useEffect(() => {
     if (!active) return;
@@ -172,6 +176,7 @@ export function MenuBar({
     setViewport(null);
     setGraphics(null);
     onGraphicsOpenChange?.(false);
+    setVolume(null);
     setActive({ label, left: rect.left, top: rect.bottom + 10 });
   };
 
@@ -181,7 +186,35 @@ export function MenuBar({
     setActive(null);
     setGraphics(null);
     onGraphicsOpenChange?.(false);
+    setVolume(null);
     setViewport({ left: rect.left, top: rect.bottom + 10 });
+  };
+
+  useEffect(() => {
+    if (!volume) return;
+    const close = (e) => {
+      if (barRef.current?.contains(e.target)) return;
+      if (volRef.current?.contains(e.target)) return;
+      if (isPortalClick(e.target)) return;
+      setVolume(null);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') setVolume(null); };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [volume]);
+
+  const toggleVolume = (target) => {
+    if (volume) { setVolume(null); return; }
+    const rect = target.getBoundingClientRect();
+    setActive(null);
+    setViewport(null);
+    setGraphics(null);
+    onGraphicsOpenChange?.(false);
+    setVolume({ left: rect.left, top: rect.bottom + 10 });
   };
 
   const toggleGraphics = (target) => {
@@ -272,6 +305,17 @@ export function MenuBar({
             onClick={(e) => toggleGraphics(e.currentTarget)}
           >
             <span className="icon">display_settings</span>
+          </button>
+        </Tooltip>
+        <Tooltip content="Volume — sounds, music, ambient" placement="bottom">
+          <button
+            type="button"
+            className={`view-tool${volume ? ' on' : ''}`}
+            aria-label="Volume"
+            aria-expanded={!!volume}
+            onClick={(e) => toggleVolume(e.currentTarget)}
+          >
+            <span className="icon">{effectVolume > 0 || musicVolume > 0 ? 'volume_up' : 'volume_off'}</span>
           </button>
         </Tooltip>
         <Tooltip content="Viewport — background & floor" placement="bottom">
@@ -377,6 +421,26 @@ export function MenuBar({
               onEffectDistanceScale={onEffectDistanceScale}
               zoneLod={zoneLod}
               onZoneLod={onZoneLod}
+            />
+          </div>,
+          document.body,
+        )}
+
+      {volume &&
+        createPortal(
+          <div
+            className="menu-panel tool-pop"
+            ref={volRef}
+            style={{ position: 'fixed', left: volume.left, top: volume.top }}
+          >
+            <VolumePanel
+              effectVolume={effectVolume}
+              onEffectVolume={onEffectVolume}
+              musicVolume={musicVolume}
+              onMusicVolume={onMusicVolume}
+              ambientVolume={ambientVolume}
+              onAmbientVolume={onAmbientVolume}
+              zoneLoaded={zoneLoaded}
             />
           </div>,
           document.body,

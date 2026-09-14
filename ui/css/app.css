@@ -6825,7 +6825,7 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 
 /* ── Right rail: one round glyph per panel; the panels are floating hosts dragged by their header ── */
 #right-rail {
-  position: fixed; top: 60px; right: 12px;
+  position: fixed; top: 12px; right: 12px;   /* level with the menubar */
   z-index: 30;
   display: flex; flex-direction: column; gap: 8px;
 }
@@ -6857,3 +6857,5 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .float-host .details-header, .float-host .panel-title, .float-host .plc-header, .float-host .wx-header { user-select: none; -webkit-user-select: none; }
 .float-host.dragging, .float-host.dragging * { user-select: none !important; -webkit-user-select: none !important; }
 .float-host .mixer-parts-panel { max-height: calc(100vh - 80px); }
+/* Weather panel audio rows: the toggle and a label; the sliders live in the nav's Volume popover. */
+.wx-audio-label { flex: 1 1 auto; min-width: 0; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

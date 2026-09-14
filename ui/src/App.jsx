@@ -5038,8 +5038,6 @@ export default function App({ launch = null }) {
     // Same volume the Effects view sets: an action's routine plays through the
     // effect audio path, so it needs the same control (and one shared value,
     // not a second one that quietly disagrees).
-    volume: effectVolume,
-    onVolume: FX_VIEWS.has(leftView) && pcFxMode !== 'mesh' ? setEffectVolume : null,
   };
 
   // Character Creation playback. Pose auto-splits removed — they were quiet
@@ -5087,8 +5085,6 @@ export default function App({ launch = null }) {
     speed: effectSpeed,
     onSpeed: setEffectSpeed,
     onSeek: restartEffect,
-    volume: effectVolume,
-    onVolume: setEffectVolume,
   };
   // The mixer has one transport of its own (Play mix / Stop / space / scrubber /
   // speed / loop). Its stance panel keeps only the stage options, so there is
@@ -10107,10 +10103,6 @@ export default function App({ launch = null }) {
       onFogOn={setFogOn}
       fogScale={fogScale}
       onFogScale={setFogScale}
-      musicVolume={player.volume}
-      onMusicVolume={player.setVolume}
-      sfxVolume={sfxVolume}
-      onSfxVolume={setSfxVolume}
       sfxOn={sfxOn}
       onToggleSfx={toggleSfx}
       zoneTrack={zoneTrack}
@@ -10229,6 +10221,12 @@ export default function App({ launch = null }) {
         fpsCap={fpsCap}
         onFpsCap={setFpsCap}
         onGraphicsOpenChange={setGraphicsOpen}
+        effectVolume={effectVolume}
+        onEffectVolume={setEffectVolume}
+        musicVolume={player.volume}
+        onMusicVolume={player.setVolume}
+        ambientVolume={sfxVolume}
+        onAmbientVolume={setSfxVolume}
       />
 
       {/* Mounted only while open: unmounting is what releases the camera lock,

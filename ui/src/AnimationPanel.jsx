@@ -119,7 +119,7 @@ export function AnimationPanel({ pc, anim }) {
           fxRoutines, fxRoutine = '', onFxRoutine,
           animPacks, animPack = '', onAnimPack,
           baseAnim = 'none', onBaseAnim,
-          speed = 1, onSpeed, volume, onVolume } = anim ?? {};
+          speed = 1, onSpeed } = anim ?? {};
 
   if (actionGroups.length === 0 && anims.length === 0 && schedules.length === 0) return null;
 
@@ -311,21 +311,6 @@ export function AnimationPanel({ pc, anim }) {
             onInput={(e) => onSpeed(+e.target.value / 100)}
           />
           <span className="mono pc-frame-num">{Math.round(speed * 100)}%</span>
-        </Row>
-      )}
-      {onVolume && (
-        <Row label="Volume">
-          <input
-            type="range"
-            className="vol-slider pc-frame-slider"
-            min="0" max="100" step="1"
-            value={Math.round(volume * 100)}
-            style={{ '--fill': `${Math.round(volume * 100)}%` }}
-            onInput={(e) => onVolume(+e.target.value / 100)}
-          />
-          <span className="mono pc-frame-num">
-            {volume > 0 ? `${Math.round(volume * 100)}%` : 'muted'}
-          </span>
         </Row>
       )}
       {onBaseAnim && (
