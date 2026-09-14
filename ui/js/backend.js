@@ -183,6 +183,12 @@ export const backend = {
         return await tauriInvoke('xi_run_stream', {
           args: args || [], xiPath: xiPath || null, env: env || null,
         });
+      } catch (e) {
+        // The Rust side rejects a non-zero exit; callers were promised the code,
+        // and the lines they collected carry xi's own message.
+        const m = /xi exited with code (\d+)/.exec(String(e?.message ?? e));
+        if (m) return Number(m[1]);
+        throw e;
       } finally {
         try { unlisten(); } catch { /* */ }
       }

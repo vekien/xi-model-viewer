@@ -6283,6 +6283,7 @@ export default function App({ launch = null }) {
   const [mixerLaneInfo, setMixerLaneInfo] = useState({});
   const [mixerBusy, setMixerBusy] = useState(false);
   const [mixerNote, setMixerNote] = useState('');
+  const [mixerError, setMixerError] = useState(null); // { title, text } — xi's message, shown in the timeline dock
   const [mixerRecipes, setMixerRecipes] = useState([]);
   const [mixerStageName, setMixerStageName] = useState(null);   // recipe composed on the stage
   const [mixerLoaded, setMixerLoaded] = useState(false);   // a composed mix is on the stage
@@ -6524,6 +6525,7 @@ export default function App({ launch = null }) {
     if (!ctx) return;
     if (!recipe.events.some((e) => e.enabled !== false)) { setStatusText('Nothing to play yet.'); return; }
     setMixerBusy(true);
+    setMixerError(null);
     try {
       const xiRace = RACE_TO_XI[pc.race] ?? 'HumeMale';
       const motionSpec = recipe.sources?.motion?.spec;
@@ -6565,6 +6567,7 @@ export default function App({ launch = null }) {
       setMixerNote(`${report.sections.length} sections · ${report.total} f${renames ? ` · ${renames} renamed` : ''}`);
     } catch (e) {
       setMixerNote('');
+      setMixerError({ title: 'Compose failed', text: String(e?.message ?? e) });
       setStatusText(`compose failed: ${e?.message ?? e}`);
       setCliOutput({ title: 'xi ability compose · failed', text: String(e?.message ?? e) });
     } finally {
@@ -6578,6 +6581,7 @@ export default function App({ launch = null }) {
    *  and the stage plays the mix so far. */
   const mixerPick = useCallback(async (entry) => {
     setMixerBusy(true);
+    setMixerError(null);
     let next = null;
     try {
       const info = await mixerInfoFor(entry);
@@ -6593,6 +6597,7 @@ export default function App({ launch = null }) {
       setMixerLaneInfo((m) => ({ ...m, [lane]: { entry, info } }));
       setMixerNote(`${entry.name} → ${lane}`);
     } catch (e) {
+      setMixerError({ title: `Pick failed · ${entry.name}`, text: String(e?.message ?? e) });
       setStatusText(`pick failed: ${e?.message ?? e}`);
     } finally {
       setMixerBusy(false);
@@ -10650,6 +10655,8 @@ export default function App({ launch = null }) {
             recipes={mixerRecipes}
             busy={mixerBusy}
             note={mixerNote}
+            error={mixerError}
+            onDismissError={() => setMixerError(null)}
             onSolo={mixerSolo}
             onPlaySound={mixerPlaySound}
             getSoundPeaks={mixerSoundPeaks}

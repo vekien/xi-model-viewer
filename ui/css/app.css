@@ -6754,6 +6754,12 @@ body.mixer-docked #mixer-actors { max-height: calc(100vh - 124px - var(--mixer-d
 #mixer-dock .mixer-editor { border-top: 0; padding-top: 0; }
 #mixer-dock { width: auto; }
 #mixer-dock .details-header .mixer-dock-note { margin-left: 6px; }
+.mixer-dock-note.is-failed { color: #f0a8a2; }
+/* xi's own message when a compose or pick fails — the form-error block, docked. */
+#mixer-dock .mixer-dock-error { margin: 0 12px 8px; font: 12px/1.4 var(--font-mono); max-height: 38%; overflow: auto; }
+#mixer-dock .mixer-dock-error > span:not(.icon) { flex: 1; }
+#mixer-dock .mixer-dock-error b { display: block; font: 600 12.5px/1.3 var(--font-ui, inherit); color: #f6c2bd; margin-bottom: 3px; }
+#mixer-dock .mixer-dock-error .pc-tbtn { flex: 0 0 auto; margin: -4px -4px 0 0; }
 /* Recipe organizer (the side panel's main body now that the timeline is docked). */
 .mixer-recipes { display: flex; flex-direction: column; gap: 2px; overflow: auto; max-height: 40vh; }
 .mixer-recipe-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; cursor: pointer; }

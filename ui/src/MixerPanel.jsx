@@ -511,7 +511,7 @@ function RecipeRow({ r, current, onStage, onOpen, onRename, onDuplicate, onDelet
 
 export function MixerPanel({
   recipe, onRecipe, lane, laneInfo, laneEntry,
-  transport, onPlay, onStop, onPublish, publishPlan = null, onSaveAs, onOpen, onReset, recipes, busy, note,
+  transport, onPlay, onStop, onPublish, publishPlan = null, onSaveAs, onOpen, onReset, recipes, busy, note, error = null, onDismissError,
   onDelete, onRename, onDuplicate, onShuffle, stageName,
   onPause, onResume, onSeek, getPlayhead, mixLoaded, mixDirty,
   onSolo, onPlaySound, onTake, viewerRace, onClose, getSoundPeaks, speed = 1, onSpeed, loop = true, onLoop, ghosts = null,
@@ -643,6 +643,8 @@ export function MixerPanel({
     setOverwrite(null);
   };
 
+  // A failed compose or pick outranks every other note until the next attempt.
+  const failed = !busy && !!error;
   const statusNote = busy ? 'working…' : (mixLoaded && mixDirty ? 'edited · Play mix to hear the change' : (events.length ? note : 'pick a motion, effect or sound on the left to start'));
 
   // The transport is the Animation panel's: one Play/Pause with a label, then
@@ -701,7 +703,7 @@ export function MixerPanel({
         <span className="icon">timeline</span>
         <span className="details-title">Timeline</span>
         <span className="mono mixer-dock-name">{recipe.name}</span>
-        <span className="mixer-dock-note">{statusNote}</span>
+        <span className={`mixer-dock-note${failed ? ' is-failed' : ''}`}>{failed ? error.title : statusNote}</span>
         <span className="sp" />
         {!dockOpen && transportButtons}
         <Tooltip content={dockOpen ? 'Collapse the timeline (stage only)' : 'Show the timeline'}>
@@ -710,6 +712,15 @@ export function MixerPanel({
       </div>
       {dockOpen && (
         <>
+          {failed && (
+            <div className="form-error mixer-dock-error" role="alert">
+              <span className="icon">error</span>
+              <span><b>{error.title}</b>{error.text}</span>
+              <Tooltip content="Dismiss">
+                <button type="button" className="pc-tbtn" aria-label="Dismiss" onClick={onDismissError}><span className="icon">close</span></button>
+              </Tooltip>
+            </div>
+          )}
           <div className="mixer-dock-body">
             <Timeline events={events} selectedIds={selectedIds} onSelect={select}
               onMoveMany={moveMany} onShiftLane={shift} strike={strike}
