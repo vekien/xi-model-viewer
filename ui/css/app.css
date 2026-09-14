@@ -6769,7 +6769,6 @@ body.mixer-docked #mixer-actors { max-height: calc(100vh - 124px - var(--mixer-d
 .mixer-recipe-badge { font: 600 9px/1 var(--font-ui); color: var(--accent); border: 1px solid var(--accent); border-radius: 8px; padding: 2px 5px; letter-spacing: 0.04em; }
 .mixer-recipe-acts { display: none; gap: 0; }
 .mixer-recipe-row:hover .mixer-recipe-acts, .mixer-recipe-row.busy .mixer-recipe-acts { display: inline-flex; }
-.mixer-recipe-acts .mixer-chip.danger { color: #e06c6c; border-color: #e06c6c; }
 .mixer-save { display: flex; align-items: center; gap: 6px; }
 .mixer-save input { flex: 1 1 auto; min-width: 0; font: 600 12px/1.3 var(--font-mono); color: var(--text); background: var(--gray-900); border: 1px solid var(--accent); border-radius: 6px; padding: 3px 6px; }
 .mixer-dock-body { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 8px; }

@@ -465,7 +465,7 @@ function Parts({ lane, entry, info, events, onSolo, onPlaySound, onTake }) {
 
 /** One saved recipe in the organizer: open, rename (inline), duplicate, delete (two-step). */
 function RecipeRow({ r, current, onStage, onOpen, onRename, onDuplicate, onDelete }) {
-  const [mode, setMode] = useState(null);   // null | 'rename' | 'delete'
+  const [mode, setMode] = useState(null);   // null | 'rename'
   const [draft, setDraft] = useState(r.name);
   const ref = useRef(null);
   useEffect(() => { if (mode === 'rename') { ref.current?.focus(); ref.current?.select?.(); } }, [mode]);
@@ -492,20 +492,10 @@ function RecipeRow({ r, current, onStage, onOpen, onRename, onDuplicate, onDelet
         <span className="mixer-recipe-src">{srcs || 'empty'}</span>
       </div>
       <span className="mixer-recipe-acts" onClick={stop}>
-        {mode === 'delete'
-          ? (
-            <>
-              <button type="button" className="mixer-chip danger" onClick={() => { onDelete(r.name); setMode(null); }}>delete {r.name}</button>
-              <button type="button" className="mixer-chip" onClick={() => setMode(null)}>keep</button>
-            </>
-          )
-          : (
-            <>
-              <Tooltip content="Rename"><button type="button" className="pc-tbtn" onClick={() => { setDraft(r.name); setMode('rename'); }}><span className="icon">edit</span></button></Tooltip>
-              <Tooltip content="Duplicate"><button type="button" className="pc-tbtn" onClick={() => onDuplicate(r.name)}><span className="icon">content_copy</span></button></Tooltip>
-              <Tooltip content="Delete"><button type="button" className="pc-tbtn" onClick={() => setMode('delete')}><span className="icon">delete</span></button></Tooltip>
-            </>
-          )}
+        <Tooltip content="Rename"><button type="button" className="pc-tbtn" onClick={() => { setDraft(r.name); setMode('rename'); }}><span className="icon">edit</span></button></Tooltip>
+        <Tooltip content="Duplicate"><button type="button" className="pc-tbtn" onClick={() => onDuplicate(r.name)}><span className="icon">content_copy</span></button></Tooltip>
+        {/* One click: a recipe is a small JSON file next to its compose output, cheap to recreate. */}
+        <Tooltip content="Delete"><button type="button" className="pc-tbtn" onClick={() => onDelete(r.name)}><span className="icon">delete</span></button></Tooltip>
       </span>
     </div>
   );

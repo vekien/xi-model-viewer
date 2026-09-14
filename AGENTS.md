@@ -121,7 +121,8 @@ view adds panels the way the Animation, Actors, Details and Skeleton panels are 
 - **Keyboard.** Transport keys (Space) go through the one handler in `App.jsx` as a
   `leftView` branch; a panel registers only its own editing keys, in the bubble phase,
   and never a second Space listener.
-- **Confirmation** is inline in the panel (a two-step chip row, like the recipe
-  organizer's delete) or a modal component; never `window.confirm` / `alert`.
+- **Confirmation** is inline in the panel (a two-step chip row, like the mixer's
+  publish plan) or a modal component; never `window.confirm` / `alert`. Cheap,
+  recreatable things — a saved recipe — get no confirmation at all.
 - No `console.log` / `console.info` left in a panel; the CLI output panel and the status
   bar are the user-facing channels.
