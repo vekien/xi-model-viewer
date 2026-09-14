@@ -116,8 +116,11 @@ view adds panels the way the Animation, Actors, Details and Skeleton panels are 
   Sliders are `vol-slider pc-frame-slider` with a `pc-frame-num` readout.
 - **Placement.** Right-rail panels are 320px wide, stacked with a 12px gap, and start at
   the tree's top (60px) when they sit under the menubar's row. A view that needs more
-  than the rail owns one extra column at most; anything wider goes into a dock along the
-  bottom (`#mixer-dock` is the pattern) rather than a third column.
+  than the rail owns one extra column at most; anything wider is a floating window that
+  borrows the Camera Sequencer's chrome (`#camseq` / `.cseq-*`: header dragged by its
+  title bar, the inset track, the round Play / Stop, the frame readout, the edge resize
+  handles — `#mixer-seq` in MixerTimeline.jsx is the second one) rather than a third
+  column or a dock.
 - **Keyboard.** Transport keys (Space) go through the one handler in `App.jsx` as a
   `leftView` branch; a panel registers only its own editing keys, in the bubble phase,
   and never a second Space listener.

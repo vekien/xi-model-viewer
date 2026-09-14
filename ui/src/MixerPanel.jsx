@@ -1,16 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Tooltip } from './Tooltip.jsx';
-import {
-  KEEP_LANE, LANES, LANE_BY_ID, opName, recipeLength, shiftLane, strikeFrame, withIds,
-} from '../js/mixer.js';
+import { TimelineWindow } from './MixerTimeline.jsx';
+import { LANE_BY_ID, opName, shiftLane, strikeFrame, withIds } from '../js/mixer.js';
 
-// The mixer's working surface: the recipe as lanes on a frame timeline, the parts of
-// the source under the cursor (solo / take), and the selected event's numbers.
-// Everything here edits `recipe.events`; Play composes exactly that.
+// The mixer's side panel: the recipe (name, save, publish, the organizer), the parts
+// of the picked source (solo / take), the selected event's numbers, and the state
+// the timeline window (MixerTimeline.jsx) draws. Everything here edits
+// `recipe.events`; Play composes exactly that.
 
-const TRACKS = [...LANES, KEEP_LANE];
-const MIN_LEN = 120;
 const SHUFFLE_KINDS = [{ id: 'ws', label: 'WS' }, { id: 'ja', label: 'Ability' }, { id: 'spell', label: 'Spell' }];
 
 /** The lines of a `dats build --dry-run` that name the slot and the DATs — the
@@ -18,345 +15,6 @@ const SHUFFLE_KINDS = [{ id: 'ws', label: 'WS' }, { id: 'ja', label: 'Ability' }
 function planExcerpt(text) {
   const lines = String(text ?? '').split('\n').filter((l) => /animation|file_id|-> ROM|occupied|Error/i.test(l));
   return (lines.length ? lines : String(text ?? '').split('\n').slice(-6)).slice(0, 12).join('\n');
-}
-
-/** The sound id an event plays, recorded from the inspector (the pointer's name is
- *  not the id: Raging Rush's `8049` plays se018049, so no guessing from digits). */
-const soundIdOf = (ev) => ev.sound ?? null;
-const isSoundEvent = (ev) => ev.kind === 'sound' || ev.from === 'sound';
-const SOUND_ROW = 26;   // px per sub-row of the docked sound lane
-
-/** Overlapping sound blocks go into sub-rows, first fit, in start order. */
-function soundRows(evs, endOf) {
-  const rows = [];      // last end per row
-  const rowOf = new Map();
-  for (const ev of [...evs].sort((a, b) => a.start - b.start)) {
-    let r = rows.findIndex((end) => end <= ev.start);
-    if (r < 0) { r = rows.length; rows.push(0); }
-    rows[r] = endOf(ev);
-    rowOf.set(ev._id, r);
-  }
-  return { rowOf, count: Math.max(1, rows.length) };
-}
-
-/** Peak envelope as one path of vertical bars, drawn in a 96×20 box. */
-function wavePath(peaks) {
-  let d = '';
-  for (let i = 0; i < peaks.length; i++) {
-    const h = Math.max(0.6, peaks[i] * 9.5);
-    d += `M${i + 0.5},${10 - h}V${10 + h}`;
-  }
-  return d;
-}
-
-function Timeline({ events, selectedIds, onSelect, onMoveMany, onShiftLane, onPreview, strike, playhead, minLen = 0, loopEnd = 0, big = false, getSoundPeaks = null, ghosts = null }) {
-  const ghostSounds = ghosts?.sounds ?? [];
-  const ghostGens = ghosts?.gens ?? [];
-  // Overlapping blocks stack into sub-rows (first fit) so nothing hides another —
-  // an effects lane can carry thirty generators on one tick. Each lane can be
-  // collapsed back to one row from the chevron on its label; remembered.
-  const [laneRowsOpen, setLaneRowsOpen] = useState(() => { try { return JSON.parse(localStorage.getItem('mixerLaneRows') || '{}'); } catch { return {}; } });
-  const toggleLaneRows = (laneId) => setLaneRowsOpen((m) => {
-    const next = { ...m, [laneId]: m[laneId] === false };
-    try { localStorage.setItem('mixerLaneRows', JSON.stringify(next)); } catch { /* private mode */ }
-    return next;
-  });
-  // Sounds the linked shared routines (mdam, eis1, proc…) add: shown in the sound
-  // lane as read-only ghosts so what plays is what the timeline shows. They move
-  // with their link block (in the links lane) and go with it when it is muted.
-  const ghostEvents = useMemo(() => (big ? ghostSounds.map((g, i) => ({
-    _id: `ghost:${i}`, from: 'sound', kind: 'sound', op: 0x0a, ref: g.ref, start: g.start, sound: g.sound, ghost: true, via: g.via,
-  })) : []), [ghostSounds, big]);
-  // Generators a linked shared routine spawns: one hatched block per link in the
-  // effects lane, spanning the window its generators emit over.
-  const ghostGenEvents = useMemo(() => (big ? ghostGens.map((g, i) => ({
-    _id: `ghostg:${i}`, from: 'vfx', kind: 'vfx', op: 0x02, ref: g.via, start: g.start, dur: Math.max(g.end - g.start, 4), ghost: true, via: g.via, count: g.count,
-  })) : []), [ghostGens, big]);
-  // Sound lengths (docked view only): sound id -> { seconds, peaks } | null.
-  const [peaks, setPeaks] = useState(() => new Map());
-  const pending = useRef(new Set());
-  useEffect(() => {
-    if (!big || !getSoundPeaks) return;
-    for (const ev of [...events, ...ghostEvents]) {
-      if (!isSoundEvent(ev)) continue;
-      const id = soundIdOf(ev);
-      if (id == null || peaks.has(id) || pending.current.has(id)) continue;
-      pending.current.add(id);
-      Promise.resolve(getSoundPeaks(id)).catch(() => null).then((res) => {
-        pending.current.delete(id);
-        setPeaks((m) => new Map(m).set(id, res ?? null));
-      });
-    }
-  }, [big, events, ghostEvents, peaks, getSoundPeaks]);
-  const soundTicks = (ev) => (big ? Math.round((peaks.get(soundIdOf(ev))?.seconds ?? 0) * 60) : 0);
-  const soundEnd = Math.max(0, ...[...events.filter(isSoundEvent), ...ghostEvents].map((e) => e.start + soundTicks(e)));
-
-  const len = Math.max(MIN_LEN, recipeLength(events) + 20, soundEnd + 20, minLen);
-  const railRef = useRef(null);
-  const rootRef = useRef(null);
-  const drag = useRef(null);
-  const [marquee, setMarquee] = useState(null);   // root-relative px while rubber-banding
-
-  const pxPerFrame = () => (railRef.current?.clientWidth ?? 300) / len;
-  const frameAt = (clientX) => {
-    const r = railRef.current?.getBoundingClientRect();
-    return r?.width ? ((clientX - r.left) / r.width) * len : 0;
-  };
-
-  // A press on a block of the current selection drags the whole group; on any
-  // other block it selects that block alone. Ctrl/shift toggles membership.
-  const startDrag = (e, ev) => {
-    e.stopPropagation();
-    const additive = e.ctrlKey || e.metaKey || e.shiftKey;
-    if (additive) { onSelect(ev._id, 'toggle'); return; }
-    const inGroup = selectedIds.has(ev._id);
-    const ids = inGroup ? selectedIds : new Set([ev._id]);
-    if (!inGroup) onSelect(ev._id, 'only');
-    const starts = events.filter((x) => ids.has(x._id)).map((x) => ({ id: x._id, start0: x.start }));
-    drag.current = { kind: 'block', x0: e.clientX, ev, starts, moved: false, inGroup };
-    e.target.setPointerCapture?.(e.pointerId);
-  };
-  const startLaneDrag = (e, laneId) => {
-    drag.current = { kind: 'lane', x0: e.clientX, lane: laneId, moved: 0 };
-    e.target.setPointerCapture?.(e.pointerId);
-  };
-  // Empty rail: rubber-band a region. Blocks whose start lies inside it, on
-  // every lane the band crosses, become the selection.
-  const startMarquee = (e) => {
-    if (e.target !== e.currentTarget) return;
-    const root = rootRef.current.getBoundingClientRect();
-    const p0 = { x: e.clientX - root.left, y: e.clientY - root.top };
-    drag.current = { kind: 'marquee', x0: e.clientX, y0: e.clientY, p0, additive: e.ctrlKey || e.metaKey || e.shiftKey };
-    setMarquee({ x0: p0.x, y0: p0.y, x1: p0.x, y1: p0.y });
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-  };
-  const onPointerMove = (e) => {
-    const d = drag.current;
-    if (!d) return;
-    if (d.kind === 'marquee') {
-      const root = rootRef.current.getBoundingClientRect();
-      setMarquee({ x0: d.p0.x, y0: d.p0.y, x1: e.clientX - root.left, y1: e.clientY - root.top });
-      return;
-    }
-    const frames = Math.round((e.clientX - d.x0) / pxPerFrame());
-    if (d.kind === 'block') {
-      if (frames) d.moved = true;
-      // Clamp the group as one so its spacing survives the left edge.
-      const delta = Math.max(frames, -Math.min(...d.starts.map((s) => s.start0)));
-      onMoveMany(d.starts.map((s) => ({ id: s.id, start: s.start0 + delta })));
-    } else if (d.kind === 'lane') {
-      const delta = frames - d.moved;
-      if (delta) { onShiftLane(d.lane, delta); d.moved = frames; }
-    }
-  };
-  const endDrag = (e) => {
-    const d = drag.current;
-    drag.current = null;
-    if (!d) return;
-    if (d.kind === 'marquee') {
-      setMarquee(null);
-      const [x0, x1] = [Math.min(d.x0, e.clientX), Math.max(d.x0, e.clientX)];
-      const [y0, y1] = [Math.min(d.y0, e.clientY), Math.max(d.y0, e.clientY)];
-      const [f0, f1] = [frameAt(x0), frameAt(x1)];
-      const hit = [];
-      for (const row of rootRef.current.querySelectorAll('.mixer-track')) {
-        const r = row.getBoundingClientRect();
-        if (r.bottom < y0 || r.top > y1) continue;
-        const laneId = row.dataset.lane;
-        for (const ev of events) {
-          const inLane = laneId === 'keep' ? ev.kind === 'keep' : (ev.from === laneId && ev.kind !== 'keep');
-          if (inLane && ev.start >= f0 && ev.start <= f1) hit.push(ev._id);
-        }
-      }
-      onSelect(hit, d.additive ? 'add' : 'set');
-      return;
-    }
-    if (d.kind === 'block' && !d.moved) {
-      if (d.inGroup) onSelect(d.ev._id, 'only');   // a plain click inside a group narrows to that block
-      // A click (no drag) on a sound block auditions it.
-      if (d.ev.kind === 'sound' || d.ev.from === 'sound') onPreview?.(d.ev);
-    }
-  };
-
-  const ticks = [];
-  const step = len > 600 ? 100 : len > 240 ? 50 : 30;
-  for (let f = 0; f <= len; f += step) ticks.push(f);
-
-  return (
-    <div className="mixer-timeline" ref={rootRef} onPointerMove={onPointerMove} onPointerUp={endDrag}
-      onPointerLeave={() => { if (drag.current?.kind !== 'marquee') drag.current = null; }}>
-      <div className="mixer-ruler">
-        <span className="mixer-track-label" />
-        <div className="mixer-rail" ref={railRef}>
-          {ticks.map((f) => (
-            <span key={f} className="mixer-tick" style={{ left: `${(f / len) * 100}%` }}>{f}</span>
-          ))}
-          {loopEnd > 0 && loopEnd < len && (
-            <Tooltip content="Loop restart — the motion/effect routine's end. Sounds after here keep ringing past the restart (one-shots aren't waited for), just like in game.">
-              <span className="mixer-loop-label" style={{ left: `${(loopEnd / len) * 100}%` }}>⟲ loop</span>
-            </Tooltip>
-          )}
-        </div>
-      </div>
-      {TRACKS.map((t) => {
-        const own = events.filter((e) => e.from === t.id && e.kind !== 'keep');
-        const laneEvents = t.id === 'keep' ? events.filter((e) => e.kind === 'keep')
-          : t.id === 'sound' ? [...own, ...ghostEvents]
-            : t.id === 'vfx' ? [...own, ...ghostGenEvents] : own;
-        const waves = big && t.id === 'sound';
-        // A block's footprint in ticks: its duration, or the minimum drawn width.
-        const minTicks = len * 0.012;
-        const endOf = (e) => e.start + (t.id === 'sound'
-          ? (e.op === 0x1e ? 8 : Math.max(soundTicks(e), 8))
-          : Math.max(e.dur || 0, minTicks));
-        const rows = big ? soundRows(laneEvents, endOf) : { rowOf: new Map(), count: 1 };
-        const stacked = big && rows.count > 1 && laneRowsOpen[t.id] !== false;
-        const rowOf = (ev) => (stacked ? (rows.rowOf.get(ev._id) ?? 0) : 0);
-        const railStyle = stacked ? { height: rows.count * SOUND_ROW + 6 } : undefined;
-        return (
-          <div className="mixer-track" key={t.id} data-lane={t.id}>
-            <span className="mixer-track-labelcell">
-              <Tooltip content={`Drag to shift the whole ${t.label.toLowerCase()} lane`}>
-                <span className="mixer-track-label" style={{ color: t.color }}
-                  onPointerDown={(e) => startLaneDrag(e, t.id)}>{t.label}</span>
-              </Tooltip>
-              {big && rows.count > 1 && (
-                <Tooltip content={stacked ? `Collapse to one row (${rows.count} rows of overlapping blocks)` : `Expand overlapping blocks into ${rows.count} rows`}>
-                  <button type="button" className="mixer-lane-toggle" onPointerDown={(e) => e.stopPropagation()} onClick={() => toggleLaneRows(t.id)}>
-                    <span className="icon">{stacked ? 'unfold_less' : 'unfold_more'}</span>{rows.count}
-                  </button>
-                </Tooltip>
-              )}
-            </span>
-            <div className="mixer-rail" onPointerDown={startMarquee} style={railStyle}>
-              {strike != null && <span className="mixer-strike" style={{ left: `${(strike / len) * 100}%` }} />}
-              {/* Loop restart point: the routine's own end. Sounds are fire-and-forget
-                  one-shots, so a block drawn past here keeps ringing after the mix
-                  restarts, exactly as in game — shade that zone and mark the line. */}
-              {loopEnd > 0 && loopEnd < len && (
-                <>
-                  <span className="mixer-past-loop" style={{ left: `${(loopEnd / len) * 100}%`, width: `${((len - loopEnd) / len) * 100}%` }} />
-                  <span className="mixer-loopend" style={{ left: `${(loopEnd / len) * 100}%` }} />
-                </>
-              )}
-              {playhead != null && <span className="mixer-playhead" style={{ left: `${(Math.min(playhead, len) / len) * 100}%` }} />}
-              {laneEvents.map((ev) => {
-                const color = (t.id === 'keep' ? KEEP_LANE : LANE_BY_ID.get(ev.from) ?? KEEP_LANE).color;
-                if (ev.ghost && t.id === 'vfx') {
-                  const w = Math.max(1.2, ((ev.dur || 0) / len) * 100);
-                  return (
-                    <Tooltip key={ev._id} content={`${ev.count} generator${ev.count === 1 ? '' : 's'} via shared routine ${ev.via} @${ev.start} — the game runs this from ROM/0/0.DAT; mute or move the ${ev.via} link to change it`}>
-                      <span className="mixer-block ghost fx"
-                        style={{ left: `${(ev.start / len) * 100}%`, width: `${w}%`, ...(stacked ? { top: 3 + rowOf(ev) * SOUND_ROW, height: SOUND_ROW - 4 } : {}) }}>
-                        <span className="icon mixer-spk">link</span> {ev.via} · {ev.count} gen{ev.count === 1 ? '' : 's'}
-                      </span>
-                    </Tooltip>
-                  );
-                }
-                if (waves && ev.ghost) {
-                  const pk = peaks.get(soundIdOf(ev));
-                  const ticks = soundTicks(ev);
-                  const w = Math.max(2.4, (ticks / len) * 100);
-                  const row = rowOf(ev);
-                  return (
-                    <Tooltip key={ev._id} content={`${ev.ref} via shared routine ${ev.via} @${ev.start}${pk ? ` · ${pk.seconds.toFixed(2)}s` : ''} — the game plays this from ROM/0/0.DAT; mute or move the ${ev.via} link to change it`}>
-                      <span className="mixer-block wave ghost"
-                        style={{ left: `${(ev.start / len) * 100}%`, width: `${w}%`, top: 3 + row * SOUND_ROW, height: SOUND_ROW - 4 }}>
-                        <span className="icon mixer-spk">link</span>
-                        {pk?.peaks && (
-                          <svg className="mixer-wave" viewBox="0 0 96 20" preserveAspectRatio="none">
-                            <path d={wavePath(pk.peaks)} stroke="#0d1012" strokeWidth="0.9" fill="none" />
-                          </svg>
-                        )}
-                        <span className="mixer-wave-label">{ev.via} · {ev.ref}</span>
-                      </span>
-                    </Tooltip>
-                  );
-                }
-                if (waves && ev.op === 0x1e) {
-                  // DampenGenerator: the cut that ends a sustained audio generator —
-                  // a marker, not a sound of its own.
-                  const row = rowOf(ev);
-                  return (
-                    <Tooltip key={ev._id} content={`Stop ${ev.ref} @${ev.start} — ends the sustained sound`}>
-                      <span
-                        className={`mixer-block${selectedIds.has(ev._id) ? ' on' : ''}${ev.enabled === false ? ' off' : ''}`}
-                        style={{ left: `${(ev.start / len) * 100}%`, width: '2.4%', background: color, top: 3 + row * SOUND_ROW, height: SOUND_ROW - 4, opacity: 0.7 }}
-                        onPointerDown={(e) => startDrag(e, ev)}>
-                        ■ stop {ev.ref}
-                      </span>
-                    </Tooltip>
-                  );
-                }
-                if (waves) {
-                  const pk = peaks.get(soundIdOf(ev));
-                  const ticks = soundTicks(ev);
-                  const w = Math.max(2.4, (ticks / len) * 100);
-                  const row = rowOf(ev);
-                  return (
-                    <Tooltip key={ev._id} content={`${opName(ev.op)} ${ev.ref ?? ''} @${ev.start}${pk ? ` · ${pk.seconds.toFixed(2)}s` : ''} · click the speaker to hear it${ev.enabled === false ? ' · muted (M to unmute)' : ''}`}>
-                      <span
-                        className={`mixer-block wave${selectedIds.has(ev._id) ? ' on' : ''}${ev.enabled === false ? ' off' : ''}`}
-                        style={{ left: `${(ev.start / len) * 100}%`, width: `${w}%`, background: color, top: 3 + row * SOUND_ROW, height: SOUND_ROW - 4 }}
-                        onPointerDown={(e) => startDrag(e, ev)}>
-                        <span className="icon mixer-spk" role="button" aria-label="Play this sound"
-                          onPointerDown={(e) => { e.stopPropagation(); onPreview?.(ev); }}>{ev.enabled === false ? 'volume_off' : 'volume_up'}</span>
-                        {pk?.peaks && (
-                          <svg className="mixer-wave" viewBox="0 0 96 20" preserveAspectRatio="none">
-                            <path d={wavePath(pk.peaks)} stroke="#0d1012" strokeWidth="0.9" fill="none" />
-                          </svg>
-                        )}
-                        <span className="mixer-wave-label">{ev.ref ?? opName(ev.op)}</span>
-                      </span>
-                    </Tooltip>
-                  );
-                }
-                const w = Math.max(1.2, ((ev.dur || 0) / len) * 100);
-                return (
-                  <Tooltip key={ev._id} content={`${opName(ev.op)} ${ev.ref ?? ''} @${ev.start}${ev.dur ? ` for ${ev.dur}` : ''}`}>
-                    <span
-                      className={`mixer-block${selectedIds.has(ev._id) ? ' on' : ''}${ev.enabled === false ? ' off' : ''}`}
-                      style={{ left: `${(ev.start / len) * 100}%`, width: `${w}%`, background: color, ...(stacked ? { top: 3 + rowOf(ev) * SOUND_ROW, height: SOUND_ROW - 4 } : {}) }}
-                      onPointerDown={(e) => startDrag(e, ev)}>
-                      {ev.ref ?? opName(ev.op)}
-                    </span>
-                  </Tooltip>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-      {marquee && (
-        <div className="mixer-marquee" style={{
-          left: Math.min(marquee.x0, marquee.x1), top: Math.min(marquee.y0, marquee.y1),
-          width: Math.abs(marquee.x1 - marquee.x0), height: Math.abs(marquee.y1 - marquee.y0),
-        }} />
-      )}
-    </div>
-  );
-}
-
-/** Play/pause plus a frame slider over the mix. Polls the stage's playhead while
- *  it runs; dragging seeks (which pauses). */
-function Scrubber({ onSeek, getPlayhead, fallbackLen }) {
-  const [head, setHead] = useState({ frame: 0, length: 0 });
-  useEffect(() => {
-    const id = setInterval(() => setHead(getPlayhead()), 50);
-    return () => clearInterval(id);
-  }, [getPlayhead]);
-  const len = Math.max(1, Math.round(head.length || fallbackLen || 1));
-  const frame = Math.min(len, Math.round(head.frame));
-  const step = (d) => onSeek(Math.min(len, Math.max(0, frame + d)));
-  return (
-    <div className="mixer-scrub">
-      <Tooltip content="Back one frame"><button type="button" className="pc-tbtn" onClick={() => step(-1)}><span className="icon">chevron_left</span></button></Tooltip>
-      <input type="range" min={0} max={len} value={frame} className="mixer-scrub-range"
-        onChange={(e) => onSeek(Number(e.target.value))} />
-      <Tooltip content="Forward one frame"><button type="button" className="pc-tbtn" onClick={() => step(1)}><span className="icon">chevron_right</span></button></Tooltip>
-      <span className="mono mixer-scrub-num">{String(frame).padStart(3, '0')} / {len}</span>
-    </div>
-  );
 }
 
 function Num({ label, value, onChange, min = 0 }) {
@@ -523,30 +181,12 @@ export function MixerPanel({
   });
   const selectedId = selectedIds.size === 1 ? [...selectedIds][0] : null;
 
-  // The timeline lives in a dock along the bottom of the stage (After Effects
-  // style); the side panel is the recipe: name, save, publish, the organizer,
-  // and the parts of the picked source. The dock collapses to its header for a
-  // stage-only view and remembers its height.
-  const [dockOpen, setDockOpen] = useState(() => { try { return localStorage.getItem('mixerDockOpen') !== '0'; } catch { return true; } });
-  const [dockH, setDockH] = useState(() => { try { return Number(localStorage.getItem('mixerDockH')) || 300; } catch { return 300; } });
-  const toggleDock = () => setDockOpen((o) => { try { localStorage.setItem('mixerDockOpen', o ? '0' : '1'); } catch { /* private mode */ } return !o; });
-  // The picker (#tree) and the right-hand stacks reach the bottom of the window;
-  // they stop above the dock (app.css: body.mixer-docked, --mixer-dock).
-  useEffect(() => {
-    document.body.classList.add('mixer-docked');
-    document.documentElement.style.setProperty('--mixer-dock', `${dockOpen ? dockH : 40}px`);
-    return () => document.body.classList.remove('mixer-docked');
-  }, [dockOpen, dockH]);
-  const startDockResize = (e) => {
-    const h0 = dockH; const y0 = e.clientY;
-    const clamp = (h) => Math.max(160, Math.min(window.innerHeight - 160, h));
-    const move = (ev) => setDockH(clamp(h0 + (y0 - ev.clientY)));
-    const up = (ev) => {
-      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
-      try { localStorage.setItem('mixerDockH', String(clamp(h0 + (y0 - ev.clientY)))); } catch { /* private mode */ }
-    };
-    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
-  };
+  // The timeline is a floating window (MixerTimeline.jsx, the Camera Sequencer's
+  // chrome); the side panel is the recipe: name, save, publish, the organizer and
+  // the parts of the picked source. Closing the window is remembered; the header's
+  // timeline glyph brings it back.
+  const [tlOpen, setTlOpen] = useState(() => { try { return localStorage.getItem('mixerDockOpen') !== '0'; } catch { return true; } });
+  const toggleTl = () => setTlOpen((o) => { try { localStorage.setItem('mixerDockOpen', o ? '0' : '1'); } catch { /* private mode */ } return !o; });
 
   const [head, setHead] = useState(0);
   useEffect(() => {
@@ -639,119 +279,32 @@ export function MixerPanel({
   const failed = !busy && !!error;
   const statusNote = busy ? 'working…' : (mixLoaded && mixDirty ? 'edited · Play mix to hear the change' : (events.length ? note : 'pick a motion, effect or sound on the left to start'));
 
-  // The transport is the Animation panel's: one Play/Pause with a label, then
-  // bare glyphs (stop, rewind, loop) in a group — same classes, same shapes.
+  // The window's Play/Pause is the sequencer's round glyph; its meaning is the
+  // Animation panel's: compose and play, pause, resume, or play again.
   const armed = mixLoaded && !mixDirty;
-  const playLabel = armed ? (transport === 'playing' ? 'Pause' : transport === 'paused' ? 'Resume' : 'Play again') : 'Play mix';
-  const playTip = armed ? (transport === 'playing' ? 'Pause the mix' : 'Run the composed mix again (no recompose)') : 'Compose the recipe for this race and play it';
+  const playTip = armed ? (transport === 'playing' ? 'Pause the mix (Space)' : 'Run the composed mix again (no recompose)') : 'Compose the recipe for this race and play it';
   const onPlayPause = () => {
     if (!armed) return onPlay?.();
     return transport === 'playing' ? onPause?.() : onResume?.();
   };
-  const transportButtons = (
-    <>
-      <Tooltip content={playTip}>
-        <button type="button" className="pc-play" disabled={busy || (!armed && !events.length)} onClick={onPlayPause}>
-          <span className="icon fill">{armed && transport === 'playing' ? 'pause' : 'play_arrow'}</span>
-          <span>{playLabel}</span>
-        </button>
-      </Tooltip>
-      <div className="pc-tgroup">
-        <Tooltip content={mixDirty ? 'Stop the stale mix' : 'Stop'}>
-          <button type="button" className="pc-tbtn" aria-label="Stop" disabled={!mixLoaded || transport === 'stopped'} onClick={onStop}>
-            <span className="icon">stop_circle</span>
-          </button>
-        </Tooltip>
-        <Tooltip content="Rewind to frame 0 (paused)">
-          <button type="button" className="pc-tbtn" aria-label="Rewind" disabled={!mixLoaded} onClick={() => onSeek?.(0)}>
-            <span className="icon">replay</span>
-          </button>
-        </Tooltip>
-        {onLoop && (
-          <Tooltip content={loop ? 'Loop on: the mix restarts when it ends' : 'Loop off: the mix parks at its end'}>
-            <button type="button" className={`pc-tbtn${loop ? ' on' : ''}`} aria-label="Loop" aria-pressed={loop ? 'true' : 'false'} onClick={() => onLoop(!loop)}>
-              <span className="icon">repeat</span>
-            </button>
-          </Tooltip>
-        )}
-      </div>
-      {onSpeed && (
-        <Tooltip content="Playback speed of the stage (effect, sound and motion together)">
-          <span className="mixer-speed">
-            <input type="range" className="vol-slider pc-frame-slider" min="10" max="200" step="5"
-              value={Math.round(speed * 100)} style={{ '--fill': `${((Math.round(speed * 100) - 10) / 190) * 100}%` }}
-              onInput={(e) => onSpeed(+e.target.value / 100)} />
-            <span className="mono pc-frame-num">{Math.round(speed * 100)}%</span>
-          </span>
-        </Tooltip>
-      )}
-    </>
-  );
-
-  const dock = createPortal(
-    <div id="mixer-dock" className={`panel${dockOpen ? '' : ' collapsed'}`} style={dockOpen ? { height: dockH } : undefined}>
-      {dockOpen && <div className="mixer-dock-grip" onPointerDown={startDockResize} aria-label="Drag to resize" />}
-      <div className="details-header">
-        <span className="icon">timeline</span>
-        <span className="details-title">Timeline</span>
-        <span className="mono mixer-dock-name">{recipe.name}</span>
-        <span className={`mixer-dock-note${failed ? ' is-failed' : ''}`}>{failed ? error.title : statusNote}</span>
-        <span className="sp" />
-        {!dockOpen && transportButtons}
-        <Tooltip content={dockOpen ? 'Collapse the timeline (stage only)' : 'Show the timeline'}>
-          <button type="button" className="pc-tbtn details-close" aria-label={dockOpen ? 'Collapse' : 'Expand'} onClick={toggleDock}><span className="icon">{dockOpen ? 'expand_more' : 'expand_less'}</span></button>
-        </Tooltip>
-      </div>
-      {dockOpen && (
-        <>
-          {failed && (
-            <div className="form-error mixer-dock-error" role="alert">
-              <span className="icon">error</span>
-              <span><b>{error.title}</b>{error.text}</span>
-              <Tooltip content="Dismiss">
-                <button type="button" className="pc-tbtn" aria-label="Dismiss" onClick={onDismissError}><span className="icon">close</span></button>
-              </Tooltip>
-            </div>
-          )}
-          <div className="mixer-dock-body">
-            <Timeline events={events} selectedIds={selectedIds} onSelect={select}
-              onMoveMany={moveMany} onShiftLane={shift} strike={strike}
-              onPreview={(ev) => onPlaySound?.({ id: ev.sound, ref: ev.ref })}
-              playhead={mixLoaded ? head : null}
-              minLen={getPlayhead ? getPlayhead().length : 0}
-              loopEnd={mixLoaded && getPlayhead ? getPlayhead().length : 0}
-              big getSoundPeaks={getSoundPeaks} ghosts={ghosts} />
-            {selected && <EventEditor ev={selected} onChange={(p) => update(selected._id, p)} onRemove={() => remove(selected._id)} />}
-          </div>
-          <div className="mixer-dock-bar">
-            {transportButtons}
-            {onSeek && mixLoaded && transport !== 'stopped'
-              ? <Scrubber onSeek={onSeek} getPlayhead={getPlayhead} fallbackLen={recipeLength(events)} />
-              : <span className="sp" />}
-            <span className="mono-small">strike f{strike}</span>
-            <div className="pc-tgroup">
-              {LANES.filter((l) => l.id !== 'motion').map((l) => (
-                <Tooltip key={l.id} content={`Snap the ${l.label.toLowerCase()} lane to the strike frame (its first generator lands on f${strike})`}>
-                  <button type="button" className="pc-tbtn" aria-label={`Snap ${l.label}`} style={{ color: l.color }} onClick={() => snapLane(l.id)}>
-                    <span className="icon">align_horizontal_left</span>
-                  </button>
-                </Tooltip>
-              ))}
-            </div>
-            <span className="mono-small">{viewerRace}</span>
-          </div>
-          <div className="mono-small mixer-keys">
-            space pause / resume · space ×2 stop &amp; rewind · ctrl+D duplicate · del / backspace remove · M mute / unmute · click a sound block to hear it · drag on empty rail to select a region, ctrl+click adds · drag a block (or a selected group) to move it, a lane label to shift the lane
-          </div>
-        </>
-      )}
-    </div>,
-    document.body,
+  const timeline = (
+    <TimelineWindow open={tlOpen} onClose={toggleTl}
+      recipeName={recipe.name} note={statusNote} failed={failed} error={error} onDismissError={onDismissError}
+      events={events} selectedIds={selectedIds} onSelect={select} onMoveMany={moveMany} onShiftLane={shift}
+      onPreview={(ev) => onPlaySound?.({ id: ev.sound, ref: ev.ref })}
+      strike={strike} playhead={mixLoaded ? head : null} mixLoaded={mixLoaded}
+      minLen={getPlayhead ? getPlayhead().length : 0} loopEnd={mixLoaded && getPlayhead ? getPlayhead().length : 0}
+      getSoundPeaks={getSoundPeaks} ghosts={ghosts}
+      transport={armed ? transport : 'stopped'} canPlay={!busy && (armed || events.length > 0)} playTip={playTip}
+      onPlayPause={onPlayPause} onStop={onStop} onSeek={onSeek}
+      speed={speed} onSpeed={onSpeed} loop={loop} onLoop={onLoop}
+      onSnapLane={snapLane} viewerRace={viewerRace}
+      editor={selected ? <EventEditor ev={selected} onChange={(p) => update(selected._id, p)} onRemove={() => remove(selected._id)} /> : null} />
   );
 
   return (
     <div id="mixer-stack">
-      {dock}
+      {timeline}
       <div className="panel mixer-panel">
         <div className="details-header">
           <span className="icon">tune</span>
@@ -765,6 +318,9 @@ export function MixerPanel({
                 <button type="button" className="pc-tbtn" aria-label="Shuffle" disabled={busy} onClick={() => onShuffle(shuffleKind)}><span className="icon">casino</span></button>
               </Tooltip>
             )}
+            <Tooltip content={tlOpen ? 'Hide the timeline window' : 'Show the timeline window'}>
+              <button type="button" className={`pc-tbtn${tlOpen ? ' on' : ''}`} aria-label="Timeline" aria-pressed={tlOpen ? 'true' : 'false'} onClick={toggleTl}><span className="icon">timeline</span></button>
+            </Tooltip>
             <Tooltip content="Publish: prepare the xi dats action for this recipe and show the build plan">
               <button type="button" className="pc-tbtn" aria-label="Publish" disabled={busy || !events.length || !!publishPlan} onClick={() => onPublish?.('plan')}><span className="icon">publish</span></button>
             </Tooltip>
