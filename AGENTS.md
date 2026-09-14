@@ -89,3 +89,39 @@ import { Tooltip } from './Tooltip.jsx';
   <button type="button" aria-label="Close" onClick={onClose}>…</button>
 </Tooltip>
 ```
+
+## Panels (hard rules)
+
+Every floating panel on the stage is one of the app's panels, not a bespoke box. A new
+view adds panels the way the Animation, Actors, Details and Skeleton panels are built:
+
+- **Header.** One `details-header` row: `<span className="icon">…</span>` (the accent
+  glyph), a `details-title` (the panel's name, short, no state in it), then a spacer
+  (`<span className="sp" />`) and any actions. Anything that changes — a recipe name, a
+  count, a status note — is its own `span` after the title (`mono`, `mono-small`,
+  `fx-actor-sec-title` for a section heading inside the body), never concatenated into
+  the title text. `panel-title` is the older equivalent on `#animbar`; do not invent a
+  third. Add the panel's id/class to the right-rail selector lists in `app.css`
+  (`#animbar, #effect-actors, …` and the `.details-header` / `> .icon` lists) so it
+  inherits the spacing contract (12px padding, 12px gap, 18px accent icon) instead of
+  restyling it.
+- **Buttons are glyphs.** Actions in a header, a transport, a row: a bare
+  `button.pc-tbtn` with a Material `icon` inside, grouped in a `pc-tgroup`, each wrapped
+  in `<Tooltip>` with an `aria-label`. `icon-btn` is the boxed variant for the odd
+  standalone control (a search clear); `details-close` is the close/collapse glyph at the
+  end of a header. The one labelled button is Play/Pause (`pc-play`), exactly as the
+  Animation panel draws it. No text buttons, no `<select>` for a handful of options —
+  that is a `seg-tabs` row — and no new `.foo-btn` classes.
+- **Rows.** A labelled control is a `pc-ctrl` row: `pc-ctrl-label` then the control.
+  Sliders are `vol-slider pc-frame-slider` with a `pc-frame-num` readout.
+- **Placement.** Right-rail panels are 320px wide, stacked with a 12px gap, and start at
+  the tree's top (60px) when they sit under the menubar's row. A view that needs more
+  than the rail owns one extra column at most; anything wider goes into a dock along the
+  bottom (`#mixer-dock` is the pattern) rather than a third column.
+- **Keyboard.** Transport keys (Space) go through the one handler in `App.jsx` as a
+  `leftView` branch; a panel registers only its own editing keys, in the bubble phase,
+  and never a second Space listener.
+- **Confirmation** is inline in the panel (a two-step chip row, like the recipe
+  organizer's delete) or a modal component; never `window.confirm` / `alert`.
+- No `console.log` / `console.info` left in a panel; the CLI output panel and the status
+  bar are the user-facing channels.

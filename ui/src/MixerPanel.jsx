@@ -350,10 +350,10 @@ function Scrubber({ onSeek, getPlayhead, fallbackLen }) {
   const step = (d) => onSeek(Math.min(len, Math.max(0, frame + d)));
   return (
     <div className="mixer-scrub">
-      <Tooltip content="Back one frame"><button type="button" className="icon-btn" onClick={() => step(-1)}><span className="icon">chevron_left</span></button></Tooltip>
+      <Tooltip content="Back one frame"><button type="button" className="pc-tbtn" onClick={() => step(-1)}><span className="icon">chevron_left</span></button></Tooltip>
       <input type="range" min={0} max={len} value={frame} className="mixer-scrub-range"
         onChange={(e) => onSeek(Number(e.target.value))} />
-      <Tooltip content="Forward one frame"><button type="button" className="icon-btn" onClick={() => step(1)}><span className="icon">chevron_right</span></button></Tooltip>
+      <Tooltip content="Forward one frame"><button type="button" className="pc-tbtn" onClick={() => step(1)}><span className="icon">chevron_right</span></button></Tooltip>
       <span className="mono mixer-scrub-num">{String(frame).padStart(3, '0')} / {len}</span>
     </div>
   );
@@ -377,14 +377,16 @@ function EventEditor({ ev, onChange, onRemove }) {
         <span className="mono">{ev.ref ?? '—'}</span>
         <span className="mono-small">{opName(ev.op)} · {ev.from}</span>
         <span className="sp" />
+        <div className="pc-tgroup">
         <Tooltip content={ev.enabled === false ? 'Include in the recipe' : 'Leave out of the recipe'}>
-          <button type="button" className="icon-btn" onClick={() => onChange({ enabled: ev.enabled === false })}>
+          <button type="button" className="pc-tbtn" onClick={() => onChange({ enabled: ev.enabled === false })}>
             <span className="icon">{ev.enabled === false ? 'visibility_off' : 'visibility'}</span>
           </button>
         </Tooltip>
         <Tooltip content="Remove">
-          <button type="button" className="icon-btn" onClick={onRemove}><span className="icon">delete</span></button>
+          <button type="button" className="pc-tbtn" onClick={onRemove}><span className="icon">delete</span></button>
         </Tooltip>
+        </div>
       </div>
       <div className="mixer-fields">
         <Num label="start frame" value={ev.start} onChange={(v) => onChange({ start: v ?? 0 })} />
@@ -434,7 +436,7 @@ function Parts({ lane, entry, info, events, onSolo, onPlaySound, onTake }) {
       {lane !== 'sound' && genRows.map((g) => (
         <div className="mixer-part" key={`g${g.ref}${g.start ?? ''}`}>
           <Tooltip content="Play only this generator on the stage (Play mix brings the mix back)">
-            <button type="button" className="icon-btn" onClick={() => onSolo(g.ref)}><span className="icon">play_arrow</span></button>
+            <button type="button" className="pc-tbtn" onClick={() => onSolo(g.ref)}><span className="icon">play_arrow</span></button>
           </Tooltip>
           <span className="mono">{g.ref}</span>
           <span className="mono-small">{g.start != null ? `f${g.start}` : ''}{g.dur ? ` · ${g.dur}` : ''}{g.sound ? ` · ♪ ${g.sound}` : ''}</span>
@@ -446,7 +448,7 @@ function Parts({ lane, entry, info, events, onSolo, onPlaySound, onTake }) {
       {lane === 'sound' && [...soundRows, ...audioRows].map((s) => (
         <div className="mixer-part" key={`s${s.ref}${s.start ?? ''}`}>
           <Tooltip content="Play this sound">
-            <button type="button" className="icon-btn" onClick={() => onPlaySound(s)}><span className="icon">volume_up</span></button>
+            <button type="button" className="pc-tbtn" onClick={() => onPlaySound(s)}><span className="icon">volume_up</span></button>
           </Tooltip>
           <span className="mono">{s.ref}</span>
           <span className="mono-small">{s.sound ?? (s.id != null ? `se${String(s.id).padStart(6, '0')}` : '')}{s.title ? ` · ${s.title}` : ''}{s.start != null ? ` · f${s.start}` : ''}</span>
@@ -475,8 +477,8 @@ function RecipeRow({ r, current, onStage, onOpen, onRename, onDuplicate, onDelet
             <form className="mixer-save" onClick={stop} onSubmit={(e) => { e.preventDefault(); onRename(r.name, draft); setMode(null); }}>
               <input ref={ref} value={draft} spellCheck={false} onChange={(e) => setDraft(e.target.value.replace(/[^A-Za-z0-9_-]/g, '_'))}
                 onKeyDown={(e) => { if (e.key === 'Escape') setMode(null); }} />
-              <button type="submit" className="icon-btn"><span className="icon">check</span></button>
-              <button type="button" className="icon-btn" onClick={() => setMode(null)}><span className="icon">close</span></button>
+              <button type="submit" className="pc-tbtn"><span className="icon">check</span></button>
+              <button type="button" className="pc-tbtn" onClick={() => setMode(null)}><span className="icon">close</span></button>
             </form>
           )
           : (
@@ -497,9 +499,9 @@ function RecipeRow({ r, current, onStage, onOpen, onRename, onDuplicate, onDelet
           )
           : (
             <>
-              <Tooltip content="Rename"><button type="button" className="icon-btn" onClick={() => { setDraft(r.name); setMode('rename'); }}><span className="icon">edit</span></button></Tooltip>
-              <Tooltip content="Duplicate"><button type="button" className="icon-btn" onClick={() => onDuplicate(r.name)}><span className="icon">content_copy</span></button></Tooltip>
-              <Tooltip content="Delete"><button type="button" className="icon-btn" onClick={() => setMode('delete')}><span className="icon">delete</span></button></Tooltip>
+              <Tooltip content="Rename"><button type="button" className="pc-tbtn" onClick={() => { setDraft(r.name); setMode('rename'); }}><span className="icon">edit</span></button></Tooltip>
+              <Tooltip content="Duplicate"><button type="button" className="pc-tbtn" onClick={() => onDuplicate(r.name)}><span className="icon">content_copy</span></button></Tooltip>
+              <Tooltip content="Delete"><button type="button" className="pc-tbtn" onClick={() => setMode('delete')}><span className="icon">delete</span></button></Tooltip>
             </>
           )}
       </span>
@@ -703,7 +705,7 @@ export function MixerPanel({
         <span className="sp" />
         {!dockOpen && transportButtons}
         <Tooltip content={dockOpen ? 'Collapse the timeline (stage only)' : 'Show the timeline'}>
-          <button type="button" className="icon-btn details-close" aria-label={dockOpen ? 'Collapse' : 'Expand'} onClick={toggleDock}><span className="icon">{dockOpen ? 'expand_more' : 'expand_less'}</span></button>
+          <button type="button" className="pc-tbtn details-close" aria-label={dockOpen ? 'Collapse' : 'Expand'} onClick={toggleDock}><span className="icon">{dockOpen ? 'expand_more' : 'expand_less'}</span></button>
         </Tooltip>
       </div>
       {dockOpen && (
@@ -752,17 +754,19 @@ export function MixerPanel({
           <span className="icon">tune</span>
           <span className="details-title">Ability Mixer</span>
           <span className="sp" />
-          <Tooltip content="Save the recipe (asks for a name)"><button type="button" className="icon-btn" aria-label="Save" onClick={beginSave}><span className="icon">save</span></button></Tooltip>
-          <Tooltip content="Start over: clear every lane and put the character back to idle"><button type="button" className="icon-btn" aria-label="Reset" onClick={onReset}><span className="icon">restart_alt</span></button></Tooltip>
-          {onShuffle && (
-            <Tooltip content={`Shuffle: a random ${SHUFFLE_KINDS.find((k) => k.id === shuffleKind)?.label ?? ''} motion + random effects + a random sound, then play`}>
-              <button type="button" className="icon-btn" aria-label="Shuffle" disabled={busy} onClick={() => onShuffle(shuffleKind)}><span className="icon">casino</span></button>
+          <div className="pc-tgroup">
+            <Tooltip content="Save the recipe (asks for a name)"><button type="button" className="pc-tbtn" aria-label="Save" onClick={beginSave}><span className="icon">save</span></button></Tooltip>
+            <Tooltip content="Start over: clear every lane and put the character back to idle"><button type="button" className="pc-tbtn" aria-label="Reset" onClick={onReset}><span className="icon">restart_alt</span></button></Tooltip>
+            {onShuffle && (
+              <Tooltip content={`Shuffle: a random ${SHUFFLE_KINDS.find((k) => k.id === shuffleKind)?.label ?? ''} motion + random effects + a random sound, then play`}>
+                <button type="button" className="pc-tbtn" aria-label="Shuffle" disabled={busy} onClick={() => onShuffle(shuffleKind)}><span className="icon">casino</span></button>
+              </Tooltip>
+            )}
+            <Tooltip content="Publish: prepare the xi dats action for this recipe and show the build plan">
+              <button type="button" className="pc-tbtn" aria-label="Publish" disabled={busy || !events.length || !!publishPlan} onClick={() => onPublish?.('plan')}><span className="icon">publish</span></button>
             </Tooltip>
-          )}
-          <Tooltip content="Publish: prepare the xi dats action for this recipe and show the build plan">
-            <button type="button" className="icon-btn" aria-label="Publish" disabled={busy || !events.length || !!publishPlan} onClick={() => onPublish?.('plan')}><span className="icon">publish</span></button>
-          </Tooltip>
-          {onClose && <button type="button" className="icon-btn details-close" aria-label="Close" onClick={onClose}><span className="icon">close</span></button>}
+          </div>
+          {onClose && <button type="button" className="pc-tbtn details-close" aria-label="Close" onClick={onClose}><span className="icon">close</span></button>}
         </div>
 
         <div className="pc-ctrl">
@@ -801,8 +805,8 @@ export function MixerPanel({
               onKeyDown={(e) => { if (e.key === 'Escape') { setSaving(false); setOverwrite(null); } }} />
             {overwrite
               ? <button type="submit" className="mixer-chip danger">overwrite {overwrite}</button>
-              : <Tooltip content="Save"><button type="submit" className="icon-btn" aria-label="Save"><span className="icon">check</span></button></Tooltip>}
-            <Tooltip content="Cancel"><button type="button" className="icon-btn" aria-label="Cancel" onClick={() => { setSaving(false); setOverwrite(null); }}><span className="icon">close</span></button></Tooltip>
+              : <Tooltip content="Save"><button type="submit" className="pc-tbtn" aria-label="Save"><span className="icon">check</span></button></Tooltip>}
+            <Tooltip content="Cancel"><button type="button" className="pc-tbtn" aria-label="Cancel" onClick={() => { setSaving(false); setOverwrite(null); }}><span className="icon">close</span></button></Tooltip>
           </form>
         )}
 

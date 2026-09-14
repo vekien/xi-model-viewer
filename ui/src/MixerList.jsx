@@ -105,7 +105,7 @@ export function MixerList({
             <span className="mixer-current-name">{current.name ?? current.spec}</span>
             <span className="mono-small">{current.spec}</span>
             <Tooltip content="Clear this lane">
-              <button type="button" className="icon-btn" onClick={() => onClearLane(lane)}>
+              <button type="button" className="pc-tbtn" onClick={() => onClearLane(lane)}>
                 <span className="icon">close</span>
               </button>
             </Tooltip>
