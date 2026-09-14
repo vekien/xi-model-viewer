@@ -1261,6 +1261,13 @@
      "fileId": 4750,
      "abilityId": 394,
      "animId": 338
+    },
+    {
+     "name": "Cutting Cards",
+     "path": "ROM/309/2.DAT",
+     "fileId": 4699,
+     "abilityId": 339,
+     "animId": 287
     }
    ]
   },
