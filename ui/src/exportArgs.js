@@ -282,6 +282,18 @@ const ANIM_ARGS = [
     hint: 'Animation name (idl, wlk, run, etc.).',
   },
   {
+    flag: '--split-anim', kind: 'flag', group: 'Layout', managed: true,
+    label: 'Every animation as its own file',
+    hint: 'Set by the checkbox in the dialog: export every track in the DAT as a separate '
+      + 'file named after it (idl0, wlk0, …) instead of the one --anim clip.',
+  },
+  {
+    flag: '--categories', kind: 'flag', group: 'Layout', managed: true,
+    label: 'Race / category / action folders',
+    hint: 'Set by the checkbox in the dialog: lay the output out as '
+      + '<race>/<category>/<action>/ (hume_male/sword/fast_blade/) instead of the ROM path.',
+  },
+  {
     flag: '--fbx', kind: 'flag', group: 'Output',
     label: 'Also write FBX',
     hint: 'Also convert to an animated .fbx via Blender (bakes the motion and, unless --no-tex, '
@@ -448,4 +460,10 @@ export function removeFlag(tokens, flag) {
 export function tokenValue(tokens, flag) {
   const hit = (tokens ?? []).find((x) => tokenFlag(x) === flag);
   return hit === undefined ? null : splitToken(hit).value;
+}
+
+/** How `anim export` lays its files out, read off the arg tokens. */
+export function animLayout(tokens) {
+  const flags = new Set((tokens ?? []).map(tokenFlag));
+  return { split: flags.has('--split-anim'), categories: flags.has('--categories') };
 }

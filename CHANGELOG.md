@@ -10,7 +10,8 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ## [Unreleased]
 
-_Nothing yet._
+### Export
+- **Animation export has two layout checkboxes**, in File › Export and File › Batch Export alike. **Every animation as its own file** writes each track in the DAT as a separate file named after it (`idl0.gltf`, `wlk0.gltf`, `bow1.gltf`, …) in a folder of the DAT's own, instead of the one `--anim` clip; with FBX the lot is baked through a single Blender run. **Race \ category \ action folders** lays the output out as `hume_male\sword\fast_blade\` — named from the character list, with the client's motion tables as the fallback — instead of the game's ROM path; anything that is not a PC motion file (a monster, an NPC) goes under `other\`. They are xi-tools' new `--split-anim` and `--categories` flags, shown in the arguments box like any other, and the command preview and the "Exports to" line follow them
 
 ## [1.6.1] — 2026-09-13
 

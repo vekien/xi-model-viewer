@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button } from '@headlessui/react';
+import { Button, Checkbox, Field, Label } from '@headlessui/react';
 import { backend } from '../js/backend.js';
 import { ArgsInput } from './ArgsInput.jsx';
 import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
 import { parseAudioHeader, toWav, FMT_ATRAC3 } from '../js/audio.js';
 import {
-  EXPORT_COMMANDS, addToken, removeFlag, tokenValue, tokensToArgv,
+  EXPORT_COMMANDS, addToken, animLayout, removeFlag, tokenValue, tokensToArgv,
 } from './exportArgs.js';
 
 /** Windows-illegal characters out of a name we're about to make a filename of. */
@@ -163,6 +163,45 @@ export function buildPoseArgs(pose, folder, format, userArgs, poseFile = null) {
 const stemOf = (path) => (String(path || '').split(/[\\/]/).pop() || 'export').replace(/\.dat$/i, '');
 
 /**
+ * The directory `anim export` gets as --output. With --categories it is the root xi
+ * builds the race/category/action path under; with --split-anim alone the tracks are
+ * the files, so they get a folder of the DAT's own (`…\82\idl0.gltf`) rather than
+ * landing loose beside everything else; otherwise the folder as picked.
+ */
+export function animOutputDir(dir, datStem, args) {
+  const { split, categories } = animLayout(args);
+  if (categories || !split) return dir;
+  return `${dir}\\${datStem}`;
+}
+
+/** The two layout checkboxes the Animation export draws, one row each. */
+export function AnimLayoutOptions({ args, onChange, disabled = false }) {
+  const { split, categories } = animLayout(args);
+  const toggle = (flag, on) => onChange(on ? addToken('anim', args, flag) : removeFlag(args, flag));
+  return (
+    <div className="form-row">
+      <label className="form-label">Layout</label>
+      <Tooltip content="Export every animation in the DAT as its own file, named after the track (idl0, wlk0, bow1, …), instead of the one --anim clip. Adds --split-anim.">
+        <Field className="check-field" disabled={disabled}>
+          <Checkbox checked={split} onChange={(v) => toggle('--split-anim', v)} className="checkbox">
+            <span className="icon check-icon">check</span>
+          </Checkbox>
+          <Label className="check-label">Every animation as its own file</Label>
+        </Field>
+      </Tooltip>
+      <Tooltip content="Lay the output out as race \ category \ action folders — hume_male\sword\fast_blade\ — named from the character list, instead of the ROM path. DATs that are not PC motion files (monsters, NPCs) go under other\. Adds --categories.">
+        <Field className="check-field" disabled={disabled}>
+          <Checkbox checked={categories} onChange={(v) => toggle('--categories', v)} className="checkbox">
+            <span className="icon check-icon">check</span>
+          </Checkbox>
+          <Label className="check-label">Race \ category \ action folders</Label>
+        </Field>
+      </Tooltip>
+    </div>
+  );
+}
+
+/**
  * File > Export dialog. Music/SFX export to WAV in-app; models/zones shell out
  * to `xi mesh|anim|zone export` and dump the CLI log into the bottom console
  * (same path as DAT edits). Draggable and screen-clamped like SettingsModal.
@@ -291,10 +330,17 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
 
   const outExt = isXi ? kind.ext(format === 'fbx') : 'wav';
   const poseStem = pose ? sanitizeFileName(pose.stem || spec.name || datStem) : datStem;
+  // What lands where, for the summary line: a split export is many files in a folder
+  // of the DAT's own; a categorised one sits under folders xi names at run time.
+  const animOpts = kindId === 'anim' ? animLayout(args) : { split: false, categories: false };
+  const animClip = `${datStem}_${animId || DEFAULT_ANIM}`;
   const outStem = !isXi
     ? sanitizeFileName(spec.outStem)
     : (isPose ? poseStem
-      : kindId === 'anim' ? `${datStem}_${animId || DEFAULT_ANIM}` : datStem);
+      : kindId !== 'anim' ? datStem
+        : animOpts.categories
+          ? `race\\category\\action\\${animOpts.split ? '*' : `${animClip}\\${animClip}`}`
+          : animOpts.split ? `${datStem}\\*` : animClip);
   const headTitle = isXi
     ? `Export ${kind.label}: ${spec.name || datStem}`
     : `Export ${spec.typeLabel}: ${spec.title}`;
@@ -302,11 +348,12 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
   // shown is the command that runs. It stays behind as a record of the exact pose.
   const poseFileName = isPose ? `${poseStem}.pose.json` : null;
   const poseFileFor = (dir) => (isPose && spec.capturePose ? `${dir}\\${poseFileName}` : null);
+  const xiOutDir = (dir) => (kindId === 'anim' ? animOutputDir(dir, datStem, args) : dir);
   const previewArgs = !isXi ? null
     : (isPose
       ? buildPoseArgs({ ...pose, stem: poseStem }, folder || '…', format, args,
         poseFileFor(folder || '…'))
-      : buildXiArgs(catalog, activePath, folder || '…', format, args));
+      : buildXiArgs(catalog, activePath, xiOutDir(folder || '…'), format, args));
 
   const doExport = async () => {
     if (!folder) { onStatus?.('Choose an export folder first.'); return; }
@@ -316,7 +363,7 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
     const env = xiEnvFromSpec(spec);
     // A hand-written --output wins over the folder picker, so that is where the
     // file actually lands and where the banner's "Open folder" has to point.
-    const outDir = (isXi && tokenValue(args, '--output')) || folder;
+    const outDir = (isXi && tokenValue(args, '--output')) || (isXi ? xiOutDir(folder) : folder);
     // Snapshot before onClose unmounts this modal (xi path closes early).
     const snap = {
       xiPath: spec.xiPath,
@@ -351,7 +398,7 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
         }
         const xiArgs = isPose
           ? buildPoseArgs({ ...pose, stem: poseStem }, folder, format, args, poseFile)
-          : buildXiArgs(catalog, activePath, folder, format, args);
+          : buildXiArgs(catalog, activePath, xiOutDir(folder), format, args);
         const cmd = `xi ${xiArgs.map(shellQuote).join(' ')}`;
         const title = `xi ${EXPORT_COMMANDS[catalog].join(' ')} · ${snap.datStem}`;
         const head = [];
@@ -521,6 +568,8 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
                   className="export-select"
                 />
               </div>
+
+              {kindId === 'anim' && <AnimLayoutOptions args={args} onChange={setArgList} />}
 
               <div className="form-row">
                 <label className="form-label">

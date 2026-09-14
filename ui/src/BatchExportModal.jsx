@@ -12,9 +12,10 @@ import {
 import { ArgsInput } from './ArgsInput.jsx';
 import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
-import { EXPORT_COMMANDS, addToken, tokenValue } from './exportArgs.js';
+import { EXPORT_COMMANDS, addToken, animLayout, tokenValue } from './exportArgs.js';
 import {
-  EXPORT_KINDS, buildXiArgs, loadArgs, sanitizeFileName, shellQuote, xiEnvFromSpec,
+  AnimLayoutOptions, EXPORT_KINDS, animOutputDir, buildXiArgs, loadArgs, sanitizeFileName,
+  shellQuote, xiEnvFromSpec,
 } from './ExportModal.jsx';
 
 // File > Batch Export. A loop around whichever single export the picked tab
@@ -70,6 +71,20 @@ function gameSubdir(rel) {
 function outDirFor(folder, rel) {
   const dir = gameSubdir(rel);
   return dir ? `${folder}\\${dir}` : folder;
+}
+
+const stemOf = (rel) => (normRel(rel).split('\\').pop() || 'export').replace(/\.dat$/i, '');
+
+/**
+ * Where one job's `xi … export` writes. Meshes and single clips mirror the game
+ * folder (`…\ROM\27\82.glb`); a split animation export gets a folder of the DAT's
+ * own under that (`…\ROM\27\82\idl0.gltf`); a categorised one hands xi the export
+ * root and lets it build `race\category\action\` underneath.
+ */
+function jobOutDir(folder, rel, catalog, args) {
+  if (catalog !== 'anim') return outDirFor(folder, rel);
+  if (animLayout(args).categories) return folder;
+  return animOutputDir(outDirFor(folder, rel), stemOf(rel), args);
 }
 
 function loadFormat(store) {
@@ -494,7 +509,8 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
   );
   const sampleArgs = isAudio
     ? null
-    : buildXiArgs(catalog, sampleDat, outDirFor(folder || '…', sampleDat), format, args);
+    : buildXiArgs(catalog, sampleDat, jobOutDir(folder || '…', sampleDat, catalog, args), format, args);
+  const animOpts = effKind === 'anim' ? animLayout(args) : { split: false, categories: false };
   const sampleOut = tab === 'music'
     ? `…\\sound\\win\\music\\data\\${naming === 'file' ? 'music101' : 'Ronfaure'}.wav`
     : `…\\sound\\win\\se\\se003\\${naming === 'file' ? 'se003022' : 'Fire'}.wav`;
@@ -547,7 +563,7 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
           // eslint-disable-next-line no-await-in-loop
           note = await exportAudio(job);
         } else {
-          const xiArgs = buildXiArgs(catalog, job.path, outDirFor(folder, job.path), format, args);
+          const xiArgs = buildXiArgs(catalog, job.path, jobOutDir(folder, job.path, catalog, args), format, args);
           // eslint-disable-next-line no-await-in-loop
           await backend.xiRunStream(xiArgs, xiPath, env, (line) => {
             if (/^# exit /.test(line)) return;
@@ -787,11 +803,17 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
                   </div>
                   {effKind === 'anim' && (
                     <div className="form-hint">
-                      One clip per DAT — the <span className="mono">--anim</span> argument below
-                      picks which (<span className="mono">idl</span> if unset).
+                      {animOpts.split
+                        ? <>Every animation in each DAT, one file per track.</>
+                        : <>One clip per DAT — the <span className="mono">--anim</span> argument below
+                          picks which (<span className="mono">idl</span> if unset).</>}
                     </div>
                   )}
                 </div>
+              )}
+
+              {!isAudio && effKind === 'anim' && (
+                <AnimLayoutOptions args={args} onChange={setArgList} disabled={running} />
               )}
             </div>
 
@@ -862,6 +884,15 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
                     <>Each sound lands under its own game folder
                       (<span className="mono">{sampleOut}</span>) so same-named files from different
                       expansions don&apos;t collide.</>
+                  ) : animOpts.categories ? (
+                    <>Each DAT lands under race \ category \ action folders xi names from the
+                      character list (<span className="mono">…\hume_male\sword\fast_blade\</span>);
+                      anything that isn&apos;t a PC motion file goes under
+                      <span className="mono"> other\</span>.</>
+                  ) : animOpts.split ? (
+                    <>Each DAT gets a folder of its own under its game folder
+                      (<span className="mono">…\ROM\27\82\idl0.{kind.ext(format === 'fbx')}</span>),
+                      one file per animation.</>
                   ) : (
                     <>Each DAT lands under its own game folder
                       (<span className="mono">…\ROM\27\82.{kind.ext(format === 'fbx')}</span>) so
