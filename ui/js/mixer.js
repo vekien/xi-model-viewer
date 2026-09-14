@@ -63,10 +63,23 @@ export function withIds(events) {
 }
 
 /** Strip client-only fields before writing the recipe file. */
+/** A frame count as the schema wants it: a whole, non-negative integer. */
+const frames = (v) => Math.max(0, Math.round(Number(v) || 0));
+
 export function serializeRecipe(recipe) {
+  // The timeline is edited in pixels and typed frames, so a start or duration can
+  // arrive fractional, negative or empty; the file carries whole frames only (a
+  // fractional dur fails the schema before compose starts).
   const events = recipe.events
     .filter((e) => e.enabled !== false)
-    .map(({ _id, enabled, label, kind, sound, ...rest }) => rest);
+    .map(({ _id, enabled, label, kind, sound, ...rest }) => {
+      const out = { ...rest, start: frames(rest.start) };
+      const dur = Number.isFinite(Number(rest.dur)) && rest.dur != null && rest.dur !== '' ? frames(rest.dur) : 0;
+      if (dur > 0) out.dur = dur; else delete out.dur;
+      if (Array.isArray(rest.blend)) out.blend = rest.blend.map(frames);
+      if (rest.loops != null) out.loops = frames(rest.loops);
+      return out;
+    });
   return JSON.stringify({ schema: RECIPE_SCHEMA, ...recipe, events }, null, 2);
 }
 

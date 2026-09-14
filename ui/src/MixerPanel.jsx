@@ -363,7 +363,9 @@ function Num({ label, value, onChange, min = 0 }) {
   return (
     <label className="mixer-field">
       <span>{label}</span>
-      <input type="number" min={min} value={value ?? ''} onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))} />
+      {/* Whole frames only: the recipe schema rejects a fractional or negative dur. */}
+      <input type="number" min={min} step={1} value={value ?? ''}
+        onChange={(e) => onChange(e.target.value === '' ? undefined : Math.max(min, Math.round(Number(e.target.value) || 0)))} />
     </label>
   );
 }
