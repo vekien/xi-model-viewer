@@ -1235,6 +1235,9 @@ export class Renderer {
     this.pose = null;
     this.batches = [];
     this.textures = new Map();
+    /** Texture names the attached effect brought in, removed when the next
+     *  effect is attached (see {@link Renderer#attachEffectSystem}). */
+    this.effectTextureNames = new Set();
     /** Texture names owned by the current model, so an effect overlaid on
      *  the actor cannot replace the actor's own art (see
      *  {@link Renderer#attachEffectSystem}). */
@@ -1664,6 +1667,7 @@ export class Renderer {
     this.zoneBatches = [];
     this.textures.clear();
     this.modelTextureNames.clear();
+    this.effectTextureNames.clear();
     this._freeOverlay(this.collisionOverlay);
     this.collisionOverlay = null;
     // Navmesh is loaded async and keyed to the zone — clear on every model swap.
@@ -1781,6 +1785,17 @@ export class Renderer {
   attachEffectSystem(system, textures) {
     this.particleDrawer?.disposeMeshes();
     const gl = this.gl;
+    // The previous effect's textures go first. Left in the registry they
+    // outlive their effect: a later DAT missing a texture of the same name
+    // (a composed ability whose walk dropped one) silently drew with the
+    // stale art, and looked right only after the retail effect had been
+    // played once — a cold start drew white quads instead.
+    for (const name of this.effectTextureNames) {
+      if (this.modelTextureNames.has(name)) continue;
+      const t = this.textures.get(name);
+      if (t) { gl.deleteTexture(t); this.textures.delete(name); }
+    }
+    this.effectTextureNames.clear();
     for (const tex of textures.values()) {
       // Never overwrite art the geometry draws with. `this.textures` is a
       // single registry shared by mesh draws and particles, and the old code
@@ -1795,6 +1810,7 @@ export class Renderer {
       const prev = this.textures.get(tex.name);
       if (prev) gl.deleteTexture(prev);
       this.textures.set(tex.name, t);
+      this.effectTextureNames.add(tex.name);
     }
     this.effectMode = false;
     this.effectPaused = false;
