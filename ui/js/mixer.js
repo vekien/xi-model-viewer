@@ -220,11 +220,45 @@ export async function xiJson(args, xiPath, env, onLine) {
   });
   const text = lines.join('\n');
   if (code && code !== 0) throw new Error(`xi ${args[0]} ${args[1] ?? ''} failed (${code}): ${text.slice(-400)}`);
-  const start = text.indexOf('{');
-  const startArr = text.indexOf('[');
-  const i = start < 0 ? startArr : (startArr < 0 ? start : Math.min(start, startArr));
-  if (i < 0) throw new Error(`xi ${args.join(' ')} printed no JSON`);
-  return JSON.parse(text.slice(i));
+  const value = firstJsonValue(text);
+  if (value === undefined) throw new Error(`xi ${args.join(' ')} printed no JSON`);
+  return value;
+}
+
+/**
+ * The first complete JSON value in `text`, or undefined when there is none.
+ *
+ * The runner hands back stdout and stderr together — the Tauri stream emits
+ * both as `xi-log` lines, the dev server concatenates them — so a uv warning or
+ * a Python notice can land before, between or after the JSON. Parsing the whole
+ * text fails with "non-whitespace character after JSON"; walking to the value's
+ * own closing bracket (string-aware, so a `}` inside a name does not end it)
+ * and parsing only that slice does not.
+ */
+export function firstJsonValue(text) {
+  const s = String(text ?? '');
+  const a = s.indexOf('{');
+  const b = s.indexOf('[');
+  const start = a < 0 ? b : (b < 0 ? a : Math.min(a, b));
+  if (start < 0) return undefined;
+  let depth = 0;
+  let inStr = false;
+  for (let i = start; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      if (c === '\\') i++;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === '{' || c === '[') depth++;
+    else if (c === '}' || c === ']') {
+      depth--;
+      if (depth === 0) return JSON.parse(s.slice(start, i + 1));
+    }
+  }
+  // Unbalanced: let JSON.parse produce its own message for the tail.
+  return JSON.parse(s.slice(start));
 }
 
 export async function inspectSpec(spec, xiPath, env) {

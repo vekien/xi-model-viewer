@@ -548,7 +548,9 @@ class Handler(SimpleHTTPRequestHandler):
                     [xi, *args], cwd=cwd, capture_output=True, text=True,
                     encoding="utf-8", errors="replace", env=env,
                 )
-                out = ((r.stdout or "") + (r.stderr or "")).strip()
+                # stderr after stdout, on its own line: a warning glued to the
+                # end of a --json result must not share the closing bracket's line.
+                out = "\n".join(t for t in ((r.stdout or "").strip(), (r.stderr or "").strip()) if t)
                 if r.returncode != 0:
                     self.send_response(500)
                     b = (out or f"xi exited {r.returncode}").encode()
