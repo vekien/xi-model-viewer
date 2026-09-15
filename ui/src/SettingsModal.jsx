@@ -515,11 +515,9 @@ export function SettingsModal({
       >
         <span className="icon">settings</span>
         <span className="modal-title">Settings</span>
-        <Tooltip content="Close">
-          <Button className="icon-btn modal-close" onClick={cancel}>
-            <span className="icon">close</span>
-          </Button>
-        </Tooltip>
+        <Button className="icon-btn modal-close" onClick={cancel}>
+          <span className="icon">close</span>
+        </Button>
       </div>
 
       <div className="settings-tabs" role="tablist">

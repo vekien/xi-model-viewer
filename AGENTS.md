@@ -107,7 +107,8 @@ view adds panels the way the Animation, Actors, Details and Skeleton panels are 
   restyling it.
 - **Buttons are glyphs.** Actions in a header, a transport, a row: a bare
   `button.pc-tbtn` with a Material `icon` inside, grouped in a `pc-tgroup`, each wrapped
-  in `<Tooltip>` with an `aria-label`. `icon-btn` is the boxed variant for the odd
+  in `<Tooltip>` with an `aria-label` — except a close glyph, which is obvious and gets
+  only the `aria-label`. `icon-btn` is the boxed variant for the odd
   standalone control (a search clear); `details-close` is the close/collapse glyph at the
   end of a header. The one labelled button is Play/Pause (`pc-play`), exactly as the
   Animation panel draws it. No text buttons, no `<select>` for a handful of options —

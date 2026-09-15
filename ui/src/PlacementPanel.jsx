@@ -229,11 +229,9 @@ export function PlacementPanel({
           </Tooltip>
         )}
         {onClose && (
-          <Tooltip content="Close">
-            <button type="button" className="icon-btn plc-tool" onClick={onClose}>
-              <span className="icon">close</span>
-            </button>
-          </Tooltip>
+          <button type="button" className="icon-btn plc-tool" onClick={onClose}>
+            <span className="icon">close</span>
+          </button>
         )}
       </div>
 

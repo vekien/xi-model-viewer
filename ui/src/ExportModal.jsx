@@ -467,11 +467,9 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
           <Tooltip content={headTitle}>
             <span className="modal-title export-title">{headTitle}</span>
           </Tooltip>
-          <Tooltip content="Close">
-            <Button className="icon-btn modal-close" onClick={onClose}>
-              <span className="icon">close</span>
-            </Button>
-          </Tooltip>
+          <Button className="icon-btn modal-close" onClick={onClose}>
+            <span className="icon">close</span>
+          </Button>
         </div>
 
         {spec.type === 'model' && (

@@ -1499,11 +1499,9 @@ export function CameraSequencer({
       >
         <span className="icon">movie</span>
         <span className="cseq-title">Camera Sequencer</span>
-        <Tooltip content="Close" placement="left">
-          <button type="button" className="icon-btn cseq-close" onClick={onClose} aria-label="Close">
-            <span className="icon">close</span>
-          </button>
-        </Tooltip>
+        <button type="button" className="icon-btn cseq-close" onClick={onClose} aria-label="Close">
+          <span className="icon">close</span>
+        </button>
       </div>
 
       <div className="cseq-body">

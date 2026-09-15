@@ -44,11 +44,9 @@ export function ScenesPanel({
     </Tooltip>
   );
   const closeBtn = (
-    <Tooltip content="Close" placement="left">
-      <Button type="button" className="pc-tbtn details-close" aria-label="Close" onClick={onClose}>
-        <span className="icon">close</span>
-      </Button>
-    </Tooltip>
+    <Button type="button" className="pc-tbtn details-close" aria-label="Close" onClick={onClose}>
+      <span className="icon">close</span>
+    </Button>
   );
 
   if (view !== 'actors' || !current) {

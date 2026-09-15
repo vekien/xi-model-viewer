@@ -75,11 +75,9 @@ export function DatabaseFilter({ fields, draft, onDraft, onApply, onClear, onClo
             </button>
           ))}
         </div>
-        <Tooltip content="Close" placement="left">
-          <button type="button" className="icon-btn dbf-close" aria-label="Close" onClick={onClose}>
-            <span className="icon">close</span>
-          </button>
-        </Tooltip>
+        <button type="button" className="icon-btn dbf-close" aria-label="Close" onClick={onClose}>
+          <span className="icon">close</span>
+        </button>
       </div>
 
       {tab === 'advanced' ? (

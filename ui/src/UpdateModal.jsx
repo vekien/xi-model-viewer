@@ -71,11 +71,9 @@ export function UpdateModal({ open, info, onClose }) {
           >
             <span className="icon">check_circle</span>
             <span className="modal-title">Check for Updates</span>
-            <Tooltip content="Close" placement="left">
-              <Button className="icon-btn modal-close" aria-label="Close" onClick={onClose}>
-                <span className="icon">close</span>
-              </Button>
-            </Tooltip>
+            <Button className="icon-btn modal-close" aria-label="Close" onClick={onClose}>
+              <span className="icon">close</span>
+            </Button>
           </div>
 
           <div className="modal-body update-body">
@@ -114,11 +112,9 @@ export function UpdateModal({ open, info, onClose }) {
         >
           <span className="icon">system_update_alt</span>
           <span className="modal-title">Update available</span>
-          <Tooltip content="Close" placement="left">
-            <Button className="icon-btn modal-close" aria-label="Close" onClick={onClose}>
-              <span className="icon">close</span>
-            </Button>
-          </Tooltip>
+          <Button className="icon-btn modal-close" aria-label="Close" onClick={onClose}>
+            <span className="icon">close</span>
+          </Button>
         </div>
 
         <div className="modal-body update-body">

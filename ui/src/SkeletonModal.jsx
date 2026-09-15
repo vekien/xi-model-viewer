@@ -111,11 +111,9 @@ export function SkeletonModal({
         <span className="icon">accessibility_new</span>
         <span className="modal-title mono">{title}</span>
         <span className="skel-count mono">{joints.length} joints</span>
-        <Tooltip content="Close">
-          <Button className="icon-btn modal-close" onClick={onClose}>
-            <span className="icon">close</span>
-          </Button>
-        </Tooltip>
+        <Button className="icon-btn modal-close" onClick={onClose}>
+          <span className="icon">close</span>
+        </Button>
       </div>
       <div className="skel-modal-body">{rows}</div>
     </div>,

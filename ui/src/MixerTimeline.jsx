@@ -391,11 +391,9 @@ export function TimelineWindow({
         <span className="cseq-title">Timeline</span>
         <span className="mono mseq-name">{recipeName}</span>
         <span className={`mseq-note${failed ? ' is-failed' : ''}`}>{failed ? error?.title : note}</span>
-        <Tooltip content="Close (the Ability Mixer panel's timeline glyph brings it back)" placement="left">
-          <button type="button" className="icon-btn cseq-close" onClick={onClose} aria-label="Close">
-            <span className="icon">close</span>
-          </button>
-        </Tooltip>
+        <button type="button" className="icon-btn cseq-close" onClick={onClose} aria-label="Close">
+          <span className="icon">close</span>
+        </button>
       </div>
 
       <div className="cseq-body" ref={bodyRef}>

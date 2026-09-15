@@ -129,11 +129,9 @@ export function ZoneMeshPreviewModal({
       >
         <span className="icon">landscape</span>
         <span className="modal-title mono">{title}</span>
-        <Tooltip content="Close">
-          <Button className="icon-btn modal-close" onClick={onClose}>
-            <span className="icon">close</span>
-          </Button>
-        </Tooltip>
+        <Button className="icon-btn modal-close" onClick={onClose}>
+          <span className="icon">close</span>
+        </Button>
       </div>
       {error ? (
         <div className="fx-modal-body">

@@ -21,11 +21,9 @@ export function EffectActorsPanel({
         <span className="icon">groups</span>
         <span className="details-title">Actors</span>
         {onClose && (
-          <Tooltip content="Close">
-            <button type="button" className="icon-btn details-close" onClick={onClose}>
-              <span className="icon">close</span>
-            </button>
-          </Tooltip>
+          <button type="button" className="icon-btn details-close" onClick={onClose}>
+            <span className="icon">close</span>
+          </button>
         )}
       </div>
 

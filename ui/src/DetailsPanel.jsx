@@ -26,11 +26,9 @@ export function DetailsPanel({ info, animClip, animId, schedule, onClose, onOpen
       <div className="details-header">
         <span className="icon">info</span>
         <span className="details-title">Details</span>
-        <Tooltip content="Close">
-          <Button className="icon-btn details-close" onClick={onClose}>
-            <span className="icon">close</span>
-          </Button>
-        </Tooltip>
+        <Button className="icon-btn details-close" onClick={onClose}>
+          <span className="icon">close</span>
+        </Button>
       </div>
 
       <div className="details-body">

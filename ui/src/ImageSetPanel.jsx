@@ -44,11 +44,9 @@ export function ImageSetPanel({
           </button>
         </Tooltip>
         {onClose && (
-          <Tooltip content="Close">
-            <button className="icon-btn plc-tool" onClick={onClose}>
-              <span className="icon">close</span>
-            </button>
-          </Tooltip>
+          <button className="icon-btn plc-tool" onClick={onClose}>
+            <span className="icon">close</span>
+          </button>
         )}
       </div>
 

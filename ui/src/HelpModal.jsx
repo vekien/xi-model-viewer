@@ -86,11 +86,9 @@ export function HelpModal({ open, onClose, onFocus, zIndex = 5000 }) {
       >
         <span className="icon">star</span>
         <span className="modal-title">About</span>
-        <Tooltip content="Close">
-          <Button className="icon-btn modal-close" onClick={onClose}>
-            <span className="icon">close</span>
-          </Button>
-        </Tooltip>
+        <Button className="icon-btn modal-close" onClick={onClose}>
+          <span className="icon">close</span>
+        </Button>
       </div>
 
       <div className="modal-body help-body">

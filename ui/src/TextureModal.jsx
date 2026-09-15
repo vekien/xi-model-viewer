@@ -209,11 +209,9 @@ export function TextureModal({ tex, onClose, onFocus, zIndex = 210, initialPos =
             </Button>
           </Tooltip>
         </div>
-        <Tooltip content="Close">
-          <Button className="icon-btn modal-close" onClick={onClose}>
-            <span className="icon">close</span>
-          </Button>
-        </Tooltip>
+        <Button className="icon-btn modal-close" onClick={onClose}>
+          <span className="icon">close</span>
+        </Button>
       </div>
       <div className="tex-modal-body">
         <div
