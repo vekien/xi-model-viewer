@@ -11046,7 +11046,7 @@ export default function App({ launch = null }) {
               onClose={() => setMixerPanel('actors', false)}
             />
           </Floating>
-          <Floating id="mixer-preview" open={!!mixerPanels.preview} defaultPos={{ right: 68, top: 60 }}>
+          <Floating id="mixer-preview" open={!!mixerPanels.preview} defaultPos={{ right: 68, top: 12 }}>
             <AnimationPanel
               title="Animation Preview"
               pc={pc}
