@@ -10707,6 +10707,7 @@ export default function App({ launch = null }) {
           <AnimationPanel
             pc={leftView === 'pc' ? pc : null}
             anim={leftView === 'creation' ? creationAnim : animControls}
+            onClose={() => setAnimOpen(false)}
           />
         </Floating>
       )}
@@ -10718,7 +10719,7 @@ export default function App({ launch = null }) {
         <>
           {animOpen && (
             <Floating id="effect-anim" defaultPos={{ right: 68, top: 12 }}>
-              <AnimationPanel anim={effectAnim} />
+              <AnimationPanel anim={effectAnim} onClose={() => setAnimOpen(false)} />
             </Floating>
           )}
           {actorsOpen && (
@@ -10938,13 +10939,6 @@ export default function App({ launch = null }) {
                   </button>
                 </>
               )}
-              {modelInfo && ORBIT_VIEWS.has(leftView)
-                && !(leftView === 'files' && browserKind && browserKind !== 'entity') && (
-                <>
-                  <span className="status-sep">·</span>
-                  <button className="status-link" onClick={() => setSkeletonOpen((v) => !v)}>Skeleton</button>
-                </>
-              )}
               {((leftView === 'effects') || (leftView === 'files' && browserKind === 'effect'))
                 && effectEntry && (
                 <>
@@ -11002,13 +10996,6 @@ export default function App({ launch = null }) {
                   </button>
                 </>
               )}
-              {ORBIT_VIEWS.has(leftView)
-                && !(leftView === 'files' && browserKind && browserKind !== 'entity') && (
-                <>
-                  <span className="status-sep">·</span>
-                  <button className="status-link" onClick={() => setSkeletonOpen((v) => !v)}>Skeleton</button>
-                </>
-              )}
               {((leftView === 'effects') || (leftView === 'files' && browserKind === 'effect'))
                 && effectEntry && (
                 <>
@@ -11055,12 +11042,14 @@ export default function App({ launch = null }) {
 
       {skeletonOpen && !player.current && ORBIT_VIEWS.has(leftView)
         && !(leftView === 'files' && browserKind && browserKind !== 'entity') && (
-        <SkeletonPanel
-          pose={rendererRef.current?.pose ?? null}
-          selectedJoint={selectedJoint}
-          onSelectJoint={setSelectedJoint}
-          onClose={() => { setSkeletonOpen(false); setSelectedJoint(-1); }}
-        />
+        <Floating id="view-skeleton" width={360} defaultPos={{ right: 68, top: 340 }}>
+          <SkeletonPanel
+            pose={rendererRef.current?.pose ?? null}
+            selectedJoint={selectedJoint}
+            onSelectJoint={setSelectedJoint}
+            onClose={() => { setSkeletonOpen(false); setSelectedJoint(-1); }}
+          />
+        </Floating>
       )}
 
       {showShadows && lightGizmoOpen && (
