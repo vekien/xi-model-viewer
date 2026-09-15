@@ -84,6 +84,7 @@ const HELP = [
   'Drag a pill to move it; drag a lane label to shift the whole lane.',
   'Drag on empty space to select a group; Ctrl-click adds to it.',
   'Ctrl+D duplicates the selection, Delete removes it, M mutes it.',
+  'Ctrl+C copies the selection; Ctrl+V pastes it at the red cursor, on the same tracks.',
   'Click a sound pill’s speaker to hear it.',
 ];
 

@@ -4,6 +4,10 @@ import { TimelineWindow } from './MixerTimeline.jsx';
 import { Floating } from './Floating.jsx';
 import { kindOf, opName, shiftLane, strikeFrame, trackLabel, withIds } from '../js/mixer.js';
 
+// Ctrl+C / Ctrl+V: the copied blocks with their spacing and tracks. Module
+// level so a copy outlives a view switch and lands in another mix.
+let clipboard = null;   // { items: [{ ...event sans _id, offset }], span, origin }
+
 // The mixer's side panel: the recipe (name, save, publish, the organizer), the parts
 // of the picked source (solo / take), the selected event's numbers, and the state
 // the timeline window (MixerTimeline.jsx) draws. Everything here edits
@@ -125,6 +129,32 @@ export function MixerPanel({
     onRecipe({ ...recipe, events: events.map((e) => (ids.has(e._id) ? { ...e, enabled: !anyOn } : e)) });
   };
   const remove = (id) => removeMany(new Set([id]));
+  /** Ctrl+C: the selection, spacing kept, ready for Ctrl+V. */
+  const copyMany = (ids) => {
+    const src = events.filter((e) => ids.has(e._id));
+    if (!src.length) return;
+    const first = Math.min(...src.map((e) => e.start));
+    const last = Math.max(...src.map((e) => e.start + (e.dur || 0)));
+    clipboard = {
+      items: src.map(({ _id, ...rest }) => ({ ...rest, offset: rest.start - first })),
+      span: Math.max(last - first, 15),
+      origin: first,
+    };
+  };
+  /** Ctrl+V: the copies at `frame`, on their own tracks (a track gone since the
+   *  copy falls back to its kind's first), selected so they can be dragged. */
+  const pasteAt = (frame) => {
+    if (!clipboard?.items.length) return;
+    const known = new Set(tracks.map((t) => t.id));
+    const at = Math.max(0, Math.round(frame));
+    const copies = withIds(clipboard.items.map(({ offset, ...rest }) => ({
+      ...rest,
+      start: at + offset,
+      from: known.has(rest.from) ? rest.from : kindOf(rest.from),
+    })));
+    onRecipe({ ...recipe, events: [...events, ...copies] });
+    setSelectedIds(new Set(copies.map((c) => c._id)));
+  };
   /** Ctrl+D: copies of the selection right after it, spacing kept, selected so they can be dragged. */
   const duplicateMany = (ids) => {
     const src = events.filter((e) => ids.has(e._id));
@@ -156,8 +186,19 @@ export function MixerPanel({
         setSelectedIds(new Set(events.map((ev) => ev._id)));
         return;
       }
+      // Ctrl+V: at the red cursor; with nothing scrubbed (frame 0) right after
+      // the copied group instead, where Ctrl+D would put it.
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v' && !e.shiftKey && !e.altKey && !typing(e.target)) {
+        if (!clipboard) return;
+        e.preventDefault();
+        pasteAt(head > 0 ? head : clipboard.origin + clipboard.span);
+        return;
+      }
       if (typing(e.target) || !selectedIds.size) return;
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        copyMany(selectedIds);
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
         e.preventDefault();
         duplicateMany(selectedIds);
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
