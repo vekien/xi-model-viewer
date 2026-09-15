@@ -216,7 +216,7 @@ export function MixerPanel({
       canPublish={!busy && events.length > 0 && !publishPlan}
       onDropEntry={onDropEntry}
       editor={selected ? <EventEditor ev={selected} onChange={(p) => update(selected._id, p)} onRemove={() => remove(selected._id)}
-        onSolo={onSolo ? () => onSolo(selected.ref, selected.from) : null} /> : null} />
+        onSolo={onSolo ? () => onSolo(selected.ref, selected.from, selected.dur) : null} /> : null} />
   );
 
   return (

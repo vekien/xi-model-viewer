@@ -226,7 +226,8 @@ export function TimelineWindow({
   const soundEnd = Math.max(0, ...[...events.filter(isSoundEvent), ...ghostEvents].map((e) => e.start + soundTicks(e)));
 
   // Whole ticks: the armed routine's end can be fractional (a loop point from a clip length at 30fps).
-  const len = Math.ceil(Math.max(MIN_LEN, recipeLength(events) + 20, soundEnd + 20, minLen));
+  // A little past the armed routine's end too, so a loop marker sitting there stays on the ruler.
+  const len = Math.ceil(Math.max(MIN_LEN, recipeLength(events) + 20, soundEnd + 20, minLen + 20));
   const ticks = rulerTicks(len, FPS, zoom);
 
   // Each lane's stacking is remembered (collapse from the glyph by the label).

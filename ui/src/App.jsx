@@ -7019,17 +7019,27 @@ export default function App({ launch = null }) {
     mixerPlayRecipe(next);
   }, [mixerLaneInfo, mixerPlayRecipe]);
 
-  /** Play one generator of a track's source on its own, looping, until Play mix. */
-  const mixerSolo = useCallback(async (genId, lane = null) => {
+  /**
+   * Play one generator of a track's source on its own, looping, until Play mix.
+   *
+   * The loop point is the mix's own, so the solo keeps the mix's period and
+   * the timeline's loop marker stays where it was. It also has to exist: a
+   * looping routine with no loop point restarts as soon as everything has
+   * fired and nothing is alive — which, for one instant generator, is the
+   * very tick it fires, before its first particle is born. That restart every
+   * tick is what showed nothing at all.
+   */
+  const mixerSolo = useCallback(async (genId, lane = null, dur = 0) => {
     const entry = mixerLaneInfo[lane ?? mixerLane]?.entry;
     if (!entry) { setStatusText(`solo ${genId}: no source on ${trackLabel(lane ?? mixerLane)}`); return; }
+    const period = rendererRef.current?.particleSystem?._effect?.loopAt ?? Math.max(120, (dur || 0) + 60);
     mixerComposeRef.current = null;   // the solo replaces the armed mix; Play mix brings it back
     const path = entryPathForRace(entry, pc.race);
     if (effectEntryRef.current?.path !== path) await mixerLoadEntryOnStage(entry);
     const system = rendererRef.current?.particleSystem;
     if (!system) return;
     weatherAudioRef.current?.stopOneShots();
-    system.playEffectRoutine([{ genId, delay: 0, dur: 0 }], { loop: true, sounds: [], anims: [] });
+    system.playEffectRoutine([{ genId, delay: 0, dur: dur || 0 }], { loop: true, sounds: [], anims: [], loopAt: period });
     rendererRef.current.effectPaused = false;
     setEffectTransport('playing');
     setStatusText(`solo ${genId}`);
