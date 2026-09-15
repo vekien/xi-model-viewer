@@ -45,7 +45,7 @@ export function ScenesPanel({
   );
   const closeBtn = (
     <Tooltip content="Close" placement="left">
-      <Button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>
+      <Button type="button" className="pc-tbtn details-close" aria-label="Close" onClick={onClose}>
         <span className="icon">close</span>
       </Button>
     </Tooltip>

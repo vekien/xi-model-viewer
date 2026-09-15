@@ -31,6 +31,7 @@ export function WeatherPanel({
   brightness = 0, onBrightness,
   fogOn = true, onFogOn, fogScale = 1, onFogScale,
   sfxOn = true, onToggleSfx,
+  onClose,
   zoneTrack = null, zoneTrackPlaying = false, onToggleZoneMusic,
 }) {
   // Weather and time are always offered when the zone declares any weather.
@@ -91,20 +92,25 @@ export function WeatherPanel({
       <div className="wx-header">
         <span className="icon">landscape</span>
         <span className="wx-title">{heading}</span>
-        {showSkyControls && <span className="wx-time mono">{fmtTime(timeMinutes)}</span>}
-        {showSkyControls && (
-          <Tooltip content="Show sky" placement="bottom">
-            <label className="switch wx-switch">
-              <input type="checkbox" checked={!!skyboxOn} onChange={(e) => onToggleSkybox(e.target.checked)} />
-              <span className="track" />
-            </label>
-          </Tooltip>
+        <span className="sp" />
+        {onClose && (
+          <button type="button" className="pc-tbtn details-close" aria-label="Close" onClick={onClose}><span className="icon">close</span></button>
         )}
       </div>
 
       <div className="wx-body">
         {showSkyControls ? (
           <div className={`wx-weather${skyboxOn ? '' : ' wx-off'}`}>
+            <div className="wx-row wx-weather-head">
+              <span className="wx-label">Weather</span>
+              <span className="sp" />
+              <Tooltip content={skyboxOn ? 'Weather and sky on' : 'Weather and sky off'} placement="left">
+                <label className="switch wx-switch">
+                  <input type="checkbox" checked={!!skyboxOn} onChange={(e) => onToggleSkybox(e.target.checked)} />
+                  <span className="track" />
+                </label>
+              </Tooltip>
+            </div>
             <div className="wx-row">
               <Combo
                 value={weather}
@@ -119,13 +125,13 @@ export function WeatherPanel({
                 range input snaps its value to the step grid. */}
             <div className="wx-row wx-time-row">
               <Tooltip content={todPlaying ? 'Stop the clock' : 'Auto Play Day/Night cycle'} placement="top">
-                <button
-                  className={`wx-audio-btn${todPlaying ? ' playing' : ''}`}
-                  aria-pressed={todPlaying}
+                <button type="button"
+                  className={`pc-tbtn${todPlaying ? ' on' : ''}`}
+                  aria-pressed={todPlaying ? 'true' : 'false'}
                   aria-label={todPlaying ? 'Stop time of day' : 'Play time of day'}
                   onClick={() => onToggleTod?.(!todPlaying)}
                 >
-                  <span className="icon">{todPlaying ? 'stop_circle' : 'play_arrow'}</span>
+                  <span className="icon fill">{todPlaying ? 'stop' : 'play_arrow'}</span>
                 </button>
               </Tooltip>
               <input
@@ -134,6 +140,7 @@ export function WeatherPanel({
                 className="vol-slider"
                 style={{ '--fill': `${(timeMinutes / 1439) * 100}%` }}
               />
+              <span className="wx-time mono">{fmtTime(timeMinutes)}</span>
             </div>
           </div>
         ) : (

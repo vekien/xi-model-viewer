@@ -1650,6 +1650,10 @@ button.cli-output-stop:hover {
   line-height: 1;
 }
 .wx-time-row .vol-slider { flex: 1 1 auto; }
+/* The Weather label row carries the sky switch; the clock sits at the slider's right. */
+.wx-label { color: var(--muted); font-size: 12px; flex: 0 0 auto; }
+.wx-weather-head { min-height: 22px; }
+.wx-time-row .wx-time { margin: 0; flex: 0 0 auto; }
 /* Music and ambient: an inset like the timeline's track, one transport glyph and a name per row. */
 .wx-audio { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border-radius: 8px; background: rgba(0, 0, 0, 0.28); box-shadow: inset 0 0 10px #00000070; }
 .wx-audio-row { gap: 8px; }
@@ -1659,43 +1663,6 @@ button.cli-output-stop:hover {
 .wx-fog-row .wx-switch { flex: 0 0 auto; }
 /* The row's leading icon doubles as its transport toggle: minimal by default,
    tinted and animated while active so the state reads without a second control. */
-.wx-audio-btn {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  min-height: 20px;   /* the global button rule forces 30px otherwise */
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: none;
-  color: var(--muted);
-  cursor: pointer;
-  transition: color 0.15s ease, background-color 0.15s ease;
-}
-.wx-audio-btn .icon { font-size: 16px; line-height: 1; }
-.wx-audio-btn:hover:not(:disabled) { color: var(--gray-100, #e8e8e8); background: rgba(255, 255, 255, 0.08); }
-.wx-audio-btn:disabled { opacity: 0.3; cursor: default; }
-.wx-audio-btn.playing { color: var(--accent, #4c8dff); }
-.wx-audio-btn.playing .icon { animation: wx-pulse 1.6s ease-in-out infinite; transform-origin: center; }
-/* graphic_eq reads as levels, so give it a quicker, bar-like beat. */
-.wx-audio-btn.playing .icon.eq { animation: wx-eq 0.9s ease-in-out infinite; }
-
-@keyframes wx-pulse {
-  0%, 100% { transform: scale(1); opacity: 0.9; }
-  50%      { transform: scale(1.18); opacity: 1; }
-}
-@keyframes wx-eq {
-  0%, 100% { transform: scaleY(0.8); opacity: 0.85; }
-  25%      { transform: scaleY(1.15); opacity: 1; }
-  60%      { transform: scaleY(0.9); opacity: 0.95; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .wx-audio-btn.playing .icon,
-  .wx-audio-btn.playing .icon.eq { animation: none; }
-}
-
 .wx-bright-val {
   flex: 0 0 auto;
   width: 36px;

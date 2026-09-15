@@ -6319,8 +6319,7 @@ export default function App({ launch = null }) {
   const [mixerShuffleKind, setMixerShuffleKind] = useState('ws');   // the Shuffle-as choice; the top-right bar's Shuffle uses it
   const [mixerSaveTick, setMixerSaveTick] = useState(0);            // bumped by the top-right bar's Save
   // The other views' rail: one glyph per panel the view shows, toggling the flag
-  // that already gates that panel. Objects and Scenes stay exclusive, as the
-  // status bar's links keep them.
+  // that already gates that panel.
   const viewRail = useMemo(() => {
     const isZone = leftView === 'zones' || browserKind === 'zone';
     const isEffect = leftView === 'effects' || (leftView === 'files' && browserKind === 'effect');
@@ -6334,8 +6333,8 @@ export default function App({ launch = null }) {
     if (isEffect && effectEntry) items.push({ id: 'actors', icon: 'groups', label: 'Actors', open: actorsOpen, set: setActorsOpenPersist });
     if (isZone) {
       items.push({ id: 'weather', icon: 'partly_cloudy_day', label: 'Weather', open: weatherOpen, set: setWeatherOpen });
-      if (objectGroups) items.push({ id: 'objects', icon: 'view_in_ar', label: 'Objects', open: plcOpen, set: (v) => { if (v) setScenesPanelOpen(false); setPlcOpen(v); rememberRightPanel(v ? 'objects' : 'none'); } });
-      if (modelInfo?.zone) items.push({ id: 'scenes', icon: 'movie', label: 'Scenes', open: scenesPanelOpen, set: (v) => { if (v) setPlcOpen(false); else setActorPlacing(null); setScenesPanelOpen(v); rememberRightPanel(v ? 'scenes' : 'none'); } });
+      if (objectGroups) items.push({ id: 'objects', icon: 'view_in_ar', label: 'Objects', open: plcOpen, set: (v) => { setPlcOpen(v); rememberRightPanel(v ? 'objects' : 'none'); } });
+      if (modelInfo?.zone) items.push({ id: 'scenes', icon: 'movie', label: 'Scenes', open: scenesPanelOpen, set: (v) => { if (!v) setActorPlacing(null); setScenesPanelOpen(v); rememberRightPanel(v ? 'scenes' : 'none'); } });
     }
     if (skeletonOk && !player.current) items.push({ id: 'skeleton', icon: 'accessibility_new', label: 'Skeleton', open: skeletonOpen, set: setSkeletonOpen });
     if (detailsOk && modelInfo && !player.current) items.push({ id: 'details', icon: 'info', label: 'Details', open: detailsOpen, set: setDetailsOpen });
@@ -10177,6 +10176,7 @@ export default function App({ launch = null }) {
       hasSkybox={hasSkybox}
       heading={minimal ? (modelInfo?.name || 'Zone') : 'Zone'}
       objectsOpen={!minimal && !!objectGroups && plcOpen}
+      onClose={() => setWeatherOpen(false)}
       brightness={zoneBrightness}
       onBrightness={setZoneBrightness}
       fogOn={fogOn}
@@ -10592,7 +10592,7 @@ export default function App({ launch = null }) {
       )}
 
       {!dataStructOpen && scenesPanelOpen && modelInfo?.zone && (
-        <Floating id="zone-scenes" defaultPos={{ right: 400, top: 12 }}>
+        <Floating id="zone-scenes" defaultPos={{ right: 400, top: 524 }}>
           <ScenesPanel
             scenes={zoneScenes}
             current={currentScene}
@@ -10935,7 +10935,7 @@ export default function App({ launch = null }) {
               {objectGroups && (
                 <>
                   <span className="status-sep">·</span>
-                  <button className="status-link" onClick={() => { setScenesPanelOpen(false); setPlcOpen((v) => { rememberRightPanel(v ? 'none' : 'objects'); return !v; }); }}>
+                  <button className="status-link" onClick={() => { setPlcOpen((v) => { rememberRightPanel(v ? 'none' : 'objects'); return !v; }); }}>
                     {plcOpen ? 'Hide objects' : 'Objects'}
                   </button>
                 </>
@@ -10947,8 +10947,7 @@ export default function App({ launch = null }) {
                     className="status-link"
                     onClick={() => {
                       setScenesPanelOpen((v) => {
-                        if (!v) setPlcOpen(false);
-                        else { setActorPlacing(null); }
+                        if (v) setActorPlacing(null);
                         rememberRightPanel(v ? 'none' : 'scenes');
                         return !v;
                       });
@@ -10984,7 +10983,7 @@ export default function App({ launch = null }) {
               {objectGroups && (
                 <>
                   <span className="status-sep">·</span>
-                  <button className="status-link" onClick={() => { setScenesPanelOpen(false); setPlcOpen((v) => { rememberRightPanel(v ? 'none' : 'objects'); return !v; }); }}>
+                  <button className="status-link" onClick={() => { setPlcOpen((v) => { rememberRightPanel(v ? 'none' : 'objects'); return !v; }); }}>
                     {plcOpen ? 'Hide objects' : 'Objects'}
                   </button>
                 </>
@@ -10996,8 +10995,7 @@ export default function App({ launch = null }) {
                     className="status-link"
                     onClick={() => {
                       setScenesPanelOpen((v) => {
-                        if (!v) setPlcOpen(false);
-                        else { setActorPlacing(null); }
+                        if (v) setActorPlacing(null);
                         rememberRightPanel(v ? 'none' : 'scenes');
                         return !v;
                       });
