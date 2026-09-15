@@ -271,7 +271,18 @@ export async function xiJson(args, xiPath, env, onLine) {
   try {
     value = firstJsonValue(out.join('\n'));
   } catch (e) {
-    throw new Error(`xi ${args.join(' ')}: could not read its JSON (${e?.message ?? e})`);
+    // A shell built before stderr had its own event still mixes the streams;
+    // a line of prose in the middle of the value is what breaks the parse.
+    // Pretty-printed JSON lines start with a quote, a bracket, a number or a
+    // bare literal — keep those and try once more before giving up.
+    const jsonish = out.filter((l) => /^\s*(["{}[\]]|-?\d|true|false|null)/.test(l));
+    try {
+      value = firstJsonValue(jsonish.join('\n'));
+      console.warn(`[xi] ${args.join(' ')}: read its JSON after dropping ${out.length - jsonish.length} non-JSON line(s) from stdout`, out.filter((l) => !jsonish.includes(l)).slice(0, 5));
+    } catch (e2) {
+      console.warn(`[xi] ${args.join(' ')}: JSON unreadable`, e2, text.slice(0, 2000));
+      throw new Error(`xi ${args.join(' ')}: could not read its JSON (${e?.message ?? e})`);
+    }
   }
   if (value === undefined) throw new Error(`xi ${args.join(' ')} printed no JSON`);
   return value;
