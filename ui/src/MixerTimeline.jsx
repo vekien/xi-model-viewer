@@ -4,6 +4,15 @@ import { Tooltip } from './Tooltip.jsx';
 import { Combo } from './Combo.jsx';
 import { KEEP_LANE, LANES, LANE_BY_ID, kindOf, opName, recipeLength, trackLabel } from '../js/mixer.js';
 
+const SHUFFLE_KINDS = [{ id: 'ws', label: 'WS' }, { id: 'ja', label: 'Ability' }, { id: 'spell', label: 'Spell' }];
+
+/** The lines of a `dats build --dry-run` that name the slot and the DATs — the
+ *  rest (the SQL, the command echo) stays in the console. */
+function planExcerpt(text) {
+  const lines = String(text ?? '').split('\n').filter((l) => /animation|file_id|-> ROM|occupied|Error/i.test(l));
+  return (lines.length ? lines : String(text ?? '').split('\n').slice(-6)).slice(0, 12).join('\n');
+}
+
 // The mixer's timeline as a floating window built from the Camera Sequencer's
 // chrome (#camseq / .cseq-*): the same title bar, dragged by it; the same inset
 // track with a seconds ruler, one lane per line, the red playhead you drag; the
@@ -84,6 +93,11 @@ export function TimelineWindow({
   getSoundPeaks = null, ghosts = null,
   transport, canPlay, playTip, onPlayPause, onStop, onSeek,
   speed, onSpeed, loop, onLoop, onSnapLane, viewerRace,
+  // The saved-mix row (the Camera Sequencer's New / name / Save / Load / Delete),
+  // the publish plan, and the shuffle kind — what the Recipes window used to hold.
+  name = '', onName, onNew, onSave, saved = [], onOpen, onDelete,
+  publishPlan = null, onPublish, busy = false,
+  shuffleKind = 'ws', onShuffleKind,
   editor = null,
 }) {
   // ── Window: position, size, drag, resize (the sequencer's pattern) ──────────
@@ -463,13 +477,62 @@ export function TimelineWindow({
           </div>
         )}
 
-        {/* Above the track, the sequencer's settings row: add a track on the left, zoom on the right */}
+        {publishPlan && (
+          <div className="mixer-publish mseq-publish">
+            <div className="fx-actor-sec-title">Publish · {publishPlan.name}</div>
+            <pre className="mono-small mixer-plan">{planExcerpt(publishPlan.text)}</pre>
+            <div className="mixer-save">
+              <span className="side-note mixer-publish-note">Writes the DAT(s) into ROM10 and registers their file ids (xi dats build). Full plan in the console.</span>
+              <button type="button" className="mixer-chip danger" disabled={busy} onClick={() => onPublish?.('go')}>publish</button>
+              <button type="button" className="mixer-chip" onClick={() => onPublish?.('cancel')}>cancel</button>
+            </div>
+          </div>
+        )}
+
+        {/* Above the track, the sequencer's settings row: add a track, then the
+            saved-mix row exactly as the Camera Sequencer has it, zoom on the right */}
         <div className="cseq-row cseq-settings mseq-toolbar">
           <span className="cseq-label">Add track</span>
           <div className="cseq-load mseq-add-track">
             <Combo value="" items={LANES.map((l) => ({ id: l.id, label: l.label, color: l.color }))} placeholder="Motion, Effects, Sound…"
               onChange={(kind) => kind && onAddTrack?.(kind)} />
           </div>
+          <div className="cseq-bar-sep" />
+          <Tooltip content="Start a new empty mix" placement="top">
+            <button type="button" className="cseq-btn" onClick={onNew}>New</button>
+          </Tooltip>
+          <input
+            type="text"
+            className="cseq-text mseq-mix-name"
+            placeholder="Mix name"
+            value={name}
+            spellCheck={false}
+            onChange={(e) => onName?.(e.target.value.replace(/[^A-Za-z0-9_-]/g, '_'))}
+          />
+          <Tooltip content={saved.some((r) => r.name === name.trim()) ? 'Save over the mix with this name' : 'Save under this name'} placement="top">
+            <button type="button" className="cseq-btn" disabled={!name.trim() || busy} onClick={onSave}>Save</button>
+          </Tooltip>
+          <Tooltip content={saved.length ? 'Load a saved mix' : 'Nothing saved yet — Save writes one into exports/ability/mixer'} placement="top">
+            <div className="cseq-load">
+              <Combo
+                value={saved.some((r) => r.name === name.trim()) ? name.trim() : ''}
+                items={saved.map((r) => ({ id: r.name, label: r.name }))}
+                placeholder={saved.length ? 'Load…' : 'None saved'}
+                onChange={(n) => n && onOpen?.(n)}
+              />
+            </div>
+          </Tooltip>
+          <Tooltip content="Delete the saved mix with this name" placement="top">
+            <button
+              type="button"
+              className="icon-btn cseq-icon cseq-del"
+              aria-label="Delete saved mix"
+              disabled={!saved.some((r) => r.name === name.trim())}
+              onClick={() => onDelete?.(name.trim())}
+            >
+              <span className="icon">delete</span>
+            </button>
+          </Tooltip>
           <div className="cseq-bar-group cseq-zoom">
             <Tooltip content="Zoom out" placement="top">
               <button type="button" className="icon-btn cseq-icon" aria-label="Zoom out" disabled={zoom <= MIN_ZOOM} onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z / 2))}>
@@ -613,6 +676,16 @@ export function TimelineWindow({
           <div className="cseq-bar-sep" />
 
           <div className="cseq-bar-group">
+            {onShuffleKind && (
+              <Tooltip content="Shuffle as: what the toolbar's Shuffle draws its motion from" placement="top">
+                <div className="seg-tabs mseq-shuffle" role="tablist" aria-label="Shuffle kind">
+                  {SHUFFLE_KINDS.map((k) => (
+                    <button key={k.id} type="button" role="tab" aria-selected={shuffleKind === k.id}
+                      className={`seg-tab${shuffleKind === k.id ? ' on' : ''}`} onClick={() => onShuffleKind(k.id)}>{k.label}</button>
+                  ))}
+                </div>
+              </Tooltip>
+            )}
             {LANES.filter((l) => l.id !== 'motion').map((l) => (
               <Tooltip key={l.id} content={`Snap the ${l.label.toLowerCase()} lane to the strike frame (its first generator lands on f${strike})`} placement="top">
                 <button type="button" className="icon-btn cseq-icon" aria-label={`Snap ${l.label}`} style={{ color: l.color }} onClick={() => onSnapLane(l.id)}>

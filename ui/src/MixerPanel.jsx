@@ -10,15 +10,6 @@ import { kindOf, opName, shiftLane, strikeFrame, trackLabel, withIds } from '../
 // the timeline window (MixerTimeline.jsx) draws. Everything here edits
 // `recipe.events`; Play composes exactly that.
 
-const SHUFFLE_KINDS = [{ id: 'ws', label: 'WS' }, { id: 'ja', label: 'Ability' }, { id: 'spell', label: 'Spell' }];
-
-/** The lines of a `dats build --dry-run` that name the slot and the DATs — the
- *  rest (the SQL, the command echo) stays in the console. */
-function planExcerpt(text) {
-  const lines = String(text ?? '').split('\n').filter((l) => /animation|file_id|-> ROM|occupied|Error/i.test(l));
-  return (lines.length ? lines : String(text ?? '').split('\n').slice(-6)).slice(0, 12).join('\n');
-}
-
 function Num({ label, value, onChange, min = 0 }) {
   return (
     <label className="mixer-field">
@@ -136,44 +127,6 @@ function Parts({ lane, entry, info, events, onSolo, onPlaySound, onTake, playing
   );
 }
 
-/** One saved recipe in the organizer: open, rename (inline), duplicate, delete (two-step). */
-function RecipeRow({ r, current, onStage, onOpen, onRename, onDuplicate, onDelete }) {
-  const [mode, setMode] = useState(null);   // null | 'rename'
-  const [draft, setDraft] = useState(r.name);
-  const ref = useRef(null);
-  useEffect(() => { if (mode === 'rename') { ref.current?.focus(); ref.current?.select?.(); } }, [mode]);
-  const srcs = ['motion', 'vfx', 'sound'].map((l) => r.sources?.[l]?.name ?? r.sources?.[l]?.spec).filter(Boolean).join(' · ');
-  const stop = (e) => { e.stopPropagation(); };
-  return (
-    <div className={`mixer-recipe-row${current ? ' on' : ''}${mode ? ' busy' : ''}`} onClick={() => !mode && onOpen(r.name)}>
-      <div className="mixer-recipe-main">
-        {mode === 'rename'
-          ? (
-            <form className="mixer-save" onClick={stop} onSubmit={(e) => { e.preventDefault(); onRename(r.name, draft); setMode(null); }}>
-              <input ref={ref} value={draft} spellCheck={false} onChange={(e) => setDraft(e.target.value.replace(/[^A-Za-z0-9_-]/g, '_'))}
-                onKeyDown={(e) => { if (e.key === 'Escape') setMode(null); }} />
-              <button type="submit" className="pc-tbtn"><span className="icon">check</span></button>
-              <button type="button" className="pc-tbtn" onClick={() => setMode(null)}><span className="icon">close</span></button>
-            </form>
-          )
-          : (
-            <span className="mixer-recipe-name">
-              {r.name}
-              {onStage && <span className="mixer-recipe-badge">ON STAGE</span>}
-            </span>
-          )}
-        <span className="mixer-recipe-src">{srcs || 'empty'}</span>
-      </div>
-      <span className="mixer-recipe-acts" onClick={stop}>
-        <Tooltip content="Rename"><button type="button" className="pc-tbtn" onClick={() => { setDraft(r.name); setMode('rename'); }}><span className="icon">edit</span></button></Tooltip>
-        <Tooltip content="Duplicate"><button type="button" className="pc-tbtn" onClick={() => onDuplicate(r.name)}><span className="icon">content_copy</span></button></Tooltip>
-        {/* One click: a recipe is a small JSON file next to its compose output, cheap to recreate. */}
-        <Tooltip content="Delete"><button type="button" className="pc-tbtn" onClick={() => onDelete(r.name)}><span className="icon">delete</span></button></Tooltip>
-      </span>
-    </div>
-  );
-}
-
 export function MixerPanel({
   recipe, onRecipe, lane, laneInfo, laneEntry,
   transport, onPlay, onStop, onPublish, publishPlan = null, onSaveAs, onOpen, onReset, recipes, busy, note, error = null, onDismissError,
@@ -276,22 +229,8 @@ export function MixerPanel({
 
   // Save prompts for a name (prefilled). A different name that already exists
   // asks before overwriting; a new name writes a copy and leaves the old file.
-  const [saving, setSaving] = useState(false);
-  const [saveName, setSaveName] = useState('');
-  const [overwrite, setOverwrite] = useState(null);
-  const saveRef = useRef(null);
-  useEffect(() => { if (saving) { saveRef.current?.focus(); saveRef.current?.select?.(); } }, [saving]);
-  const beginSave = () => { setSaveName(recipe.name); setOverwrite(null); setSaving(true); };
-  // The top-right bar's Save glyph asks for the name here, where the form lives.
-  useEffect(() => { if (saveTick) beginSave(); }, [saveTick]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const commitSave = () => {
-    const name = saveName.trim();
-    if (!name) { setSaving(false); return; }
-    if (name !== recipe.name && (recipes ?? []).some((r) => r.name === name) && overwrite !== name) { setOverwrite(name); return; }
-    onSaveAs?.(name);
-    setSaving(false);
-    setOverwrite(null);
-  };
+  // The toolbar's Save glyph saves under the mix's current name.
+  useEffect(() => { if (saveTick && recipe.name.trim()) onSaveAs?.(recipe.name.trim()); }, [saveTick]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // A failed compose or pick outranks every other note until the next attempt.
   const failed = !busy && !!error;
@@ -320,73 +259,16 @@ export function MixerPanel({
       onPlayPause={onPlayPause} onStop={onStop} onSeek={onSeek}
       speed={speed} onSpeed={onSpeed} loop={loop} onLoop={onLoop}
       onSnapLane={snapLane} viewerRace={viewerRace}
+      name={recipe.name} onName={(n) => onRecipe({ ...recipe, name: n })} onNew={onReset}
+      onSave={() => recipe.name.trim() && onSaveAs?.(recipe.name.trim())} saved={recipes ?? []} onOpen={onOpen} onDelete={onDelete}
+      publishPlan={publishPlan} onPublish={onPublish} busy={busy}
+      shuffleKind={shuffleKind} onShuffleKind={onShuffle ? onShuffleKind : null}
       editor={selected ? <EventEditor ev={selected} onChange={(p) => update(selected._id, p)} onRemove={() => remove(selected._id)} /> : null} />
   );
 
   return (
     <>
       {timeline}
-      <Floating id="mixer-main" open={!!panels.mixer} width={460} defaultPos={{ right: 400, top: 60 }}>
-      <div className="panel mixer-panel">
-        <div className="details-header">
-          <span className="icon">tune</span>
-          <span className="details-title">Recipes</span>
-          <span className="sp" />
-          <button type="button" className="pc-tbtn details-close" aria-label="Close" onClick={() => onPanel?.('mixer', false)}><span className="icon">close</span></button>
-        </div>
-
-        <div className="pc-ctrl">
-          <span className="pc-ctrl-label">Recipe</span>
-          <input type="text" className="mixer-name" value={recipe.name} spellCheck={false} aria-label="Recipe name"
-            onChange={(e) => onRecipe({ ...recipe, name: e.target.value.replace(/[^A-Za-z0-9_-]/g, '_') })} />
-        </div>
-        {onShuffle && (
-          <div className="pc-ctrl">
-            <span className="pc-ctrl-label">Shuffle as</span>
-            <div className="seg-tabs" role="tablist" aria-label="Shuffle kind">
-              {SHUFFLE_KINDS.map((k) => (
-                <button key={k.id} type="button" role="tab" aria-selected={shuffleKind === k.id}
-                  className={`seg-tab${shuffleKind === k.id ? ' on' : ''}`} onClick={() => onShuffleKind?.(k.id)}>{k.label}</button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {publishPlan && (
-          <div className="mixer-publish">
-            <div className="fx-actor-sec-title">Publish · {publishPlan.name}</div>
-            <pre className="mono-small mixer-plan">{planExcerpt(publishPlan.text)}</pre>
-            <div className="mixer-save">
-              <span className="side-note mixer-publish-note">Writes the DAT(s) into ROM10 and registers their file ids (xi dats build). Full plan in the console.</span>
-              <button type="button" className="mixer-chip danger" disabled={busy} onClick={() => onPublish?.('go')}>publish</button>
-              <button type="button" className="mixer-chip" onClick={() => onPublish?.('cancel')}>cancel</button>
-            </div>
-          </div>
-        )}
-
-        {saving && (
-          <form className="mixer-save" onSubmit={(e) => { e.preventDefault(); commitSave(); }}>
-            <input ref={saveRef} value={saveName} spellCheck={false} placeholder="recipe name"
-              onChange={(e) => { setSaveName(e.target.value.replace(/[^A-Za-z0-9_-]/g, '_')); setOverwrite(null); }}
-              onKeyDown={(e) => { if (e.key === 'Escape') { setSaving(false); setOverwrite(null); } }} />
-            {overwrite
-              ? <button type="submit" className="mixer-chip danger">overwrite {overwrite}</button>
-              : <Tooltip content="Save"><button type="submit" className="pc-tbtn" aria-label="Save"><span className="icon">check</span></button></Tooltip>}
-            <Tooltip content="Cancel"><button type="button" className="pc-tbtn" aria-label="Cancel" onClick={() => { setSaving(false); setOverwrite(null); }}><span className="icon">close</span></button></Tooltip>
-          </form>
-        )}
-
-        <div className="fx-actor-sec-title">Recipes · {(recipes ?? []).length}</div>
-        <div className="mixer-recipes">
-          {!(recipes ?? []).length && <div className="side-note">No saved recipes yet — Save writes one into exports/ability/mixer.</div>}
-          {(recipes ?? []).map((r) => (
-            <RecipeRow key={r.name} r={r} current={r.name === recipe.name} onStage={r.name === stageName}
-              onOpen={onOpen} onRename={onRename} onDuplicate={onDuplicate} onDelete={onDelete} />
-          ))}
-        </div>
-      </div>
-
-      </Floating>
       <Floating id="mixer-parts" open={!!panels.parts} width={460} defaultPos={{ right: 400, top: 430 }}>
       <div className="panel mixer-parts-panel">
         <div className="details-header">

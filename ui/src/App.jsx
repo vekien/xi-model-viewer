@@ -164,7 +164,6 @@ const MIXER_RAIL = [
   { id: 'timeline', icon: 'timeline', label: 'Timeline' },
   { id: 'preview', icon: 'animation', label: 'Animation Preview' },
   { id: 'actors', icon: 'groups', label: 'Actors' },
-  { id: 'mixer', icon: 'tune', label: 'Recipes' },
   { id: 'parts', icon: 'segment', label: 'Parts' },
 ];
 const ORBIT_VIEWS = new Set(['files', 'npc', 'pc', 'creation']);
@@ -6554,7 +6553,7 @@ export default function App({ launch = null }) {
   // The mixer view's right rail: one glyph per panel, the Animation panel first.
   // Which are open is remembered; a panel's own close glyph reports back here.
   const [mixerPanels, setMixerPanels] = useState(() => {
-    const d = { actors: false, mixer: true, parts: false, timeline: true, preview: false };
+    const d = { actors: false, parts: false, timeline: true, preview: false };
     try { return { ...d, ...JSON.parse(localStorage.getItem('mixerPanels') || '{}') }; } catch { return d; }
   });
   const setMixerPanel = useCallback((id, v) => setMixerPanels((m) => {
@@ -10988,7 +10987,7 @@ export default function App({ launch = null }) {
       {!dataStructOpen && leftView === 'mixer' && (
         <>
           <div id="menubar-right" className="panel" role="toolbar" aria-label="Recipe">
-            <Tooltip content="Save the recipe (asks for a name)" placement="bottom">
+            <Tooltip content="Save the mix under its name (the Timeline's name field)" placement="bottom">
               <button type="button" className="view-tool" aria-label="Save" onClick={() => setMixerSaveTick((n) => n + 1)}><span className="icon">save</span></button>
             </Tooltip>
             <Tooltip content="Start over: clear every track and put the character back to idle" placement="bottom">

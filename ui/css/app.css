@@ -6805,3 +6805,9 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mseq-loopend.grab { cursor: ew-resize; pointer-events: auto; width: 8px; margin-left: -3px; border-left-width: 2px; }
 .mseq-loopend.grab i { cursor: ew-resize; }
 .mseq-loopend.set i { color: #ffd078; }
+
+/* Timeline toolbar: the saved-mix row shares the line with Add track and zoom. */
+.mseq-toolbar .mseq-mix-name { flex: 1 1 120px; min-width: 90px; }
+.mseq-toolbar .cseq-load:not(.mseq-add-track) { width: 150px; }
+.mseq-publish { margin-bottom: 8px; }
+.mseq-shuffle { margin-right: 6px; }
