@@ -336,6 +336,16 @@ export function mixerDir(xiPath) {
   return `${String(xiPath).replace(/[\\/]+$/, '')}\\exports\\ability\\mixer`;
 }
 
+/**
+ * Where compose and publish read the mix from: a scratch copy under `_work`,
+ * not the mixer folder itself. The saved list is that folder's `*.recipe.json`
+ * files, so writing the working copy beside them made every preview — a
+ * Randomise, a pick — look saved. Save is the only thing that writes there.
+ */
+function workRecipePath(xiPath, name) {
+  return `${mixerDir(xiPath)}\\_work\\${name}.recipe.json`;
+}
+
 export function composedDatName(recipe, xiRace) {
   const raceBound = Object.values(recipe.sources).some((s) => /^ws:\d+$/i.test(s.spec));
   return raceBound ? `${recipe.name}.${xiRace}.DAT` : `${recipe.name}.DAT`;
@@ -344,7 +354,7 @@ export function composedDatName(recipe, xiRace) {
 /** Write the recipe, compose it for one race, return the absolute DAT path to preview. */
 export async function composeForPreview(recipe, xiRace, xiPath, env, onLine) {
   const dir = mixerDir(xiPath);
-  const recipePath = `${dir}\\${recipe.name}.recipe.json`;
+  const recipePath = workRecipePath(xiPath, recipe.name);
   await backend.writeTextFile(recipePath, serializeRecipe(recipe));
   const outDir = `${dir}\\${recipe.name}`;
   const args = ['ability', 'compose', recipePath, '--out', outDir, '--json'];
@@ -363,8 +373,7 @@ export async function composeForPreview(recipe, xiRace, xiPath, env, onLine) {
  * the rest of the project.
  */
 export async function publishRecipe(recipe, { dryRun, animation = null, kind = null }, xiPath, env, onLine) {
-  const dir = mixerDir(xiPath);
-  const recipePath = `${dir}\\${recipe.name}.recipe.json`;
+  const recipePath = workRecipePath(xiPath, recipe.name);
   await backend.writeTextFile(recipePath, serializeRecipe(recipe));
   const lines = [];
   const run = async (args) => {

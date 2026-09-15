@@ -516,7 +516,7 @@ export function TimelineWindow({
             spellCheck={false}
             onChange={(e) => onName?.(e.target.value.replace(/[^A-Za-z0-9_-]/g, '_'))}
           />
-          <Tooltip content={saved.some((r) => r.name === name.trim()) ? 'Save over the mix with this name' : 'Save under this name'} placement="top">
+          <Tooltip content={saved.some((r) => r.name === name.trim()) ? 'Save over the mix with this name (Ctrl+S)' : 'Save under this name (Ctrl+S)'} placement="top">
             <button type="button" className="cseq-btn" disabled={!name.trim() || busy} onClick={onSave}>Save</button>
           </Tooltip>
           <Tooltip content={saved.length ? 'Load a saved mix' : 'Nothing saved yet — Save writes one into exports/ability/mixer'} placement="top">

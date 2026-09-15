@@ -204,6 +204,13 @@ export function MixerPanel({
   useEffect(() => {
     const typing = (t) => /^(input|select|textarea)$/i.test(t?.tagName) || t?.isContentEditable;
     const onKey = (e) => {
+      // Ctrl+S / Alt+S: the Timeline row's Save, from anywhere in the view —
+      // the name field included, so typing a name and pressing Ctrl+S works.
+      if ((e.ctrlKey || e.metaKey || e.altKey) && e.key.toLowerCase() === 's' && !e.shiftKey) {
+        e.preventDefault();
+        if (recipe.name.trim()) onSaveAs?.(recipe.name.trim());
+        return;
+      }
       if (typing(e.target) || !selectedIds.size) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
         e.preventDefault();
