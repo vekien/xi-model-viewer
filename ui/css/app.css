@@ -6742,7 +6742,21 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mseq-speed { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; width: 150px; }
 .mseq-speed .pc-frame-slider { flex: 1 1 auto; min-width: 0; }
 .mseq-help { display: flex; flex-direction: column; gap: 3px; text-align: left; }
-.mseq-resize-v { position: absolute; left: 0; right: 0; bottom: 0; height: 7px; cursor: ns-resize; z-index: 2; }
+.mseq-resize-v { position: absolute; left: 0; right: 0; bottom: 0; height: 8px; cursor: ns-resize; z-index: 2; }
+/* The same pill as the width handle, lying flat on the bottom edge. */
+.mseq-resize-v::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  width: 28px;
+  height: 3px;
+  margin-left: -14px;
+  border-radius: 2px;
+  background: var(--gray-500);
+  opacity: 0.45;
+}
+.mseq-resize-v:hover::after { background: var(--accent); opacity: 0.9; }
 #mixer-seq .mixer-editor { flex: 0 0 auto; border-top: 1px solid var(--ring); padding-top: 8px; }
 
 /* ── Right rail: one round glyph per panel; the panels are floating hosts dragged by their header ── */
