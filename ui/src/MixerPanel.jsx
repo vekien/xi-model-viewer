@@ -261,7 +261,8 @@ export function MixerPanel({
       tracks={tracks} activeTrack={lane} sources={recipe.sources} onActivateTrack={onActivateTrack} onAddTrack={onAddTrack} onRemoveTrack={onRemoveTrack}
       onPreview={(ev) => onPlaySound?.({ id: ev.sound, ref: ev.ref })}
       strike={strike} playhead={mixLoaded ? head : null} mixLoaded={mixLoaded}
-      minLen={getPlayhead ? getPlayhead().length : 0} loopEnd={mixLoaded && getPlayhead ? getPlayhead().length : 0}
+      minLen={getPlayhead ? getPlayhead().length : 0}
+      loopEnd={Number.isFinite(recipe.total) && recipe.total > 0 ? recipe.total : (getPlayhead ? getPlayhead().length : 0)}
       loopSet={Number.isFinite(recipe.total) && recipe.total > 0}
       onLoopEnd={(f) => { const { total, ...rest } = recipe; onRecipe?.(f ? { ...recipe, total: f } : rest); }}
       getSoundPeaks={getSoundPeaks} ghosts={ghosts}
