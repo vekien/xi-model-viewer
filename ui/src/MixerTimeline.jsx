@@ -386,7 +386,7 @@ export function TimelineWindow({
     return (
       <Tooltip key={ev._id} content={`${opName(ev.op)} ${ev.ref ?? ''} @${ev.start}${ev.dur ? ` for ${ev.dur}` : ''}`}>
         <span className={`mseq-pill${state}`} style={{ left: x(ev.start), width: `${Math.max(1.2, ((ev.dur || 0) / len) * 100)}%`, background: color, top }}
-          onPointerDown={(e) => startDragBlock(e, ev)}>{ev.ref ?? opName(ev.op)}</span>
+          onPointerDown={(e) => startDragBlock(e, ev)}>{ev.ref ? ev.ref.replace(/\?$/, '') : opName(ev.op)}</span>
       </Tooltip>
     );
   };
