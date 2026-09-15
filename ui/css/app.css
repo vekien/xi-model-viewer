@@ -6833,7 +6833,9 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 
 /* Mixer list rows: click previews, + adds to the active track, drag onto a lane. */
 .mixer-row[draggable] { cursor: grab; }
-.mixer-row .mixer-add { flex: 0 0 auto; width: 20px; height: 20px; margin-left: 4px; opacity: 0; }
-.mixer-row .mixer-add .icon { font-size: 16px; }
-.mixer-row:hover .mixer-add, .mixer-row .mixer-add:focus-visible { opacity: 1; }
+/* The + is the minimal glyph button (pc-tbtn), shown on hover only. */
+.mixer-row button.mixer-add { width: 20px; height: 20px; margin-left: 4px; opacity: 0; color: var(--muted); }
+.mixer-row button.mixer-add .icon { font-size: 15px; }
+.mixer-row:hover button.mixer-add, .mixer-row button.mixer-add:focus-visible { opacity: 1; }
+.mixer-row button.mixer-add:hover { color: var(--accent); }
 .mseq-lane.drop-ok { background: rgba(63, 189, 187, 0.12); box-shadow: inset 0 0 0 1px var(--accent); }

@@ -19,7 +19,8 @@
         "title": "XI Model Viewer",
         "width": 1500,
         "height": 900,
-        "resizable": true
+        "resizable": true,
+        "dragDropEnabled": false
       }
     ],
     "security": {

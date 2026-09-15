@@ -110,7 +110,7 @@ function packContents(buffer) {
 function AddButton({ tip, onAdd }) {
   return (
     <Tooltip content={tip} placement="right">
-      <button type="button" className="icon-btn mixer-add" aria-label={tip}
+      <button type="button" className="pc-tbtn mixer-add" aria-label={tip}
         onClick={(e) => { e.stopPropagation(); onAdd(); }} onPointerDown={(e) => e.stopPropagation()}>
         <span className="icon">add</span>
       </button>
