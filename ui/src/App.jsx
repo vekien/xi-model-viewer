@@ -5410,10 +5410,12 @@ export default function App({ launch = null }) {
   const [dataDoc, setDataDoc] = useState(null);         // inspectDat result + path
   // Status-bar overlay: peek structure without leaving the live zone/model/etc.
   const [dataStructOpen, setDataStructOpenState] = useState(false);
-  // The image viewer is a 2D overlay (ImageViewer.jsx), so while it is up the
-  // renderer parks its floor, grid and axes rather than drawing a horizon
-  // behind a texture. Same condition as the ImageViewer mount below.
-  const imageStage = !dataStructOpen && !!imageDoc
+  // The image viewer is a 2D overlay (ImageViewer.jsx), so while the view is
+  // an image one the renderer parks its floor, grid and axes rather than
+  // drawing a horizon behind a texture. Keyed on the view, not on a loaded
+  // image: a pick drops the old image before the next decodes, and keying on
+  // the image flashed the stage in that gap.
+  const imageStage = !dataStructOpen
     && (leftView === 'images' || (leftView === 'files' && browserKind === 'image'));
   useEffect(() => {
     if (rendererRef.current) rendererRef.current.stageHidden = imageStage;
