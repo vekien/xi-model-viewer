@@ -117,7 +117,10 @@ view adds panels the way the Animation, Actors, Details and Skeleton panels are 
 - **Placement.** A view's right-hand panels hang off the right rail (`RightRail.jsx`,
   `#right-rail`): one round glyph per panel, the view's main panel first, hover names
   it, a click opens or closes it, open glyphs are lit, and which are open is remembered
-  per view (the mixer view is the pattern: `MIXER_RAIL` in App.jsx). Each open panel
+  per view (`viewRail` in App.jsx lists every view's; the mixer's is `MIXER_RAIL`). A
+  view's own actions that are not panels (the mixer's Save / Reset / Shuffle / Publish)
+  go in `#menubar-right`, the icon-only twin of the menubar at the top-right, and the
+  rail then starts under it (`top={60}`). Each open panel
   sits in a `Floating` host (`Floating.jsx`, `.float-host`): 320px wide unless told
   otherwise, placed by a `defaultPos` next to the rail (right 68px, top 60px under the
   menubar's row) until dragged by its own header, after which the spot is remembered.

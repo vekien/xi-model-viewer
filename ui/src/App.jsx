@@ -1167,6 +1167,12 @@ export default function App({ launch = null }) {
   const [modelInfo, setModelInfo] = useState(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [skeletonOpen, setSkeletonOpen] = useState(false);
+  // Rail flags for the panels that were always on: the Animation panel of the
+  // model views and the Weather panel of a zone. Remembered.
+  const [animOpen, setAnimOpenState] = useState(() => { try { return localStorage.getItem('railAnimOpen') !== '0'; } catch { return true; } });
+  const setAnimOpen = useCallback((v) => { setAnimOpenState(v); try { localStorage.setItem('railAnimOpen', v ? '1' : '0'); } catch { /* quota */ } }, []);
+  const [weatherOpen, setWeatherOpenState] = useState(() => { try { return localStorage.getItem('railWeatherOpen') !== '0'; } catch { return true; } });
+  const setWeatherOpen = useCallback((v) => { setWeatherOpenState(v); try { localStorage.setItem('railWeatherOpen', v ? '1' : '0'); } catch { /* quota */ } }, []);
   const [selectedJoint, setSelectedJoint] = useState(-1);
   const [texWindows, setTexWindows] = useState([]); // [{ id, tex }] open texture viewers
   const texIdRef = useRef(0);
@@ -6293,6 +6299,33 @@ export default function App({ launch = null }) {
   const mixerTracks = useMemo(() => recipeTracks(mixerRecipe, mixerExtraTracks), [mixerRecipe, mixerExtraTracks]);
   const [mixerBusy, setMixerBusy] = useState(false);
   const [mixerNote, setMixerNote] = useState('');
+  const [mixerShuffleKind, setMixerShuffleKind] = useState('ws');   // the Shuffle-as choice; the top-right bar's Shuffle uses it
+  const [mixerSaveTick, setMixerSaveTick] = useState(0);            // bumped by the top-right bar's Save
+  // The other views' rail: one glyph per panel the view shows, toggling the flag
+  // that already gates that panel. Objects and Scenes stay exclusive, as the
+  // status bar's links keep them.
+  const viewRail = useMemo(() => {
+    const isZone = leftView === 'zones' || browserKind === 'zone';
+    const isEffect = leftView === 'effects' || (leftView === 'files' && browserKind === 'effect');
+    const isEntity = leftView === 'pc' || leftView === 'npc' || leftView === 'creation'
+      || (ORBIT_VIEWS.has(leftView) && browserKind === 'entity');
+    const skeletonOk = ORBIT_VIEWS.has(leftView) && !(leftView === 'files' && browserKind && browserKind !== 'entity');
+    const detailsOk = (DETAIL_VIEWS.has(leftView) || (leftView === 'files' && (browserKind === 'zone' || browserKind === 'effect')))
+      && !(leftView === 'files' && browserKind && !['entity', 'zone', 'effect'].includes(browserKind));
+    const items = [];
+    if (!player.current && (isEntity || (isEffect && effectEntry))) items.push({ id: 'anim', icon: 'animation', label: 'Animation', open: animOpen, set: setAnimOpen });
+    if (isEffect && effectEntry) items.push({ id: 'actors', icon: 'groups', label: 'Actors', open: actorsOpen, set: setActorsOpenPersist });
+    if (isZone) {
+      items.push({ id: 'weather', icon: 'partly_cloudy_day', label: 'Weather', open: weatherOpen, set: setWeatherOpen });
+      if (objectGroups) items.push({ id: 'objects', icon: 'view_in_ar', label: 'Objects', open: plcOpen, set: (v) => { if (v) setScenesPanelOpen(false); setPlcOpen(v); rememberRightPanel(v ? 'objects' : 'none'); } });
+      if (modelInfo?.zone) items.push({ id: 'scenes', icon: 'movie', label: 'Scenes', open: scenesPanelOpen, set: (v) => { if (v) setPlcOpen(false); else setActorPlacing(null); setScenesPanelOpen(v); rememberRightPanel(v ? 'scenes' : 'none'); } });
+    }
+    if (skeletonOk && !player.current) items.push({ id: 'skeleton', icon: 'accessibility_new', label: 'Skeleton', open: skeletonOpen, set: setSkeletonOpen });
+    if (detailsOk && modelInfo && !player.current) items.push({ id: 'details', icon: 'info', label: 'Details', open: detailsOpen, set: setDetailsOpen });
+    return items;
+  }, [leftView, browserKind, player.current, effectEntry, animOpen, setAnimOpen, actorsOpen, setActorsOpenPersist,
+    weatherOpen, setWeatherOpen, objectGroups, plcOpen, modelInfo, scenesPanelOpen, skeletonOpen, detailsOpen]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   // The mixer view's right rail: one glyph per panel, the Animation panel first.
   // Which are open is remembered; a panel's own close glyph reports back here.
   const [mixerPanels, setMixerPanels] = useState(() => {
@@ -10535,40 +10568,44 @@ export default function App({ launch = null }) {
 
       {/* Stays visible while zone music plays — the play button lives in here,
           so taking the panel over would pull the controls out from under it. */}
-      {!dataStructOpen && (leftView === 'zones' || browserKind === 'zone') && zonePanel}
+      {!dataStructOpen && weatherOpen && (leftView === 'zones' || browserKind === 'zone') && (
+        <Floating id="zone-weather" defaultPos={{ right: 68, top: 12 }}>{zonePanel}</Floating>
+      )}
 
       {!dataStructOpen && scenesPanelOpen && modelInfo?.zone && (
-        <ScenesPanel
-          scenes={zoneScenes}
-          current={currentScene}
-          view={sceneView}
-          dirty={sceneDirty}
-          zoneName={modelInfo.zone.name || modelInfo.name || ''}
-          onNewScene={newScene}
-          onOpenScene={openScene}
-          onCloseScene={closeScene}
-          onDeleteScene={removeScene}
-          onBack={() => { setSceneView('list'); setActorPlacing(null); }}
-          onSave={() => { if (currentScene) saveCurrentScene(currentScene.name, currentScene.id); }}
-          onRename={renameCurrentScene}
-          actors={zoneActors}
-          placing={actorPlacing}
-          editingId={actorEditId}
-          selectedId={actorSelectedId}
-          liveSelection={actorPick}
-          onToggleLiveSelection={toggleActorPick}
-          onAddActor={() => { setActorEditId(null); setActorPlacing({ forId: null }); }}
-          onCancelPlace={() => setActorPlacing(null)}
-          onEdit={(id) => { selectActor(id); setActorEditId(id); }}
-          onRemove={removeActor}
-          onToggleVisible={(id) => {
-            const a = zoneActorsRef.current.find((x) => x.id === id);
-            if (!a) return;
-            rendererRef.current?.setActorVisible(id, !a.visible);
-            updateActor(id, { visible: !a.visible });
-          }}
-          onClose={() => { setScenesPanelOpen(false); setActorPlacing(null); rememberRightPanel('none'); }}
-        />
+        <Floating id="zone-scenes" defaultPos={{ right: 400, top: 12 }}>
+          <ScenesPanel
+            scenes={zoneScenes}
+            current={currentScene}
+            view={sceneView}
+            dirty={sceneDirty}
+            zoneName={modelInfo.zone.name || modelInfo.name || ''}
+            onNewScene={newScene}
+            onOpenScene={openScene}
+            onCloseScene={closeScene}
+            onDeleteScene={removeScene}
+            onBack={() => { setSceneView('list'); setActorPlacing(null); }}
+            onSave={() => { if (currentScene) saveCurrentScene(currentScene.name, currentScene.id); }}
+            onRename={renameCurrentScene}
+            actors={zoneActors}
+            placing={actorPlacing}
+            editingId={actorEditId}
+            selectedId={actorSelectedId}
+            liveSelection={actorPick}
+            onToggleLiveSelection={toggleActorPick}
+            onAddActor={() => { setActorEditId(null); setActorPlacing({ forId: null }); }}
+            onCancelPlace={() => setActorPlacing(null)}
+            onEdit={(id) => { selectActor(id); setActorEditId(id); }}
+            onRemove={removeActor}
+            onToggleVisible={(id) => {
+              const a = zoneActorsRef.current.find((x) => x.id === id);
+              if (!a) return;
+              rendererRef.current?.setActorVisible(id, !a.visible);
+              updateActor(id, { visible: !a.visible });
+            }}
+            onClose={() => { setScenesPanelOpen(false); setActorPlacing(null); rememberRightPanel('none'); }}
+          />
+        </Floating>
       )}
       {editingActor && modelInfo?.zone && (
         <ActorEditorModal
@@ -10617,38 +10654,40 @@ export default function App({ launch = null }) {
       )}
       {!dataStructOpen && objectGroups && plcOpen
         && (leftView === 'zones' || browserKind === 'zone') && (
-        <PlacementPanel
-          groups={objectGroups}
-          selectedKey={plcSelected}
-          onSelectGroup={focusPlacementGroup}
-          onSelectInstance={focusPlacementInstance}
-          onClose={() => { setPlcOpen(false); rememberRightPanel('none'); }}
-          showEnv={showSkybox}
-          liveSelection={liveSelection}
-          onToggleLiveSelection={toggleLiveSelection}
-          isPlacementMoved={isPlacementMoved}
-          isPlacementHidden={(p) => !!p?.userHidden}
-          hiddenTick={plcHiddenTick}
-          onTogglePlacementVisible={togglePlacementVisible}
-          onToggleGroupVisible={togglePlacementGroupVisible}
-          effectGroups={effectGroups}
-          vfxHiddenTick={vfxHiddenTick}
-          onToggleEffectVisible={toggleEffectVisible}
-          onToggleEffectGroupVisible={toggleEffectGroupVisible}
-          onSelectEffect={focusEffectInstance}
-          onSelectEffectGroup={focusEffectGroup}
-          soundGroups={soundGroups}
-          sfxListTick={sfxListTick}
-          onRefreshSoundGroups={refreshSoundGroups}
-          onSelectSound={focusSoundInstance}
-          onSelectSoundGroup={focusSoundGroup}
-          onPlaySound={playZoneSfx}
-          playingSoundKey={playingSoundKey}
-          onResetPlacement={(p) => {
-            rememberOriginalPose(p);
-            resetPlacementPose(p);
-          }}
-        />
+        <Floating id="zone-objects" defaultPos={{ right: 400, top: 12 }}>
+          <PlacementPanel
+            groups={objectGroups}
+            selectedKey={plcSelected}
+            onSelectGroup={focusPlacementGroup}
+            onSelectInstance={focusPlacementInstance}
+            onClose={() => { setPlcOpen(false); rememberRightPanel('none'); }}
+            showEnv={showSkybox}
+            liveSelection={liveSelection}
+            onToggleLiveSelection={toggleLiveSelection}
+            isPlacementMoved={isPlacementMoved}
+            isPlacementHidden={(p) => !!p?.userHidden}
+            hiddenTick={plcHiddenTick}
+            onTogglePlacementVisible={togglePlacementVisible}
+            onToggleGroupVisible={togglePlacementGroupVisible}
+            effectGroups={effectGroups}
+            vfxHiddenTick={vfxHiddenTick}
+            onToggleEffectVisible={toggleEffectVisible}
+            onToggleEffectGroupVisible={toggleEffectGroupVisible}
+            onSelectEffect={focusEffectInstance}
+            onSelectEffectGroup={focusEffectGroup}
+            soundGroups={soundGroups}
+            sfxListTick={sfxListTick}
+            onRefreshSoundGroups={refreshSoundGroups}
+            onSelectSound={focusSoundInstance}
+            onSelectSoundGroup={focusSoundGroup}
+            onPlaySound={playZoneSfx}
+            playingSoundKey={playingSoundKey}
+            onResetPlacement={(p) => {
+              rememberOriginalPose(p);
+              resetPlacementPose(p);
+            }}
+          />
+        </Floating>
       )}
 
       {!dataStructOpen && player.current && leftView !== 'zones' && browserKind !== 'zone' && (
@@ -10660,38 +10699,65 @@ export default function App({ launch = null }) {
           Creation is ORBIT but not browserKind==='entity', so list it explicitly. */}
       {/* PC/NPC/Creation own the viewport directly (browserKind is cleared on
           view switch). DAT Browser needs browserKind==='entity'. */}
-      {!dataStructOpen && !player.current
+      {!dataStructOpen && !player.current && animOpen
         && (leftView === 'pc' || leftView === 'npc' || leftView === 'creation'
           || (ORBIT_VIEWS.has(leftView) && browserKind === 'entity'))
         && (
-        <AnimationPanel
-          pc={leftView === 'pc' ? pc : null}
-          anim={leftView === 'creation' ? creationAnim : animControls}
-        />
+        <Floating id="view-anim" defaultPos={{ right: 68, top: 12 }}>
+          <AnimationPanel
+            pc={leftView === 'pc' ? pc : null}
+            anim={leftView === 'creation' ? creationAnim : animControls}
+          />
+        </Floating>
       )}
 
-      {/* Effects: Options transport + Actors (PC/NPC) stacked on the right. */}
+      {/* Effects: the transport and the Actors panel, each a window off the rail. */}
       {!dataStructOpen
         && ((leftView === 'effects') || (leftView === 'files' && browserKind === 'effect'))
         && effectEntry && (
-        <div id="effect-stack">
-          <AnimationPanel anim={effectAnim} />
-          {actorsOpen && (
-            <EffectActorsPanel
-              tab={effectActorTab}
-              onTab={pickEffectActorTab}
-              pc={pc}
-              selectedPath={selectedDat}
-              onSelectNpc={loadEffectNpc}
-              onClose={() => setActorsOpenPersist(false)}
-            />
+        <>
+          {animOpen && (
+            <Floating id="effect-anim" defaultPos={{ right: 68, top: 12 }}>
+              <AnimationPanel anim={effectAnim} />
+            </Floating>
           )}
-        </div>
+          {actorsOpen && (
+            <Floating id="effect-actors" defaultPos={{ right: 68, top: 300 }}>
+              <EffectActorsPanel
+                tab={effectActorTab}
+                onTab={pickEffectActorTab}
+                pc={pc}
+                selectedPath={selectedDat}
+                onSelectNpc={loadEffectNpc}
+                onClose={() => setActorsOpenPersist(false)}
+              />
+            </Floating>
+          )}
+        </>
+      )}
+
+      {!dataStructOpen && leftView !== 'mixer' && viewRail.length > 0 && (
+        <RightRail items={viewRail} open={Object.fromEntries(viewRail.map((i) => [i.id, i.open]))}
+          onToggle={(id) => { const it = viewRail.find((i) => i.id === id); it?.set(!it.open); }} />
       )}
 
       {!dataStructOpen && leftView === 'mixer' && (
         <>
-          <RightRail items={MIXER_RAIL} open={mixerPanels} onToggle={setMixerPanel} />
+          <div id="menubar-right" className="panel" role="toolbar" aria-label="Recipe">
+            <Tooltip content="Save the recipe (asks for a name)" placement="bottom">
+              <button type="button" className="view-tool" aria-label="Save" onClick={() => setMixerSaveTick((n) => n + 1)}><span className="icon">save</span></button>
+            </Tooltip>
+            <Tooltip content="Start over: clear every track and put the character back to idle" placement="bottom">
+              <button type="button" className="view-tool" aria-label="Reset" onClick={mixerReset}><span className="icon">restart_alt</span></button>
+            </Tooltip>
+            <Tooltip content={`Shuffle: a random ${mixerShuffleKind === 'ws' ? 'weapon skill' : mixerShuffleKind === 'ja' ? 'ability' : 'spell'} motion + random effects + a random sound, then play`} placement="bottom">
+              <button type="button" className="view-tool" aria-label="Shuffle" disabled={mixerBusy} onClick={() => mixerShuffle(mixerShuffleKind)}><span className="icon">casino</span></button>
+            </Tooltip>
+            <Tooltip content="Publish: prepare the xi dats action for this recipe and show the build plan" placement="bottom">
+              <button type="button" className="view-tool" aria-label="Publish" disabled={mixerBusy || !mixerRecipe.events.length || !!mixerPlan} onClick={() => mixerPublish('plan')}><span className="icon">publish</span></button>
+            </Tooltip>
+          </div>
+          <RightRail items={MIXER_RAIL} open={mixerPanels} onToggle={setMixerPanel} top={60} />
           <MixerPanel
             recipe={mixerRecipe}
             onRecipe={mixerEdit}
@@ -10736,6 +10802,9 @@ export default function App({ launch = null }) {
             onLoop={setEffectLoop}
             onTake={mixerTake}
             playingSoundKey={playingSoundKey}
+            shuffleKind={mixerShuffleKind}
+            onShuffleKind={setMixerShuffleKind}
+            saveTick={mixerSaveTick}
             viewerRace={RACE_TO_XI[pc.race] ?? 'HumeMale'}
             panels={mixerPanels}
             onPanel={setMixerPanel}

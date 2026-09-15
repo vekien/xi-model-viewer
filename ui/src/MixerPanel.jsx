@@ -183,6 +183,7 @@ export function MixerPanel({
   panels = { mixer: true, parts: true, timeline: true }, onPanel,
   tracks = [], onActivateTrack, onAddTrack, onRemoveTrack,
   playingSoundKey = null,
+  shuffleKind = 'ws', onShuffleKind, saveTick = 0,
 }) {
   // Selection is a set: a marquee or ctrl-click builds a group that drags,
   // duplicates and deletes as one. The editor below shows a lone selection.
@@ -277,11 +278,12 @@ export function MixerPanel({
   // asks before overwriting; a new name writes a copy and leaves the old file.
   const [saving, setSaving] = useState(false);
   const [saveName, setSaveName] = useState('');
-  const [shuffleKind, setShuffleKind] = useState('ws');
   const [overwrite, setOverwrite] = useState(null);
   const saveRef = useRef(null);
   useEffect(() => { if (saving) { saveRef.current?.focus(); saveRef.current?.select?.(); } }, [saving]);
   const beginSave = () => { setSaveName(recipe.name); setOverwrite(null); setSaving(true); };
+  // The top-right bar's Save glyph asks for the name here, where the form lives.
+  useEffect(() => { if (saveTick) beginSave(); }, [saveTick]);   // eslint-disable-line react-hooks/exhaustive-deps
   const commitSave = () => {
     const name = saveName.trim();
     if (!name) { setSaving(false); return; }
@@ -328,18 +330,6 @@ export function MixerPanel({
           <span className="icon">tune</span>
           <span className="details-title">Ability Mixer</span>
           <span className="sp" />
-          <div className="pc-tgroup">
-            <Tooltip content="Save the recipe (asks for a name)"><button type="button" className="pc-tbtn" aria-label="Save" onClick={beginSave}><span className="icon">save</span></button></Tooltip>
-            <Tooltip content="Start over: clear every lane and put the character back to idle"><button type="button" className="pc-tbtn" aria-label="Reset" onClick={onReset}><span className="icon">restart_alt</span></button></Tooltip>
-            {onShuffle && (
-              <Tooltip content={`Shuffle: a random ${SHUFFLE_KINDS.find((k) => k.id === shuffleKind)?.label ?? ''} motion + random effects + a random sound, then play`}>
-                <button type="button" className="pc-tbtn" aria-label="Shuffle" disabled={busy} onClick={() => onShuffle(shuffleKind)}><span className="icon">casino</span></button>
-              </Tooltip>
-            )}
-            <Tooltip content="Publish: prepare the xi dats action for this recipe and show the build plan">
-              <button type="button" className="pc-tbtn" aria-label="Publish" disabled={busy || !events.length || !!publishPlan} onClick={() => onPublish?.('plan')}><span className="icon">publish</span></button>
-            </Tooltip>
-          </div>
           <button type="button" className="pc-tbtn details-close" aria-label="Close" onClick={() => onPanel?.('mixer', false)}><span className="icon">close</span></button>
         </div>
 
@@ -354,7 +344,7 @@ export function MixerPanel({
             <div className="seg-tabs" role="tablist" aria-label="Shuffle kind">
               {SHUFFLE_KINDS.map((k) => (
                 <button key={k.id} type="button" role="tab" aria-selected={shuffleKind === k.id}
-                  className={`seg-tab${shuffleKind === k.id ? ' on' : ''}`} onClick={() => setShuffleKind(k.id)}>{k.label}</button>
+                  className={`seg-tab${shuffleKind === k.id ? ' on' : ''}`} onClick={() => onShuffleKind?.(k.id)}>{k.label}</button>
               ))}
             </div>
           </div>

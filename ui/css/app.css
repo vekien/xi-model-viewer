@@ -73,6 +73,13 @@
 
 /* --- Menu bar ------------------------------------------------------------- */
 
+/* The right-hand twin of the menubar: icon-only actions for the view (the mixer's recipe). */
+#menubar-right {
+  position: fixed; top: 12px; right: 12px;
+  display: flex; align-items: center; gap: 2px;
+  padding: 5px 6px;
+  z-index: 30;
+}
 #menubar {
   top: 12px; left: 12px;
   display: flex; align-items: center; gap: 2px;
@@ -1239,30 +1246,7 @@ button.seg-tab.active .icon { color: var(--accent); }
 }
 
 /* Effects: Options + Actors stacked top-right (both in-flow under the stack). */
-#effect-stack {
-  position: fixed;
-  top: 12px;
-  right: 12px;
-  width: 320px;
-  max-height: calc(100vh - 64px);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  z-index: 25;
-  pointer-events: none;
-}
-#effect-stack > .panel { pointer-events: auto; }
 /* Kill #animbar's usual fixed placement so it stacks above Actors. */
-#effect-stack #animbar {
-  position: relative !important;
-  top: auto !important;
-  right: auto !important;
-  left: auto !important;
-  bottom: auto !important;
-  width: 100% !important;
-  flex: 0 0 auto;
-  z-index: auto !important;
-}
 #effect-actors {
   position: relative;
   flex: 1 1 auto;
