@@ -3843,8 +3843,25 @@ export class Renderer {
    * cheaper than tracking dirtiness.
    */
   _drawActorHover(viewProj) {
-    if (this.actorHoverId == null) return;
-    const actor = this.getActor(this.actorHoverId);
+    // The selected actor (the gizmo's) wears a light orange box two pixels
+    // wide; a hovered actor that is not it wears the thin cyan one.
+    const selId = this.actorGizmo?.actorId ?? null;
+    if (selId != null) this._drawActorBox(selId, [1.0, 0.72, 0.38], 2, viewProj);
+    if (this.actorHoverId != null && this.actorHoverId !== selId) {
+      this._drawActorBox(this.actorHoverId, [0.35, 0.85, 1.0], 1, viewProj);
+    }
+  }
+
+  /**
+   * Wire box round an actor's live bounds, `px` pixels wide. WebGL ignores
+   * lineWidth, so a wider line is the same lines drawn again shifted by whole
+   * pixels — the shift goes into the clip-space matrix as k·w so it is a
+   * screen offset at any depth. Depth-tested but not depth-writing: the
+   * actor's body and the terrain occlude the box, so it reads as a frame in
+   * the scene rather than a decal on the glass.
+   */
+  _drawActorBox(actorId, rgb, px, viewProj) {
+    const actor = this.getActor(actorId);
     if (!actor || !actor.visible) return;
     const b = this.actorBoundsDisplay(actor);
     if (!b?.min || !b?.max) return;
@@ -3859,7 +3876,6 @@ export class Renderer {
       [4, 5], [5, 6], [6, 7], [7, 4],
       [0, 4], [1, 5], [2, 6], [3, 7],
     ];
-    const rgb = [0.35, 0.85, 1.0];   // same cyan as the zone live-selection hover
     const verts = [];
     for (const [a, bi] of edges) {
       verts.push(...c[a], ...rgb, ...c[bi], ...rgb);
@@ -3876,15 +3892,26 @@ export class Renderer {
     gl.enableVertexAttribArray(1);
     gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
     gl.useProgram(this.overlayProgram);
-    gl.uniformMatrix4fv(this.overlayUniforms.viewProj, false, viewProj);
     gl.uniform1f(this.overlayUniforms.opacity, 1);
     gl.disable(gl.BLEND);
-    // Depth-tested but not depth-writing: the actor's body and the terrain
-    // occlude the box, so it reads as a frame in the scene rather than a
-    // decal on the glass.
     gl.enable(gl.DEPTH_TEST);
     gl.depthMask(false);
-    gl.drawArrays(gl.LINES, 0, verts.length / 6);
+    const w = gl.drawingBufferWidth || 1;
+    const h = gl.drawingBufferHeight || 1;
+    const m = new Float32Array(16);
+    for (let dy = 0; dy < px; dy++) {
+      for (let dx = 0; dx < px; dx++) {
+        m.set(viewProj);
+        const kx = (2 * dx) / w;
+        const ky = (2 * dy) / h;
+        for (let col = 0; col < 16; col += 4) {
+          m[col] += kx * viewProj[col + 3];
+          m[col + 1] += ky * viewProj[col + 3];
+        }
+        gl.uniformMatrix4fv(this.overlayUniforms.viewProj, false, m);
+        gl.drawArrays(gl.LINES, 0, verts.length / 6);
+      }
+    }
     gl.bindVertexArray(null);
     gl.depthMask(true);
     gl.deleteVertexArray(vao);
