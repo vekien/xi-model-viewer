@@ -6868,4 +6868,5 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mseq-plan th { text-align: left; font: 500 10px/1.2 var(--font-ui); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 14px 2px 0; }
 .mseq-plan td { padding: 1px 14px 1px 0; white-space: nowrap; }
 .mseq-plan td.warn { color: #ffd078; }
-.mseq-plan-err { color: #f0a8a2; }
+.mseq-plan td.dim { color: var(--muted); }
+.mseq-plan-err { color: #f0a8a2; margin: 0; white-space: pre-wrap; }

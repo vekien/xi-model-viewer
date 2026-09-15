@@ -411,7 +411,9 @@ export function parsePublishPlan(text) {
     const line = raw.trim();
     let m = line.match(/\(ability\):\s+(ja|spell|ws) animation (\d+)/);
     if (m) { out.kind = m[1]; out.animation = Number(m[2]); continue; }
-    m = line.match(/file_id\s+(\d+)\s+(.+?)\s+->\s+(\S+)(?:\s+\(occupied by (\S+)\))?/);
+    // "(occupied by X)" is a real collision; "(retail placeholder X, free)" is
+    // the dummy DAT a free slot's id points at — what makes the slot free.
+    m = line.match(/file_id\s+(\d+)\s+(.+?)\s+->\s+(\S+)(?:\s+\((occupied by|retail placeholder)\s+(\S+?),?(?:\s+free)?\))?/);
     if (m) {
       const parts = m[2].trim().split(/\s+/);
       out.files.push({
@@ -419,7 +421,8 @@ export function parsePublishPlan(text) {
         race: parts.length > 1 ? parts[0] : null,
         role: parts.length > 1 ? parts[1] : parts[0],
         target: m[3],
-        occupiedBy: m[4] ?? null,
+        occupiedBy: m[4] === 'occupied by' ? m[5] : null,
+        placeholder: m[4] === 'retail placeholder' ? m[5] : null,
       });
       continue;
     }

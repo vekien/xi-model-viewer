@@ -573,8 +573,8 @@ export function TimelineWindow({
               <span className="mono">Publish · {recipeName}</span>
               <span className="mono-small">how xi dats places it</span>
               <span className="sp" />
-              <Tooltip content="Check: a dry run with these choices — the slot it takes and where every DAT lands, nothing written" placement="top">
-                <button type="button" className="cseq-btn" disabled={busy || !onCheckPublish} onClick={onCheckPublish}>Check</button>
+              <Tooltip content={canPublish ? 'Check: a dry run with these choices — the slot it takes and where every DAT lands, nothing written' : 'Pick a motion, effect or sound first'} placement="top">
+                <button type="button" className="cseq-btn" disabled={!canPublish || !onCheckPublish} onClick={onCheckPublish}>Check</button>
               </Tooltip>
             </div>
             <div className="mixer-fields">
@@ -614,16 +614,17 @@ export function TimelineWindow({
                 {publishPlan.animation != null && (
                   <div className="mono-small">{publishPlan.kind} animation <b>{publishPlan.animation}</b> · {publishPlan.files.length} DAT{publishPlan.files.length === 1 ? '' : 's'}{publishPlan.server ? ` · server: ${publishPlan.server}` : ''}</div>
                 )}
-                {publishPlan.errors.map((err) => <div key={err} className="mono-small mseq-plan-err">{err}</div>)}
-                {!publishPlan.ok && !publishPlan.errors.length && <div className="mono-small mseq-plan-err">The check failed — the console has the full output.</div>}
+                {!publishPlan.ok && (
+                  <pre className="mono-small mseq-plan-err">{(publishPlan.errors.length ? publishPlan.errors : String(publishPlan.text ?? '').trim().split(/\r?\n/).filter(Boolean).slice(-6)).join('\n')}</pre>
+                )}
                 {publishPlan.files.length > 0 && (
                   <table className="mseq-plan">
-                    <thead><tr><th>file id</th><th>race</th><th>role</th><th>lands in</th><th>points at today</th></tr></thead>
+                    <thead><tr><th>file id</th><th>race</th><th>role</th><th>lands in</th><th>slot today</th></tr></thead>
                     <tbody>
                       {publishPlan.files.map((f) => (
                         <tr key={`${f.fileId}:${f.role}`}>
                           <td>{f.fileId}</td><td>{f.race ?? '—'}</td><td>{f.role}</td><td>{f.target}</td>
-                          <td className={f.occupiedBy ? 'warn' : ''}>{f.occupiedBy ?? 'nothing (free)'}</td>
+                          <td className={f.occupiedBy ? 'warn' : 'dim'}>{f.occupiedBy ? `taken · ${f.occupiedBy}` : f.placeholder ? `free · placeholder ${f.placeholder}` : 'free'}</td>
                         </tr>
                       ))}
                     </tbody>
