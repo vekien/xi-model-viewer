@@ -13,9 +13,10 @@ function Num({ label, value, onChange, min = 0 }) {
   return (
     <label className="mixer-field">
       <span>{label}</span>
-      {/* Whole frames only: the recipe schema rejects a fractional or negative dur. */}
-      <input type="number" min={min} step={1} value={value ?? ''}
-        onChange={(e) => onChange(e.target.value === '' ? undefined : Math.max(min, Math.round(Number(e.target.value) || 0)))} />
+      {/* Whole frames only: the recipe schema rejects a fractional or negative dur.
+          A plain text field (numeric keypad on touch), not a number spinner. */}
+      <input type="text" inputMode="numeric" className="cseq-text mixer-num" value={value ?? ''} spellCheck={false}
+        onChange={(e) => { const digits = e.target.value.replace(/[^0-9]/g, ''); onChange(digits === '' ? undefined : Math.max(min, Number(digits))); }} />
     </label>
   );
 }

@@ -6654,9 +6654,10 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mixer-editor { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px 10px; border-radius: 8px; background: rgba(0, 0, 0, 0.28); box-shadow: inset 0 0 10px #00000070; }
 .mixer-editor.off .mixer-editor-title .mono { color: var(--muted); }
 .mixer-editor-title { display: flex; align-items: center; gap: 8px; }
-.mixer-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.mixer-field { display: flex; flex-direction: column; gap: 2px; font: 500 10px/1.2 var(--font-ui); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-.mixer-field input { font: 400 12px/1.3 var(--font-mono); color: var(--text); background: var(--gray-900); border: 1px solid var(--ring); border-radius: 5px; padding: 3px 6px; width: 100%; box-sizing: border-box; }
+/* Short fields in a row, the sequencer's input style; a frame count is never wide. */
+.mixer-fields { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.mixer-field { display: flex; flex-direction: column; gap: 3px; width: 96px; font: 500 10px/1.2 var(--font-ui); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+.mixer-field input.mixer-num { width: 96px; height: 26px; min-height: 26px; flex: 0 0 auto; font: 400 12px/1.3 var(--font-mono); }
 .mixer-editor-note { color: var(--muted); }
 
 .mixer-parts { display: flex; flex-direction: column; gap: 2px; }
