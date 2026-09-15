@@ -120,8 +120,8 @@ html, body {
     var(--panel);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
-  border: 1px solid var(--ring);
-  border-radius: 10px;
+  /* border: 1px solid var(--ring); */
+  border-radius: 8px;
   box-shadow:
     inset 0 1px 0 var(--highlight),
     0 6px 28px rgba(0, 0, 0, 0.42);
@@ -141,7 +141,7 @@ button {
   font: 500 13px/1.3 var(--font-ui);
   color: var(--gray-100);
   background: linear-gradient(180deg, var(--gray-700), var(--gray-800));
-  border: 1px solid var(--ring-strong);
+  border: 1px solid #000;
   border-radius: 7px;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.09),
@@ -151,7 +151,6 @@ button {
 }
 button:hover {
   background: linear-gradient(180deg, var(--gray-600), var(--gray-750));
-  border-color: rgba(255, 255, 255, 0.2);
 }
 button:active {
   background: var(--gray-800);
@@ -186,16 +185,16 @@ input[type='text'] {
   font: 400 12px/1.4 var(--font-mono);
   color: var(--text);
   background: linear-gradient(180deg, var(--gray-900), var(--gray-850));
-  border: 1px solid var(--ring);
+  border: 1px solid #000;
   border-radius: 7px;
   min-height: 30px;
   padding: 5px 9px;
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
   transition: border-color 0.12s ease;
+  outline: none;
 }
 input[type='text']:focus {
   outline: none;
-  border-color: var(--accent);
 }
 
 select {
