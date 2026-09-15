@@ -17,7 +17,7 @@ function fmtDate(iso) {
  * - the actor view: the open scene's actors (place NPCs / characters /
  *   lights, click a row to edit) with the scene's name and Save in the title.
  *
- * Mutually exclusive with the Objects panel — same slot on the right rail.
+ * A Floating host off the right rail; the Objects panel can be up beside it.
  */
 export function ScenesPanel({
   scenes, current, view, dirty, zoneName,
@@ -137,7 +137,7 @@ export function ScenesPanel({
     <div id="scenes" className="panel">
       <div className="plc-header">
         <Tooltip content="Back to the scene list" placement="bottom">
-          <button type="button" className="pc-tbtn scene-back" aria-label="Back to scenes" onClick={onBack}>
+          <button type="button" className="icon-btn plc-tool scene-back" aria-label="Back to scenes" onClick={onBack}>
             <span className="icon">arrow_back</span>
           </button>
         </Tooltip>
