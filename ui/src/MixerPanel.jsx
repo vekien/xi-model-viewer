@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Checkbox, Field, Label } from '@headlessui/react';
 import { Tooltip } from './Tooltip.jsx';
 import { TimelineWindow } from './MixerTimeline.jsx';
 import { Floating } from './Floating.jsx';
@@ -66,7 +67,7 @@ function EventEditor({ ev, onChange, onRemove }) {
 }
 
 /** The parts of the source shown for `lane`: generators (solo / take), sounds (play / take), clips. */
-function Parts({ lane, entry, info, events, onSolo, onPlaySound, onTake }) {
+function Parts({ lane, entry, info, events, onSolo, onPlaySound, onTake, playingSoundKey = null }) {
   if (!entry) return null;
   const kind = kindOf(lane);
   const taken = new Set(events.filter((e) => e.from === lane && e.enabled !== false).map((e) => e.ref));
@@ -104,22 +105,31 @@ function Parts({ lane, entry, info, events, onSolo, onPlaySound, onTake }) {
           </Tooltip>
           <span className="mono">{g.ref}</span>
           <span className="mono-small">{g.start != null ? `f${g.start}` : ''}{g.dur ? ` · ${g.dur}` : ''}{g.sound ? ` · ♪ ${g.sound}` : ''}</span>
-          <label className="mixer-take">
-            <input type="checkbox" checked={taken.has(g.ref)} onChange={(e) => onTake(lane, g.ref, e.target.checked)} />take
-          </label>
+          <Field className="mixer-take">
+            <Checkbox checked={taken.has(g.ref)} onChange={(v) => onTake(lane, g.ref, v)} className="checkbox">
+              <span className="icon check-icon">check</span>
+            </Checkbox>
+            <Label>take</Label>
+          </Field>
         </div>
       ))}
       {kind === 'sound' && (soundRows.length + audioRows.length) > 0 && <div className="side-separator">Sounds</div>}
       {kind === 'sound' && [...soundRows, ...audioRows].map((s) => (
         <div className="mixer-part" key={`s${s.ref}${s.start ?? ''}`}>
-          <Tooltip content="Play this sound">
-            <button type="button" className="pc-tbtn" onClick={() => onPlaySound(s)}><span className="icon">volume_up</span></button>
+          <Tooltip content={playingSoundKey === `${s.ref}:${s.id}` ? 'Stop' : 'Play this sound'}>
+            <button type="button" className={`pc-tbtn${playingSoundKey === `${s.ref}:${s.id}` ? ' on' : ''}`}
+              aria-pressed={playingSoundKey === `${s.ref}:${s.id}` ? 'true' : 'false'} onClick={() => onPlaySound(s)}>
+              <span className="icon">{playingSoundKey === `${s.ref}:${s.id}` ? 'stop' : 'volume_up'}</span>
+            </button>
           </Tooltip>
           <span className="mono">{s.ref}</span>
           <span className="mono-small">{s.sound ?? (s.id != null ? `se${String(s.id).padStart(6, '0')}` : '')}{s.title ? ` · ${s.title}` : ''}{s.start != null ? ` · f${s.start}` : ''}</span>
-          <label className="mixer-take">
-            <input type="checkbox" checked={taken.has(s.ref)} onChange={(e) => onTake(lane, s.ref, e.target.checked)} />take
-          </label>
+          <Field className="mixer-take">
+            <Checkbox checked={taken.has(s.ref)} onChange={(v) => onTake(lane, s.ref, v)} className="checkbox">
+              <span className="icon check-icon">check</span>
+            </Checkbox>
+            <Label>take</Label>
+          </Field>
         </div>
       ))}
     </div>
@@ -172,6 +182,7 @@ export function MixerPanel({
   onSolo, onPlaySound, onTake, viewerRace, onClose, getSoundPeaks, speed = 1, onSpeed, loop = true, onLoop, ghosts = null,
   panels = { mixer: true, parts: true, timeline: true }, onPanel,
   tracks = [], onActivateTrack, onAddTrack, onRemoveTrack,
+  playingSoundKey = null,
 }) {
   // Selection is a set: a marquee or ctrl-click builds a group that drags,
   // duplicates and deletes as one. The editor below shows a lone selection.
@@ -395,7 +406,7 @@ export function MixerPanel({
         <div className="mixer-parts-body">
           {!laneEntry && <div className="side-note">Pick a source for this lane to see what it is made of.</div>}
           <Parts lane={lane} entry={laneEntry} info={laneInfo} events={events}
-            onSolo={onSolo} onPlaySound={onPlaySound} onTake={onTake} />
+            onSolo={onSolo} onPlaySound={onPlaySound} onTake={onTake} playingSoundKey={playingSoundKey} />
         </div>
       </div>
       </Floating>

@@ -6617,7 +6617,10 @@ export default function App({ launch = null }) {
       const info = entry.clip
         ? { timeline: [{ op: 0x05, ref: entry.clip.ref, start: 0, dur: entry.clip.frames, name: 'PlayClip', summary: `${entry.clip.frames} f` }] }
         : await mixerInfoFor(entry);
-      const fresh = eventsFromInspect(info, lane, { keep: kindOf(lane) === 'motion' });
+      // A pick brings its own kind and nothing else: a motion pick is the clips
+      // and traces, not the source's locks, hits and links — those link the
+      // client's shared routines, which spawn effects and sounds of their own.
+      const fresh = eventsFromInspect(info, lane, { keep: false });
       const r = mixerRecipeRef.current;
       const keptEvents = r.events.filter((e) => e.from !== lane);
       // routine: a tag, or null for a bare clip pack (no routine at all) — not 'main'.
@@ -10732,6 +10735,7 @@ export default function App({ launch = null }) {
             loop={effectLoop}
             onLoop={setEffectLoop}
             onTake={mixerTake}
+            playingSoundKey={playingSoundKey}
             viewerRace={RACE_TO_XI[pc.race] ?? 'HumeMale'}
             panels={mixerPanels}
             onPanel={setMixerPanel}

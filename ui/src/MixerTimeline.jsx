@@ -193,8 +193,8 @@ export function TimelineWindow({
 
   // Each lane's stacking is remembered (collapse from the glyph by the label).
   const [laneRowsOpen, setLaneRowsOpen] = useState(() => readJson('mixerLaneRows') ?? {});
-  const toggleLaneRows = (laneId) => setLaneRowsOpen((m) => {
-    const next = { ...m, [laneId]: m[laneId] === false };
+  const toggleLaneRows = (laneId, open) => setLaneRowsOpen((m) => {
+    const next = { ...m, [laneId]: open };
     writeJson('mixerLaneRows', next);
     return next;
   });
@@ -219,7 +219,9 @@ export function TimelineWindow({
       ? (e.op === 0x1e ? 8 : Math.max(soundTicks(e), 8))
       : Math.max(e.dur || 0, minTicks));
     const rows = stackRows(laneEvents, endOf);
-    const stacked = rows.count > 1 && laneRowsOpen[t.id] !== false;
+    // Overlaps stack open by default; the keep lane (locks, hits, links) starts
+    // collapsed — it is bookkeeping, not the mix — until its glyph opens it.
+    const stacked = rows.count > 1 && (laneRowsOpen[t.id] ?? (t.kind !== 'keep'));
     return { t, laneEvents, rows, stacked, height: (stacked ? rows.count : 1) * LANE_H };
   });
   const trackH = RULER_H + lanes.reduce((a, l) => a + l.height, 0);
@@ -446,7 +448,7 @@ export function TimelineWindow({
                 </Tooltip>
                 {rows.count > 1 && (
                   <Tooltip content={stacked ? `Collapse to one row (${rows.count} rows of overlapping pills)` : `Expand overlapping pills into ${rows.count} rows`}>
-                    <button type="button" className="mseq-rows" onPointerDown={(e) => e.stopPropagation()} onClick={() => toggleLaneRows(t.id)}>
+                    <button type="button" className="mseq-rows" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); toggleLaneRows(t.id, !stacked); }}>
                       <span className="icon">{stacked ? 'unfold_less' : 'unfold_more'}</span>{rows.count}
                     </button>
                   </Tooltip>
