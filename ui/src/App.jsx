@@ -165,6 +165,7 @@ const MIXER_RAIL = [
   { id: 'mixer', icon: 'tune', label: 'Ability Mixer' },
   { id: 'parts', icon: 'segment', label: 'Parts' },
   { id: 'timeline', icon: 'timeline', label: 'Timeline' },
+  { id: 'preview', icon: 'animation', label: 'Animation Preview' },
 ];
 const ORBIT_VIEWS = new Set(['files', 'npc', 'pc', 'creation']);
 // Seconds of real time one in-game day takes when the day/night cycle is
@@ -1422,6 +1423,7 @@ export default function App({ launch = null }) {
   // and pushes the deny-list when the hidden set changes.
   const weaponBaseRef = useRef(null);
   const weaponVisRef = useRef({ vis: [], end: 0, engaged: false });
+  const mixerPreviewRef = useRef(false);                    // the Mixer's Animation Preview owns the stage
   const weaponVisKeyRef = useRef('');
   const rangedInfoRef = useRef(null);                       // ranged weapon info.rangeType → lc/ls routine
   const applyWeaponVis = useCallback((frame) => {
@@ -4277,7 +4279,9 @@ export default function App({ launch = null }) {
    * by the same rule). The Effects and Mixer views set this from their cues.
    */
   useEffect(() => {
-    if (leftView === 'effects' || leftView === 'mixer') return undefined;
+    // Those views drive the actor from effect cues (cueWeaponVis) — unless
+    // the Mixer's Animation Preview has the stage, which plays like this view.
+    if (leftView === 'effects' || (leftView === 'mixer' && !mixerPreviewRef.current)) return undefined;
     let live = true;
     const compute = () => {
       const model = modelRef.current;
@@ -5267,6 +5271,36 @@ export default function App({ launch = null }) {
     ...effectAnim,
     onPlay: undefined, onPause: undefined, onStop: undefined, onSeek: undefined,
     onLoop: undefined, onSpeed: undefined,
+  };
+  /**
+   * Animation Preview (Mixer rail): play any of the character's clips or
+   * schedules on the stage without touching the recipe or its timeline. The
+   * Characters view's pickers and transport, behind one step that takes the
+   * mix off the stage first — its cues would otherwise re-take the actor on
+   * the next tick. Play mix re-arms it from the recipe as it always does.
+   */
+  const mixerPreviewTake = () => {
+    const r = rendererRef.current;
+    if (!r) return;
+    r.particleSystem?.stopEffect?.();
+    r.actorFollowsEffect = false;
+    r.effectPaused = false;
+    mixerPreviewRef.current = true;
+    setEffectTransport('stopped');
+  };
+  const mixerPreviewAnim = {
+    anims, currentAnim, onAnimChange: (id, o) => { mixerPreviewTake(); handleAnimChange(id, o); },
+    schedules, currentSchedule, onScheduleChange: (id, o) => { mixerPreviewTake(); handleScheduleChange(id, o); },
+    playing,
+    transport: pcTransport,
+    onPlay: () => { mixerPreviewTake(); pcPlay(); },
+    onPause: pcPause,
+    onStop: pcStop,
+    onReset: () => { mixerPreviewTake(); pcReset(); },
+    loop: pcLoop,
+    onLoop: setPcLoop,
+    frameSink: animTick, onSeek: pcSeek,
+    speed: playbackSpeed, onSpeed: setPlaybackSpeed,
   };
 
   /**
@@ -6507,7 +6541,7 @@ export default function App({ launch = null }) {
   // The mixer view's right rail: one glyph per panel, the Animation panel first.
   // Which are open is remembered; a panel's own close glyph reports back here.
   const [mixerPanels, setMixerPanels] = useState(() => {
-    const d = { actors: false, mixer: true, parts: false, timeline: true };
+    const d = { actors: false, mixer: true, parts: false, timeline: true, preview: false };
     try { return { ...d, ...JSON.parse(localStorage.getItem('mixerPanels') || '{}') }; } catch { return d; }
   });
   const setMixerPanel = useCallback((id, v) => setMixerPanels((m) => {
@@ -6760,6 +6794,7 @@ export default function App({ launch = null }) {
     const ctx = xiCtx();
     if (!ctx) return;
     if (!recipe.events.some((e) => e.enabled !== false)) { setStatusText('Nothing to play yet.'); return; }
+    mixerPreviewRef.current = false;
     setMixerBusy(true);
     setMixerError(null);
     try {
@@ -6994,8 +7029,17 @@ export default function App({ launch = null }) {
     r.playing = false;
     sys.restartEffect();
     mixerLastCueRef.current = null;
-    const target = Math.max(0, Math.round(frame));
+    // A scrub steps the routine forward by hand; with Loop on, stepping past
+    // the loop point wrapped it to the start, so the thumb dragged to the end
+    // landed at frame 0. Loop is for playback — off while stepping, and the
+    // target stops one short of the loop point (the authored end of the mix).
+    const e = sys._effect;
+    const wasLoop = e?.loop;
+    if (e) e.loop = false;
+    const end = e?.loopAt != null ? Math.max(0, e.loopAt - 1) : Infinity;
+    const target = Math.min(Math.max(0, Math.round(frame)), end);
     for (let i = 0; i < target; i++) sys.update(1);
+    if (e) e.loop = wasLoop;
     audio?.stopOneShots?.();
     audio?.setEnabled(effectSfxOnRef.current);
     const cue = mixerLastCueRef.current;
@@ -11003,6 +11047,14 @@ export default function App({ launch = null }) {
               selectedPath={selectedDat}
               onSelectNpc={loadEffectNpc}
               onClose={() => setMixerPanel('actors', false)}
+            />
+          </Floating>
+          <Floating id="mixer-preview" open={!!mixerPanels.preview} defaultPos={{ right: 68, top: 60 }}>
+            <AnimationPanel
+              title="Animation Preview"
+              pc={pc}
+              anim={mixerPreviewAnim}
+              onClose={() => setMixerPanel('preview', false)}
             />
           </Floating>
         </>

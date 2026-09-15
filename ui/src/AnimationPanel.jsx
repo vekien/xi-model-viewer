@@ -105,7 +105,7 @@ function FrameScrubber({ frameSink, onSeek }) {
  * and the scrubber has somewhere to sit. `pc` is only wired up in the Characters
  * view — every other view drives a plain clip and gets no action pickers.
  */
-export function AnimationPanel({ pc, anim, onClose }) {
+export function AnimationPanel({ pc, anim, onClose, title = 'Animation' }) {
   const { actionGroups = [], actionGroupItems = [], actionGroup, setActionGroup,
           actionEntries = [], action, setAction } = pc ?? {};
   const { anims = [], currentAnim = '', onAnimChange,
@@ -175,7 +175,7 @@ export function AnimationPanel({ pc, anim, onClose }) {
     <div id="animbar" className="panel">
       <div className="panel-title">
         <span className="icon">animation</span>
-        Animation
+        {title}
         {onClose && (
           <>
             <span className="sp" />
