@@ -26,6 +26,13 @@ async function pickOnce(cmd, initial) {
   }
 }
 
+// Streamed xi runs go one at a time. Their lines arrive on one event channel
+// (`xi-log` / `xi-err`) that every live listener hears, so two runs at once —
+// Randomise inspecting the effect and the sound together — read each other's
+// output, and two JSON values interleaved parse as neither. A chain of
+// promises queues the callers; each starts when the one before has finished.
+let xiStreamChain = Promise.resolve();
+
 export const backend = {
   /**
    * Scale the whole UI (1 = 100%). In Tauri this is real webview zoom — same as
@@ -172,6 +179,13 @@ export const backend = {
    * @returns {Promise<number>} exit code (0 ok)
    */
   async xiRunStream(args, xiPath, env, onLine) {
+    const run = () => this._xiRunStreamNow(args, xiPath, env, onLine);
+    const turn = xiStreamChain.then(run, run);
+    xiStreamChain = turn.catch(() => {});
+    return turn;
+  },
+
+  async _xiRunStreamNow(args, xiPath, env, onLine) {
     if (isTauri()) {
       const listen = window.__TAURI__?.event?.listen;
       const offs = [];

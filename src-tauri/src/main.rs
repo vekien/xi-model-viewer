@@ -846,18 +846,17 @@ fn xi_run_stream_sync(
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
 
-    {
-        let slot = XI_STREAM_PID.lock().map_err(|e| e.to_string())?;
+    // Check and claim under one lock: two calls arriving together both passed
+    // a separate check before either had claimed the slot, and both ran.
+    let mut child = {
+        let mut slot = XI_STREAM_PID.lock().map_err(|e| e.to_string())?;
         if slot.is_some() {
             return Err("another xi command is already running — Stop it first".into());
         }
-    }
-    let mut child = cmd.spawn().map_err(|e| format!("failed to spawn xi: {e}"))?;
-    let pid = child.id();
-    {
-        let mut slot = XI_STREAM_PID.lock().map_err(|e| e.to_string())?;
-        *slot = Some(pid);
-    }
+        let child = cmd.spawn().map_err(|e| format!("failed to spawn xi: {e}"))?;
+        *slot = Some(child.id());
+        child
+    };
 
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
