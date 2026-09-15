@@ -3301,6 +3301,8 @@ export default function App({ launch = null }) {
     try { localStorage.setItem('masterVolume', String(m)); } catch { /* quota */ }
     weatherAudioRef.current?.setMaster(m);   // effects and ambient share this bus
     player.setMaster(m);                     // the zone track and the music player
+    const sfx = dataSfxRef.current;          // a sound previewed from a list or the mixer
+    if (sfx?.gain) sfx.gain.gain.value = m * effectVolumeRef.current;
   }, [player]);
 
   const setEffectVolume = useCallback((v) => {
@@ -3309,6 +3311,8 @@ export default function App({ launch = null }) {
     effectSfxOnRef.current = clamped > 0;
     setEffectVolumeState(clamped);
     try { localStorage.setItem('effectVolume', String(clamped)); } catch { /* quota */ }
+    const sfx = dataSfxRef.current;
+    if (sfx?.gain) sfx.gain.gain.value = masterVolumeRef.current * clamped;
     const audio = weatherAudioRef.current;
     if (!audio) return;
     audio.setVolume(clamped);
@@ -6385,8 +6389,11 @@ export default function App({ launch = null }) {
         try { ctx.close(); } catch { /* ok */ }
         return;
       }
+      // Under the app's Master and Sound Effects levels, like every other
+      // sound; it played at full gain on its own context before, whatever the
+      // sliders said. The setters below keep it in step while it plays.
       const gain = ctx.createGain();
-      gain.gain.value = 1;
+      gain.gain.value = masterVolumeRef.current * effectVolumeRef.current;
       gain.connect(ctx.destination);
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
