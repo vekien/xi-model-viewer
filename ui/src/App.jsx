@@ -1448,15 +1448,38 @@ export default function App({ launch = null }) {
     for (const slot of hidden) paths.push(...(base.slots[slot] ?? []));
     r.setHiddenSources(paths.length ? paths : null);
   }, []);
+  // The composer hook's latest value, for callbacks that outlive a render.
+  const pcRef = useRef(null);
+  /**
+   * The client's engaged state, as far as the viewer can tell.
+   *
+   * In the game it is a state, not a property of a clip: the PS2 client's
+   * motion machine reads the attack pack only in its engaged mode and plays
+   * emotes only from idle (xiatelnet.cpp; XiAtelBuff.ExtMotionMode), a weapon
+   * skill needs an engaged actor, a cast runs in either. So: Base Anim set to
+   * Battle, the battle idle itself, or a motion from one of the packs
+   * characters.json lists as engaged (`engagedDisplay`, from xi-tools
+   * gear_sets.json). Everything else — emotes, abilities, the basic set —
+   * plays disengaged, weapons sheathed.
+   */
+  const engagedFor = useCallback((clip) => {
+    if (baseAnimRef.current === 'btl') return true;
+    const ids = clip ? [clip.id, ...(Array.isArray(clip.parts) ? clip.parts : [])].filter(Boolean).map(String) : [];
+    if (ids.length && ids.every((id) => /^btl/i.test(id))) return true;
+    const p = pcRef.current;
+    return (p?.engagedDisplay?.actionGroups ?? []).includes(p?.actionGroup);
+  }, []);
   /** An effect cue takes over the motion: its clip and its schedule's commands. */
   const cueWeaponVis = useCallback((a) => {
+    const engaged = engagedFor(a.clip);
+    if (rendererRef.current) rendererRef.current.actorEngaged = engaged;
     weaponVisRef.current = {
       vis: a.vis ?? [],
       end: a.clip?.lengthInFrames ?? 0,
-      engaged: baseAnimRef.current === 'btl' || !isRestingClip(a.clip),
+      engaged,
     };
     weaponVisKeyRef.current = '';
-  }, []);
+  }, [engagedFor]);
   const weatherAudioRef = useRef(null);                     // ambient weather bed (0x3D sound pointers)
 
   // ── Assets > Effects (standalone spell/ability VFX) ────────────────────────
@@ -4079,6 +4102,7 @@ export default function App({ launch = null }) {
     onError: (msg) => setStatusText(msg),
     onIsolationChange: applyPcIsolation,
   });
+  pcRef.current = pc;
 
   /**
    * Play the current PC action's own effect routine when the mode asks for it.
@@ -4278,7 +4302,9 @@ export default function App({ launch = null }) {
         vis.sort((a, b) => a.delay - b.delay);
         end = clip?.lengthInFrames ?? 0;
       }
-      weaponVisRef.current = { vis, end, engaged: baseAnim === 'btl' || !isRestingClip(clip) };
+      const engaged = engagedFor(clip);
+      if (rendererRef.current) rendererRef.current.actorEngaged = engaged;
+      weaponVisRef.current = { vis, end, engaged };
       weaponVisKeyRef.current = '';
       applyWeaponVis(rendererRef.current?.animFrame ?? 0);
     };
@@ -4292,7 +4318,7 @@ export default function App({ launch = null }) {
       ensureGlobalEffects(settingsRef.current, []).then(() => { if (live) compute(); });
     }
     return () => { live = false; };
-  }, [currentAnim, currentSchedule, baseAnim, schedules, leftView, applyWeaponVis, ensureGlobalEffects]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentAnim, currentSchedule, baseAnim, schedules, leftView, pc.actionGroup, pc.engagedDisplay, applyWeaponVis, ensureGlobalEffects, engagedFor]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Character Creation (high-poly RT/SHAPE + SQLE models) ----------------
 

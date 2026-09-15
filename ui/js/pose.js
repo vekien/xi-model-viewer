@@ -130,7 +130,12 @@ export class SkeletonPose {
     this.evaluate(null, 0);
   }
 
-  evaluate(clip, frame) {
+  /**
+   * `engagedState` is the client's engaged flag when the caller knows it (App
+   * derives it from the motion's pack and the Base Anim — see engagedFor);
+   * null falls back to the resting-clip rule, which scene actors still use.
+   */
+  evaluate(clip, frame, engagedState = null) {
     const joints = this.skeleton.joints;
     const n = joints.length;
     const computed = new Array(n).fill(false);
@@ -188,7 +193,7 @@ export class SkeletonPose {
     // re-parent is gated the way xim gates it (isDisplayEngaged). At rest the
     // grip joint keeps its real parent and the clip's own keys carry it on the
     // hip, which is where a sheathed weapon belongs.
-    const engaged = !isRestingClip(clip);
+    const engaged = engagedState ?? !isRestingClip(clip);
 
     // Local, so a stalled pass can drop the re-parenting for the rest of this
     // evaluate without touching the model's own map (see the bail below).

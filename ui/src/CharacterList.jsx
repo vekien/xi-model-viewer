@@ -515,6 +515,7 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
           ...DEFAULT_SECTIONS,
           ...(data.gearSections ?? {}),
           rangedDisplay: data.rangedDisplay ?? null,
+          engagedDisplay: data.engagedDisplay ?? null,
         };
         const rs = data.races.map((r) => ({ id: r.id, label: r.label, base: r.base,
                                             lookRace: r.lookRace }));
@@ -845,6 +846,9 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
     // Ranged weapons are stowed (scaled to 0 in game) unless the current action
     // is one of these groups. App gates the mesh on it.
     rangedDisplay: sectionCfg.current.rangedDisplay ?? null,
+    // Action groups whose motions play with the weapons drawn (the client's
+    // engaged state) — App's engagedFor. Same source, characters.json.
+    engagedDisplay: sectionCfg.current.engagedDisplay ?? null,
     rangedPaths: slots?.range?.find((it) => it.id === sel.range)?.paths ?? null,
     // The hand weapons' DATs, per slot: the scheduler shows and hides weapons
     // by slot (wep0 main, wep1 sub, wep2 ranged — js/weaponVis.js).

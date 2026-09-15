@@ -272705,5 +272705,26 @@
    "Fishing"
   ],
   "handRef": 126
+ },
+ "engagedDisplay": {
+  "actionGroups": [
+   "Battle",
+   "Hand-to-hand",
+   "Dagger",
+   "Sword",
+   "G. Sword",
+   "Axe",
+   "G. Axe",
+   "Scythe",
+   "Polearm",
+   "Katana",
+   "G. Katana",
+   "Club",
+   "Staff",
+   "Archery",
+   "Marksmanship",
+   "NPC WS",
+   "WS (Unreleased)"
+  ]
  }
 }

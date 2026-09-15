@@ -1261,6 +1261,9 @@ export class Renderer {
     // furniture (floor, grid, axes) is parked so a texture isn't framed by a
     // horizon. The toggles keep their values for when a model is back.
     this.stageHidden = false;
+    // The main actor's engaged state (App engagedFor): drawn-weapon re-parent
+    // in SkeletonPose.evaluate. null = the pose's own resting-clip fallback.
+    this.actorEngaged = null;
     this.gridLines = null;   // { vao, vbo, count, kind } — rebuilt when range kind changes
     // Camera Sequencer route preview — set by the panel, null when it is closed.
     this.cameraPath = null;  // { data, count, dirty }
@@ -2368,7 +2371,7 @@ export class Renderer {
     if (!this.currentAnimation || !this.pose) return;
     const len = this.currentAnimation.lengthInFrames ?? 0;
     this.animFrame = Math.min(Math.max(frame, 0), len);
-    this.pose.evaluate(this.currentAnimation, this.animFrame);
+    this.pose.evaluate(this.currentAnimation, this.animFrame, this.actorEngaged);
     this.poseDirty = true;
   }
 
@@ -3039,7 +3042,7 @@ export class Renderer {
           this.onAnimLoop?.();
         }
       }
-      this.pose.evaluate(this.currentAnimation, this.animFrame);
+      this.pose.evaluate(this.currentAnimation, this.animFrame, this.actorEngaged);
       this.poseDirty = true;
     }
     // Creation models animate on the CPU: pick up the playhead every frame
