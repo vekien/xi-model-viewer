@@ -9,13 +9,6 @@ export const DRAG_TYPE = 'application/x-mixer-entry+';
 
 const SHUFFLE_KINDS = [{ id: 'ws', label: 'WS' }, { id: 'ja', label: 'Ability' }, { id: 'spell', label: 'Spell' }];
 
-/** The lines of a `dats build --dry-run` that name the slot and the DATs — the
- *  rest (the SQL, the command echo) stays in the console. */
-function planExcerpt(text) {
-  const lines = String(text ?? '').split('\n').filter((l) => /animation|file_id|-> ROM|occupied|Error/i.test(l));
-  return (lines.length ? lines : String(text ?? '').split('\n').slice(-6)).slice(0, 12).join('\n');
-}
-
 // The mixer's timeline as a floating window built from the Camera Sequencer's
 // chrome (#camseq / .cseq-*): the same title bar, dragged by it; the same inset
 // track with a seconds ruler, one lane per line, the red playhead you drag; the
@@ -31,7 +24,7 @@ const RULER_H = 22;
 const MIN_W = 700;
 const DEFAULT_W = 940;
 const MIN_H = 200;
-const MAX_H = 700;                    // the window fits its content up to this (see #mixer-seq)
+const maxH = () => Math.floor(window.innerHeight * 0.9);   // the window fits its content up to this (see #mixer-seq)
 const MIN_LEN = 120;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 8;
@@ -101,6 +94,7 @@ export function TimelineWindow({
   // the publish plan, and the shuffle kind — what the Recipes window used to hold.
   name = '', onName, onNew, onSave, saved = [], onOpen, onDelete,
   publishPlan = null, onPublish, busy = false,
+  publishCfg = null, onPublishCfg, onCheckPublish,
   shuffleKind = 'ws', onShuffleKind, onRandomise, canPublish = false,
   onDropEntry,
   editor = null,
@@ -175,7 +169,7 @@ export function TimelineWindow({
     if (r.axis === 'w') {
       setSize((s) => ({ ...s, w: clamp(Math.round(r.w0 + (e.clientX - r.x0)), MIN_W, Math.max(MIN_W, window.innerWidth - 16)) }));
     } else {
-      const cap = Math.min(naturalH(), MAX_H, window.innerHeight - 16);
+      const cap = Math.min(naturalH(), maxH());
       const h = Math.round(r.h0 + (e.clientY - r.y0));
       setSize((s) => ({ ...s, h: h >= cap ? null : Math.max(MIN_H, h) }));
     }
@@ -186,6 +180,12 @@ export function TimelineWindow({
     if (!size.h || !open) return;
     if (size.h >= naturalH()) setSize((s) => ({ ...s, h: null }));
   });
+  // The main window shrinking takes the timeline down with it (90% of its height at most).
+  useEffect(() => {
+    const onResize = () => setSize((s) => (s.h && s.h > maxH() ? { ...s, h: maxH() } : s));
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // Keep the window reachable after a resolution change.
   useEffect(() => {
@@ -276,6 +276,10 @@ export function TimelineWindow({
   // (`application/x-mixer-entry+motion`), which is all a dragover may read,
   // so a motion can only land on a motion track.
   const [dropLane, setDropLane] = useState(null);
+  // A pill dragged onto another lane: that lane lights up; below the last lane
+  // of its kind, the last lane shows a bar — the drop makes a new track there.
+  const [dropNew, setDropNew] = useState(null);
+  const [manageOpen, setManageOpen] = useState(false);
   const dragTypeFor = (t) => `${DRAG_TYPE}${t.kind}`;
   const dragFits = (e, t) => t.kind !== 'keep' && Array.from(e.dataTransfer?.types ?? []).includes(dragTypeFor(t));
   const dragOverLane = (e, t) => {
@@ -329,7 +333,7 @@ export function TimelineWindow({
     const ids = inGroup ? selectedIds : new Set([ev._id]);
     if (!inGroup) onSelect(ev._id, 'only');
     const starts = events.filter((x) => ids.has(x._id)).map((x) => ({ id: x._id, start0: x.start }));
-    drag.current = { kind: 'block', x0: e.clientX, ev, starts, moved: false, inGroup };
+    drag.current = { kind: 'block', x0: e.clientX, y0: e.clientY, ev, starts, moved: false, inGroup, over: null, newFor: null };
     e.target.setPointerCapture?.(e.pointerId);
   };
   const startLaneDrag = (e, laneId) => {
@@ -356,7 +360,8 @@ export function TimelineWindow({
     }
     const frames = Math.round((e.clientX - d.x0) / pxPerFrame());
     if (d.kind === 'block') {
-      if (frames) d.moved = true;
+      if (frames || Math.abs(e.clientY - d.y0) > 6) d.moved = true;
+      trackDropTarget(d, e.clientY);
       let delta = Math.max(frames, -Math.min(...d.starts.map((s) => s.start0)));
       if (snap) {
         // Nearest target to the grabbed block's start or end wins; the whole
@@ -414,6 +419,47 @@ export function TimelineWindow({
       if (d.inGroup) onSelect(d.ev._id, 'only');
       if (isSoundEvent(d.ev)) onPreview?.(d.ev);
     }
+    if (d.kind === 'block') {
+      setDropLane(null);
+      setDropNew(null);
+      const target = d.newFor ? nextTrackId(d.newFor) : (d.over && d.over !== d.ev.from ? d.over : null);
+      if (target) {
+        const laneKind = d.newFor ?? lanes.find((l) => l.t.id === target)?.t.kind;
+        const byId = new Map(events.map((x) => [x._id, x]));
+        onMoveMany(d.starts.map((st) => {
+          const ev = byId.get(st.id);
+          const fits = ev && laneKind && (ev.kind === laneKind || kindOf(ev.from) === laneKind);
+          return { id: st.id, start: ev?.start ?? st.start0, ...(fits ? { from: target } : {}) };
+        }));
+      }
+    }
+  };
+  /** Which lane the pointer is over during a block drag, and whether it is past the last lane of the pill's kind. */
+  const trackDropTarget = (d, clientY) => {
+    const laneKind = kindOf(d.ev.from);
+    let over = null;
+    let lastBottom = -Infinity;
+    for (const row of rootRef.current?.querySelectorAll('.mseq-lane') ?? []) {
+      const r = row.getBoundingClientRect();
+      const id = row.dataset.lane;
+      if (id !== 'keep' && kindOf(id) === laneKind) lastBottom = Math.max(lastBottom, r.bottom);
+      if (clientY >= r.top && clientY < r.bottom) over = id;
+    }
+    const overKind = over && over !== 'keep' ? lanes.find((l) => l.t.id === over)?.t.kind : null;
+    const fits = !!overKind && (overKind === d.ev.kind || overKind === laneKind);
+    d.over = fits ? over : null;
+    d.newFor = !fits && clientY > lastBottom ? laneKind : null;
+    const wantLane = d.over && d.over !== d.ev.from ? d.over : null;
+    const wantNew = d.newFor ? lanes.filter((l) => l.t.kind === d.newFor).at(-1)?.t.id ?? null : null;
+    if (wantLane !== dropLane) setDropLane(wantLane);
+    if (wantNew !== dropNew) setDropNew(wantNew);
+  };
+  /** The id the next extra track of `kind` gets (recipeTracks numbers them from 2). */
+  const nextTrackId = (kind) => {
+    const used = new Set(tracks.map((t) => t.id));
+    let n = 2;
+    while (used.has(`${kind}${n}`)) n++;
+    return `${kind}${n}`;
   };
 
   // ── Pills ───────────────────────────────────────────────────────────────────
@@ -491,9 +537,16 @@ export function TimelineWindow({
         <span className="cseq-title">Timeline</span>
         <span className="mono mseq-name">{recipeName}</span>
         <span className={`mseq-note${failed ? ' is-failed' : ''}`}>{failed ? error?.title : note}</span>
+        {onPublishCfg && (
+          <Tooltip content="Manage: how this mix publishes — kind, animation slot, ROM10 folder — and a check of where its DATs would land" placement="bottom">
+            <button type="button" className={`cseq-btn mseq-manage-btn${manageOpen ? ' on' : ''}`} onClick={() => setManageOpen((v) => !v)}>
+              <span className="icon">tune</span>Manage
+            </button>
+          </Tooltip>
+        )}
         {onPublish && (
-          <Tooltip content="Publish: prepare the xi dats action for this mix and show the build plan" placement="bottom">
-            <button type="button" className="cseq-btn mseq-publish-btn" disabled={!canPublish} onClick={() => onPublish('plan')}>
+          <Tooltip content="Publish: build this mix into the game folder now (xi dats build) — the console shows it as it runs" placement="bottom">
+            <button type="button" className="cseq-btn mseq-publish-btn" disabled={!canPublish} onClick={() => onPublish()}>
               <span className="icon">publish</span>Publish
             </button>
           </Tooltip>
@@ -514,22 +567,77 @@ export function TimelineWindow({
           </div>
         )}
 
-        {publishPlan && (
-          <div className="mixer-publish mseq-publish">
-            <div className="fx-actor-sec-title">Publish · {publishPlan.name}</div>
-            <pre className="mono-small mixer-plan">{planExcerpt(publishPlan.text)}</pre>
-            <div className="mixer-save">
-              <span className="side-note mixer-publish-note">Writes the DAT(s) into ROM10 and registers their file ids (xi dats build). Full plan in the console.</span>
-              <button type="button" className="mixer-chip danger" disabled={busy} onClick={() => onPublish?.('go')}>publish</button>
-              <button type="button" className="mixer-chip" onClick={() => onPublish?.('cancel')}>cancel</button>
+        {manageOpen && publishCfg && (
+          <div className="mixer-editor mseq-manage">
+            <div className="mixer-editor-title">
+              <span className="mono">Publish · {recipeName}</span>
+              <span className="mono-small">how xi dats places it</span>
+              <span className="sp" />
+              <Tooltip content="Check: a dry run with these choices — the slot it takes and where every DAT lands, nothing written" placement="top">
+                <button type="button" className="cseq-btn" disabled={busy || !onCheckPublish} onClick={onCheckPublish}>Check</button>
+              </Tooltip>
             </div>
+            <div className="mixer-fields">
+              <label className="mixer-field">
+                <span>publish as</span>
+                <div className="seg-tabs" role="tablist" aria-label="Publish as">
+                  {[['auto', 'Auto'], ['ws', 'WS'], ['ja', 'Ability'], ['spell', 'Spell']].map(([id, label]) => (
+                    <button key={id} type="button" role="tab" aria-selected={publishCfg.kind === id}
+                      className={`seg-tab${publishCfg.kind === id ? ' on' : ''}`} onClick={() => onPublishCfg({ kind: id })}>{label}</button>
+                  ))}
+                </div>
+              </label>
+              <label className="mixer-field">
+                <span>animation</span>
+                <input type="text" inputMode="numeric" className="cseq-text mixer-num" placeholder="auto" spellCheck={false}
+                  value={publishCfg.animation ?? ''} onChange={(e) => onPublishCfg({ animation: e.target.value.replace(/[^0-9]/g, '') })} />
+              </label>
+              <label className="mixer-field">
+                <span>ROM10 folder</span>
+                <input type="text" inputMode="numeric" className="cseq-text mixer-num" spellCheck={false}
+                  value={publishCfg.subdir ?? ''} onChange={(e) => onPublishCfg({ subdir: e.target.value.replace(/[^0-9]/g, '') })} />
+              </label>
+              <label className="mixer-field">
+                <span>taken slots</span>
+                <label className="switch cseq-switch">
+                  <input type="checkbox" checked={!!publishCfg.force} onChange={(e) => onPublishCfg({ force: e.target.checked })} />
+                  <span className="track" />
+                  <span className="cseq-switch-label">Force</span>
+                </label>
+              </label>
+            </div>
+            <div className="mono-small mixer-editor-note">
+              The client works the file ids out from the animation number itself — a weapon skill: the race's extended bank base + (animation − 256), body plus two companions; an ability: 4412 + animation; a spell: 2800 + animation — so the number is the choice, and the DATs go into ROM10/{publishCfg.subdir || 20}. Auto takes the next free slot. Force takes the number even when its file ids point at another DAT.
+            </div>
+            {publishPlan && (
+              <div className="mseq-plan-wrap">
+                {publishPlan.animation != null && (
+                  <div className="mono-small">{publishPlan.kind} animation <b>{publishPlan.animation}</b> · {publishPlan.files.length} DAT{publishPlan.files.length === 1 ? '' : 's'}{publishPlan.server ? ` · server: ${publishPlan.server}` : ''}</div>
+                )}
+                {publishPlan.errors.map((err) => <div key={err} className="mono-small mseq-plan-err">{err}</div>)}
+                {!publishPlan.ok && !publishPlan.errors.length && <div className="mono-small mseq-plan-err">The check failed — the console has the full output.</div>}
+                {publishPlan.files.length > 0 && (
+                  <table className="mseq-plan">
+                    <thead><tr><th>file id</th><th>race</th><th>role</th><th>lands in</th><th>points at today</th></tr></thead>
+                    <tbody>
+                      {publishPlan.files.map((f) => (
+                        <tr key={`${f.fileId}:${f.role}`}>
+                          <td>{f.fileId}</td><td>{f.race ?? '—'}</td><td>{f.role}</td><td>{f.target}</td>
+                          <td className={f.occupiedBy ? 'warn' : ''}>{f.occupiedBy ?? 'nothing (free)'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
           </div>
         )}
 
         {/* Above the track, the sequencer's settings row: add a track, then the
             saved-mix row exactly as the Camera Sequencer has it, zoom on the right */}
         <div className="cseq-row cseq-settings mseq-toolbar">
-          <span className="cseq-label">Add track</span>
+          <span className="cseq-label">Add Track</span>
           <div className="cseq-load mseq-add-track">
             <Combo value="" items={LANES.map((l) => ({ id: l.id, label: l.label, color: l.color }))} placeholder="Motion, Effects, Sound…"
               onChange={(kind) => kind && onAddTrack?.(kind)} />
@@ -627,7 +735,7 @@ export function TimelineWindow({
                 ))}
               </div>
               {lanes.map((lane) => (
-                <div key={lane.t.id} className={`cseq-lane mseq-lane${dropLane === lane.t.id ? ' drop-ok' : ''}`} data-lane={lane.t.id} style={{ height: lane.height }} onPointerDown={startMarquee}
+                <div key={lane.t.id} className={`cseq-lane mseq-lane${dropLane === lane.t.id ? ' drop-ok' : ''}${dropNew === lane.t.id ? ' drop-new' : ''}`} data-lane={lane.t.id} style={{ height: lane.height }} onPointerDown={startMarquee}
                   onDragOver={(e) => dragOverLane(e, lane.t)} onDragLeave={() => { if (dropLane === lane.t.id) setDropLane(null); }} onDrop={(e) => dropOnLane(e, lane.t)}>
                   {lane.laneEvents.map((ev) => pill(ev, lane))}
                 </div>

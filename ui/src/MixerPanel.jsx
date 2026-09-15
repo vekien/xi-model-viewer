@@ -72,7 +72,8 @@ function EventEditor({ ev, onChange, onRemove, onSolo }) {
 
 export function MixerPanel({
   recipe, onRecipe, lane, laneInfo, laneEntry,
-  transport, onPlay, onStop, onPublish, publishPlan = null, onSaveAs, onOpen, onReset, recipes, busy, note, error = null, onDismissError,
+  transport, onPlay, onStop, onPublish, publishPlan = null, publishCfg = null, onPublishCfg, onCheckPublish,
+  onSaveAs, onOpen, onReset, recipes, busy, note, error = null, onDismissError,
   onDelete, onRename, onDuplicate, onShuffle, stageName,
   onPause, onResume, onSeek, getPlayhead, mixLoaded, mixDirty,
   onSolo, onPlaySound, onTake, viewerRace, onClose, getSoundPeaks, speed = 1, onSpeed, loop = true, onLoop, ghosts = null,
@@ -118,9 +119,14 @@ export function MixerPanel({
   }, [events, selectedIds]);
 
   const update = (id, patch) => onRecipe({ ...recipe, events: events.map((e) => (e._id === id ? { ...e, ...patch } : e)) });
+  /** Blocks moved on the timeline: a new start each, and a new track when they were dragged onto one. */
   const moveMany = (list) => {
-    const by = new Map(list.map((m) => [m.id, m.start]));
-    onRecipe({ ...recipe, events: events.map((e) => (by.has(e._id) ? { ...e, start: by.get(e._id) } : e)) });
+    const by = new Map(list.map((m) => [m.id, m]));
+    onRecipe({ ...recipe, events: events.map((e) => {
+      const m = by.get(e._id);
+      if (!m) return e;
+      return { ...e, start: m.start, ...(m.from ? { from: m.from } : {}) };
+    }) });
   };
   const removeMany = (ids) => onRecipe({ ...recipe, events: events.filter((e) => !ids.has(e._id)) });
   /** M: mute (disable) or unmute the selection. A muted event stays on the timeline but is left out of the mix. */
@@ -253,8 +259,9 @@ export function MixerPanel({
       name={recipe.name} onName={(n) => onRecipe({ ...recipe, name: n })} onNew={onReset}
       onSave={() => recipe.name.trim() && onSaveAs?.(recipe.name.trim())} saved={recipes ?? []} onOpen={onOpen} onDelete={onDelete}
       publishPlan={publishPlan} onPublish={onPublish} busy={busy}
+      publishCfg={publishCfg} onPublishCfg={onPublishCfg} onCheckPublish={onCheckPublish}
       shuffleKind={shuffleKind} onShuffleKind={onShuffle ? onShuffleKind : null} onRandomise={onShuffle ? () => onShuffle(shuffleKind) : null}
-      canPublish={!busy && events.length > 0 && !publishPlan}
+      canPublish={!busy && events.length > 0}
       onDropEntry={onDropEntry}
       editor={selected ? <EventEditor ev={selected} onChange={(p) => update(selected._id, p)} onRemove={() => remove(selected._id)}
         onSolo={onSolo ? () => onSolo(selected.ref, selected.from, selected.dur) : null} /> : null} />

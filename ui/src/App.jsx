@@ -62,7 +62,7 @@ import { MixerList } from './MixerList.jsx';
 import { MixerPanel } from './MixerPanel.jsx';
 import { Floating } from './Floating.jsx';
 import { RightRail } from './RightRail.jsx';
-import { RACE_TO_XI, buildCatalogArgs, composeForPreview, emptyRecipe, entryPathForRace, eventsFromInspect, inspectSpec, kindOf, laneForEvent, loadCatalog, mixerDir, publishRecipe, recipeTracks, serializeRecipe, soundIdsFromInfo, trackLabel, withIds } from '../js/mixer.js';
+import { RACE_TO_XI, buildCatalogArgs, composeForPreview, emptyRecipe, entryPathForRace, eventsFromInspect, inspectSpec, kindOf, laneForEvent, loadCatalog, mixerDir, parsePublishPlan, publishRecipe, recipeTracks, serializeRecipe, soundIdsFromInfo, trackLabel, withIds } from '../js/mixer.js';
 import { ZoneMeshPreviewModal } from './ZoneMeshPreviewModal.jsx';
 import { armGeneratorPreview } from '../js/particlePreview.js';
 import { checkForUpdate, checkForUpdateManual, dismissUpdate } from '../js/update.js';
@@ -165,6 +165,8 @@ const MIXER_RAIL = [
   { id: 'actors', icon: 'groups', label: 'Actors' },
 ];
 const ORBIT_VIEWS = new Set(['files', 'npc', 'pc', 'creation']);
+/** Publish choices for a mix (the Timeline's Manage panel); see setMixerPublishCfg. */
+const PUBLISH_CFG_DEFAULT = { kind: 'auto', animation: '', subdir: 20, force: false };
 // Seconds of real time one in-game day takes when the day/night cycle is
 // playing. 60 is what the button did before it was configurable.
 const DAY_LENGTH_DEFAULT = 60;
@@ -6720,7 +6722,7 @@ export default function App({ launch = null }) {
     // is parked in idle under the effect (the Effects view's default).
     if (!showCharAnimRef.current) setShowCharAnim(true);
     return () => { cancelled = true; };
-  }, [leftView, xiCtx, refreshMixerRecipes, pickEffectActorTab, setShowCharAnim]);
+  }, [leftView, settings?.xiPath, xiCtx, refreshMixerRecipes, pickEffectActorTab, setShowCharAnim]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const buildMixerCatalog = useCallback(async () => {
     const ctx = xiCtx();
@@ -7244,32 +7246,71 @@ export default function App({ launch = null }) {
    * written: `plan` runs the dry-run build and parks its text on the panel,
    * `go` runs the real build once the user confirms there.
    */
-  const [mixerPlan, setMixerPlan] = useState(null);   // { name, text } awaiting confirmation
-  const mixerPublish = useCallback(async (step = 'plan') => {
+  /**
+   * How the mix publishes — the Timeline's Manage panel. Kept per mix name:
+   * the recipe schema has no room for it, and the dats project records what
+   * a build actually did rather than what to ask for next time.
+   *   kind       auto | ja | spell | ws — what xi dats publishes it as
+   *   animation  '' = auto (the next free slot), or the number to take
+   *   subdir     the ROM10 folder the DATs are written into
+   *   force      take the slot even when its file ids point at another DAT
+   */
+  const publishCfgKey = (name) => `mixerPublish:${name}`;
+  const loadPublishCfg = (name) => {
+    try { return { ...PUBLISH_CFG_DEFAULT, ...JSON.parse(localStorage.getItem(publishCfgKey(name)) || '{}') }; } catch { return { ...PUBLISH_CFG_DEFAULT }; }
+  };
+  const [mixerPublishCfg, setMixerPublishCfgState] = useState(() => loadPublishCfg(mixerRecipe.name));
+  const [mixerPublishPlan, setMixerPublishPlan] = useState(null);   // parsePublishPlan of the last Check
+  useEffect(() => { setMixerPublishCfgState(loadPublishCfg(mixerRecipe.name)); setMixerPublishPlan(null); }, [mixerRecipe.name]);
+  const setMixerPublishCfg = useCallback((patch) => {
+    setMixerPublishCfgState((c) => {
+      const next = { ...c, ...patch };
+      try { localStorage.setItem(publishCfgKey(mixerRecipeRef.current.name), JSON.stringify(next)); } catch { /* quota */ }
+      return next;
+    });
+    setMixerPublishPlan(null);   // a check is for one set of choices
+  }, []);
+  const publishOpts = (cfg) => ({
+    kind: cfg.kind && cfg.kind !== 'auto' ? cfg.kind : null,
+    animation: cfg.animation === '' || cfg.animation == null ? null : Number(cfg.animation),
+    subdir: Number.isFinite(Number(cfg.subdir)) && String(cfg.subdir) !== '' ? Number(cfg.subdir) : null,
+    force: !!cfg.force,
+  });
+  /** Manage › Check: a dry run with the current choices, shown as a table in the panel. */
+  const mixerCheckPublish = useCallback(async () => {
     const ctx = xiCtx();
     if (!ctx) return;
     const recipe = mixerRecipeRef.current;
-    if (step === 'cancel') { setMixerPlan(null); return; }
     setMixerBusy(true);
     try {
-      if (step === 'plan') {
-        const plan = await publishRecipe(recipe, { dryRun: true }, ctx.xiPath, ctx.env);
-        setCliOutput({ title: `xi dats build ${recipe.name} · plan`, text: plan.text });
-        if (!plan.ok) { setStatusText('Publish plan failed — see the console.'); setMixerPlan(null); return; }
-        setMixerPlan({ name: recipe.name, text: plan.text });
-        return;
-      }
-      setMixerPlan(null);
-      const res = await publishRecipe(recipe, { dryRun: false }, ctx.xiPath, ctx.env);
-      setCliOutput({ title: `xi dats build ${recipe.name} · ${res.ok ? 'done' : 'failed'}`, text: res.text });
+      const res = await publishRecipe(recipe, { dryRun: true, ...publishOpts(mixerPublishCfg) }, ctx.xiPath, ctx.env);
+      const plan = parsePublishPlan(res.text);
+      setMixerPublishPlan({ ...plan, ok: res.ok, text: res.text });
+      setStatusText(res.ok ? `${recipe.name}: ${plan.kind ?? '?'} animation ${plan.animation ?? '?'} · ${plan.files.length} DAT(s)` : 'Check failed — see the Manage panel.');
+    } finally {
+      setMixerBusy(false);
+    }
+  }, [xiCtx, mixerPublishCfg]);
+  /** Publish: the real build, straight away, its output streaming into the console as it runs. */
+  const mixerPublish = useCallback(async () => {
+    const ctx = xiCtx();
+    if (!ctx) return;
+    const recipe = mixerRecipeRef.current;
+    const title = `xi dats build ${recipe.name}`;
+    const lines = [];
+    setCliOutput({ title, text: 'starting…' });
+    setMixerBusy(true);
+    try {
+      const res = await publishRecipe(recipe, { dryRun: false, ...publishOpts(mixerPublishCfg) }, ctx.xiPath, ctx.env,
+        (line) => { lines.push(line); setCliOutput({ title, text: lines.join('\n') }); });
+      setCliOutput({ title: `${title} · ${res.ok ? 'done' : 'failed'}`, text: res.text });
       setStatusText(res.ok ? `Published ${recipe.name} — restart the client to see it` : 'Publish failed — see the console.');
+      setMixerPublishPlan(null);
       refreshMixerRecipes();
     } finally {
       setMixerBusy(false);
     }
-  }, [xiCtx, refreshMixerRecipes]);
-  // A plan is for one recipe as it was; any edit or switch voids it.
-  useEffect(() => { setMixerPlan(null); }, [mixerRecipe]);
+  }, [xiCtx, refreshMixerRecipes, mixerPublishCfg]);
 
   // One view on screen at a time, each arriving clean. Without this a model
   // keeps rendering (and animating) behind the Images page, music plays on under
@@ -11040,7 +11081,10 @@ export default function App({ launch = null }) {
             onStop={() => { stopEffect(); setMixerLoaded(false); setMixerDirty(false); setMixerStageName(null); mixerComposeRef.current = null; }}
             mixLoaded={mixerLoaded}
             onPublish={mixerPublish}
-            publishPlan={mixerPlan}
+            publishCfg={mixerPublishCfg}
+            onPublishCfg={setMixerPublishCfg}
+            publishPlan={mixerPublishPlan}
+            onCheckPublish={mixerCheckPublish}
             onSaveAs={mixerSaveAs}
             onDelete={mixerDelete}
             onRename={mixerRename}

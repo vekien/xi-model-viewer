@@ -376,23 +376,58 @@ export async function composeForPreview(recipe, xiRace, xiPath, env, onLine) {
  * the wizard and the CLI use, so the ability is rebuilt, listed and undone with
  * the rest of the project.
  */
-export async function publishRecipe(recipe, { dryRun, animation = null, kind = null }, xiPath, env, onLine) {
+export async function publishRecipe(recipe, { dryRun, animation = null, kind = null, subdir = null, force = false }, xiPath, env, onLine) {
   const recipePath = workRecipePath(xiPath, recipe.name);
   await backend.writeTextFile(recipePath, serializeRecipe(recipe));
   const lines = [];
+  const say = (line) => { lines.push(line); onLine?.(line); };
   const run = async (args) => {
-    lines.push(`$ xi ${args.join(' ')}`);
-    const code = await backend.xiRunStream(args, xiPath, env, (line) => { lines.push(line); onLine?.(line); });
+    say(`$ xi ${args.join(' ')}`);
+    const code = await backend.xiRunStream(args, xiPath, env, (line) => say(line));
     return !code;
   };
   const prep = ['dats', 'prepare', recipePath, '--project', recipe.name, '--type', 'ability', '--replace'];
   if (animation != null) prep.push('--animation', String(animation));
   if (kind && kind !== 'auto') prep.push('--kind', kind);
+  if (subdir != null) prep.push('--subdir', String(subdir));
   if (!(await run(prep))) return { ok: false, text: lines.join('\n') };
   const build = ['dats', 'build', recipe.name, '--only', `ability.${slug(recipe.name)}`];
   if (dryRun) build.push('--dry-run');
+  if (force) build.push('--force');
   const ok = await run(build);
   return { ok, text: lines.join('\n') };
+}
+
+/**
+ * What a `dats build --dry-run` says it would place, from its text: the kind
+ * and animation number it settled on, and one row per DAT — file id, race,
+ * role (body / companion_a / companion_b for a weapon skill), the ROM10 path
+ * it goes to, and what the file id points at today ("occupied by": a retail
+ * placeholder for a free extended slot, or another skill's DAT).
+ */
+export function parsePublishPlan(text) {
+  const out = { kind: null, animation: null, files: [], server: null, errors: [] };
+  for (const raw of String(text ?? '').split(/\r?\n/)) {
+    const line = raw.trim();
+    let m = line.match(/\(ability\):\s+(ja|spell|ws) animation (\d+)/);
+    if (m) { out.kind = m[1]; out.animation = Number(m[2]); continue; }
+    m = line.match(/file_id\s+(\d+)\s+(.+?)\s+->\s+(\S+)(?:\s+\(occupied by (\S+)\))?/);
+    if (m) {
+      const parts = m[2].trim().split(/\s+/);
+      out.files.push({
+        fileId: Number(m[1]),
+        race: parts.length > 1 ? parts[0] : null,
+        role: parts.length > 1 ? parts[1] : parts[0],
+        target: m[3],
+        occupiedBy: m[4] ?? null,
+      });
+      continue;
+    }
+    m = line.match(/^server:\s+(\S+)/);
+    if (m) { out.server = m[1]; continue; }
+    if (/^Error:/i.test(line)) out.errors.push(line.replace(/^Error:\s*/i, ''));
+  }
+  return out;
 }
 
 /** xi_dats._slug: lowercase, runs of anything but a-z0-9 → `_`. */
