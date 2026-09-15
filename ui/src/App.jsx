@@ -163,7 +163,6 @@ const VIEWS = ['files', 'database', 'npc', 'pc', 'creation', 'music', 'sfx', 'zo
 const MIXER_RAIL = [
   { id: 'timeline', icon: 'timeline', label: 'Timeline' },
   { id: 'actors', icon: 'groups', label: 'Actors' },
-  { id: 'parts', icon: 'segment', label: 'Parts' },
 ];
 const ORBIT_VIEWS = new Set(['files', 'npc', 'pc', 'creation']);
 // Seconds of real time one in-game day takes when the day/night cycle is
@@ -6543,7 +6542,7 @@ export default function App({ launch = null }) {
   // The mixer view's right rail: one glyph per panel, the Animation panel first.
   // Which are open is remembered; a panel's own close glyph reports back here.
   const [mixerPanels, setMixerPanels] = useState(() => {
-    const d = { actors: false, parts: false, timeline: true };
+    const d = { actors: false, timeline: true };
     try { return { ...d, ...JSON.parse(localStorage.getItem('mixerPanels') || '{}') }; } catch { return d; }
   });
   const setMixerPanel = useCallback((id, v) => setMixerPanels((m) => {
@@ -6874,7 +6873,7 @@ export default function App({ launch = null }) {
       // A pick brings its own kind and nothing else: a motion pick is the clips
       // and traces, not the source's locks, hits and links — those link the
       // client's shared routines, which spawn effects and sounds of their own.
-      const fresh = eventsFromInspect(info, lane, { keep: false })
+      const fresh = eventsFromInspect(info, lane, { keep: false, withGens: true })
         .map((e) => (startAt ? { ...e, start: e.start + startAt } : e));
       const r = mixerRecipeRef.current;
       const keptEvents = r.events.filter((e) => e.from !== lane);
@@ -6950,7 +6949,7 @@ export default function App({ launch = null }) {
       for (let i = 0; i < 6 && !mEvents.some((e) => e.op === 0x05); i++) {
         motion = pick(motionPool);
         mInfo = await mixerInfoFor(motion);
-        mEvents = eventsFromInspect(mInfo, 'motion', { keep: true });
+        mEvents = eventsFromInspect(mInfo, 'motion', { keep: true, withGens: true });
       }
       const vfx = pick(vfxPool);
       const sound = pick(soundPool);
@@ -7020,10 +7019,10 @@ export default function App({ launch = null }) {
     mixerPlayRecipe(next);
   }, [mixerLaneInfo, mixerPlayRecipe]);
 
-  /** Play one generator of the previewed DAT on its own, looping. */
-  const mixerSolo = useCallback(async (genId) => {
-    const entry = mixerLaneInfo[mixerLane]?.entry;
-    if (!entry) return;
+  /** Play one generator of a track's source on its own, looping, until Play mix. */
+  const mixerSolo = useCallback(async (genId, lane = null) => {
+    const entry = mixerLaneInfo[lane ?? mixerLane]?.entry;
+    if (!entry) { setStatusText(`solo ${genId}: no source on ${trackLabel(lane ?? mixerLane)}`); return; }
     mixerComposeRef.current = null;   // the solo replaces the armed mix; Play mix brings it back
     const path = entryPathForRace(entry, pc.race);
     if (effectEntryRef.current?.path !== path) await mixerLoadEntryOnStage(entry);

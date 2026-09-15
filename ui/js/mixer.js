@@ -121,6 +121,10 @@ export function eventsFromInspect(info, track, opts = {}) {
   const wantKeep = opts.keep !== false;
   const kind = opts.kind ?? kindOf(track);
   const refs = opts.refs ?? null;     // a Set: take the events naming these refs, whatever their kind
+  // A motion source's own generators ride on its track (`kind: 'vfx'` events
+  // on a motion track): a weapon skill's flashes and trails are part of the
+  // motion, and they used to wait behind a "take" box in the Parts window.
+  const withGens = !!opts.withGens && kind === 'motion';
   const out = [];
   for (const e of info.timeline) {
     // The inspector already expands local sub-routines at absolute frames, so
@@ -130,7 +134,7 @@ export function eventsFromInspect(info, track, opts = {}) {
     // the client's shared routines.
     if (LINK_OPS.has(e.op) && e.detail?.local) continue;
     const laneOf = laneForEvent(e);
-    if (refs ? !refs.has(e.ref) : (laneOf !== kind && !(wantKeep && laneOf === 'keep'))) continue;
+    if (refs ? !refs.has(e.ref) : (laneOf !== kind && !(withGens && laneOf === 'vfx') && !(wantKeep && laneOf === 'keep'))) continue;
     out.push({
       from: track,
       op: e.op,

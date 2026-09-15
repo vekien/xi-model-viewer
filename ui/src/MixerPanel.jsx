@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Checkbox, Field, Label } from '@headlessui/react';
 import { Tooltip } from './Tooltip.jsx';
 import { TimelineWindow } from './MixerTimeline.jsx';
 import { Floating } from './Floating.jsx';
@@ -21,23 +20,32 @@ function Num({ label, value, onChange, min = 0 }) {
   );
 }
 
-function EventEditor({ ev, onChange, onRemove }) {
+function EventEditor({ ev, onChange, onRemove, onSolo }) {
   if (!ev) return <div className="side-note">Select a block to edit its frames.</div>;
   const isClip = ev.op === 0x05;
+  const isGen = ev.op === 0x02 || ev.op === 0x3f;
+  const off = ev.enabled === false;
   return (
-    <div className="mixer-editor">
+    <div className={`mixer-editor${off ? ' off' : ''}`}>
       <div className="mixer-editor-title">
         <span className="mono">{ev.ref ?? '—'}</span>
-        <span className="mono-small">{opName(ev.op)} · {ev.from}</span>
+        <span className="mono-small">{opName(ev.op)} · {trackLabel(ev.from)}{off ? ' · disabled' : ''}</span>
         <span className="sp" />
         <div className="pc-tgroup">
-        <Tooltip content={ev.enabled === false ? 'Include in the recipe' : 'Leave out of the recipe'}>
-          <button type="button" className="pc-tbtn" onClick={() => onChange({ enabled: ev.enabled === false })}>
-            <span className="icon">{ev.enabled === false ? 'visibility_off' : 'visibility'}</span>
+        {isGen && onSolo && (
+          <Tooltip content="Play just this generator, looping, until the next Play mix">
+            <button type="button" className="pc-tbtn" aria-label="Play this generator" onClick={onSolo}>
+              <span className="icon">play_circle</span>
+            </button>
+          </Tooltip>
+        )}
+        <Tooltip content={off ? 'Enable: back into the mix' : 'Disable: stays on the timeline, left out of the mix'}>
+          <button type="button" className={`pc-tbtn${off ? ' on' : ''}`} aria-label={off ? 'Enable' : 'Disable'} onClick={() => onChange({ enabled: off })}>
+            <span className="icon">{off ? 'visibility_off' : 'visibility'}</span>
           </button>
         </Tooltip>
-        <Tooltip content="Remove">
-          <button type="button" className="pc-tbtn" onClick={onRemove}><span className="icon">delete</span></button>
+        <Tooltip content="Remove from the timeline">
+          <button type="button" className="pc-tbtn" aria-label="Remove" onClick={onRemove}><span className="icon">delete</span></button>
         </Tooltip>
         </div>
       </div>
@@ -53,76 +61,6 @@ function EventEditor({ ev, onChange, onRemove }) {
         )}
       </div>
       {ev.label && <div className="mono-small mixer-editor-note">{ev.label}</div>}
-    </div>
-  );
-}
-
-/** The parts of the source shown for `lane`: generators (solo / take), sounds (play / take), clips. */
-function Parts({ lane, entry, info, events, onSolo, onPlaySound, onTake, playingSoundKey = null }) {
-  if (!entry) return null;
-  const kind = kindOf(lane);
-  const taken = new Set(events.filter((e) => e.from === lane && e.enabled !== false).map((e) => e.ref));
-  const gens = (info?.timeline ?? []).filter((e) => e.op === 0x02 && !e.detail?.sound);
-  const genRows = gens.length ? gens.map((g) => ({ ref: g.ref, start: g.start, dur: g.dur }))
-    : (entry.gens ?? []).map((g) => ({ ref: g }));
-  const audioRows = (info?.timeline ?? []).filter((e) => e.op === 0x02 && e.detail?.sound)
-    .map((g) => ({ ref: g.ref, start: g.start, sound: g.detail.sound.file, id: g.detail.sound.sound_id, title: g.detail.sound.title }));
-  // One row per sound pointer: a skill often plays the same pointer twice (at the
-  // source and at the target); `take` covers every command that names it.
-  const soundRows = [];
-  for (const s of (info?.timeline ?? []).filter((e) => e.kind === 'sound')) {
-    if (soundRows.some((r) => r.ref === s.ref)) continue;
-    soundRows.push({ ref: s.ref, start: s.start, id: s.detail?.sound?.sound_id, title: s.detail?.sound?.title });
-  }
-  const clipRows = (info?.timeline ?? []).filter((e) => e.op === 0x05)
-    .map((c) => ({ ref: c.ref, start: c.start, dur: c.dur, summary: c.summary }));
-  return (
-    <div className="mixer-parts">
-      <div className="fx-actor-sec-title">{entry.name} · {entry.spec}</div>
-      {!info && <div className="side-note">Reading the timeline…</div>}
-      {kind === 'motion' && clipRows.length > 0 && <div className="side-separator">Clips</div>}
-      {kind === 'motion' && clipRows.map((c) => (
-        <div className="mixer-part" key={`c${c.ref}${c.start}`}>
-          <span className="mono">{c.ref}</span>
-          <span className="mono-small">f{c.start}{c.dur ? ` · ${c.dur}` : ''}</span>
-          <span className="mixer-part-note mono-small">{c.summary}</span>
-        </div>
-      ))}
-      {kind !== 'sound' && genRows.length > 0 && <div className="side-separator">Generators</div>}
-      {kind !== 'sound' && genRows.map((g) => (
-        <div className="mixer-part" key={`g${g.ref}${g.start ?? ''}`}>
-          <Tooltip content="Play only this generator on the stage (Play mix brings the mix back)">
-            <button type="button" className="pc-tbtn" onClick={() => onSolo(g.ref)}><span className="icon">play_arrow</span></button>
-          </Tooltip>
-          <span className="mono">{g.ref}</span>
-          <span className="mono-small">{g.start != null ? `f${g.start}` : ''}{g.dur ? ` · ${g.dur}` : ''}{g.sound ? ` · ♪ ${g.sound}` : ''}</span>
-          <Field className="mixer-take">
-            <Checkbox checked={taken.has(g.ref)} onChange={(v) => onTake(lane, g.ref, v)} className="checkbox">
-              <span className="icon check-icon">check</span>
-            </Checkbox>
-            <Label>take</Label>
-          </Field>
-        </div>
-      ))}
-      {kind === 'sound' && (soundRows.length + audioRows.length) > 0 && <div className="side-separator">Sounds</div>}
-      {kind === 'sound' && [...soundRows, ...audioRows].map((s) => (
-        <div className="mixer-part" key={`s${s.ref}${s.start ?? ''}`}>
-          <Tooltip content={playingSoundKey === `${s.ref}:${s.id}` ? 'Stop' : 'Play this sound'}>
-            <button type="button" className={`pc-tbtn${playingSoundKey === `${s.ref}:${s.id}` ? ' on' : ''}`}
-              aria-pressed={playingSoundKey === `${s.ref}:${s.id}` ? 'true' : 'false'} onClick={() => onPlaySound(s)}>
-              <span className="icon">{playingSoundKey === `${s.ref}:${s.id}` ? 'stop' : 'volume_up'}</span>
-            </button>
-          </Tooltip>
-          <span className="mono">{s.ref}</span>
-          <span className="mono-small">{s.sound ?? (s.id != null ? `se${String(s.id).padStart(6, '0')}` : '')}{s.title ? ` · ${s.title}` : ''}{s.start != null ? ` · f${s.start}` : ''}</span>
-          <Field className="mixer-take">
-            <Checkbox checked={taken.has(s.ref)} onChange={(v) => onTake(lane, s.ref, v)} className="checkbox">
-              <span className="icon check-icon">check</span>
-            </Checkbox>
-            <Label>take</Label>
-          </Field>
-        </div>
-      ))}
     </div>
   );
 }
@@ -276,27 +214,13 @@ export function MixerPanel({
       shuffleKind={shuffleKind} onShuffleKind={onShuffle ? onShuffleKind : null} onRandomise={onShuffle ? () => onShuffle(shuffleKind) : null}
       canPublish={!busy && events.length > 0 && !publishPlan}
       onDropEntry={onDropEntry}
-      editor={selected ? <EventEditor ev={selected} onChange={(p) => update(selected._id, p)} onRemove={() => remove(selected._id)} /> : null} />
+      editor={selected ? <EventEditor ev={selected} onChange={(p) => update(selected._id, p)} onRemove={() => remove(selected._id)}
+        onSolo={onSolo ? () => onSolo(selected.ref, selected.from) : null} /> : null} />
   );
 
   return (
     <>
       {timeline}
-      <Floating id="mixer-parts" open={!!panels.parts} width={460} defaultPos={{ right: 400, top: 430 }}>
-      <div className="panel mixer-parts-panel">
-        <div className="details-header">
-          <span className="icon">segment</span>
-          <span className="details-title">Parts · {trackLabel(lane)}</span>
-          <span className="sp" />
-          <button type="button" className="pc-tbtn details-close" aria-label="Close" onClick={() => onPanel?.('parts', false)}><span className="icon">close</span></button>
-        </div>
-        <div className="mixer-parts-body">
-          {!laneEntry && <div className="side-note">Pick a source for this lane to see what it is made of.</div>}
-          <Parts lane={lane} entry={laneEntry} info={laneInfo} events={events}
-            onSolo={onSolo} onPlaySound={onPlaySound} onTake={onTake} playingSoundKey={playingSoundKey} />
-        </div>
-      </div>
-      </Floating>
     </>
   );
 }

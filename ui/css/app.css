@@ -6650,7 +6650,9 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mixer-marquee { position: absolute; border: 1px dashed #fff; background: rgba(255, 255, 255, 0.12); pointer-events: none; z-index: 2; }
 .mixer-snaps { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
-.mixer-editor { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--ring); padding-top: 8px; }
+/* The block's properties: the same inset frame as the track above it. */
+.mixer-editor { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px 10px; border-radius: 8px; background: rgba(0, 0, 0, 0.28); box-shadow: inset 0 0 10px #00000070; }
+.mixer-editor.off .mixer-editor-title .mono { color: var(--muted); }
 .mixer-editor-title { display: flex; align-items: center; gap: 8px; }
 .mixer-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .mixer-field { display: flex; flex-direction: column; gap: 2px; font: 500 10px/1.2 var(--font-ui); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
@@ -6733,7 +6735,7 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 }
 .mseq-pill:active { cursor: grabbing; }
 .mseq-pill.on { outline: 2px solid #fff; outline-offset: -1px; }
-.mseq-pill.off { opacity: 0.35; }
+.mseq-pill.off { opacity: 0.4; filter: grayscale(1); }
 .mseq-pill.wave { display: flex; align-items: center; gap: 4px; padding: 0 6px 0 3px; }
 .mseq-pill .mseq-spk { font-size: 13px; line-height: 1; cursor: pointer; flex: 0 0 auto; }
 .mseq-pill .mseq-wave { flex: 1 1 auto; min-width: 0; height: 100%; opacity: 0.8; }
@@ -6765,7 +6767,7 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
   opacity: 0.45;
 }
 .mseq-resize-v:hover::after { background: var(--accent); opacity: 0.9; }
-#mixer-seq .mixer-editor { flex: 0 0 auto; border-top: 1px solid var(--ring); padding-top: 8px; }
+#mixer-seq .mixer-editor { flex: 0 0 auto; }
 
 /* ── Right rail: one round glyph per panel; the panels are floating hosts dragged by their header ── */
 #right-rail {
