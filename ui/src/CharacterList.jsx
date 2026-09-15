@@ -1057,7 +1057,11 @@ function GearSetsPanel({ race, sel, slots, races, onApply }) {
       <div className="gs-head">
         <span className="gs-title">GearSets</span>
         <span className="gs-spacer" />
-        <button type="button" className="gs-save" onClick={beginSave}>Save</button>
+        <div className="pc-tgroup">
+          <Tooltip content="Save the current look as a gear set" placement="left">
+            <button type="button" className="pc-tbtn" aria-label="Save gear set" onClick={beginSave}><span className="icon">save</span></button>
+          </Tooltip>
+        </div>
       </div>
       <div className="seg-tabs gs-tabs" role="tablist" aria-label="Gear sets">
         {[['custom', 'Custom'], ['presets', 'Presets']].map(([id, label]) => (
