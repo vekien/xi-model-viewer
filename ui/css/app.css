@@ -6860,7 +6860,9 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mseq-manage-btn.on { background: rgba(255, 255, 255, 0.12); }
 .mseq-manage { margin-bottom: 8px; }
 .mseq-manage .mixer-field { width: auto; }
-.mseq-manage .seg-tabs { height: 26px; }
+.mseq-manage .mseq-manage-kind .cseq-load { width: 140px; height: 26px; }
+.mseq-manage .mseq-manage-kind .combo-input { height: 26px; min-height: 26px; }
+.mseq-manage .mseq-manage-force { height: 26px; }
 .mseq-plan-wrap { max-height: 200px; overflow: auto; display: flex; flex-direction: column; gap: 4px; }
 .mseq-plan { border-collapse: collapse; font: 400 11px/1.4 var(--font-mono); color: var(--text); }
 .mseq-plan th { text-align: left; font: 500 10px/1.2 var(--font-ui); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 14px 2px 0; }

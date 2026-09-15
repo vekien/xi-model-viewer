@@ -578,13 +578,14 @@ export function TimelineWindow({
               </Tooltip>
             </div>
             <div className="mixer-fields">
-              <label className="mixer-field">
+              <label className="mixer-field mseq-manage-kind">
                 <span>publish as</span>
-                <div className="seg-tabs" role="tablist" aria-label="Publish as">
-                  {[['auto', 'Auto'], ['ws', 'WS'], ['ja', 'Ability'], ['spell', 'Spell']].map(([id, label]) => (
-                    <button key={id} type="button" role="tab" aria-selected={publishCfg.kind === id}
-                      className={`seg-tab${publishCfg.kind === id ? ' on' : ''}`} onClick={() => onPublishCfg({ kind: id })}>{label}</button>
-                  ))}
+                <div className="cseq-load">
+                  <Combo
+                    value={publishCfg.kind || 'auto'}
+                    items={[{ id: 'auto', label: 'Auto' }, { id: 'ws', label: 'Weapon skill' }, { id: 'ja', label: 'Job ability' }, { id: 'spell', label: 'Spell' }]}
+                    onChange={(id) => id && onPublishCfg({ kind: id })}
+                  />
                 </div>
               </label>
               <label className="mixer-field">
@@ -598,16 +599,15 @@ export function TimelineWindow({
                   value={publishCfg.subdir ?? ''} onChange={(e) => onPublishCfg({ subdir: e.target.value.replace(/[^0-9]/g, '') })} />
               </label>
               <label className="mixer-field">
-                <span>taken slots</span>
-                <label className="switch cseq-switch">
-                  <input type="checkbox" checked={!!publishCfg.force} onChange={(e) => onPublishCfg({ force: e.target.checked })} />
-                  <span className="track" />
-                  <span className="cseq-switch-label">Force</span>
-                </label>
+                <span>force</span>
+                <Tooltip content="Take the animation slot even when its file ids already point at another DAT (xi dats build --force)" placement="top">
+                  <label className="switch cseq-switch mseq-manage-force">
+                    <input type="checkbox" checked={!!publishCfg.force} onChange={(e) => onPublishCfg({ force: e.target.checked })} />
+                    <span className="track" />
+                    <span className="cseq-switch-label">Overwrite a taken slot</span>
+                  </label>
+                </Tooltip>
               </label>
-            </div>
-            <div className="mono-small mixer-editor-note">
-              The client works the file ids out from the animation number itself — a weapon skill: the race's extended bank base + (animation − 256), body plus two companions; an ability: 4412 + animation; a spell: 2800 + animation — so the number is the choice, and the DATs go into ROM10/{publishCfg.subdir || 20}. Auto takes the next free slot. Force takes the number even when its file ids point at another DAT.
             </div>
             {publishPlan && (
               <div className="mseq-plan-wrap">
