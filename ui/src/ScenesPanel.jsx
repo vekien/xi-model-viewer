@@ -137,7 +137,7 @@ export function ScenesPanel({
     <div id="scenes" className="panel">
       <div className="plc-header">
         <Tooltip content="Back to the scene list" placement="bottom">
-          <button type="button" className="icon-btn scene-back" aria-label="Back to scenes" onClick={onBack}>
+          <button type="button" className="pc-tbtn scene-back" aria-label="Back to scenes" onClick={onBack}>
             <span className="icon">arrow_back</span>
           </button>
         </Tooltip>

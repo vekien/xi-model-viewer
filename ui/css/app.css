@@ -6465,7 +6465,7 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 #scenes .plc-count { margin-left: auto; color: var(--muted); font-size: 11px; }
 #scenes .plc-spacer { flex: 1 1 auto; }
 /* Actor view title: back arrow, the scene's name (edited in place), Save. */
-#scenes .scene-back { width: 24px; height: 24px; min-height: 0; flex: 0 0 auto; margin-left: -4px; }
+#scenes .scene-back { margin-left: -4px; }
 #scenes .scene-name-input { flex: 1 1 auto; min-width: 0; font: 600 12px/1.2 var(--font-ui); }
 #scenes .scene-name-input:not(:focus):not(:hover) { background: transparent; }
 #scenes .scene-save.dirty { color: var(--accent); background: rgba(100, 180, 255, 0.14); }
