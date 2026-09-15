@@ -211,6 +211,12 @@ export function MixerPanel({
         if (recipe.name.trim()) onSaveAs?.(recipe.name.trim());
         return;
       }
+      // Ctrl+A: every block on every track, rather than the page's text.
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a' && !e.shiftKey && !e.altKey && !typing(e.target)) {
+        e.preventDefault();
+        setSelectedIds(new Set(events.map((ev) => ev._id)));
+        return;
+      }
       if (typing(e.target) || !selectedIds.size) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
         e.preventDefault();
