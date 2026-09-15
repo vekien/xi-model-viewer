@@ -28,7 +28,11 @@
 //        shown, hands hidden — for duration/2 frames, and so does this.
 //   0xA3 (not in the PS2 client; xim ToggleModelVisibilityRoutine)
 //        +8 u32 hidden, +0xc u16 slot. An actor-level toggle applied last.
-//   0x78 plays a sound (xim calls it DisplayDead); it does not touch weapons.
+//   0x78 plays a sound in the PS2 client (xim calls it DisplayDead); it does
+//        not touch the weapons there. The viewer nonetheless HIDES EVERY SLOT
+//        for a routine that carries it — the `dead` schedule is the only one
+//        (ded? then cor?) — because in game the corpse lies weaponless and no
+//        tag in the DATs says so. Hard-coded on observation, not evidence.
 //
 // The shared helpers in ROM/0/0.DAT are where most of the 0x75s live:
 //   hwmg  hide main+sub if engaged, hide ranged   ← every ca*/sh* cast schedule
@@ -40,7 +44,7 @@
 export const SLOT = { main: 0, sub: 1, range: 2 };
 
 /** Scheduler tags that change weapon visibility (or link the routine that does). */
-export const VIS_OPS = new Set([0x75, 0x76, 0x77, 0x89, 0xa3]);
+export const VIS_OPS = new Set([0x75, 0x76, 0x77, 0x78, 0x89, 0xa3]);
 
 /**
  * Decode one visibility tag at byte offset `p` (the op byte) into a command
@@ -65,6 +69,8 @@ export function readVisCommand(bytes, p, op, at, end) {
     case 0x89:
       if (p + 8 > end) return null;
       return { op, delay: at, dur: u16(p + 6) };
+    case 0x78:
+      return { op, delay: at, dur: 0 };
     default:
       return null;
   }
@@ -132,6 +138,9 @@ export function collectVis(schedule, { schedById = null, globalById = null, rang
  * @returns {{ hidden: Set<number>, rangedDrawn: boolean }}
  */
 export function hiddenSlotsAt(vis, tick, { engaged = false } = {}) {
+  // Death: hidden from the first frame, whatever else the routine says (the
+  // tag itself sits 92 ticks in, after the fall). See the 0x78 note above.
+  if (vis.some((v) => v.op === 0x78)) return { hidden: new Set([SLOT.main, SLOT.sub, SLOT.range]), rangedDrawn: false };
   const hidden = new Set([SLOT.range]);
   const toggled = new Map();
   let drawn = false;
