@@ -5410,6 +5410,14 @@ export default function App({ launch = null }) {
   const [dataDoc, setDataDoc] = useState(null);         // inspectDat result + path
   // Status-bar overlay: peek structure without leaving the live zone/model/etc.
   const [dataStructOpen, setDataStructOpenState] = useState(false);
+  // The image viewer is a 2D overlay (ImageViewer.jsx), so while it is up the
+  // renderer parks its floor, grid and axes rather than drawing a horizon
+  // behind a texture. Same condition as the ImageViewer mount below.
+  const imageStage = !dataStructOpen && !!imageDoc
+    && (leftView === 'images' || (leftView === 'files' && browserKind === 'image'));
+  useEffect(() => {
+    if (rendererRef.current) rendererRef.current.stageHidden = imageStage;
+  }, [imageStage]);
   const setDataStructOpen = useCallback((v) => {
     const next = typeof v === 'function' ? v(dataStructOpenRef.current) : !!v;
     dataStructOpenRef.current = next;

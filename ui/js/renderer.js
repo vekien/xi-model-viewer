@@ -1257,6 +1257,10 @@ export class Renderer {
     this.showAxes = false;
     // World grid on the ground plane (View > Toggle Grid) — the floor, as lines.
     this.showGrid = false;
+    // Image DATs are a 2D overlay over the canvas: while one is up the stage
+    // furniture (floor, grid, axes) is parked so a texture isn't framed by a
+    // horizon. The toggles keep their values for when a model is back.
+    this.stageHidden = false;
     this.gridLines = null;   // { vao, vbo, count, kind } — rebuilt when range kind changes
     // Camera Sequencer route preview — set by the panel, null when it is closed.
     this.cameraPath = null;  // { data, count, dirty }
@@ -3160,7 +3164,7 @@ export class Renderer {
     // wins over a loaded ground texture while it is on, and stands in for one
     // when none is loaded.
     const flatOn = this.flatFloor.on && !!this.flatFloorTex;
-    if ((this.floor || flatOn) && !zoneUp) {
+    if ((this.floor || flatOn) && !zoneUp && !this.stageHidden) {
       gl.useProgram(this.floorProgram);
       gl.uniformMatrix4fv(this.floorUniforms.viewProj, false, datVP);
       gl.uniform1f(this.floorUniforms.tile, this.floorTile);
@@ -3203,8 +3207,8 @@ export class Renderer {
         this._drawActorGizmo(viewProj);
       }
       if (this.showSoundMarkers) this._drawSoundMarkers(viewProj);
-      if (this.showGrid) this._drawGrid(viewProj);
-      if (this.showAxes) this._drawAxes(viewProj);
+      if (this.showGrid && !this.stageHidden) this._drawGrid(viewProj);
+      if (this.showAxes && !this.stageHidden) this._drawAxes(viewProj);
       if (this.cameraPath) this._drawCameraPath(viewProj);
       gl.depthMask(true);
       gl.disable(gl.BLEND);
@@ -3220,9 +3224,9 @@ export class Renderer {
     // no model geometry behind them. Drawn before the model early-outs below,
     // which would otherwise skip it (there is no pose).
     if (this.effectMode && this.particleSystem) {
-      if (this.showGrid) this._drawGrid(viewProj);   // before particles: they blend over it
+      if (this.showGrid && !this.stageHidden) this._drawGrid(viewProj);   // before particles: they blend over it
       this._drawParticles();
-      if (this.showAxes) this._drawAxes(viewProj);
+      if (this.showAxes && !this.stageHidden) this._drawAxes(viewProj);
       if (this.cameraPath) this._drawCameraPath(viewProj);
       gl.depthMask(true);
       gl.disable(gl.BLEND);
@@ -3239,8 +3243,8 @@ export class Renderer {
       ? datVP
       : viewProj;
     const drawHelpers = () => {
-      if (this.showGrid) this._drawGrid(helpersVP);
-      if (this.showAxes) this._drawAxes(helpersVP);
+      if (this.showGrid && !this.stageHidden) this._drawGrid(helpersVP);
+      if (this.showAxes && !this.stageHidden) this._drawAxes(helpersVP);
       if (this.cameraPath) this._drawCameraPath(helpersVP);
     };
     if (!this.pose) { drawHelpers(); return; }
@@ -3373,8 +3377,8 @@ export class Renderer {
     // Debug overlays on top (collision terrain colours, UE-green navmesh).
     this._drawOverlay(viewProj, this.showCollision ? this.collisionOverlay : null, this.collisionOpacity);
     this._drawOverlay(viewProj, this.showNavmesh ? this.navmeshOverlay : null, this.navmeshOpacity);
-    if (this.showGrid) this._drawGrid(viewProj);
-    if (this.showAxes) this._drawAxes(viewProj);
+    if (this.showGrid && !this.stageHidden) this._drawGrid(viewProj);
+    if (this.showAxes && !this.stageHidden) this._drawAxes(viewProj);
     if (this.cameraPath) this._drawCameraPath(viewProj);
 
     gl.depthMask(true);
