@@ -6786,9 +6786,11 @@ export default function App({ launch = null }) {
       const lane = mixerLane;
       // A bare clip from a clip pack has no routine to inspect: it is one
       // PlayClip for the clip's own length, which compose builds from the
-      // template (the lane's `routine` is null).
+      // template (the lane's `routine` is null). The window is in scheduler
+      // ticks (60/s) while the clip counts 30fps frames, so it is doubled —
+      // retail writes jb1 (120 frames) as a 244-tick PlayClip in `motw`.
       const info = entry.clip
-        ? { timeline: [{ op: 0x05, ref: entry.clip.ref, start: 0, dur: entry.clip.frames, name: 'PlayClip', summary: `${entry.clip.frames} f` }] }
+        ? { timeline: [{ op: 0x05, ref: entry.clip.ref, start: 0, dur: entry.clip.frames * 2, name: 'PlayClip', summary: `${entry.clip.frames} f` }] }
         : await mixerInfoFor(entry);
       // A pick brings its own kind and nothing else: a motion pick is the clips
       // and traces, not the source's locks, hits and links — those link the
