@@ -10948,14 +10948,6 @@ export default function App({ launch = null }) {
                   </button>
                 </>
               )}
-              {modelInfo && (DETAIL_VIEWS.has(leftView)
-                || (leftView === 'files' && (browserKind === 'zone' || browserKind === 'effect')))
-                && !(leftView === 'files' && browserKind && !['entity', 'zone', 'effect'].includes(browserKind)) && (
-                <>
-                  <span className="status-sep">·</span>
-                  <button className="status-link" onClick={() => setDetailsOpen((v) => !v)}>Details</button>
-                </>
-              )}
             </>
           ) : modelInfo ? (
             <>
@@ -11003,14 +10995,6 @@ export default function App({ launch = null }) {
                   <button className="status-link" onClick={() => setActorsOpenPersist((v) => !v)}>
                     {actorsOpen ? 'Hide actors' : 'Actors'}
                   </button>
-                </>
-              )}
-              {(DETAIL_VIEWS.has(leftView)
-                || (leftView === 'files' && (browserKind === 'zone' || browserKind === 'effect')))
-                && !(leftView === 'files' && browserKind && !['entity', 'zone', 'effect'].includes(browserKind)) && (
-                <>
-                  <span className="status-sep">·</span>
-                  <button className="status-link" onClick={() => setDetailsOpen((v) => !v)}>Details</button>
                 </>
               )}
             </>
@@ -11070,15 +11054,17 @@ export default function App({ launch = null }) {
       {detailsOpen && modelInfo && !player.current
         && (DETAIL_VIEWS.has(leftView) || (leftView === 'files' && (browserKind === 'zone' || browserKind === 'effect')))
         && !(leftView === 'files' && browserKind && !['entity', 'zone', 'effect'].includes(browserKind)) && (
-        <DetailsPanel
-          info={modelInfo}
-          animClip={animsRef.current.find((g) => g.id === currentAnim)?.clip ?? null}
-          animId={currentAnim}
-          schedule={schedules.find((s) => s.id === currentSchedule) ?? null}
-          onClose={() => setDetailsOpen(false)}
-          onOpenTexture={openTexture}
-          onPlayClip={playClipId}
-        />
+        <Floating id="view-details" defaultPos={{ right: 68, top: 340 }}>
+          <DetailsPanel
+            info={modelInfo}
+            animClip={animsRef.current.find((g) => g.id === currentAnim)?.clip ?? null}
+            animId={currentAnim}
+            schedule={schedules.find((s) => s.id === currentSchedule) ?? null}
+            onClose={() => setDetailsOpen(false)}
+            onOpenTexture={openTexture}
+            onPlayClip={playClipId}
+          />
+        </Floating>
       )}
 
       {texWindows.map((w, i) => (
