@@ -92,6 +92,7 @@ export function MenuBar({
   shadowsOn = false, shadowDistance = 90, onShadowDistance,
   renderHeight = 0, onRenderHeight, bufferSize = null,
   fpsCap = 0, onFpsCap, onGraphicsOpenChange,
+  masterVolume = 1, onMasterVolume,
   effectVolume = 1, onEffectVolume, musicVolume = 0.8, onMusicVolume, ambientVolume = 0.6, onAmbientVolume,
   renderDistance = 5000, onRenderDistance,
   effectDistanceScale = 1, onEffectDistanceScale,
@@ -315,7 +316,7 @@ export function MenuBar({
             aria-expanded={!!volume}
             onClick={(e) => toggleVolume(e.currentTarget)}
           >
-            <span className="icon">{effectVolume > 0 || musicVolume > 0 ? 'volume_up' : 'volume_off'}</span>
+            <span className="icon">{masterVolume > 0 && (effectVolume > 0 || musicVolume > 0) ? 'volume_up' : 'volume_off'}</span>
           </button>
         </Tooltip>
         <Tooltip content="Viewport — background & floor" placement="bottom">
@@ -434,6 +435,8 @@ export function MenuBar({
             style={{ position: 'fixed', left: volume.left, top: volume.top }}
           >
             <VolumePanel
+              masterVolume={masterVolume}
+              onMasterVolume={onMasterVolume}
               effectVolume={effectVolume}
               onEffectVolume={onEffectVolume}
               musicVolume={musicVolume}

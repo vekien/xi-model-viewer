@@ -1,7 +1,8 @@
-// Toolbar volume popover — the same chrome as Graphics (tool-pop). Three sliders
-// for the whole app: Volume is every sound an animation, effect or mix plays;
-// Music is the zone's track and the music player; Ambient is a zone's weather
-// and environment sound, so it is only live while a zone is loaded.
+// Toolbar volume popover — the same chrome as Graphics (tool-pop). Master is
+// the level over everything the app plays; under it, Sound Effects is every
+// sound an animation, effect or mix plays, Music is the zone's track and the
+// music player, and Ambient is a zone's weather and environment sound, so it
+// is only live while a zone is loaded.
 
 function Slider({ label, value, onChange, disabled = false, note = null }) {
   const pct = Math.round((value ?? 0) * 100);
@@ -23,6 +24,7 @@ function Slider({ label, value, onChange, disabled = false, note = null }) {
 }
 
 export function VolumePanel({
+  masterVolume = 1, onMasterVolume,
   effectVolume = 1, onEffectVolume,
   musicVolume = 0.8, onMusicVolume,
   ambientVolume = 0.6, onAmbientVolume,
@@ -31,7 +33,8 @@ export function VolumePanel({
   return (
     <div className="tool-pop-body vol-pop">
       <h3>VOLUME</h3>
-      <Slider label="Volume" value={effectVolume} onChange={onEffectVolume} />
+      <Slider label="Master" value={masterVolume} onChange={onMasterVolume} />
+      <Slider label="Sound Effects" value={effectVolume} onChange={onEffectVolume} />
       <Slider label="Music" value={musicVolume} onChange={onMusicVolume} />
       <Slider label="Ambient" value={ambientVolume} onChange={onAmbientVolume} disabled={!zoneLoaded} note="zones only" />
     </div>

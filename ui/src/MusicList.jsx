@@ -148,12 +148,14 @@ export function useAudioPlayer() {
     const v = parseFloat(localStorage.getItem('musicVolume'));
     return Number.isFinite(v) ? v : 0.8;
   });
+  // The app-wide Master level rides over the music volume; the gain node carries the product.
+  const masterRef = useRef((() => { const m = parseFloat(localStorage.getItem('masterVolume')); return Number.isFinite(m) ? m : 1; })());
 
   const ensureCtx = () => {
     if (!ctxRef.current) {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
       const gain = ctx.createGain();
-      gain.gain.value = volume;
+      gain.gain.value = volume * masterRef.current;
       // gain -> analyser -> destination, so the visualizer sees the live signal.
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
@@ -332,12 +334,19 @@ export function useAudioPlayer() {
     const clamped = Math.min(Math.max(v, 0), 1);
     setVolumeState(clamped);
     localStorage.setItem('musicVolume', String(clamped));
-    if (gainRef.current) gainRef.current.gain.value = clamped;
+    if (gainRef.current) gainRef.current.gain.value = clamped * masterRef.current;
   };
+  /** The app-wide Master level (0..1); the music volume itself is untouched. */
+  const setMaster = (m) => {
+    masterRef.current = Math.min(Math.max(m, 0), 1);
+    if (gainRef.current) gainRef.current.gain.value = volumeRef.current * masterRef.current;
+  };
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
 
   useEffect(() => () => { disconnectSource(); clearTick(); }, []);
 
   const getAnalyser = () => analyserRef.current;
 
-  return { current, playing, info, position, volume, play, pause, resume, stop, seek, setVolume, getAnalyser };
+  return { current, playing, info, position, volume, play, pause, resume, stop, seek, setVolume, setMaster, getAnalyser };
 }

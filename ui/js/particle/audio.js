@@ -94,6 +94,7 @@ export class WeatherAudio {
     this._getContextRaw = getContext;
     this.loadSound = loadSound;
     this.volume = Math.max(0, Math.min(1, volume));
+    this.master = 1;          // the app-wide Master level, over this bus's own volume
     this.enabled = false;
 
     this.system = null;
@@ -129,10 +130,16 @@ export class WeatherAudio {
     return ctx;
   }
 
-  /** Effective linear gain on the master bus (0 when muted). */
+  /** Effective linear gain on the master bus (0 when muted): this bus's volume under the app's Master. */
   _masterGainValue() {
-    if (!this.enabled || this.volume <= 0) return 0;
-    return this.volume;
+    if (!this.enabled || this.volume <= 0 || this.master <= 0) return 0;
+    return this.volume * this.master;
+  }
+
+  /** The app-wide Master level (0..1); scales this bus without touching its own volume. */
+  setMaster(v) {
+    this.master = Math.max(0, Math.min(1, v));
+    this._applyMasterGain();
   }
 
   _applyMasterGain() {

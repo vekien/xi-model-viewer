@@ -1419,6 +1419,13 @@ export default function App({ launch = null }) {
   const [effectSpeed, setEffectSpeedState] = useState(1);
   const effectRoutinesRef = useRef([]);                     // mirror for stable playback callbacks
   const effectSpeedRef = useRef(1);
+  // Master: the level over everything the app plays — effects, music, ambient.
+  // Each bus multiplies it into its own volume, so the three levels stay as set.
+  const [masterVolume, setMasterVolumeState] = useState(() => {
+    const v = parseFloat(localStorage.getItem('masterVolume'));
+    return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1;
+  });
+  const masterVolumeRef = useRef(masterVolume);
   const [effectVolume, setEffectVolumeState] = useState(() => {
     const v = parseFloat(localStorage.getItem('effectVolume'));
     return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.6;
@@ -3184,6 +3191,15 @@ export default function App({ launch = null }) {
   }, [ensureGlobalEffects, setWasd]);
 
   /** Effect SFX level. 0 mutes: the backend stops rather than playing silence. */
+  const setMasterVolume = useCallback((v) => {
+    const m = Math.min(1, Math.max(0, v));
+    masterVolumeRef.current = m;
+    setMasterVolumeState(m);
+    try { localStorage.setItem('masterVolume', String(m)); } catch { /* quota */ }
+    weatherAudioRef.current?.setMaster(m);   // effects and ambient share this bus
+    player.setMaster(m);                     // the zone track and the music player
+  }, [player]);
+
   const setEffectVolume = useCallback((v) => {
     const clamped = Math.min(1, Math.max(0, v));
     effectVolumeRef.current = clamped;
@@ -3609,6 +3625,7 @@ export default function App({ launch = null }) {
         return { buffer: toAudioBuffer(audioCtx, buffer).audioBuffer, loopStart };
       },
     });
+    weatherAudioRef.current.setMaster(masterVolumeRef.current);
     return weatherAudioRef.current;
   }, []);
 
@@ -10286,6 +10303,8 @@ export default function App({ launch = null }) {
         fpsCap={fpsCap}
         onFpsCap={setFpsCap}
         onGraphicsOpenChange={setGraphicsOpen}
+        masterVolume={masterVolume}
+        onMasterVolume={setMasterVolume}
         effectVolume={effectVolume}
         onEffectVolume={setEffectVolume}
         musicVolume={player.volume}
