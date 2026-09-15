@@ -330,6 +330,7 @@ export function MenuBar({
             <span className="icon">grass</span>
           </button>
         </Tooltip>
+        <span className="menu-sep" aria-hidden="true" />
         <Tooltip content="Camera Sequencer" placement="bottom">
           <button
             type="button"
