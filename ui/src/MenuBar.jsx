@@ -290,20 +290,6 @@ export function MenuBar({
       <span className="menu-sep" aria-hidden="true" />
 
       <div className="cam-group">
-        <Tooltip content="Reload DAT — refresh Data Struct and open inspect windows" placement="bottom">
-          <button
-            type="button"
-            className="view-tool"
-            aria-label="Reload DAT"
-            onClick={() => {
-              setActive(null); setViewport(null);
-              setGraphics(null); onGraphicsOpenChange?.(false);
-              onAction('reload-dat', 'Reload DAT');
-            }}
-          >
-            <span className="icon">refresh</span>
-          </button>
-        </Tooltip>
         {/* Panel openers, grouped apart from the on/off toggles to their left. */}
         <Tooltip content="Graphics — shadows, resolution, FPS, FOV" placement="bottom">
           <button
