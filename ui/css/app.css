@@ -1639,12 +1639,13 @@ button.cli-output-stop:hover {
 .wx-row .combo-input { flex: 1 1 auto; width: auto; min-width: 0; }
 /* Every Zone row leads with a 20x20 control — icon or toggle button — so the
    sliders after them all start on the same vertical line. */
+/* The same 26px footprint as the time row's transport glyph (button.pc-tbtn), so the sliders line up. */
 .wx-tod-icon {
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   color: var(--muted);
   font-size: 16px;
   line-height: 1;
