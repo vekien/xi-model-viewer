@@ -40,9 +40,13 @@ export function Floating({ id, open = true, width = 320, defaultPos = { right: 6
   const onPointerDown = (e) => {
     setZ(++topZ);
     if (e.button !== 0) return;
-    const header = e.target.closest(HEADER);
-    if (!header || !hostRef.current?.contains(header) || e.target.closest(CONTROL)) return;
     const el = hostRef.current;
+    // The grab area is the header (between its controls) and the panel's own
+    // padding: a press that lands on the panel element itself, not on a child,
+    // is in the 12px frame around the content, so every edge drags.
+    const header = e.target.closest(HEADER);
+    const onFrame = e.target === el || e.target === el?.firstElementChild;
+    if (!onFrame && (!header || !el?.contains(header) || e.target.closest(CONTROL))) return;
     const rect = el.getBoundingClientRect();
     if (!pos) setPos({ x: rect.left, y: rect.top });
     const d = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };

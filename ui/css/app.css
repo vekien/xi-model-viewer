@@ -6780,6 +6780,9 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
   box-sizing: border-box;
 }
 .float-host .details-header, .float-host .panel-title, .float-host .plc-header, .float-host .wx-header { cursor: grab; }
+/* The panel's 12px frame around its content is grab area too; the content keeps its own cursors. */
+.float-host > .panel { cursor: grab; }
+.float-host > .panel > * { cursor: auto; }
 .float-host.dragging .details-header, .float-host.dragging .panel-title { cursor: grabbing; }
 /* A drag must not sweep the header text into a selection. */
 .float-host .details-header, .float-host .panel-title, .float-host .plc-header, .float-host .wx-header { user-select: none; -webkit-user-select: none; }
