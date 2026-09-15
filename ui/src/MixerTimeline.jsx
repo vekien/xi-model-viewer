@@ -218,7 +218,8 @@ export function TimelineWindow({
   const soundTicks = (ev) => Math.round((peaks.get(soundIdOf(ev))?.seconds ?? 0) * FPS);
   const soundEnd = Math.max(0, ...[...events.filter(isSoundEvent), ...ghostEvents].map((e) => e.start + soundTicks(e)));
 
-  const len = Math.max(MIN_LEN, recipeLength(events) + 20, soundEnd + 20, minLen);
+  // Whole ticks: the armed routine's end can be fractional (a loop point from a clip length at 30fps).
+  const len = Math.ceil(Math.max(MIN_LEN, recipeLength(events) + 20, soundEnd + 20, minLen));
   const ticks = rulerTicks(len, FPS, zoom);
 
   // Each lane's stacking is remembered (collapse from the glyph by the label).
