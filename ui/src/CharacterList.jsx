@@ -846,6 +846,11 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
     // is one of these groups. App gates the mesh on it.
     rangedDisplay: sectionCfg.current.rangedDisplay ?? null,
     rangedPaths: slots?.range?.find((it) => it.id === sel.range)?.paths ?? null,
+    // Both hand weapons' DATs: the game hides them while a spell is cast.
+    handPaths: [
+      ...(slots?.main?.find((it) => it.id === sel.main)?.paths ?? []),
+      ...(slots?.sub?.find((it) => it.id === sel.sub)?.paths ?? []),
+    ],
     actionLabel: actions.find((a) => a.id === action)?.label ?? '',
     snapshot: () => {
       const gear = {};

@@ -192,6 +192,8 @@ function clampWeatherFadeMs(v) {
 }
 // Views whose actor can carry particle VFX alongside its mesh, and so get the
 // Both / Mesh / VFX control and the effect volume slider.
+/** Motions the game casts a spell with: the magic clip families, the cast schedules, the Effects view's composed cast. */
+const CASTING_MOTION = /^(m[abinsw]\d*|ca[a-z]*\d*|cast)$/i;
 const FX_VIEWS = new Set(['pc', 'npc']);
 
 /**
@@ -4158,15 +4160,24 @@ export default function App({ launch = null }) {
         : pcMeshPathsRef.current);
       return;
     }
-    // The ranged rule below is a PC composer concern only.
+    // The rules below are PC composer concerns only.
     if (leftView === 'npc') { r.setHiddenSources(null); return; }
+    const hidden = [];
     const cfg = pc.rangedDisplay;
     const paths = pc.rangedPaths;
-    if (!cfg || !paths?.length) { r.setHiddenSources(null); return; }
-    const inUse = (cfg.showForActionGroups ?? []).includes(pc.actionGroup)
-      || (cfg.showForActions ?? []).includes(pc.actionLabel);
-    r.setHiddenSources(inUse ? null : paths);
-  }, [pc.rangedDisplay, pc.rangedPaths, pc.actionGroup, pc.actionLabel, leftView, pcFxMode, modelPath]);
+    if (cfg && paths?.length) {
+      const inUse = (cfg.showForActionGroups ?? []).includes(pc.actionGroup)
+        || (cfg.showForActions ?? []).includes(pc.actionLabel);
+      if (!inUse) hidden.push(...paths);
+    }
+    // A spell is cast with the hand weapons hidden. The game does that itself
+    // when the cast starts — no ShowHideWeapon in the spell or cast DATs — so
+    // the viewer does it off the motion: a magic clip (ma / mb / mi / mn / ms /
+    // mw), a cast schedule (casm, cast, cawh…) or the Effects view's composed
+    // cast.
+    if (CASTING_MOTION.test(currentAnim) || CASTING_MOTION.test(currentSchedule)) hidden.push(...(pc.handPaths ?? []));
+    r.setHiddenSources(hidden.length ? hidden : null);
+  }, [pc.rangedDisplay, pc.rangedPaths, (pc.handPaths ?? []).join('|'), pc.actionGroup, pc.actionLabel, leftView, pcFxMode, modelPath, currentAnim, currentSchedule]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Character Creation (high-poly RT/SHAPE + SQLE models) ----------------
 
