@@ -64,11 +64,13 @@ function blendSample(a, b, u) {
 // ---------------------------------------------------------------------------
 
 /**
- * Clips that are the character at rest: idle, stand, and the locomotion set
- * (trailing digit = body-region part). Everything else — the battle stance, the
- * attack rounds, a weapon skill's routine — is the character engaged.
+ * Clips that are the character at rest: idle, stand, the locomotion set, and
+ * the casting family (`cas`, `casm`, `cawh`, `cabk`, `canj`… — a spell is cast
+ * with the weapon sheathed; trailing digit = body-region part). Everything
+ * else — the battle stance, the attack rounds, a weapon skill's routine — is
+ * the character engaged.
  */
-const RESTING_CLIP = /^(idl|std|wlk|run|mvb|mvl|mvr)\d*$/i;
+const RESTING_CLIP = /^(idl|std|wlk|run|mvb|mvl|mvr|ca[a-z]*)\d*$/i;
 
 /**
  * True when every part of `clip` is a resting clip — xim's `!isDisplayEngaged`,
