@@ -103,7 +103,11 @@ export function serializeRecipe(recipe) {
       if (rest.loops != null) out.loops = frames(rest.loops);
       return out;
     });
-  return JSON.stringify({ schema: RECIPE_SCHEMA, ...recipe, events }, null, 2);
+  // `total` is the routine's end (the timeline's loop marker): whole frames,
+  // and absent rather than null when it is left to compose.
+  const { total, ...rest } = recipe;
+  const totalOut = Number.isFinite(Number(total)) && Number(total) > 0 ? { total: frames(total) } : {};
+  return JSON.stringify({ schema: RECIPE_SCHEMA, ...rest, ...totalOut, events }, null, 2);
 }
 
 /**

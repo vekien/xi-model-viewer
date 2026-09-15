@@ -80,7 +80,7 @@ export function TimelineWindow({
   recipeName, note, failed, error, onDismissError,
   events, selectedIds, onSelect, onMoveMany, onShiftLane, onPreview,
   tracks = [], activeTrack = 'motion', sources = {}, onActivateTrack, onAddTrack, onRemoveTrack,
-  strike, playhead, mixLoaded, loopEnd = 0, minLen = 0,
+  strike, playhead, mixLoaded, loopEnd = 0, minLen = 0, loopSet = false, onLoopEnd,
   getSoundPeaks = null, ghosts = null,
   transport, canPlay, playTip, onPlayPause, onStop, onSeek,
   speed, onSpeed, loop, onLoop, onSnapLane, viewerRace,
@@ -247,6 +247,7 @@ export function TimelineWindow({
   const rootRef = useRef(null);
   const drag = useRef(null);
   const [marquee, setMarquee] = useState(null);   // root-relative px while rubber-banding
+  const [loopDrag, setLoopDrag] = useState(null); // loop marker mid-drag, in frames
   // Snap (on by default): a dragged block locks onto the strike line, the
   // loop end, frame 0 and the edges of the other blocks once within reach.
   const [snap, setSnap] = useState(() => readJson('mixerSnap') ?? true);
@@ -266,6 +267,15 @@ export function TimelineWindow({
     drag.current = { kind: 'scrub' };
     e.currentTarget.setPointerCapture?.(e.pointerId);
     scrubTo(e.clientX);
+  };
+  // The loop marker: drag sets the recipe's `total` (committed on release,
+  // one edit rather than one per pixel); double-click clears it back to auto.
+  const startLoopDrag = (e) => {
+    if (!onLoopEnd) return;
+    e.stopPropagation();
+    drag.current = { kind: 'loop' };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    setLoopDrag(Math.round(frameAt(e.clientX)));
   };
   const startDragBlock = (e, ev) => {
     e.stopPropagation();
@@ -294,6 +304,7 @@ export function TimelineWindow({
     const d = drag.current;
     if (!d) return;
     if (d.kind === 'scrub') { scrubTo(e.clientX); return; }
+    if (d.kind === 'loop') { setLoopDrag(Math.max(1, Math.round(frameAt(e.clientX)))); return; }
     if (d.kind === 'marquee') {
       const root = rootRef.current.getBoundingClientRect();
       setMarquee({ x0: d.p0.x, y0: d.p0.y, x1: e.clientX - root.left, y1: e.clientY - root.top });
@@ -332,6 +343,11 @@ export function TimelineWindow({
     const d = drag.current;
     drag.current = null;
     if (!d) return;
+    if (d.kind === 'loop') {
+      setLoopDrag(null);
+      onLoopEnd?.(Math.max(1, Math.round(frameAt(e.clientX))));
+      return;
+    }
     if (d.kind === 'marquee') {
       setMarquee(null);
       const [x0, x1] = [Math.min(d.x0, e.clientX), Math.max(d.x0, e.clientX)];
@@ -517,14 +533,22 @@ export function TimelineWindow({
               ))}
               {/* Strike (first hit), loop end and the shaded run past it, then the playhead */}
               {strike != null && <span className="mseq-strike" style={{ left: x(strike) }} />}
-              {loopEnd > 0 && loopEnd < len && (
-                <>
-                  <span className="mseq-past-loop" style={{ left: x(loopEnd), width: `${((len - loopEnd) / len) * 100}%` }} />
-                  <Tooltip content="Loop restart — the motion/effect routine's end. Sounds after here keep ringing past the restart (one-shots aren't waited for), just like in game.">
-                    <span className="mseq-loopend" style={{ left: x(loopEnd) }}><i>⟲ loop</i></span>
-                  </Tooltip>
-                </>
-              )}
+              {(loopDrag ?? loopEnd) > 0 && (loopDrag ?? loopEnd) < len && (() => {
+                const at = loopDrag ?? loopEnd;
+                return (
+                  <>
+                    <span className="mseq-past-loop" style={{ left: x(at), width: `${((len - at) / len) * 100}%` }} />
+                    <Tooltip content={`Loop restart${loopSet ? ' (set on this recipe)' : ' (auto: after the last motion, effect or sound)'} — drag to move it, double-click to go back to auto. Sounds after here keep ringing past the restart, just like in game.`}>
+                      <span
+                        className={`mseq-loopend${loopSet ? ' set' : ''}${onLoopEnd ? ' grab' : ''}`}
+                        style={{ left: x(at) }}
+                        onPointerDown={startLoopDrag}
+                        onDoubleClick={() => onLoopEnd?.(null)}
+                      ><i>⟲ loop{loopSet ? ` ${Math.round(at)}` : ''}</i></span>
+                    </Tooltip>
+                  </>
+                );
+              })()}
               <div className={`cseq-playhead mseq-playhead${mixLoaded ? '' : ' idle'}`} style={{ left: x(shown) }}>
                 <span className="mseq-head" onPointerDown={startScrub} title="Drag to scrub" />
               </div>

@@ -595,6 +595,23 @@ function particleParsers(zoneResource, warnings) {
 const CAST_BLEND_FRAMES = 9;   // 0.3s
 
 /**
+ * Where a mix restarts, in routine ticks (60/s).
+ *
+ * A recipe's `total` — the routine's own end, which compose writes to the
+ * header and the timeline's loop marker edits — wins. Otherwise the last
+ * thing that plays: the last generator's emit end, every motion cue's END
+ * (its clip length; clips are 30fps, so doubled), the last sound plus a
+ * little; then a short rest. It used to take each cue's START, so a second
+ * motion added later restarted the mix before it had played.
+ */
+function mixLoopAt({ total, windup, span, animCues, sounds }) {
+  if (Number.isFinite(total) && total > 0) return Math.round(total);
+  // The idle hand-back after a cast is not a motion of the mix's own.
+  const cueEnd = (c) => c.delay + (c.handBack ? 0 : 2 * (c.clip?.lengthInFrames ?? 0));
+  return windup + Math.max(span, ...animCues.map(cueEnd), ...sounds.map((sn) => sn.delay + 30)) + 30;
+}
+
+/**
  * Effects view > Show Character Animation: the caster clips scheduled by a
  * routine's 0x05 commands (and its `ca*`/`sh*` actor calls), resolved against
  * THIS character's clips. A ref that doesn't resolve is dropped, which is how the
@@ -718,7 +735,7 @@ function buildCasterCues(actor, routine, visCtx = null) {
       },
     }];
     // Hand over to the looping idle the frame the cast finishes.
-    if (idle) animCues.push({ delay: cast.endFrame * 2, clip: idle });
+    if (idle) animCues.push({ delay: cast.endFrame * 2, clip: idle, handBack: true });
   } else {
     // No cast schedule: the 0x05 cues name clips outright. Each is laid over
     // the idle as a one-segment montage so it behaves like the game's
@@ -3132,11 +3149,7 @@ export default function App({ launch = null }) {
         // Locks and the raw command durations don't count — Berserk's hold
         // command runs to tick 316 while the character is idle from 336 on.
         loopAt: opts.hardLoop
-          ? windup + Math.max(
-            routine.flat.length,
-            ...animCues.map((c) => c.delay),
-            ...routine.flat.sounds.map((s) => s.delay + 30),
-          ) + 30
+          ? mixLoopAt({ total: opts.loopAt, windup, span: routine.flat.length, animCues, sounds: routine.flat.sounds })
           : null,
         sounds: shift(routine.flat.sounds),
         stops: shift(routine.flat.stops ?? []),
@@ -6617,7 +6630,7 @@ export default function App({ launch = null }) {
     anims.sort((a, b) => a.delay - b.delay);
     const { animCues, windup } = buildCasterCues(actor, { flat: { anims, actorCalls: [] } });
     const emitSpan = Math.max(1, ...commands.map((c) => c.delay + Math.max(c.dur, 1)));
-    const loopAt = windup + Math.max(emitSpan, ...animCues.map((c) => c.delay), ...sounds.map((s) => s.delay + 30)) + 30;
+    const loopAt = mixLoopAt({ total: recipe.total, windup, span: emitSpan, animCues, sounds });
     return sys.retimeEffect({ commands, sounds, anims: animCues, stops, loopAt });
   }, [mixerLinked]);
 
@@ -6660,7 +6673,8 @@ export default function App({ launch = null }) {
   /** Panel edits reach the stage live when the mix on it can be re-timed; otherwise
    *  the mix is flagged stale and Play mix recomposes. */
   const mixerEdit = useCallback((next) => {
-    const changed = next.events !== mixerRecipeRef.current?.events;
+    // Events, or the loop point (`total`) the timeline's marker sets.
+    const changed = next.events !== mixerRecipeRef.current?.events || next.total !== mixerRecipeRef.current?.total;
     setMixerRecipe(next);
     if (!changed) return;
     mixerRecipeRef.current = next;
@@ -6817,7 +6831,7 @@ export default function App({ launch = null }) {
       const composeP = composeForPreview(recipe, xiRace, ctx.xiPath, ctx.env);
       await reloadDone;
       const { datPath, report } = await composeP;
-      await loadEffect({ name: recipe.name, path: datPath, cat: 'Mixer' }, { keepCamera: true, hardLoop: true });
+      await loadEffect({ name: recipe.name, path: datPath, cat: 'Mixer' }, { keepCamera: true, hardLoop: true, loopAt: recipe.total });
       // Compose lists the events it wrote in the same (start, order) sort it
       // applied to the recipe's enabled events, with the refs as renamed.
       {

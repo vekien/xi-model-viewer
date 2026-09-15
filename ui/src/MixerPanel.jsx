@@ -313,6 +313,8 @@ export function MixerPanel({
       onPreview={(ev) => onPlaySound?.({ id: ev.sound, ref: ev.ref })}
       strike={strike} playhead={mixLoaded ? head : null} mixLoaded={mixLoaded}
       minLen={getPlayhead ? getPlayhead().length : 0} loopEnd={mixLoaded && getPlayhead ? getPlayhead().length : 0}
+      loopSet={Number.isFinite(recipe.total) && recipe.total > 0}
+      onLoopEnd={(f) => { const { total, ...rest } = recipe; onRecipe?.(f ? { ...recipe, total: f } : rest); }}
       getSoundPeaks={getSoundPeaks} ghosts={ghosts}
       transport={armed ? transport : 'stopped'} canPlay={!busy && (armed || events.length > 0)} playTip={playTip}
       onPlayPause={onPlayPause} onStop={onStop} onSeek={onSeek}

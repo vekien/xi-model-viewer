@@ -6800,3 +6800,8 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mseq-toolbar .cseq-zoom { margin-left: auto; }
 .pc-look-label { margin-top: 8px; }
 .gs-tabs { margin: 4px 0 6px; }
+
+/* Mixer timeline loop marker: draggable when the recipe can take a total. */
+.mseq-loopend.grab { cursor: ew-resize; pointer-events: auto; width: 8px; margin-left: -3px; border-left-width: 2px; }
+.mseq-loopend.grab i { cursor: ew-resize; }
+.mseq-loopend.set i { color: #ffd078; }
