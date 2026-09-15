@@ -6825,3 +6825,9 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mseq-toolbar .cseq-load:not(.mseq-add-track) { width: 150px; }
 .mseq-publish { margin-bottom: 8px; }
 .mseq-shuffle { margin-right: 6px; }
+
+/* Timeline header: the green Publish beside the close glyph. */
+.mseq-publish-btn { display: inline-flex; align-items: center; gap: 4px; margin-right: 6px; background: #1f8a4c; border-color: #2aa85f; color: #fff; }
+.mseq-publish-btn .icon { font-size: 16px; }
+.mseq-publish-btn:hover:not(:disabled) { background: #26a35a; }
+.mseq-publish-btn:disabled { opacity: 0.45; }

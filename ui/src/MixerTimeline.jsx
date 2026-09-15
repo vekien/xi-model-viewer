@@ -97,7 +97,7 @@ export function TimelineWindow({
   // the publish plan, and the shuffle kind — what the Recipes window used to hold.
   name = '', onName, onNew, onSave, saved = [], onOpen, onDelete,
   publishPlan = null, onPublish, busy = false,
-  shuffleKind = 'ws', onShuffleKind,
+  shuffleKind = 'ws', onShuffleKind, onRandomise, canPublish = false,
   editor = null,
 }) {
   // ── Window: position, size, drag, resize (the sequencer's pattern) ──────────
@@ -461,6 +461,13 @@ export function TimelineWindow({
         <span className="cseq-title">Timeline</span>
         <span className="mono mseq-name">{recipeName}</span>
         <span className={`mseq-note${failed ? ' is-failed' : ''}`}>{failed ? error?.title : note}</span>
+        {onPublish && (
+          <Tooltip content="Publish: prepare the xi dats action for this mix and show the build plan" placement="bottom">
+            <button type="button" className="cseq-btn mseq-publish-btn" disabled={!canPublish} onClick={() => onPublish('plan')}>
+              <span className="icon">publish</span>Publish
+            </button>
+          </Tooltip>
+        )}
         <button type="button" className="icon-btn cseq-close" onClick={onClose} aria-label="Close">
           <span className="icon">close</span>
         </button>
@@ -676,16 +683,6 @@ export function TimelineWindow({
           <div className="cseq-bar-sep" />
 
           <div className="cseq-bar-group">
-            {onShuffleKind && (
-              <Tooltip content="Shuffle as: what the toolbar's Shuffle draws its motion from" placement="top">
-                <div className="seg-tabs mseq-shuffle" role="tablist" aria-label="Shuffle kind">
-                  {SHUFFLE_KINDS.map((k) => (
-                    <button key={k.id} type="button" role="tab" aria-selected={shuffleKind === k.id}
-                      className={`seg-tab${shuffleKind === k.id ? ' on' : ''}`} onClick={() => onShuffleKind(k.id)}>{k.label}</button>
-                  ))}
-                </div>
-              </Tooltip>
-            )}
             {LANES.filter((l) => l.id !== 'motion').map((l) => (
               <Tooltip key={l.id} content={`Snap the ${l.label.toLowerCase()} lane to the strike frame (its first generator lands on f${strike})`} placement="top">
                 <button type="button" className="icon-btn cseq-icon" aria-label={`Snap ${l.label}`} style={{ color: l.color }} onClick={() => onSnapLane(l.id)}>
@@ -699,6 +696,29 @@ export function TimelineWindow({
               </button>
             </Tooltip>
           </div>
+
+          {onRandomise && (
+            <>
+              <div className="cseq-bar-sep" />
+              <div className="cseq-bar-group">
+                <Tooltip content={`Randomise: a random ${shuffleKind === 'ws' ? 'weapon skill' : shuffleKind === 'ja' ? 'ability' : 'spell'} motion, random effects and a random sound, then play`} placement="top">
+                  <button type="button" className="icon-btn cseq-icon" aria-label="Randomise" onClick={onRandomise}>
+                    <span className="icon">casino</span>
+                  </button>
+                </Tooltip>
+                {onShuffleKind && (
+                  <Tooltip content="What Randomise draws its motion from" placement="top">
+                    <div className="seg-tabs mseq-shuffle" role="tablist" aria-label="Randomise kind">
+                      {SHUFFLE_KINDS.map((k) => (
+                        <button key={k.id} type="button" role="tab" aria-selected={shuffleKind === k.id}
+                          className={`seg-tab${shuffleKind === k.id ? ' on' : ''}`} onClick={() => onShuffleKind(k.id)}>{k.label}</button>
+                      ))}
+                    </div>
+                  </Tooltip>
+                )}
+              </div>
+            </>
+          )}
 
           <span className="cseq-frame mono">
             <b>{shown}</b>

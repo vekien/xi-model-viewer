@@ -6525,7 +6525,6 @@ export default function App({ launch = null }) {
   const [mixerBusy, setMixerBusy] = useState(false);
   const [mixerNote, setMixerNote] = useState('');
   const [mixerShuffleKind, setMixerShuffleKind] = useState('ws');   // the Shuffle-as choice; the top-right bar's Shuffle uses it
-  const [mixerSaveTick, setMixerSaveTick] = useState(0);            // bumped by the top-right bar's Save
   // The other views' rail: one glyph per panel the view shows, toggling the flag
   // that already gates that panel.
   const viewRail = useMemo(() => {
@@ -10986,21 +10985,7 @@ export default function App({ launch = null }) {
 
       {!dataStructOpen && leftView === 'mixer' && (
         <>
-          <div id="menubar-right" className="panel" role="toolbar" aria-label="Recipe">
-            <Tooltip content="Save the mix under its name (the Timeline's name field)" placement="bottom">
-              <button type="button" className="view-tool" aria-label="Save" onClick={() => setMixerSaveTick((n) => n + 1)}><span className="icon">save</span></button>
-            </Tooltip>
-            <Tooltip content="Start over: clear every track and put the character back to idle" placement="bottom">
-              <button type="button" className="view-tool" aria-label="Reset" onClick={mixerReset}><span className="icon">restart_alt</span></button>
-            </Tooltip>
-            <Tooltip content={`Shuffle: a random ${mixerShuffleKind === 'ws' ? 'weapon skill' : mixerShuffleKind === 'ja' ? 'ability' : 'spell'} motion + random effects + a random sound, then play`} placement="bottom">
-              <button type="button" className="view-tool" aria-label="Shuffle" disabled={mixerBusy} onClick={() => mixerShuffle(mixerShuffleKind)}><span className="icon">casino</span></button>
-            </Tooltip>
-            <Tooltip content="Publish: prepare the xi dats action for this recipe and show the build plan" placement="bottom">
-              <button type="button" className="view-tool" aria-label="Publish" disabled={mixerBusy || !mixerRecipe.events.length || !!mixerPlan} onClick={() => mixerPublish('plan')}><span className="icon">publish</span></button>
-            </Tooltip>
-          </div>
-          <RightRail items={MIXER_RAIL} open={mixerPanels} onToggle={setMixerPanel} top={60} />
+          <RightRail items={MIXER_RAIL} open={mixerPanels} onToggle={setMixerPanel} />
           <MixerPanel
             recipe={mixerRecipe}
             onRecipe={mixerEdit}
@@ -11047,7 +11032,6 @@ export default function App({ launch = null }) {
             playingSoundKey={playingSoundKey}
             shuffleKind={mixerShuffleKind}
             onShuffleKind={setMixerShuffleKind}
-            saveTick={mixerSaveTick}
             viewerRace={RACE_TO_XI[pc.race] ?? 'HumeMale'}
             panels={mixerPanels}
             onPanel={setMixerPanel}

@@ -136,7 +136,7 @@ export function MixerPanel({
   panels = { mixer: true, parts: true, timeline: true }, onPanel,
   tracks = [], onActivateTrack, onAddTrack, onRemoveTrack,
   playingSoundKey = null,
-  shuffleKind = 'ws', onShuffleKind, saveTick = 0,
+  shuffleKind = 'ws', onShuffleKind,
 }) {
   // Selection is a set: a marquee or ctrl-click builds a group that drags,
   // duplicates and deletes as one. The editor below shows a lone selection.
@@ -229,9 +229,6 @@ export function MixerPanel({
 
   // Save prompts for a name (prefilled). A different name that already exists
   // asks before overwriting; a new name writes a copy and leaves the old file.
-  // The toolbar's Save glyph saves under the mix's current name.
-  useEffect(() => { if (saveTick && recipe.name.trim()) onSaveAs?.(recipe.name.trim()); }, [saveTick]);   // eslint-disable-line react-hooks/exhaustive-deps
-
   // A failed compose or pick outranks every other note until the next attempt.
   const failed = !busy && !!error;
   const statusNote = busy ? 'working…' : (mixLoaded && mixDirty ? 'edited · Play mix to hear the change' : (events.length ? note : 'pick a motion, effect or sound on the left to start'));
@@ -262,7 +259,8 @@ export function MixerPanel({
       name={recipe.name} onName={(n) => onRecipe({ ...recipe, name: n })} onNew={onReset}
       onSave={() => recipe.name.trim() && onSaveAs?.(recipe.name.trim())} saved={recipes ?? []} onOpen={onOpen} onDelete={onDelete}
       publishPlan={publishPlan} onPublish={onPublish} busy={busy}
-      shuffleKind={shuffleKind} onShuffleKind={onShuffle ? onShuffleKind : null}
+      shuffleKind={shuffleKind} onShuffleKind={onShuffle ? onShuffleKind : null} onRandomise={onShuffle ? () => onShuffle(shuffleKind) : null}
+      canPublish={!busy && events.length > 0 && !publishPlan}
       editor={selected ? <EventEditor ev={selected} onChange={(p) => update(selected._id, p)} onRemove={() => remove(selected._id)} /> : null} />
   );
 
