@@ -571,7 +571,6 @@ export function TimelineWindow({
           <div className="mixer-editor mseq-manage">
             <div className="mixer-editor-title">
               <span className="mono">Publish · {recipeName}</span>
-              <span className="mono-small">how xi dats places it</span>
               <span className="sp" />
               <Tooltip content={canPublish ? 'Check: a dry run with these choices — the slot it takes and where every DAT lands, nothing written' : 'Pick a motion, effect or sound first'} placement="top">
                 <button type="button" className="cseq-btn" disabled={!canPublish || !onCheckPublish} onClick={onCheckPublish}>Check</button>
