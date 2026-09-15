@@ -393,7 +393,6 @@ export function MixerList({
           )
         ))}
       </div>
-      <div className="mixer-hint mono-small">click a row to use it for this lane · the stage plays the mix so far</div>
     </div>
   );
 }

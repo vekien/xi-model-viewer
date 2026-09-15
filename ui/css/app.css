@@ -6684,7 +6684,6 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mixer-chip.on { color: var(--accent); border-color: var(--accent); }
 .mixer-row.taken .effect-name { color: var(--accent); }
 .mixer-empty { padding: 14px 12px; display: flex; flex-direction: column; gap: 10px; }
-.mixer-hint { padding: 6px 10px; border-top: 1px solid var(--ring); color: var(--muted); }
 
 .mixer-panel { flex: 0 0 auto; }
 .mixer-parts-panel { flex: 1 1 auto; min-height: 120px; max-height: 40vh; overflow: hidden; }
