@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Tooltip } from './Tooltip.jsx';
+import { DRAG_TYPE } from './MixerTimeline.jsx';
 import { LANES, filterCatalog, entryPathForRace } from '../js/mixer.js';
 import { parseEntity, groupAnimations } from '../js/dat.js';
 import { CLIP_NAMES } from './AnimationPanel.jsx';
@@ -105,19 +106,41 @@ function packContents(buffer) {
   return { clips, routines };
 }
 
+/** The + on a row: the entry onto the active track. Click on the row itself previews. */
+function AddButton({ tip, onAdd }) {
+  return (
+    <Tooltip content={tip} placement="right">
+      <button type="button" className="icon-btn mixer-add" aria-label={tip}
+        onClick={(e) => { e.stopPropagation(); onAdd(); }} onPointerDown={(e) => e.stopPropagation()}>
+        <span className="icon">add</span>
+      </button>
+    </Tooltip>
+  );
+}
+
+/** Drag start for a row: the entry as the pick would send it, typed by lane kind. */
+function startEntryDrag(e, dragType, payload) {
+  e.dataTransfer.setData(dragType, JSON.stringify(payload));
+  e.dataTransfer.effectAllowed = 'copy';
+}
+
 // One line per row: the name, and while searching the group it came from. The
 // spec and section counts are the tip — useful when choosing, noise as a column.
-function Row({ entry, sub, focused, taken, onPick, expandable, open, onToggle, children }) {
+// A click previews the entry on the stage; the + adds it to the active track;
+// the row can be dragged onto a timeline track of its kind.
+function Row({ entry, sub, focused, taken, onPreview, onAdd, addTip, dragType, payload, expandable, open, onToggle, children }) {
   return (
     <div className={`node${focused ? ' selected' : ''}${open ? ' open' : ''}`} data-spec={entry.spec}>
       <Tooltip content={tipFor(entry)} placement="right" delay={[350, 0]}>
-        <div className={`row mixer-row${taken ? ' taken' : ''}`} onClick={() => onPick(entry)}>
+        <div className={`row mixer-row${taken ? ' taken' : ''}`} onClick={() => onPreview(entry)}
+          draggable onDragStart={(e) => startEntryDrag(e, dragType, payload())}>
           {expandable
             ? <span className="caret icon" onClick={(e) => { e.stopPropagation(); onToggle(entry); }}>chevron_right</span>
             : <span className="caret"><span className="icon" /></span>}
           <span className="kind icon">{KIND_ICON[entry.kind] ?? 'bolt'}</span>
           <span className="effect-name">{entry.name}</span>
           {sub && <span className="mono-small effect-sub">{sub}</span>}
+          <AddButton tip={addTip} onAdd={() => onAdd(entry)} />
         </div>
       </Tooltip>
       {open && children}
@@ -143,8 +166,10 @@ export function MixerList({
   catalog, catalogBusy, onBuildCatalog,
   actions, race, readDat,
   lane, onLane,
-  onPick,
+  onPick, onPreview, trackLabel = '',
 }) {
+  const addTip = `Add to track: ${trackLabel || 'Motion'}`;
+  const dragType = `${DRAG_TYPE}${lane}`;
   const [query, setQuery] = useState(() => mixerListUi.query);
   const [openCats, setOpenCats] = useState(() => new Set(mixerListUi.openCats));
   const [openActions, setOpenActions] = useState(() => new Set(mixerListUi.openActions));
@@ -228,38 +253,48 @@ export function MixerList({
     });
   };
 
-  /** A routine of an action: the pick names that DAT and routine; `main` keeps the
-   *  action's own name, any other routine is suffixed with it. */
-  const pickRoutine = (entry, r) => onPick({
+  /** A routine of an action, as the pick sends it: that DAT and routine; `main` keeps
+   *  the action's own name, any other routine is suffixed with it. */
+  const routineEntry = (entry, r) => ({
     ...entry, spec: r.path, path: r.path, routine: r.id,
     name: r.id === 'main' ? entry.name : `${entry.name} · ${r.id}`,
   });
   /** A bare clip: no routine to inspect — the app makes it one PlayClip event. */
-  const pickClip = (entry, c) => onPick({
+  const clipEntry = (entry, c) => ({
     ...entry, spec: c.path, path: c.path, routine: null,
-    clip: { ref: c.ref, frames: c.frames }, name: `${entry.name} · ${c.id}`,
+    clip: { id: c.id, ref: c.ref, frames: c.frames }, name: `${entry.name} · ${c.id}`,
   });
 
-  // A click that landed while the DAT was still being read: finished when it arrives.
+  // Resolve a row to the entry the app gets, then hand it on: an action plays
+  // its `main` when it has one, a clip pack opens to its routines instead. A
+  // click that lands while the DAT is still being read finishes when it arrives.
   const pendingPick = useRef(null);
-  const pick = (entry) => {
+  const withResolved = (entry, fn) => {
     setFocus(visible.findIndex((v) => v.spec === entry.spec));
-    if (entry.kind !== 'action') { onPick(entry); return; }
-    // An action plays its `main` when it has one; a clip pack opens to its routines.
+    if (entry.kind !== 'action') { fn(entry); return; }
     const rs = routinesFor(entry);
-    if (rs === 'loading') { pendingPick.current = entry.spec; return; }
+    if (rs === 'loading') { pendingPick.current = { spec: entry.spec, fn }; return; }
     const main = rs.routines.find((r) => r.id === 'main');
-    if (main) pickRoutine(entry, main);
+    if (main) fn(routineEntry(entry, main));
     else setOpenActions((s) => new Set(s).add(entry.spec));
   };
+  const add = (entry) => withResolved(entry, (e) => onPick(e));
+  const preview = (entry) => withResolved(entry, (e) => onPreview?.(e));
+  /** What a dragged action row carries: its `main` when the DAT has been read, else the action as is. */
+  const dragEntry = (entry) => {
+    if (entry.kind !== 'action') return entry;
+    const rs = routineCache.get(entry.spec);
+    const main = rs && rs !== 'loading' ? rs.routines.find((r) => r.id === 'main') : null;
+    return main ? routineEntry(entry, main) : { ...entry, routine: 'main' };
+  };
   useEffect(() => {
-    const spec = pendingPick.current;
-    if (!spec) return;
-    const rs = routineCache.get(spec);
+    const pending = pendingPick.current;
+    if (!pending) return;
+    const rs = routineCache.get(pending.spec);
     if (!rs || rs === 'loading') return;
     pendingPick.current = null;
-    const entry = visible.find((v) => v.spec === spec);
-    if (entry) pick(entry);
+    const entry = visible.find((v) => v.spec === pending.spec);
+    if (entry) withResolved(entry, pending.fn);
   });
 
   const onKey = (e) => {
@@ -275,7 +310,7 @@ export function MixerList({
       el?.scrollIntoView({ block: 'nearest' });
     } else if (e.key === 'Enter' && focus >= 0) {
       e.preventDefault();
-      pick(visible[focus]);
+      preview(visible[focus]);
     }
   };
 
@@ -291,7 +326,8 @@ export function MixerList({
     const rs = open ? routinesFor(e) : null;
     return (
       <Row key={e.spec} entry={e} sub={sub} focused={e.spec === focusedSpec} taken={isTaken(e)}
-        onPick={pick} expandable={expandable} open={open} onToggle={toggleAction}>
+        onPreview={preview} onAdd={add} addTip={addTip} dragType={dragType} payload={() => dragEntry(e)}
+        expandable={expandable} open={open} onToggle={toggleAction}>
         {open && (
           <div className="children">
             {rs === 'loading' && <div className="side-note">Reading the DAT…</div>}
@@ -300,12 +336,14 @@ export function MixerList({
             {rs && rs !== 'loading' && rs.clips.map((c) => (
               <div key={`${c.path}:${c.id}`} className="node">
                 <div className={`row mixer-row${current?.name === `${e.name} · ${c.id}` && current?.spec === c.path ? ' taken' : ''}`}
-                  onClick={() => pickClip(e, c)}>
+                  onClick={() => onPreview?.(clipEntry(e, c))}
+                  draggable onDragStart={(ev) => startEntryDrag(ev, dragType, clipEntry(e, c))}>
                   <span className="caret"><span className="icon" /></span>
                   <span className="kind icon">animation</span>
                   <span className="effect-name mono">{CLIP_NAMES[c.id] ? `${c.id} — ${CLIP_NAMES[c.id]}` : c.id}</span>
                   {e.datPaths.length > 1 && <span className="mono-small effect-sub">{c.path.replace(/^ROM\//, '').replace(/\.DAT$/i, '')}</span>}
                   {c.parts > 1 && <span className="badge">{c.parts}</span>}
+                  <AddButton tip={addTip} onAdd={() => onPick(clipEntry(e, c))} />
                 </div>
               </div>
             ))}
@@ -313,12 +351,14 @@ export function MixerList({
             {rs && rs !== 'loading' && rs.routines.map((r) => (
               <div key={`${r.path}:${r.id}`} className="node">
                 <div className={`row mixer-row${current?.spec === r.path && (current?.routine ?? 'main') === r.id ? ' taken' : ''}`}
-                  onClick={() => pickRoutine(e, r)}>
+                  onClick={() => onPreview?.(routineEntry(e, r))}
+                  draggable onDragStart={(ev) => startEntryDrag(ev, dragType, routineEntry(e, r))}>
                   <span className="caret"><span className="icon" /></span>
                   <span className="kind icon">schedule</span>
                   <span className="effect-name mono">{r.id}</span>
                   {e.datPaths.length > 1 && <span className="mono-small effect-sub">{r.path.replace(/^ROM\//, '').replace(/\.DAT$/i, '')}</span>}
                   {r.clips > 1 && <span className="badge">{r.clips}</span>}
+                  <AddButton tip={addTip} onAdd={() => onPick(routineEntry(e, r))} />
                 </div>
               </div>
             ))}

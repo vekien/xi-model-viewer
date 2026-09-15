@@ -4,6 +4,9 @@ import { Tooltip } from './Tooltip.jsx';
 import { Combo } from './Combo.jsx';
 import { KEEP_LANE, LANES, LANE_BY_ID, kindOf, opName, recipeLength, trackLabel } from '../js/mixer.js';
 
+/** Drag type prefix shared with MixerList; the lane kind follows it. */
+export const DRAG_TYPE = 'application/x-mixer-entry+';
+
 const SHUFFLE_KINDS = [{ id: 'ws', label: 'WS' }, { id: 'ja', label: 'Ability' }, { id: 'spell', label: 'Spell' }];
 
 /** The lines of a `dats build --dry-run` that name the slot and the DATs — the
@@ -98,6 +101,7 @@ export function TimelineWindow({
   name = '', onName, onNew, onSave, saved = [], onOpen, onDelete,
   publishPlan = null, onPublish, busy = false,
   shuffleKind = 'ws', onShuffleKind, onRandomise, canPublish = false,
+  onDropEntry,
   editor = null,
 }) {
   // ── Window: position, size, drag, resize (the sequencer's pattern) ──────────
@@ -263,6 +267,26 @@ export function TimelineWindow({
   const drag = useRef(null);
   const [marquee, setMarquee] = useState(null);   // root-relative px while rubber-banding
   const [loopDrag, setLoopDrag] = useState(null); // loop marker mid-drag, in frames
+  // A row dragged off the left list. Its drag type carries the lane kind
+  // (`application/x-mixer-entry+motion`), which is all a dragover may read,
+  // so a motion can only land on a motion track.
+  const [dropLane, setDropLane] = useState(null);
+  const dragTypeFor = (t) => `${DRAG_TYPE}${t.kind}`;
+  const dragFits = (e, t) => t.kind !== 'keep' && Array.from(e.dataTransfer?.types ?? []).includes(dragTypeFor(t));
+  const dragOverLane = (e, t) => {
+    if (!onDropEntry || !dragFits(e, t)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    if (dropLane !== t.id) setDropLane(t.id);
+  };
+  const dropOnLane = (e, t) => {
+    setDropLane(null);
+    if (!onDropEntry || !dragFits(e, t)) return;
+    e.preventDefault();
+    let entry;
+    try { entry = JSON.parse(e.dataTransfer.getData(dragTypeFor(t))); } catch { return; }
+    onDropEntry(entry, t.id, Math.round(frameAt(e.clientX)));
+  };
   // Snap (on by default): a dragged block locks onto the strike line, the
   // loop end, frame 0 and the edges of the other blocks once within reach.
   const [snap, setSnap] = useState(() => readJson('mixerSnap') ?? true);
@@ -598,7 +622,8 @@ export function TimelineWindow({
                 ))}
               </div>
               {lanes.map((lane) => (
-                <div key={lane.t.id} className="cseq-lane mseq-lane" data-lane={lane.t.id} style={{ height: lane.height }} onPointerDown={startMarquee}>
+                <div key={lane.t.id} className={`cseq-lane mseq-lane${dropLane === lane.t.id ? ' drop-ok' : ''}`} data-lane={lane.t.id} style={{ height: lane.height }} onPointerDown={startMarquee}
+                  onDragOver={(e) => dragOverLane(e, lane.t)} onDragLeave={() => { if (dropLane === lane.t.id) setDropLane(null); }} onDrop={(e) => dropOnLane(e, lane.t)}>
                   {lane.laneEvents.map((ev) => pill(ev, lane))}
                 </div>
               ))}

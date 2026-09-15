@@ -136,7 +136,7 @@ export function MixerPanel({
   panels = { mixer: true, parts: true, timeline: true }, onPanel,
   tracks = [], onActivateTrack, onAddTrack, onRemoveTrack,
   playingSoundKey = null,
-  shuffleKind = 'ws', onShuffleKind,
+  shuffleKind = 'ws', onShuffleKind, onDropEntry,
 }) {
   // Selection is a set: a marquee or ctrl-click builds a group that drags,
   // duplicates and deletes as one. The editor below shows a lone selection.
@@ -268,6 +268,7 @@ export function MixerPanel({
       publishPlan={publishPlan} onPublish={onPublish} busy={busy}
       shuffleKind={shuffleKind} onShuffleKind={onShuffle ? onShuffleKind : null} onRandomise={onShuffle ? () => onShuffle(shuffleKind) : null}
       canPublish={!busy && events.length > 0 && !publishPlan}
+      onDropEntry={onDropEntry}
       editor={selected ? <EventEditor ev={selected} onChange={(p) => update(selected._id, p)} onRemove={() => remove(selected._id)} /> : null} />
   );
 

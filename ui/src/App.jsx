@@ -162,7 +162,6 @@ const VIEWS = ['files', 'database', 'npc', 'pc', 'creation', 'music', 'sfx', 'zo
 /** The mixer view's rail, top to bottom: the Animation panel is the main one. */
 const MIXER_RAIL = [
   { id: 'timeline', icon: 'timeline', label: 'Timeline' },
-  { id: 'preview', icon: 'animation', label: 'Animation Preview' },
   { id: 'actors', icon: 'groups', label: 'Actors' },
   { id: 'parts', icon: 'segment', label: 'Parts' },
 ];
@@ -5285,11 +5284,10 @@ export default function App({ launch = null }) {
     onLoop: undefined, onSpeed: undefined,
   };
   /**
-   * Animation Preview (Mixer rail): play any of the character's clips or
-   * schedules on the stage without touching the recipe or its timeline. The
-   * Characters view's pickers and transport, behind one step that takes the
-   * mix off the stage first — its cues would otherwise re-take the actor on
-   * the next tick. Play mix re-arms it from the recipe as it always does.
+   * The left list's click is a preview: the entry plays on the stage and the
+   * recipe and its timeline stay as they are. The mix is taken off the stage
+   * first — its cues would otherwise re-take the actor on the next tick; Play
+   * mix re-arms it from the recipe as always.
    */
   const mixerPreviewTake = () => {
     const r = rendererRef.current;
@@ -5299,20 +5297,6 @@ export default function App({ launch = null }) {
     r.effectPaused = false;
     mixerPreviewRef.current = true;
     setEffectTransport('stopped');
-  };
-  const mixerPreviewAnim = {
-    anims, currentAnim, onAnimChange: (id, o) => { mixerPreviewTake(); handleAnimChange(id, o); },
-    schedules, currentSchedule, onScheduleChange: (id, o) => { mixerPreviewTake(); handleScheduleChange(id, o); },
-    playing,
-    transport: pcTransport,
-    onPlay: () => { mixerPreviewTake(); pcPlay(); },
-    onPause: pcPause,
-    onStop: pcStop,
-    onReset: () => { mixerPreviewTake(); pcReset(); },
-    loop: pcLoop,
-    onLoop: setPcLoop,
-    frameSink: animTick, onSeek: pcSeek,
-    speed: playbackSpeed, onSpeed: setPlaybackSpeed,
   };
 
   /**
@@ -6552,7 +6536,7 @@ export default function App({ launch = null }) {
   // The mixer view's right rail: one glyph per panel, the Animation panel first.
   // Which are open is remembered; a panel's own close glyph reports back here.
   const [mixerPanels, setMixerPanels] = useState(() => {
-    const d = { actors: false, parts: false, timeline: true, preview: false };
+    const d = { actors: false, parts: false, timeline: true };
     try { return { ...d, ...JSON.parse(localStorage.getItem('mixerPanels') || '{}') }; } catch { return d; }
   });
   const setMixerPanel = useCallback((id, v) => setMixerPanels((m) => {
@@ -6785,7 +6769,11 @@ export default function App({ launch = null }) {
     // carries this race's DAT as `path`. Either names the Action to set.
     if (!entry?.paths && !entry?.path) return { found: false, changed: false };
     const want = normRel(entryPathForRace(entry, pc.race)).toLowerCase();
-    const hit = (pc.actions ?? []).find((a) => normRel(a.paths?.[0] ?? '').toLowerCase() === want);
+    const holds = (a) => (a.paths ?? []).concat(a.motionPaths ?? []).some((q) => normRel(q).toLowerCase() === want);
+    // The DAT that names the Action first; else any Action that carries it —
+    // the Emote pack's clips are spread over nine DATs, `paths[0]` is one.
+    const hit = (pc.actions ?? []).find((a) => normRel(a.paths?.[0] ?? '').toLowerCase() === want)
+      ?? (pc.actions ?? []).find(holds);
     if (!hit) return { found: false, changed: false };
     if (pc.action !== hit.id) {
       pc.setActionGroup(hit.group ?? 'Other');
@@ -6863,12 +6851,11 @@ export default function App({ launch = null }) {
 
   /** Take a catalog entry for the current lane: its lane events replace the lane's,
    *  and the stage plays the mix so far. */
-  const mixerPick = useCallback(async (entry) => {
+  const mixerPickInto = useCallback(async (entry, lane, startAt = 0) => {
     setMixerBusy(true);
     setMixerError(null);
     let next = null;
     try {
-      const lane = mixerLane;
       // A bare clip from a clip pack has no routine to inspect: it is one
       // PlayClip for the clip's own length, which compose builds from the
       // template (the lane's `routine` is null). The window is in scheduler
@@ -6880,7 +6867,8 @@ export default function App({ launch = null }) {
       // A pick brings its own kind and nothing else: a motion pick is the clips
       // and traces, not the source's locks, hits and links — those link the
       // client's shared routines, which spawn effects and sounds of their own.
-      const fresh = eventsFromInspect(info, lane, { keep: false });
+      const fresh = eventsFromInspect(info, lane, { keep: false })
+        .map((e) => (startAt ? { ...e, start: e.start + startAt } : e));
       const r = mixerRecipeRef.current;
       const keptEvents = r.events.filter((e) => e.from !== lane);
       // routine: a tag, or null for a bare clip pack (no routine at all) — not 'main'.
@@ -6891,7 +6879,7 @@ export default function App({ launch = null }) {
       mixerRecipeRef.current = next;
       setMixerRecipe(next);
       setMixerLaneInfo((m) => ({ ...m, [lane]: { entry, info } }));
-      setMixerNote(`${entry.name} → ${trackLabel(lane)}`);
+      setMixerNote(`${entry.name} → ${trackLabel(lane)}${startAt ? ` @${startAt}` : ''}`);
     } catch (e) {
       setMixerError({ title: `Pick failed · ${entry.name}`, text: String(e?.message ?? e) });
       setStatusText(`pick failed: ${e?.message ?? e}`);
@@ -6899,7 +6887,39 @@ export default function App({ launch = null }) {
       setMixerBusy(false);
     }
     if (next) await mixerPlayRecipe(next);
-  }, [mixerInfoFor, mixerLane, mixerPlayRecipe]);
+  }, [mixerInfoFor, mixerPlayRecipe]);
+  /** The list's + button: the entry onto the active track, from frame 0. */
+  const mixerPick = useCallback((entry) => mixerPickInto(entry, mixerLane, 0), [mixerPickInto, mixerLane]);
+  /** A drop from the list onto a timeline lane: that track, at the frame it landed on. */
+  const mixerDrop = useCallback((entry, lane, start) => {
+    setMixerLane(lane);
+    return mixerPickInto(entry, lane, Math.max(0, Math.round(start || 0)));
+  }, [mixerPickInto]);
+
+  /**
+   * Left list click: the entry plays on the stage, nothing else. A pack motion
+   * (a clip or a schedule of an Action) needs that Action on the character, so
+   * it is set and its reload awaited, as Play mix does for a weapon skill; a
+   * catalog action plays its own DAT's routine with its caster cues.
+   */
+  const mixerPreviewEntry = async (entry) => {
+    if (entry.kind === 'action') {
+      const sync = mixerSyncAction(entry);
+      if (sync.changed) {
+        await new Promise((resolve) => {
+          mixerReloadWaitRef.current = resolve;
+          setTimeout(() => { if (mixerReloadWaitRef.current === resolve) { mixerReloadWaitRef.current = null; resolve(); } }, 15000);
+        });
+      }
+      mixerPreviewTake();
+      if (entry.clip) handleAnimChange(entry.clip.id ?? entry.clip.ref.replace(/\?$/, ''));
+      else handleScheduleChange(entry.routine || 'main');
+      setStatusText(`preview ${entry.name}`);
+      return;
+    }
+    mixerComposeRef.current = null;   // the preview replaces the mix on stage; Play mix brings it back
+    await mixerLoadEntryOnStage(entry, entry.name);
+  };
 
   /**
    * Shuffle: a random motion of `kind` — the kind decides what the mix publishes
@@ -10694,6 +10714,8 @@ export default function App({ launch = null }) {
           lane={kindOf(mixerLane)}
           onLane={(kind) => { if (kindOf(mixerLane) !== kind) setMixerLane(kind); }}
           onPick={mixerPick}
+          onPreview={mixerPreviewEntry}
+          trackLabel={trackLabel(mixerLane)}
         />
       )}
 
@@ -11029,6 +11051,7 @@ export default function App({ launch = null }) {
             loop={effectLoop}
             onLoop={setEffectLoop}
             onTake={mixerTake}
+            onDropEntry={mixerDrop}
             playingSoundKey={playingSoundKey}
             shuffleKind={mixerShuffleKind}
             onShuffleKind={setMixerShuffleKind}
@@ -11044,14 +11067,6 @@ export default function App({ launch = null }) {
               selectedPath={selectedDat}
               onSelectNpc={loadEffectNpc}
               onClose={() => setMixerPanel('actors', false)}
-            />
-          </Floating>
-          <Floating id="mixer-preview" open={!!mixerPanels.preview} defaultPos={{ right: 68, top: 12 }}>
-            <AnimationPanel
-              title="Animation Preview"
-              pc={pc}
-              anim={mixerPreviewAnim}
-              onClose={() => setMixerPanel('preview', false)}
             />
           </Floating>
         </>

@@ -3801,7 +3801,6 @@ body.eyedrop-picking { user-select: none; }
   flex-wrap: wrap;
   flex: 0 0 auto;
   padding-top: 8px;
-  border-top: 1px solid var(--ring);
   row-gap: 6px;
 }
 .cseq-bar-group {
@@ -6713,7 +6712,7 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mseq-rows:hover { color: var(--accent); border-color: var(--accent); }
 .mseq-track { cursor: default; }
 .mseq-ruler { cursor: ew-resize; }
-.mseq-lane { box-sizing: border-box; border-bottom: 1px solid rgba(255, 255, 255, 0.05); background-image: repeating-linear-gradient(to bottom, transparent 0 12px, rgba(255, 255, 255, 0.07) 12px 13px, transparent 13px 25px); }
+.mseq-lane { box-sizing: border-box; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
 .mseq-lane::after { display: none; }
 .mseq-pill {
   position: absolute; height: 16px; transform: translateY(-50%);
@@ -6831,3 +6830,10 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mseq-publish-btn .icon { font-size: 16px; }
 .mseq-publish-btn:hover:not(:disabled) { background: #26a35a; }
 .mseq-publish-btn:disabled { background: var(--gray-700); border-color: var(--ring); color: var(--gray-400); opacity: 0.7; }
+
+/* Mixer list rows: click previews, + adds to the active track, drag onto a lane. */
+.mixer-row[draggable] { cursor: grab; }
+.mixer-row .mixer-add { flex: 0 0 auto; width: 20px; height: 20px; margin-left: 4px; opacity: 0; }
+.mixer-row .mixer-add .icon { font-size: 16px; }
+.mixer-row:hover .mixer-add, .mixer-row .mixer-add:focus-visible { opacity: 1; }
+.mseq-lane.drop-ok { background: rgba(63, 189, 187, 0.12); box-shadow: inset 0 0 0 1px var(--accent); }
