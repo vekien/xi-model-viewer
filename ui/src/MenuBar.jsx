@@ -305,7 +305,7 @@ export function MenuBar({
             aria-expanded={!!graphics}
             onClick={(e) => toggleGraphics(e.currentTarget)}
           >
-            <span className="icon">display_settings</span>
+            <span className="icon">settings</span>
           </button>
         </Tooltip>
         <Tooltip content="Volume — sounds, music, ambient" placement="bottom">
