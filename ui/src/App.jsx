@@ -8,6 +8,7 @@ import { baseMotionCompanions, battleSkirtPath, weaponSkillWaistPaths } from '..
 import { animDisplayName, groupAnimations, matchAnimRef, mergeModels, parseEntity, resolveScheduleClip } from '../js/dat.js';
 import { Renderer } from '../js/renderer.js';
 import { isRestingClip } from '../js/pose.js';
+import { collectVis, hiddenSlotsAt, SLOT } from '../js/weaponVis.js';
 import { FileTree } from './FileTree.jsx';
 import { DatabaseList } from './DatabaseList.jsx';
 import { DatabaseViewer, invalidateDbCache, dbDataDir, importDbFolder } from './DatabaseViewer.jsx';
@@ -192,8 +193,6 @@ function clampWeatherFadeMs(v) {
 }
 // Views whose actor can carry particle VFX alongside its mesh, and so get the
 // Both / Mesh / VFX control and the effect volume slider.
-/** Motions the game casts a spell with: the magic clip families, the cast schedules, the Effects view's composed cast. */
-const CASTING_MOTION = /^(m[abinsw]\d*|ca[a-z]*\d*|cast)$/i;
 const FX_VIEWS = new Set(['pc', 'npc']);
 
 /**
@@ -603,7 +602,7 @@ const CAST_BLEND_FRAMES = 9;   // 0.3s
  * it lands on the cast's release frame. Module-level so the Schedule combo and
  * the toggle itself can re-bake the cues without reloading the DAT.
  */
-function buildCasterCues(actor, routine) {
+function buildCasterCues(actor, routine, visCtx = null) {
   let animCues = [];
   let windup = 0;
   // `actor.animations` entries ARE clips (id + jointTracks +
@@ -676,7 +675,7 @@ function buildCasterCues(actor, routine) {
     // The release runs its own length (~1s for most schools) and then
     // fades out over CAST_BLEND_FRAMES rather than cutting to idle.
     segments.push({ clip: outC, delay: at, transOut: CAST_BLEND_FRAMES });
-    return { segments, releaseFrame: at, endFrame: at + len(outC) + CAST_BLEND_FRAMES };
+    return { segments, releaseFrame: at, endFrame: at + len(outC) + CAST_BLEND_FRAMES, scheduleId };
   };
 
   const cast = (routine.flat.actorCalls ?? []).map((c) => buildCast(c.scheduleId)).find(Boolean);
@@ -695,6 +694,9 @@ function buildCasterCues(actor, routine) {
     // re-fires cue one.
     animCues = [{
       delay: 0,
+      // The cast schedule's weapon commands (`hwmg`: hands hidden if engaged,
+      // ranged hidden), on the cue so playback can apply them (weaponVis).
+      vis: visCtx ? collectVis(schedById.get(cast.scheduleId), { schedById, ...visCtx }) : [],
       clip: {
         id: 'cast',
         segments: cast.segments,
@@ -1405,6 +1407,49 @@ export default function App({ launch = null }) {
   const zoneEnvsRef = useRef(null);                         // parsed 0x2F environments (per zone)
   const zoneEnvManagerRef = useRef(null);                   // EnvironmentManager (clock + weather fades)
   const globalEffectsRef = useRef(null);                    // ROM/0/0.DAT shared effects tree
+
+  // Weapon-slot visibility (js/weaponVis.js). `weaponBaseRef` is the static
+  // part — the slot DAT paths and the config fallback — set by the view
+  // effect; `weaponVisRef` the commands of the motion being played, set by the
+  // motion effect or an effect cue; applyWeaponVis evaluates them at a frame
+  // and pushes the deny-list when the hidden set changes.
+  const weaponBaseRef = useRef(null);
+  const weaponVisRef = useRef({ vis: [], end: 0, engaged: false });
+  const weaponVisKeyRef = useRef('');
+  const rangedInfoRef = useRef(null);                       // ranged weapon info.rangeType → lc/ls routine
+  const applyWeaponVis = useCallback((frame) => {
+    const r = rendererRef.current;
+    const base = weaponBaseRef.current;
+    if (!r?.setHiddenSources || !base) return;
+    const st = weaponVisRef.current;
+    let hidden;
+    if (st.vis.length === 0) {
+      // Nothing in the DATs says: characters.json rangedDisplay decides the
+      // ranged slot (fishing, the weapon-skill packs), hands stay shown.
+      hidden = base.rangedInUse ? new Set() : new Set([SLOT.range]);
+    } else {
+      // Past the motion's own length (a montage tail) the client is back on
+      // its idle: hands shown, ranged stowed. Tags run on 60/s ticks, the
+      // clip on 30fps frames.
+      const past = st.end > 0 && frame >= st.end;
+      hidden = hiddenSlotsAt(past ? [] : st.vis, Math.floor(frame * 2), { engaged: st.engaged }).hidden;
+    }
+    const key = [...hidden].sort().join(',');
+    if (key === weaponVisKeyRef.current) return;
+    weaponVisKeyRef.current = key;
+    const paths = [];
+    for (const slot of hidden) paths.push(...(base.slots[slot] ?? []));
+    r.setHiddenSources(paths.length ? paths : null);
+  }, []);
+  /** An effect cue takes over the motion: its clip and its schedule's commands. */
+  const cueWeaponVis = useCallback((a) => {
+    weaponVisRef.current = {
+      vis: a.vis ?? [],
+      end: a.clip?.lengthInFrames ?? 0,
+      engaged: baseAnimRef.current === 'btl' || !isRestingClip(a.clip),
+    };
+    weaponVisKeyRef.current = '';
+  }, []);
   const weatherAudioRef = useRef(null);                     // ambient weather bed (0x3D sound pointers)
 
   // ── Assets > Effects (standalone spell/ability VFX) ────────────────────────
@@ -1943,6 +1988,7 @@ export default function App({ launch = null }) {
         fpsWindowStart = now;
       }
       animTick.current?.(renderer.animFrame, renderer.currentAnimation?.lengthInFrames ?? 0);
+      applyWeaponVis(renderer.animFrame);
       if (actorAnimTick.current) {
         const ea = actorEditIdRef.current != null ? renderer.getActor(actorEditIdRef.current) : null;
         actorAnimTick.current(ea?.animFrame ?? 0, ea?.currentAnimation?.lengthInFrames ?? 0);
@@ -2301,6 +2347,12 @@ export default function App({ launch = null }) {
       // to ~2× the character and pushes its centre up and forward: F then
       // parked her at the bottom of the view with the pivot hanging in front
       // of her chest.
+      // The ranged weapon's range type (info byte 14) names the lc/ls routine
+      // a StartRanged / FinishRanged tag runs (js/weaponVis.js).
+      {
+        const rangeSet = new Set((weaponSlots?.range ?? []).map((q) => pathKey(q, settingsRef.current)));
+        rangedInfoRef.current = parsed.find((e) => rangeSet.has(pathKey(e.path, settingsRef.current)))?.model?.info?.rangeType ?? null;
+      }
       if (weaponSlots) {
         const wkeys = new Set(
           ['main', 'sub', 'range'].flatMap((k) => (weaponSlots[k] ?? []).map((q) => pathKey(q, settingsRef.current))),
@@ -3019,7 +3071,7 @@ export default function App({ launch = null }) {
       // Caster animation (see buildCasterCues). The actor keeps pace with the
       // routine's Speed control while its cues drive the clip.
       const drivesActor = onActor && showCharAnimRef.current && !keepActorAnim;
-      const { animCues, windup } = drivesActor ? buildCasterCues(actor, routine) : { animCues: [], windup: 0 };
+      const { animCues, windup } = drivesActor ? buildCasterCues(actor, routine, { globalById: globalEffectsRef.current?.routines ?? null, rangeType: rangedInfoRef.current }) : { animCues: [], windup: 0 };
       if (onActor) renderer.actorFollowsEffect = drivesActor;
       if (onActor && !showCharAnimRef.current && !keepActorAnim) {
         renderer.setAnimation(actorIdleClip());
@@ -3060,6 +3112,7 @@ export default function App({ launch = null }) {
           if (!r || !a.clip) return;
           if (opts.hardLoop) mixerLastCueRef.current = a;
           r.setAnimation(a.clip);
+          cueWeaponVis(a);
           r.playing = !r.effectPaused;
         },
         onFinished: keepActorAnim ? null : effectFinishedRef.current,
@@ -3273,7 +3326,7 @@ export default function App({ launch = null }) {
     const actor = modelRef.current;
     const onActor = !!(actor && actor.kind !== 'zone' && actor.isRenderable && renderer.model === actor);
     const drivesActor = onActor && showCharAnimRef.current;
-    const { animCues, windup } = drivesActor ? buildCasterCues(actor, routine) : { animCues: [], windup: 0 };
+    const { animCues, windup } = drivesActor ? buildCasterCues(actor, routine, { globalById: globalEffectsRef.current?.routines ?? null, rangeType: rangedInfoRef.current }) : { animCues: [], windup: 0 };
     if (onActor) {
       renderer.actorFollowsEffect = drivesActor;
       if (!drivesActor) {
@@ -3291,6 +3344,7 @@ export default function App({ launch = null }) {
         const r = rendererRef.current;
         if (!r || !a.clip) return;
         r.setAnimation(a.clip);
+        cueWeaponVis(a);
         r.playing = true;
       },
       onFinished: effectFinishedRef.current,
@@ -4133,51 +4187,100 @@ export default function App({ launch = null }) {
   }, [pcFxMode, fxPath, leftView, entityFxSource, npcFxRoutine, npcPackActive, loadEffect, actorLoadTick]);
 
   /**
-   * Stow the ranged weapon unless the current action uses it.
+   * Weapon visibility: which weapon DATs sit on the renderer's deny-list.
    *
-   * Ranged weapons are the one slot with no grip joint to re-parent — their
-   * `info` reports standardJointIndex 255 (null), and the mesh binds straight
-   * to the back-mount bone (Bone0089 and its children on Hume Male). Nothing in
-   * the base, movement or battle motion DATs animates those joints, so the game
-   * hides the weapon by scaling it to 0 until it is drawn. Without this a bow
-   * hangs in view through every melee swing.
-   *
-   * Which actions count as "in use" comes from characters.json `rangedDisplay`.
+   * The game shows and hides weapons by slot (wep0 main, wep1 sub, wep2
+   * ranged) from the schedule it is playing — ShowHideWeapon (0x75) and
+   * LockConstrainDrive (0x89) tags, mostly reached through the shared `hw*`
+   * helpers in ROM/0/0.DAT; js/weaponVis.js cites the client code. At rest the
+   * hands are shown and the ranged weapon stowed (the game keeps a bow scaled
+   * to 0 until a routine draws it). This effect fixes the static part — view,
+   * VFX-only mode, the slot paths, the config fallback — and applyWeaponVis
+   * evaluates the motion's tags at the current frame.
    */
   useEffect(() => {
     const r = rendererRef.current;
     if (!r?.setHiddenSources) return;
-    if (!FX_VIEWS.has(leftView)) { r.setHiddenSources(null); return; }
+    weaponVisKeyRef.current = '';
+    const weaponView = leftView === 'pc' || leftView === 'effects' || leftView === 'mixer';
+    if (!FX_VIEWS.has(leftView) && !weaponView) { weaponBaseRef.current = null; r.setHiddenSources(null); return; }
 
     // VFX Only hides the whole character rather than clearing the model: the
     // effect stays bound to the actor's joints, so it plays where it belongs
-    // instead of collapsing to the origin. One combined set, because the ranged
-    // rule and this share the renderer's single deny-list.
+    // instead of collapsing to the origin. One combined set, because the
+    // weapon rules and this share the renderer's single deny-list.
     if (pcFxModeRef.current === 'vfx') {
+      weaponBaseRef.current = null;
       // An NPC is a single DAT, so its own path is the whole mesh set.
       r.setHiddenSources(leftView === 'npc'
         ? (modelPath ? [modelPath] : null)
         : pcMeshPathsRef.current);
       return;
     }
-    // The rules below are PC composer concerns only.
-    if (leftView === 'npc') { r.setHiddenSources(null); return; }
-    const hidden = [];
+    // The rules below are PC composer concerns only. Paths the rendered model
+    // does not contain are inert on the deny-list, so an NPC shown in the
+    // Effects view is untouched by the composer's slots.
+    if (leftView === 'npc') { weaponBaseRef.current = null; r.setHiddenSources(null); return; }
     const cfg = pc.rangedDisplay;
-    const paths = pc.rangedPaths;
-    if (cfg && paths?.length) {
-      const inUse = (cfg.showForActionGroups ?? []).includes(pc.actionGroup)
-        || (cfg.showForActions ?? []).includes(pc.actionLabel);
-      if (!inUse) hidden.push(...paths);
+    const rangedInUse = !!cfg && ((cfg.showForActionGroups ?? []).includes(pc.actionGroup)
+      || (cfg.showForActions ?? []).includes(pc.actionLabel));
+    weaponBaseRef.current = {
+      slots: { [SLOT.main]: pc.mainPaths ?? [], [SLOT.sub]: pc.subPaths ?? [], [SLOT.range]: pc.rangedPaths ?? [] },
+      rangedInUse,
+    };
+    applyWeaponVis(r.animFrame ?? 0);
+  }, [pc.rangedDisplay, pc.rangedPaths, (pc.mainPaths ?? []).join('|'), (pc.subPaths ?? []).join('|'), pc.actionGroup, pc.actionLabel, leftView, pcFxMode, modelPath, applyWeaponVis]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  /**
+   * The Characters view's motion → its weapon tags. A schedule carries its own
+   * and those of the routines it links (`casm` → `hwmg`); a raw clip takes the
+   * tags of every schedule that plays it — `yu1` is only ever played by the
+   * archery start routine, so it gets that routine's LockConstrainDrive.
+   * `engaged` stands in for the client's GetGameStatus() == 1: Base Anim set
+   * to Battle, or a clip that is not a resting one (pose.js draws the weapons
+   * by the same rule). The Effects and Mixer views set this from their cues.
+   */
+  useEffect(() => {
+    if (leftView === 'effects' || leftView === 'mixer') return undefined;
+    let live = true;
+    const compute = () => {
+      const model = modelRef.current;
+      const schedById = new Map((model?.schedules ?? []).map((sc) => [sc.id, sc]));
+      const ctx = { schedById, globalById: globalEffectsRef.current?.routines ?? null, rangeType: rangedInfoRef.current };
+      let vis = [];
+      let end = 0;
+      let clip = null;
+      if (currentSchedule) {
+        const sched = schedById.get(currentSchedule);
+        if (sched) {
+          vis = collectVis(sched, ctx);
+          clip = resolveScheduleClip(model, sched);
+          end = clip?.lengthInFrames ?? 0;
+        }
+      } else if (currentAnim) {
+        clip = animsRef.current.find((g) => g.id === currentAnim)?.clip ?? null;
+        const ids = new Set(clip ? (clip.parts ?? [clip.id]) : []);
+        for (const sc of model?.schedules ?? []) {
+          if ((sc.commands ?? []).some((c) => (c.clipIds ?? []).some((id) => ids.has(id)))) vis.push(...collectVis(sc, ctx));
+        }
+        vis.sort((a, b) => a.delay - b.delay);
+        end = clip?.lengthInFrames ?? 0;
+      }
+      weaponVisRef.current = { vis, end, engaged: baseAnim === 'btl' || !isRestingClip(clip) };
+      weaponVisKeyRef.current = '';
+      applyWeaponVis(rendererRef.current?.animFrame ?? 0);
+    };
+    compute();
+    // The `hw*` helpers live in ROM/0/0.DAT, which the Characters view has not
+    // necessarily loaded yet (the Effects view fetches it): load it once and
+    // evaluate again with the links resolved. `root` is the completeness
+    // check ensureGlobalEffects itself uses — a failed fetch leaves an empty
+    // routines map behind, which must not count as loaded.
+    if (!globalEffectsRef.current?.root && settingsRef.current?.gamePath) {
+      ensureGlobalEffects(settingsRef.current, []).then(() => { if (live) compute(); });
     }
-    // A spell is cast with the hand weapons hidden. The game does that itself
-    // when the cast starts — no ShowHideWeapon in the spell or cast DATs — so
-    // the viewer does it off the motion: a magic clip (ma / mb / mi / mn / ms /
-    // mw), a cast schedule (casm, cast, cawh…) or the Effects view's composed
-    // cast.
-    if (CASTING_MOTION.test(currentAnim) || CASTING_MOTION.test(currentSchedule)) hidden.push(...(pc.handPaths ?? []));
-    r.setHiddenSources(hidden.length ? hidden : null);
-  }, [pc.rangedDisplay, pc.rangedPaths, (pc.handPaths ?? []).join('|'), pc.actionGroup, pc.actionLabel, leftView, pcFxMode, modelPath, currentAnim, currentSchedule]);   // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { live = false; };
+  }, [currentAnim, currentSchedule, baseAnim, schedules, leftView, applyWeaponVis, ensureGlobalEffects]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Character Creation (high-poly RT/SHAPE + SQLE models) ----------------
 

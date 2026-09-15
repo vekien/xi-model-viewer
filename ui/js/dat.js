@@ -1,3 +1,5 @@
+import { VIS_OPS, readVisCommand } from './weaponVis.js';
+
 // FFXI entity DAT parsing — port of XiViewer.Data (C#), itself ported from
 // xim's Kotlin parsers (the authoritative reference that renders retail DATs).
 // Sections: skeleton 0x29, skinned mesh 0x2A, texture 0x20, animation 0x2B.
@@ -217,6 +219,8 @@ function parseRoutine(r, sec) {
   // callee's commands are inlined by inlineRoutineCalls once the whole DAT is
   // parsed, so `main` lists (and plays) what it actually runs.
   const calls = [];
+  // Weapon show/hide tags (0x75, 0x89, …), decoded by weaponVis.js.
+  const vis = [];
   let dur = 0;
   let maxLoops = 0;
   let transIn = 0;
@@ -262,13 +266,17 @@ function parseRoutine(r, sec) {
       const ref = String.fromCharCode(r.bytes[p + 8], r.bytes[p + 9], r.bytes[p + 10], r.bytes[p + 11]).replace(/\0+$/, '');
       if (/^[\x20-\x7e]{1,4}$/.test(ref)) calls.push({ routineId: ref.trimEnd(), delay: at });
     }
+    if (VIS_OPS.has(op)) {
+      const v = readVisCommand(r.bytes, p, op, at, end);
+      if (v) vis.push(v);
+    }
     if (op === 0x00) break;
     p += entryLen;
   }
 
   // Keep routines even with no clip refs (SFX/VFX-only) so the schedule list
   // matches the full 0x07 set AltanaViewer shows.
-  return { id: sec.id, refs, commands, calls, dur, maxLoops, transIn, transOut };
+  return { id: sec.id, refs, commands, calls, vis, dur, maxLoops, transIn, transOut };
 }
 
 // Ops that invoke another routine by id (same set as effect.js CALL_OPS).
@@ -292,26 +300,34 @@ function inlineRoutineCalls(schedules) {
   return schedules.map((s) => {
     if (!s.calls?.length) return s;
     const commands = [...s.commands];
+    const vis = [...(s.vis ?? [])];
+    // Calls this DAT cannot satisfy, on the schedule's own clock. The weapon
+    // show/hide helpers (`hwmg`, `hwso`, …) live in ROM/0/0.DAT, and every
+    // cast schedule reaches one; weaponVis.collectVis follows them there.
+    const extCalls = [];
     const seen = new Set([s]);
     const walk = (r, offset, depth) => {
       if (depth > 8) return;
       for (const call of r.calls ?? []) {
-        const next = byId.get(call.routineId);
-        if (!next || seen.has(next)) continue;
-        seen.add(next);
         const at = offset + call.delay;
+        const next = byId.get(call.routineId);
+        if (!next) { extCalls.push({ routineId: call.routineId, delay: at }); continue; }
+        if (seen.has(next)) continue;
+        seen.add(next);
         for (const c of next.commands) commands.push({ ...c, delay: c.delay + at });
+        for (const v of next.vis ?? []) vis.push({ ...v, delay: v.delay + at });
         walk(next, at, depth + 1);
       }
     };
     walk(s, 0, 0);
-    if (commands.length === s.commands.length) return s;
+    vis.sort((a, b) => a.delay - b.delay);
+    if (commands.length === s.commands.length) return { ...s, vis, extCalls };
     commands.sort((a, b) => a.delay - b.delay);
     const refs = [...new Set(commands.map((c) => c.ref))];
     // Header-style fields come from the first command when the routine had none.
     const first = s.commands.length ? s : commands[0];
     return {
-      ...s, refs, commands,
+      ...s, refs, commands, vis, extCalls,
       dur: first.dur ?? first.duration, maxLoops: first.maxLoops, transIn: first.transIn, transOut: first.transOut,
     };
   });
@@ -653,6 +669,8 @@ function parseInfo(r, sec) {
     weaponAnimationType: b[3],
     weaponAnimationSubType: b[4],
     standardJointIndex: b[6] === 0xff ? null : b[6],
+    // Ranged weapons: which lc/ls routine a StartRanged tag runs (weaponVis).
+    rangeType: b[14],
     // Body armour: which waist (body-slot 2) pack block the client pairs with
     // it — AltanaView's BODYinfo, byte 0x19 of the section. 2 selects the
     // second block of every waist pack family (race +4 not +3, battle skirt

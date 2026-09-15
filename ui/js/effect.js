@@ -13,6 +13,7 @@
 // emit at the world origin for their scheduled window and then drain.
 
 import { parseSections } from './zone.js';
+import { VIS_OPS, readVisCommand } from './weaponVis.js';
 
 const EFFECT_ROUTINE = 0x07;
 const CMD_SPAWN_GENERATOR = 0x02;   // ref is a generator DatId
@@ -155,7 +156,7 @@ function decideCondition(stack, regs) {
 function parseRoutineCommands(bytes, dv, section) {
   const base = section.start + 0x10;             // dataStart
   const end = section.start + section.size;
-  const empty = { commands: [], calls: [], sounds: [], anims: [] };
+  const empty = { commands: [], calls: [], sounds: [], anims: [], stops: [], vis: [] };
   if (section.size < 0x30) return empty;
 
   const sec2 = dv.getInt32(base + 0x14, true);   // command-list pointer (body-relative)
@@ -166,6 +167,7 @@ function parseRoutineCommands(bytes, dv, section) {
   const sounds = [];
   const anims = [];
   const stops = [];
+  const vis = [];                                // weapon show/hide tags (weaponVis.js)
   const regs = new Map();                        // bound as conditions are decided
   let stack = [];                                // operands awaiting the next 0x64
   let clock = 0;                                 // Σ delays of the entries BEFORE this one
@@ -181,6 +183,12 @@ function parseRoutineCommands(bytes, dv, section) {
     const { op, p } = node;
     const at = clock;
     clock += u16(p + 4);
+    // Before the ref check: these tags carry numbers where the others carry an id.
+    if (VIS_OPS.has(op)) {
+      const v = readVisCommand(bytes, p, op, at, end);
+      if (v) vis.push(v);
+      return;
+    }
     if (p + 16 > end) return;
     const ref = cleanId(String.fromCharCode(bytes[p + 8], bytes[p + 9], bytes[p + 10], bytes[p + 11]));
     if (!/^[\x20-\x7e]{1,4}$/.test(ref)) return;
@@ -240,7 +248,7 @@ function parseRoutineCommands(bytes, dv, section) {
   };
 
   run(nestBlocks(readEntries(bytes, base + (sec2 - 16), end)));
-  return { commands, calls, sounds, anims, stops };
+  return { commands, calls, sounds, anims, stops, vis };
 }
 
 /** Frames the routine spans, from its last generator's start + emit window. */
@@ -260,9 +268,9 @@ export function parseEffectRoutines(buf) {
   const routines = [];
   for (const s of parseSections(dv)) {
     if (s.typeCode !== EFFECT_ROUTINE) continue;
-    const { commands, calls, sounds, anims, stops } = parseRoutineCommands(bytes, dv, s);
+    const { commands, calls, sounds, anims, stops, vis } = parseRoutineCommands(bytes, dv, s);
     routines.push({
-      id: cleanId(s.id) || 'main', commands, calls, sounds, anims, stops, length: routineLength(commands),
+      id: cleanId(s.id) || 'main', commands, calls, sounds, anims, stops, vis, length: routineLength(commands),
     });
   }
   return routines;
@@ -289,6 +297,7 @@ export function flattenRoutine(routine, byId, globalById = null) {
   const sounds = [];
   const anims = [];
   const stops = [];
+  const vis = [];
   const actorCalls = [];
   const seen = new Set();
 
@@ -299,6 +308,7 @@ export function flattenRoutine(routine, byId, globalById = null) {
     for (const s of r.sounds) sounds.push({ ...s, delay: s.delay + offset });
     for (const a of r.anims ?? []) anims.push({ ...a, delay: a.delay + offset });
     for (const st of r.stops ?? []) stops.push({ ...st, delay: st.delay + offset });
+    for (const v of r.vis ?? []) vis.push({ ...v, delay: v.delay + offset });
     for (const call of r.calls) {
       const next = byId.get(call.routineId) ?? globalById?.get(call.routineId) ?? null;
       if (!next) {
@@ -331,5 +341,6 @@ export function flattenRoutine(routine, byId, globalById = null) {
   // schedules meet clips in dat.js resolveScheduleClip.
   anims.sort((a, b) => a.delay - b.delay);
   actorCalls.sort((a, b) => a.delay - b.delay);
-  return { commands, sounds: deduped, anims, stops, actorCalls, length: routineLength(commands) };
+  vis.sort((a, b) => a.delay - b.delay);
+  return { commands, sounds: deduped, anims, stops, vis, actorCalls, length: routineLength(commands) };
 }
