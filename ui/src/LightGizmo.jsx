@@ -37,7 +37,7 @@ const GAIN_MAX = 2;
  * scroller again. Brightness slider above (25%–200%).
  */
 export function LightGizmo({
-  dir, onChange, onReset, detailsOpen = false,
+  dir, onChange, onReset,
   brightness = 1, onBrightness,
   followingTime = false,
 }) {
@@ -201,7 +201,7 @@ export function LightGizmo({
   return (
     <div
       id="light-gizmo"
-      className={`light-gizmo${detailsOpen ? ' details-open' : ''}${followingTime ? ' following' : ''}`}
+      className={`light-gizmo${followingTime ? ' following' : ''}`}
     >
       <div className="light-gizmo-bright">
         <span className="light-gizmo-bright-lab">

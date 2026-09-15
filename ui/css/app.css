@@ -2021,12 +2021,6 @@ body.plc-resizing { cursor: ns-resize !important; user-select: none; }
   cursor: help;
 }
 .light-gizmo-help:hover { color: var(--gray-200); }
-/* Sit just left of Details when that panel is open */
-body:has(#details) .light-gizmo.details-open {
-  right: 340px; /* 12 + 320 + 8 */
-  bottom: 56px;
-}
-
 /* --- Details panel --------------------------------------------------------- */
 
 #details {

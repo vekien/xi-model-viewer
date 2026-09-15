@@ -11057,7 +11057,6 @@ export default function App({ launch = null }) {
         <LightGizmo
           dir={customSunDir || (modelInfo?.zone ? sunDirDisplay(timeMinutes) : DEFAULT_LIGHT_DIR)}
           followingTime={!customSunDir && !!modelInfo?.zone}
-          detailsOpen={detailsOpen && !!modelInfo}
           brightness={lightGain}
           onBrightness={setLightGain}
           onChange={(d) => setCustomSunDir(d)}
