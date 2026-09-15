@@ -9261,9 +9261,11 @@ export default function App({ launch = null }) {
         break;
       case 'assets-npcs':
         setLeftView('npc');
+        setAnimOpen(true);   // the panel is the view's transport; it comes up every time
         break;
       case 'assets-characters':
         setLeftView('pc');
+        setAnimOpen(true);
         break;
       case 'assets-creation':
         setLeftView('creation');
