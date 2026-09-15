@@ -247,6 +247,11 @@ export function TimelineWindow({
   const rootRef = useRef(null);
   const drag = useRef(null);
   const [marquee, setMarquee] = useState(null);   // root-relative px while rubber-banding
+  // Snap (on by default): a dragged block locks onto the strike line, the
+  // loop end, frame 0 and the edges of the other blocks once within reach.
+  const [snap, setSnap] = useState(() => readJson('mixerSnap') ?? true);
+  const toggleSnap = (on) => { setSnap(on); writeJson('mixerSnap', on); };
+  const SNAP_PX = 8;
 
   const trackWidth = () => trackRef.current?.clientWidth ?? 300;
   const pxPerFrame = () => trackWidth() / len;
@@ -297,7 +302,26 @@ export function TimelineWindow({
     const frames = Math.round((e.clientX - d.x0) / pxPerFrame());
     if (d.kind === 'block') {
       if (frames) d.moved = true;
-      const delta = Math.max(frames, -Math.min(...d.starts.map((s) => s.start0)));
+      let delta = Math.max(frames, -Math.min(...d.starts.map((s) => s.start0)));
+      if (snap) {
+        // Nearest target to the grabbed block's start or end wins; the whole
+        // group shifts by the same correction so it keeps its shape.
+        const moving = new Set(d.starts.map((s) => s.id));
+        const targets = [0, strike, loopEnd]
+          .concat(events.filter((x) => !moving.has(x._id)).flatMap((x) => [x.start, x.start + (x.dur || 0)]))
+          .filter((t) => typeof t === 'number' && t >= 0);
+        const reach = SNAP_PX / pxPerFrame();
+        const start = d.starts.find((s) => s.id === d.ev._id)?.start0 ?? d.ev.start;
+        const edges = [start + delta, start + delta + (d.ev.dur || 0)];
+        let best = null;
+        for (const edge of edges) {
+          for (const t of targets) {
+            const off = t - edge;
+            if (Math.abs(off) <= reach && (best === null || Math.abs(off) < Math.abs(best))) best = off;
+          }
+        }
+        if (best) delta = Math.max(delta + Math.round(best), -Math.min(...d.starts.map((s) => s.start0)));
+      }
       onMoveMany(d.starts.map((s) => ({ id: s.id, start: s.start0 + delta })));
     } else if (d.kind === 'lane') {
       const delta = frames - d.moved;
@@ -553,6 +577,13 @@ export function TimelineWindow({
                 </label>
               </Tooltip>
             )}
+            <Tooltip content="Snap: a dragged block locks onto the strike line, the loop end and other blocks' edges when close" placement="top">
+              <label className="switch cseq-switch">
+                <input type="checkbox" checked={snap} onChange={(e) => toggleSnap(e.target.checked)} />
+                <span className="track" />
+                <span className="cseq-switch-label">Snap</span>
+              </label>
+            </Tooltip>
           </div>
 
           <div className="cseq-bar-sep" />
