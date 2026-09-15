@@ -3879,11 +3879,13 @@ export class Renderer {
     gl.uniformMatrix4fv(this.overlayUniforms.viewProj, false, viewProj);
     gl.uniform1f(this.overlayUniforms.opacity, 1);
     gl.disable(gl.BLEND);
-    gl.disable(gl.DEPTH_TEST);   // always readable, even through terrain
+    // Depth-tested but not depth-writing: the actor's body and the terrain
+    // occlude the box, so it reads as a frame in the scene rather than a
+    // decal on the glass.
+    gl.enable(gl.DEPTH_TEST);
     gl.depthMask(false);
     gl.drawArrays(gl.LINES, 0, verts.length / 6);
     gl.bindVertexArray(null);
-    gl.enable(gl.DEPTH_TEST);
     gl.depthMask(true);
     gl.deleteVertexArray(vao);
     gl.deleteBuffer(vbo);
