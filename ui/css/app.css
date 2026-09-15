@@ -6703,7 +6703,8 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 /* The horizontal scroller inside it must be as tall as the track, not the
    window: sized to the window it clipped the lower lanes while the label
    column beside it ran to the end, so the two scrolled apart. */
-#mixer-seq .mseq-tl .cseq-tl-scroll { height: auto; min-height: 100%; }
+#mixer-seq .mseq-tl { align-items: flex-start; }   /* columns take their content height, not the window's */
+#mixer-seq .mseq-tl .cseq-tl-scroll { height: auto; min-height: 0; }
 #mixer-seq .mseq-tl::-webkit-scrollbar { width: 6px; }
 #mixer-seq .mseq-tl::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); border-radius: 3px; }
 .mseq-name { color: var(--text); font-size: 12px; flex: 0 0 auto; }
