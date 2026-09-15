@@ -98,24 +98,40 @@ export function TimelineWindow({
   useEffect(() => { if (pos) writeJson(POS_KEY, pos); }, [pos]);
   useEffect(() => { writeJson(SIZE_KEY, size); }, [size]);
 
+  // The drag listens on the window for its lifetime rather than trusting pointer
+  // capture on the header: the canvas and the modals capture and swallow pointer
+  // events of their own, and a stolen capture left a drag dead after one step.
   const startDrag = (e) => {
+    if (e.button !== 0) return;
     if (e.target.closest('button, input, select, a, [role="button"], .cseq-resize, .mseq-resize-v')) return;
-    const rect = panelRef.current.getBoundingClientRect();
-    if (!pos) setPos({ x: rect.left, y: rect.top });
-    panelDrag.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
-    e.currentTarget.setPointerCapture(e.pointerId);
-  };
-  const onPanelDrag = (e) => {
-    if (!panelDrag.current) return;
     const el = panelRef.current;
-    const w = el?.offsetWidth ?? size.w;
-    const h = el?.offsetHeight ?? MIN_H;
-    setPos({
-      x: clamp(e.clientX - panelDrag.current.dx, 0, Math.max(window.innerWidth - w, 0)),
-      y: clamp(e.clientY - panelDrag.current.dy, 0, Math.max(window.innerHeight - h, 0)),
-    });
+    const rect = el.getBoundingClientRect();
+    if (!pos) setPos({ x: rect.left, y: rect.top });
+    const d = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+    panelDrag.current = d;
+    e.preventDefault();
+    const move = (ev) => {
+      if (panelDrag.current !== d) return;
+      if (ev.buttons === 0) { end(); return; }
+      const w = el.offsetWidth || size.w;
+      const h = el.offsetHeight || MIN_H;
+      setPos({
+        x: clamp(ev.clientX - d.dx, 0, Math.max(window.innerWidth - w, 0)),
+        y: clamp(ev.clientY - d.dy, 0, Math.max(window.innerHeight - h, 0)),
+      });
+    };
+    const end = () => {
+      if (panelDrag.current === d) panelDrag.current = null;
+      window.removeEventListener('pointermove', move, true);
+      window.removeEventListener('pointerup', end, true);
+      window.removeEventListener('pointercancel', end, true);
+      window.removeEventListener('blur', end);
+    };
+    window.addEventListener('pointermove', move, true);
+    window.addEventListener('pointerup', end, true);
+    window.addEventListener('pointercancel', end, true);
+    window.addEventListener('blur', end);
   };
-  const endDrag = () => { panelDrag.current = null; };
 
   // Height fits the content (up to MAX_H, see #mixer-seq). The bottom edge can
   // only pull the window shorter than that — the body then scrolls — never open
@@ -386,7 +402,7 @@ export function TimelineWindow({
   if (!open) return null;
   return createPortal(
     <div id="mixer-seq" className="panel" ref={panelRef} style={style}>
-      <div className="cseq-header" ref={headerRef} onPointerDown={startDrag} onPointerMove={onPanelDrag} onPointerUp={endDrag}>
+      <div className="cseq-header" ref={headerRef} onPointerDown={startDrag}>
         <span className="icon">timeline</span>
         <span className="cseq-title">Timeline</span>
         <span className="mono mseq-name">{recipeName}</span>

@@ -99,16 +99,19 @@ export function EffectPcStrip({ pc, gearsetsFirst = false }) {
     try {
       const raw = JSON.parse(localStorage.getItem('pcGearSets') || 'null');
       const sets = Array.isArray(raw?.sets) ? raw.sets : (Array.isArray(raw) ? raw : []);
+      // Saved looks first under Custom, then the built-in Presets — the same split
+      // the Characters view's GearSets panel draws with its tabs.
       return [
         { id: '', label: '— none —' },
-        ...BUILTIN_GEARSETS.map((s) => ({ id: s.id, label: `★ ${s.name}`, set: { ...s, race } })),
         ...sets
           .filter((s) => s?.id && s?.name)
           .map((s) => ({
             id: s.id,
+            group: 'Custom',
             label: s.race && s.race !== race ? `${s.name} (${s.race})` : s.name,
             set: s,
           })),
+        ...BUILTIN_GEARSETS.map((s) => ({ id: s.id, group: 'Presets', label: `★ ${s.name}`, set: { ...s, race } })),
       ];
     } catch {
       return [{ id: '', label: '— none —' }];

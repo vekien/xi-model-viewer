@@ -952,7 +952,7 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
    flat band while the ones scrolled further down did not — the same header
    reading as two different styles. */
 .combo-group {
-  color: var(--gray-500);
+  color: var(--accent);   /* a category title, like the panels' section titles */
   font: 600 10px/1.4 var(--font-ui);
   text-transform: uppercase;
   letter-spacing: 0.04em;
