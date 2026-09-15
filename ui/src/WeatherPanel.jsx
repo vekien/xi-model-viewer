@@ -1,7 +1,6 @@
 import { useLayoutEffect, useRef } from 'react';
 import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
-import { ColorSwatch } from './ColorPicker.jsx';
 
 // FFXI weather ids → display names (only those present in a zone are listed).
 export const WEATHER_NAMES = {
@@ -29,7 +28,6 @@ export function WeatherPanel({
   weathers = [], weather, timeMinutes, onChange, heading = 'Zone',
   todPlaying = false, onToggleTod,
   skyboxOn, onToggleSkybox, hasSkybox = false, objectsOpen,
-  bgColor, onBg,
   brightness = 0, onBrightness,
   fogOn = true, onFogOn, fogScale = 1, onFogScale,
   sfxOn = true, onToggleSfx,
@@ -142,17 +140,6 @@ export function WeatherPanel({
           <div className="wx-nosky">No Skybox for Indoor Zone</div>
         )}
 
-        <div className="wx-row wx-bg-row">
-          <span className="wx-bg-label">Viewport Background Colour</span>
-          <ColorSwatch
-            className="wx-bg-swatch"
-            value={bgColor || '#303438'}
-            onChange={(hex) => onBg?.(hex)}
-            tooltip="Viewport background colour"
-            placement="left"
-          />
-        </div>
-
         <div className="wx-row wx-fog-row">
           <Tooltip content="Fog" placement="top">
             <span className="icon wx-tod-icon">foggy</span>
@@ -175,46 +162,11 @@ export function WeatherPanel({
           </Tooltip>
         </div>
 
-        {/* The leading icon *is* the transport control — a separate play button
-            on its own row read as stray UI. Zone BGM is decoded on demand
-            (ATRAC3 shells out to vgmstream), so it only starts on a press. */}
         <div className="wx-row wx-bright-row">
-          <Tooltip
-            content={zoneTrack
-              ? `${zoneTrackPlaying ? 'Pause' : 'Play'} ${trackLabel}`
-              : 'This zone has no music'}
-            placement="top"
-          >
-            <button
-              className={`wx-audio-btn${zoneTrackPlaying ? ' playing' : ''}`}
-              disabled={!zoneTrack}
-              aria-pressed={zoneTrackPlaying}
-              onClick={() => onToggleZoneMusic?.()}
-            >
-              <span className="icon">music_note</span>
-            </button>
-          </Tooltip>
-          <span className="wx-audio-label">{zoneTrack ? trackLabel : 'No music in this zone'}</span>
-        </div>
-
-        <div className="wx-row wx-bright-row">
-          <Tooltip content={sfxOn ? 'Mute ambient / weather sound' : 'Enable ambient / weather sound'} placement="top">
-            <button
-              className={`wx-audio-btn${sfxOn ? ' playing' : ''}`}
-              aria-pressed={sfxOn}
-              onClick={() => onToggleSfx?.(!sfxOn)}
-            >
-              <span className="icon eq">airwave</span>
-            </button>
-          </Tooltip>
-          <span className="wx-audio-label">{sfxOn ? 'Ambient and weather sound' : 'Ambient muted'}</span>
-        </div>
-
-        <div className="wx-row wx-bright-row">
-          <Tooltip content="Brightness" placement="top">
+          <Tooltip content="Unlit Strength" placement="top">
             <span className="icon wx-tod-icon">light_mode</span>
           </Tooltip>
-          <Tooltip content="Unlit" placement="top">
+          <Tooltip content="Unlit Strength — how much of the zone draws unlit (0% lit as authored)" placement="top">
             <input
               type="range" min="0" max="100" step="1" value={brightPct}
               onChange={(e) => onBrightness?.(+e.target.value / 100)}
@@ -223,6 +175,34 @@ export function WeatherPanel({
             />
           </Tooltip>
           <span className="wx-bright-val mono">{brightPct}%</span>
+        </div>
+
+        {/* Music and ambient in one inset: a transport glyph each, Play that turns
+            into Stop while it runs, and the name beside it. Zone BGM is decoded on
+            demand (ATRAC3 shells out to vgmstream), so it only starts on a press. */}
+        <div className="wx-audio">
+          <div className="wx-row wx-audio-row">
+            <Tooltip content={zoneTrack ? (zoneTrackPlaying ? `Stop ${trackLabel}` : `Play ${trackLabel}`) : 'This zone has no music'} placement="top">
+              <button type="button" className={`pc-tbtn${zoneTrackPlaying ? ' on' : ''}`}
+                disabled={!zoneTrack} aria-pressed={zoneTrackPlaying ? 'true' : 'false'} aria-label="Zone music"
+                onClick={() => onToggleZoneMusic?.()}>
+                <span className="icon fill">{zoneTrackPlaying ? 'stop' : 'play_arrow'}</span>
+              </button>
+            </Tooltip>
+            <span className="icon wx-audio-kind">music_note</span>
+            <span className="wx-audio-label">{zoneTrack ? trackLabel : 'No music in this zone'}</span>
+          </div>
+          <div className="wx-row wx-audio-row">
+            <Tooltip content={sfxOn ? 'Stop the ambient and weather sound' : 'Play the ambient and weather sound'} placement="top">
+              <button type="button" className={`pc-tbtn${sfxOn ? ' on' : ''}`}
+                aria-pressed={sfxOn ? 'true' : 'false'} aria-label="Ambient sound"
+                onClick={() => onToggleSfx?.(!sfxOn)}>
+                <span className="icon fill">{sfxOn ? 'stop' : 'play_arrow'}</span>
+              </button>
+            </Tooltip>
+            <span className="icon wx-audio-kind">airwave</span>
+            <span className="wx-audio-label">Ambient and weather sound</span>
+          </div>
         </div>
       </div>
     </div>
