@@ -328,7 +328,7 @@ export function MixerPanel({
       <div className="panel mixer-panel">
         <div className="details-header">
           <span className="icon">tune</span>
-          <span className="details-title">Ability Mixer</span>
+          <span className="details-title">Recipes</span>
           <span className="sp" />
           <button type="button" className="pc-tbtn details-close" aria-label="Close" onClick={() => onPanel?.('mixer', false)}><span className="icon">close</span></button>
         </div>

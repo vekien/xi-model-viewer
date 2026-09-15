@@ -161,11 +161,11 @@ const VIEWS = ['files', 'database', 'npc', 'pc', 'creation', 'music', 'sfx', 'zo
 /** Views that browse individual models, where fly controls are a hindrance. */
 /** The mixer view's rail, top to bottom: the Animation panel is the main one. */
 const MIXER_RAIL = [
-  { id: 'actors', icon: 'groups', label: 'Actors' },
-  { id: 'mixer', icon: 'tune', label: 'Ability Mixer' },
-  { id: 'parts', icon: 'segment', label: 'Parts' },
   { id: 'timeline', icon: 'timeline', label: 'Timeline' },
   { id: 'preview', icon: 'animation', label: 'Animation Preview' },
+  { id: 'actors', icon: 'groups', label: 'Actors' },
+  { id: 'mixer', icon: 'tune', label: 'Recipes' },
+  { id: 'parts', icon: 'segment', label: 'Parts' },
 ];
 const ORBIT_VIEWS = new Set(['files', 'npc', 'pc', 'creation']);
 // Seconds of real time one in-game day takes when the day/night cycle is
