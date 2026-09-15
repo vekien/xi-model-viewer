@@ -165,20 +165,25 @@ export const backend = {
   },
 
   /**
-   * Background `xi` with live line events (`xi-log`). Does not freeze the UI.
-   * @param {(line: string) => void} [onLine]
+   * Background `xi` with live line events: `xi-log` is stdout, `xi-err` stderr.
+   * Does not freeze the UI. `onLine(line, stream)` — stream is 'out' or 'err',
+   * so a caller parsing JSON can read stdout alone while a log shows both.
+   * @param {(line: string, stream: 'out'|'err') => void} [onLine]
    * @returns {Promise<number>} exit code (0 ok)
    */
   async xiRunStream(args, xiPath, env, onLine) {
     if (isTauri()) {
       const listen = window.__TAURI__?.event?.listen;
-      let unlisten = () => {};
+      const offs = [];
       if (typeof listen === 'function' && onLine) {
-        unlisten = await listen('xi-log', (ev) => {
-          const line = typeof ev?.payload === 'string' ? ev.payload : String(ev?.payload ?? '');
-          if (line) onLine(line);
-        });
+        for (const [name, stream] of [['xi-log', 'out'], ['xi-err', 'err']]) {
+          offs.push(await listen(name, (ev) => {
+            const line = typeof ev?.payload === 'string' ? ev.payload : String(ev?.payload ?? '');
+            if (line) onLine(line, stream);
+          }));
+        }
       }
+      const unlisten = () => { for (const off of offs) { try { off(); } catch { /* */ } } };
       try {
         return await tauriInvoke('xi_run_stream', {
           args: args || [], xiPath: xiPath || null, env: env || null,
@@ -193,10 +198,12 @@ export const backend = {
         try { unlisten(); } catch { /* */ }
       }
     }
-    // Browser: no true stream — fall back to blocking xi-run, then dump.
+    // Browser: no true stream — fall back to blocking xi-run, then dump. The
+    // dev server puts stderr after stdout, so every line passes as stdout and
+    // a JSON reader stops at the value's end anyway.
     const text = await this.xiRun(args, xiPath, env);
     if (onLine && text) {
-      for (const line of String(text).split(/\r?\n/)) onLine(line);
+      for (const line of String(text).split(/\r?\n/)) onLine(line, 'out');
     }
     return 0;
   },

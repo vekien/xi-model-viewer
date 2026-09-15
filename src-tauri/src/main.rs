@@ -814,8 +814,10 @@ fn xi_run(
     }
 }
 
-/// Background `xi` with live stdout/stderr → `xi-log` events. UI stays responsive.
-/// Returns process exit code (0 = ok). Only one streamed job at a time.
+/// Background `xi` with live stdout → `xi-log` and stderr → `xi-err` events, so a
+/// caller reading JSON off stdout is not tripped by a uv or Python warning landing
+/// between two lines of it. UI stays responsive. Returns process exit code
+/// (0 = ok). Only one streamed job at a time.
 #[tauri::command]
 async fn xi_run_stream(
     app: AppHandle,
@@ -878,7 +880,7 @@ fn xi_run_stream_sync(
             for line in BufReader::new(pipe).lines() {
                 match line {
                     Ok(l) => {
-                        let _ = app_err.emit("xi-log", l);
+                        let _ = app_err.emit("xi-err", l);
                     }
                     Err(_) => break,
                 }

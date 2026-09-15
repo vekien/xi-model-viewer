@@ -256,13 +256,23 @@ export function entryPathForRace(entry, viewerRace) {
 /** Run `xi <args>` and parse its stdout as JSON (streaming so it can be cancelled). */
 export async function xiJson(args, xiPath, env, onLine) {
   const lines = [];
-  const code = await backend.xiRunStream(args, xiPath, env, (line) => {
+  const out = [];
+  // The JSON is read off stdout alone: the Tauri stream tags stderr, whose
+  // lines (a uv notice, a Python warning) can land in the middle of a
+  // multi-line value and break the parse at "line 93 column 1".
+  const code = await backend.xiRunStream(args, xiPath, env, (line, stream) => {
     lines.push(line);
+    if (stream !== 'err') out.push(line);
     onLine?.(line);
   });
   const text = lines.join('\n');
   if (code && code !== 0) throw new Error(`xi ${args[0]} ${args[1] ?? ''} failed (${code}): ${text.slice(-400)}`);
-  const value = firstJsonValue(text);
+  let value;
+  try {
+    value = firstJsonValue(out.join('\n'));
+  } catch (e) {
+    throw new Error(`xi ${args.join(' ')}: could not read its JSON (${e?.message ?? e})`);
+  }
   if (value === undefined) throw new Error(`xi ${args.join(' ')} printed no JSON`);
   return value;
 }
