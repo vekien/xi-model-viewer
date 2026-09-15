@@ -64,7 +64,13 @@ const MENUS = [
       // needs its event layer, and per-shape textures are not mapped yet).
       { sep: true },
       { id: 'assets-creation', label: '(WIP) Character Creation', icon: 'person_add' },
+    ],
+  },
+  {
+    label: 'Tools',
+    items: [
       { id: 'assets-mixer', label: 'Ability Mixer', icon: 'tune' },
+      { id: 'camera-sequencer', label: 'Camera Sequencer', icon: 'movie', check: 'sequencer' },
     ],
   },
 ];
@@ -81,7 +87,7 @@ const VIEW_TOOLBAR = MENUS.find((m) => m.label === 'View').items
  * stacking contexts and would otherwise swallow it).
  */
 export function MenuBar({
-  onAction, checks = {}, flySpeed = 0, fps = 0, fov = 45, onFov,
+  onAction, checks: checksProp = {}, flySpeed = 0, fps = 0, fov = 45, onFov,
   sequencerOpen = false,
   bgColor = '#1a1a24', onBgColor, bgImage = '', onBgImage,
   floorTileScale = 1, onFloorTileScale,
@@ -98,6 +104,8 @@ export function MenuBar({
   effectDistanceScale = 1, onEffectDistanceScale,
   zoneLod = false, onZoneLod,
 }) {
+  // The sequencer window's open state shows as its Tools check.
+  const checks = { ...checksProp, sequencer: sequencerOpen };
   const [active, setActive] = useState(null);   // { label, left, top } | null
   const [viewport, setViewport] = useState(null);     // { left, top } | null
   const [graphics, setGraphics] = useState(null); // { left, top } | null
@@ -328,22 +336,6 @@ export function MenuBar({
             onClick={(e) => toggleViewport(e.currentTarget)}
           >
             <span className="icon">grass</span>
-          </button>
-        </Tooltip>
-        <span className="menu-sep" aria-hidden="true" />
-        <Tooltip content="Camera Sequencer" placement="bottom">
-          <button
-            type="button"
-            className={`view-tool${sequencerOpen ? ' on' : ''}`}
-            aria-label="Camera Sequencer"
-            aria-expanded={sequencerOpen}
-            onClick={() => {
-              setActive(null); setViewport(null);
-              setGraphics(null); onGraphicsOpenChange?.(false);
-              onAction('camera-sequencer', 'Camera Sequencer');
-            }}
-          >
-            <span className="icon">movie</span>
           </button>
         </Tooltip>
         <Tooltip content="Screenshot — save the viewport as a PNG" placement="bottom">
