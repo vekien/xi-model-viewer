@@ -156,7 +156,10 @@ export function TimelineWindow({
   // a gap below the bar; dragging back down past the content lets it go auto.
   const headerRef = useRef(null);
   const bodyRef = useRef(null);
-  const naturalH = () => (headerRef.current?.offsetHeight ?? 0) + (bodyRef.current?.scrollHeight ?? 0);
+  // The track area shrinks to fit the window and scrolls on its own, so its
+  // hidden part is added back: what the window would need to show it all.
+  const naturalH = () => (headerRef.current?.offsetHeight ?? 0) + (bodyRef.current?.scrollHeight ?? 0)
+    + Math.max(0, (rootRef.current?.scrollHeight ?? 0) - (rootRef.current?.clientHeight ?? 0));
   const startResize = (axis) => (e) => {
     e.preventDefault();
     e.stopPropagation();

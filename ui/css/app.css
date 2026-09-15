@@ -6694,7 +6694,12 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
   overflow: hidden;
   box-sizing: border-box;
 }
-#mixer-seq .cseq-body { overflow: auto; }
+/* Only the track area scrolls: the toolbar rows above it and the transport bar
+   below stay put, and the window's height still fits the content up to its cap. */
+#mixer-seq .cseq-body { overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+#mixer-seq .mseq-tl { flex: 1 1 auto; min-height: 0; overflow: hidden auto; }
+#mixer-seq .mseq-tl::-webkit-scrollbar { width: 6px; }
+#mixer-seq .mseq-tl::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); border-radius: 3px; }
 .mseq-name { color: var(--text); font-size: 12px; flex: 0 0 auto; }
 .mseq-note { flex: 1 1 auto; min-width: 0; color: var(--muted); font: 500 11px/1.2 var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mseq-note.is-failed { color: #f0a8a2; }
