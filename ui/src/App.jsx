@@ -603,13 +603,20 @@ const CAST_BLEND_FRAMES = 9;   // 0.3s
  * the toggle itself can re-bake the cues without reloading the DAT.
  */
 function buildCasterCues(actor, routine, visCtx = null) {
+  // The effect DAT's own 0x2B clips come first: a composed mix carries the
+  // motion it plays (compose copies the clip sections in), so a cue resolves
+  // even when the character's loaded Action pack does not hold that clip —
+  // an emote picked on a character whose Action is a job ability, say.
+  const ownClips = visCtx?.extraClips ?? [];
+  const ownIds = new Set(ownClips.map((a) => a.id));
+  const animations = ownClips.concat(actor.animations.filter((a) => !ownIds.has(a.id)));
   let animCues = [];
   let windup = 0;
   // `actor.animations` entries ARE clips (id + jointTracks +
   // lengthInFrames) — there is no `.clip` wrapper. That only appears once
   // groupAnimations() buckets them for the Anim dropdown.
-  const ids = actor.animations.map((a) => a.id);
-  const clipById = new Map(actor.animations.map((a) => [a.id, a]));
+  const ids = animations.map((a) => a.id);
+  const clipById = new Map(animations.map((a) => [a.id, a]));
   /**
    * A ref like `mb0?` matches SEVERAL clips — `mb00`, `mb01` — and those
    * are body-region layers of one motion, not alternatives. Taking the
@@ -1465,6 +1472,7 @@ export default function App({ launch = null }) {
   const [effectTransport, setEffectTransport] = useState('playing');
   const [effectSpeed, setEffectSpeedState] = useState(1);
   const effectRoutinesRef = useRef([]);                     // mirror for stable playback callbacks
+  const effectClipsRef = useRef([]);                        // the loaded effect DAT's own 0x2B clips (buildCasterCues)
   const effectSpeedRef = useRef(1);
   // Master: the level over everything the app plays — effects, music, ambient.
   // Each bus multiplies it into its own volume, so the three levels stay as set.
@@ -2963,9 +2971,13 @@ export default function App({ launch = null }) {
     try {
       const { data: buf } = await backend.readPrefer(gameCandidates(rel, settings));
       const parsed = parseEffectRoutines(buf);
+      // Its own motion clips, for the caster cues (see buildCasterCues).
+      let ownClips = [];
+      try { ownClips = parseEntity(buf, rel).animations ?? []; } catch { /* no clips in it */ }
       const warnings = [];
       await ensureGlobalEffects(settings, warnings);
       if (token !== effectTokenRef.current) return;   // superseded by a newer click
+      effectClipsRef.current = ownClips;
 
       // Expand each routine's 0x03 calls now, so picking one from the Schedule
       // combo is just a lookup. A `main` that spawns nothing itself usually
@@ -3071,7 +3083,7 @@ export default function App({ launch = null }) {
       // Caster animation (see buildCasterCues). The actor keeps pace with the
       // routine's Speed control while its cues drive the clip.
       const drivesActor = onActor && showCharAnimRef.current && !keepActorAnim;
-      const { animCues, windup } = drivesActor ? buildCasterCues(actor, routine, { globalById: globalEffectsRef.current?.routines ?? null, rangeType: rangedInfoRef.current }) : { animCues: [], windup: 0 };
+      const { animCues, windup } = drivesActor ? buildCasterCues(actor, routine, { globalById: globalEffectsRef.current?.routines ?? null, rangeType: rangedInfoRef.current, extraClips: effectClipsRef.current }) : { animCues: [], windup: 0 };
       if (onActor) renderer.actorFollowsEffect = drivesActor;
       if (onActor && !showCharAnimRef.current && !keepActorAnim) {
         renderer.setAnimation(actorIdleClip());
@@ -3326,7 +3338,7 @@ export default function App({ launch = null }) {
     const actor = modelRef.current;
     const onActor = !!(actor && actor.kind !== 'zone' && actor.isRenderable && renderer.model === actor);
     const drivesActor = onActor && showCharAnimRef.current;
-    const { animCues, windup } = drivesActor ? buildCasterCues(actor, routine, { globalById: globalEffectsRef.current?.routines ?? null, rangeType: rangedInfoRef.current }) : { animCues: [], windup: 0 };
+    const { animCues, windup } = drivesActor ? buildCasterCues(actor, routine, { globalById: globalEffectsRef.current?.routines ?? null, rangeType: rangedInfoRef.current, extraClips: effectClipsRef.current }) : { animCues: [], windup: 0 };
     if (onActor) {
       renderer.actorFollowsEffect = drivesActor;
       if (!drivesActor) {
@@ -7213,6 +7225,7 @@ export default function App({ launch = null }) {
     if ((prev === 'effects' || (prev === 'files' && browserKind === 'effect'))
       && leftView !== 'effects' && leftView !== 'files') {
       effectRoutinesRef.current = [];
+      effectClipsRef.current = [];
       setEffectRoutines([]);
       setEffectSchedule('');
       setEffectTransport('stopped');
@@ -7259,6 +7272,7 @@ export default function App({ launch = null }) {
       rendererRef.current?.particleSystem?.clearEffect?.();
       weatherAudioRef.current?.stopOneShots?.();
       effectRoutinesRef.current = [];
+      effectClipsRef.current = [];
       setEffectRoutines([]);
       setEffectSchedule('');
       setEffectTransport('stopped');
