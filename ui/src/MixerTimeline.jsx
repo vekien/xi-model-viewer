@@ -555,10 +555,10 @@ export function TimelineWindow({
     );
   };
 
-  // No motion is off-limits for a Type any more: on a job ability or spell, a source that
-  // is neither a `ja:`/`spell:` id nor a base-pool clip is BAKED from one race's copy into
-  // the single DAT (as retail Blue Magic carries its own wz* clips) and plays on every
-  // race — worth a note in the strip, not a red track.
+  // On a job ability or spell, a source that is neither a `ja:`/`spell:` id nor a base-pool
+  // clip is BAKED from one race's copy into the single DAT. That is experimental — no retail
+  // spell carries caster clips, and the client's PlayClip finds a wildcard ref only among the
+  // actor's loaded motions — so the strip warns rather than blocking with a red track.
   const badTracks = EMPTY_SET;
   const bakedTracks = kind === 'ws' ? EMPTY_SET
     : new Set(Object.entries(sources).filter(([id, s]) => kindOf(id) === 'motion' && s?.spec
@@ -751,9 +751,9 @@ export function TimelineWindow({
 
         {/* The inset track: labels on the left, the scrolling ruler and lanes on the right */}
         {bakedTracks.size > 0 && (
-          <div className="mseq-motion-warn mseq-motion-note">
-            <span className="icon">info</span>
-            <span>This motion is baked from one race's copy into the {KIND_LABEL[kind]}'s single DAT and plays on every race (as retail Blue Magic carries its own clips). Preview bakes the viewer's race; Publish bakes Hume ♂.</span>
+          <div className="mseq-motion-warn">
+            <span className="icon">science</span>
+            <span>Experimental: this motion would be baked from one race's copy into the {KIND_LABEL[kind]}'s single DAT — not verified in game, it may not play. For a unique motion the proven route is Type WS (per-race DATs; cexislots adds slots 272–527). Base-pool casts at the top of the list always work.</span>
           </div>
         )}
         <div className="cseq-tl mseq-tl" style={{ height: trackH + 8 }} ref={rootRef} onPointerMove={onPointerMove} onPointerUp={endPointer} onPointerCancel={endPointer}>

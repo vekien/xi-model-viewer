@@ -200,10 +200,11 @@ export function MixerList({
   // one of a few base casts, the motion lane shows the curated base-motion list
   // (abilities.json `base_motions`, one row per cast / ability motion). WS bakes anything
   // per race, so it shows the full list. Only the motion lane narrows.
-  // A job ability or spell can use ANY motion: a base-pool cast is referenced by name,
-  // and anything else (an emote, a weapon skill, a race's own motion) is BAKED from one
-  // race's copy into the single DAT — the way retail Blue Magic carries its own clips.
-  // So the full list shows on every type; on ja/spell the base motions lead as a shortlist.
+  // Every motion is listed on every type. On a job ability or spell the base-pool casts
+  // lead as a shortlist — they are referenced by name and proven. Anything else (an emote,
+  // a weapon skill, a race's own motion) would be BAKED from one race's copy into the single
+  // DAT, which is experimental and unverified in game (the timeline says so); a weapon
+  // skill is the proven route for a unique motion.
   const showBase = motion && (kind === 'ja' || kind === 'spell');
   // The base motions, as pick entries: a bare clip pack (`routine: null`), `pool: true`
   // so a preview plays the clip from the actor's own pool. Picking one sets the mix Type.

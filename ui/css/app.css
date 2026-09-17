@@ -6924,12 +6924,7 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
   background: rgba(240, 168, 162, 0.12); border: 1px solid rgba(240, 168, 162, 0.4);
   color: #f6c2bd; font: 500 11.5px/1.35 var(--font-ui);
 }
-.mseq-motion-warn .icon { font-size: 15px; flex: 0 0 auto; margin-top: 1px; }
-/* The same strip as a neutral note (a motion that will be baked, not a problem). */
-.mseq-motion-warn.mseq-motion-note {
-  background: rgba(63, 189, 187, 0.10); border-color: rgba(63, 189, 187, 0.35); color: #bfe9e8;
-}
-.mseq-toolbar .cseq-zoom { margin-left: auto; }
+.mseq-motion-warn .icon { font-size: 15px; flex: 0 0 auto; margin-top: 1px; }.mseq-toolbar .cseq-zoom { margin-left: auto; }
 .pc-look-label { margin-top: 8px; }
 .gs-tabs { margin: 4px 0 6px; }
 
