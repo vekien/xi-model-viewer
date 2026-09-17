@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Tooltip } from './Tooltip.jsx';
 import { TimelineWindow } from './MixerTimeline.jsx';
 import { Floating } from './Floating.jsx';
-import { kindOf, opName, shiftLane, strikeFrame, trackLabel, withIds } from '../js/mixer.js';
+import { MixerLibrary, categoriesOf } from './MixerLibrary.jsx';
+import { clipBlend, isGeneratorOp, kindOf, opName, shiftLane, strikeFrame, trackLabel, withIds } from '../js/mixer.js';
 
 // Ctrl+C / Ctrl+V: the copied blocks with their spacing and tracks. Module
 // level so a copy outlives a view switch and lands in another mix.
@@ -28,7 +29,9 @@ function Num({ label, value, onChange, min = 0 }) {
 function EventEditor({ ev, onChange, onRemove, onSolo }) {
   if (!ev) return <div className="side-note">Select a block to edit its frames.</div>;
   const isClip = ev.op === 0x05;
-  const isGen = ev.op === 0x02 || ev.op === 0x3f;
+  // The blend the clip plays with: its own override, else the source command's.
+  const blend = clipBlend(ev);
+  const isGen = isGeneratorOp(ev.op);
   const off = ev.enabled === false;
   return (
     <div className={`mixer-editor${off ? ' off' : ''}`}>
@@ -36,31 +39,30 @@ function EventEditor({ ev, onChange, onRemove, onSolo }) {
         <span className="mono">{ev.ref ?? '—'}</span>
         <span className="mono-small">{opName(ev.op)} · {trackLabel(ev.from)}{off ? ' · disabled' : ''}</span>
         <span className="sp" />
-        <div className="pc-tgroup">
-        {isGen && onSolo && (
-          <Tooltip content="Play just this generator, looping, until the next Play mix">
-            <button type="button" className="pc-tbtn" aria-label="Play this generator" onClick={onSolo}>
-              <span className="icon">play_circle</span>
-            </button>
-          </Tooltip>
-        )}
-        <Tooltip content={off ? 'Enable: back into the mix' : 'Disable: stays on the timeline, left out of the mix'}>
-          <button type="button" className={`pc-tbtn${off ? ' on' : ''}`} aria-label={off ? 'Enable' : 'Disable'} onClick={() => onChange({ enabled: off })}>
-            <span className="icon">{off ? 'visibility_off' : 'visibility'}</span>
-          </button>
-        </Tooltip>
         <Tooltip content="Remove from the timeline">
           <button type="button" className="pc-tbtn" aria-label="Remove" onClick={onRemove}><span className="icon">delete</span></button>
         </Tooltip>
-        </div>
       </div>
       <div className="mixer-fields">
+        <div className="mixer-editor-acts">
+          {isGen && onSolo && (
+            <Tooltip content="Play just this generator, once" placement="top">
+              <button type="button" className="cseq-btn mixer-preview-btn" onClick={onSolo}>Preview</button>
+            </Tooltip>
+          )}
+          <Tooltip content={off ? 'Put it back into the mix' : 'Stays on the timeline, left out of the mix'} placement="top">
+            <button type="button" className="cseq-btn mixer-toggle-btn" onClick={() => onChange({ enabled: off })}>
+              <span className={off ? 'mixer-toggle-alt' : undefined}>Disable</span>
+              <span className={off ? undefined : 'mixer-toggle-alt'}>Re-Enable</span>
+            </button>
+          </Tooltip>
+        </div>
         <Num label="start frame" value={ev.start} onChange={(v) => onChange({ start: v ?? 0 })} />
         <Num label="duration" value={ev.dur} onChange={(v) => onChange({ dur: v })} />
         {isClip && (
           <>
-            <Num label="blend in" value={ev.blend?.[0]} onChange={(v) => onChange({ blend: [v ?? 0, ev.blend?.[1] ?? 0] })} />
-            <Num label="blend out" value={ev.blend?.[1]} onChange={(v) => onChange({ blend: [ev.blend?.[0] ?? 0, v ?? 0] })} />
+            <Num label="blend in (frames)" value={blend[0]} onChange={(v) => onChange({ blend: [v ?? 0, blend[1]] })} />
+            <Num label="blend out (frames)" value={blend[1]} onChange={(v) => onChange({ blend: [blend[0], v ?? 0] })} />
             <Num label="loops (0 = ∞)" value={ev.loops} onChange={(v) => onChange({ loops: v })} />
           </>
         )}
@@ -74,13 +76,13 @@ export function MixerPanel({
   recipe, onRecipe, lane, laneInfo, laneEntry,
   transport, onPlay, onStop, onPublish, publishPlan = null, publishCfg = null, onPublishCfg, onCheckPublish,
   onSaveAs, onOpen, onReset, recipes, busy, note, error = null, onDismissError,
-  onDelete, onRename, onDuplicate, onShuffle, stageName,
+  onDelete, onRename, onDuplicate, onSetCategory, onShuffle, stageName,
   onPause, onResume, onSeek, getPlayhead, mixLoaded, mixDirty,
   onSolo, onPlaySound, onTake, viewerRace, onClose, getSoundPeaks, speed = 1, onSpeed, loop = true, onLoop, ghosts = null,
   panels = { mixer: true, parts: true, timeline: true }, onPanel,
   tracks = [], onActivateTrack, onAddTrack, onRemoveTrack,
   playingSoundKey = null,
-  shuffleKind = 'ws', onShuffleKind, onDropEntry,
+  kind = 'ws', onKind, onDropEntry, baseMotionSpecs = null,
 }) {
   // Selection is a set: a marquee or ctrl-click builds a group that drags,
   // duplicates and deletes as one. The editor below shows a lone selection.
@@ -97,10 +99,11 @@ export function MixerPanel({
   });
   const selectedId = selectedIds.size === 1 ? [...selectedIds][0] : null;
 
-  // Three windows, each a glyph on the right rail (App.jsx): the timeline
-  // (MixerTimeline.jsx, the Camera Sequencer's chrome), the recipe — name, save,
-  // publish, the organizer — and the parts of the picked source. `panels` says
-  // which are open; closing one tells the rail through onPanel.
+  // Two windows here, each a glyph on the right rail (App.jsx): the timeline
+  // (MixerTimeline.jsx, the Camera Sequencer's chrome) with the mix's name,
+  // category, Save and Load in its toolbar, and the Mixes panel (MixerLibrary.jsx)
+  // that Load opens — the saved mixes by category. `panels` says which are open;
+  // closing one tells the rail through onPanel.
 
   const [head, setHead] = useState(0);
   useEffect(() => {
@@ -119,13 +122,13 @@ export function MixerPanel({
   }, [events, selectedIds]);
 
   const update = (id, patch) => onRecipe({ ...recipe, events: events.map((e) => (e._id === id ? { ...e, ...patch } : e)) });
-  /** Blocks moved on the timeline: a new start each, and a new track when they were dragged onto one. */
+  /** Blocks moved on the timeline: a new start each. A block never changes track:
+   *  its generators, clips and sounds are read from that track's source DAT. */
   const moveMany = (list) => {
     const by = new Map(list.map((m) => [m.id, m]));
     onRecipe({ ...recipe, events: events.map((e) => {
       const m = by.get(e._id);
-      if (!m) return e;
-      return { ...e, start: m.start, ...(m.from ? { from: m.from } : {}) };
+      return m ? { ...e, start: m.start } : e;
     }) });
   };
   const removeMany = (ids) => onRecipe({ ...recipe, events: events.filter((e) => !ids.has(e._id)) });
@@ -197,7 +200,7 @@ export function MixerPanel({
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v' && !e.shiftKey && !e.altKey && !typing(e.target)) {
         if (!clipboard) return;
         e.preventDefault();
-        pasteAt(head > 0 ? head : clipboard.origin + clipboard.span);
+        pasteAt(mixLoaded && head > 0 ? head : clipboard.origin + clipboard.span);
         return;
       }
       if (typing(e.target) || !selectedIds.size) return;
@@ -240,6 +243,18 @@ export function MixerPanel({
     if (!armed) return onPlay?.();
     return transport === 'playing' ? onPause?.() : onResume?.();
   };
+  const categories = useMemo(() => categoriesOf(recipes ?? []), [recipes]);
+  // A seek moves the stage now, or once the mix is armed: read the playhead back
+  // straight after rather than on the next poll, so the cursor does not flick back.
+  const seek = (frame) => {
+    const read = () => { if (getPlayhead) setHead(getPlayhead().frame); };
+    const done = onSeek?.(frame);
+    read();
+    Promise.resolve(done).then(read);
+  };
+  // The stage is the timeline's only while the composed mix is on it: a list
+  // preview is not the mix, so its playhead, length and seeks stay out.
+  const stageLen = mixLoaded && getPlayhead ? getPlayhead().length : 0;
   const timeline = (
     <TimelineWindow open={!!panels.timeline} onClose={() => onPanel?.('timeline', false)}
       recipeName={recipe.name} note={statusNote} failed={failed} error={error} onDismissError={onDismissError}
@@ -247,20 +262,22 @@ export function MixerPanel({
       tracks={tracks} activeTrack={lane} sources={recipe.sources} onActivateTrack={onActivateTrack} onAddTrack={onAddTrack} onRemoveTrack={onRemoveTrack}
       onPreview={(ev) => onPlaySound?.({ id: ev.sound, ref: ev.ref })}
       strike={strike} playhead={mixLoaded ? head : null} mixLoaded={mixLoaded}
-      minLen={getPlayhead ? getPlayhead().length : 0}
-      loopEnd={Number.isFinite(recipe.total) && recipe.total > 0 ? recipe.total : (getPlayhead ? getPlayhead().length : 0)}
+      minLen={stageLen}
+      loopEnd={Number.isFinite(recipe.total) && recipe.total > 0 ? recipe.total : stageLen}
       loopSet={Number.isFinite(recipe.total) && recipe.total > 0}
       onLoopEnd={(f) => { const { total, ...rest } = recipe; onRecipe?.(f ? { ...recipe, total: f } : rest); }}
       getSoundPeaks={getSoundPeaks} ghosts={ghosts}
       transport={armed ? transport : 'stopped'} canPlay={!busy && (armed || events.length > 0)} playTip={playTip}
-      onPlayPause={onPlayPause} onStop={onStop} onSeek={onSeek}
+      onPlayPause={onPlayPause} onStop={onStop} onSeek={seek}
       speed={speed} onSpeed={onSpeed} loop={loop} onLoop={onLoop}
       onSnapLane={snapLane} viewerRace={viewerRace}
       name={recipe.name} onName={(n) => onRecipe({ ...recipe, name: n })} onNew={onReset}
-      onSave={() => recipe.name.trim() && onSaveAs?.(recipe.name.trim())} saved={recipes ?? []} onOpen={onOpen} onDelete={onDelete}
+      category={recipe.category ?? ''} onCategory={(c) => onRecipe({ ...recipe, category: c })} categories={categories}
+      onSave={() => recipe.name.trim() && onSaveAs?.(recipe.name.trim())} saved={recipes ?? []} onDelete={onDelete}
+      onLoad={() => onPanel?.('library')} loadOpen={!!panels.library}
       publishPlan={publishPlan} onPublish={onPublish} busy={busy}
       publishCfg={publishCfg} onPublishCfg={onPublishCfg} onCheckPublish={onCheckPublish}
-      shuffleKind={shuffleKind} onShuffleKind={onShuffle ? onShuffleKind : null} onRandomise={onShuffle ? () => onShuffle(shuffleKind) : null}
+      kind={kind} onKind={onKind} baseMotionSpecs={baseMotionSpecs} onRandomise={onShuffle ? () => onShuffle(kind) : null}
       canPublish={!busy && events.length > 0}
       onDropEntry={onDropEntry}
       editor={selected ? <EventEditor ev={selected} onChange={(p) => update(selected._id, p)} onRemove={() => remove(selected._id)}
@@ -270,6 +287,11 @@ export function MixerPanel({
   return (
     <>
       {timeline}
+      <Floating id="mixer-library" open={!!panels.library} width={360} defaultPos={{ right: 68, top: 60 }}>
+        <MixerLibrary recipes={recipes ?? []} current={recipe.name} stageName={stageName}
+          onOpen={onOpen} onRename={onRename} onSetCategory={onSetCategory} onDuplicate={onDuplicate} onDelete={onDelete}
+          onClose={() => onPanel?.('library', false)} />
+      </Floating>
     </>
   );
 }

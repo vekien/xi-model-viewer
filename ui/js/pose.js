@@ -152,16 +152,26 @@ export class SkeletonPose {
       for (const seg of clip.segments) {
         if (frame < seg.delay) continue;
         const len = seg.clip.lengthInFrames;
+        // How long the clip occupies before it blends out / holds. loops: 1 play once
+        // (the default), N play N then hold, 0 loop forever — so a sustained motion (a
+        // bard singing, a held cast) repeats instead of freezing after one play. Only a
+        // lone clip loops; multi-segment schedules (casts, weapon skills) keep playing
+        // each part once, the way retail lays them out.
+        const loops = seg.loops ?? 1;
+        const canLoop = clip.segments.length === 1 && loops !== 1 && len > 0;
+        const span = !canLoop ? len : (loops === 0 ? Infinity : loops * len);
         const local = frame - seg.delay;
-        if (local <= len || len <= 0) {
+        if (local <= span || len <= 0) {
           // `ease` is the mirror of `release` below: blend IN from the base over
           // transIn frames, so a montage laid over a resting clip starts from
           // the pose already on screen instead of snapping to its first frame.
           // Retail schedules leave transIn unset, so they are unaffected.
           const ease = seg.transIn > 0 ? Math.min(1, local / seg.transIn) : 1;
-          active.push({ clip: seg.clip, phase: len > 0 ? local / len : 0, release: 0, ease });
+          // Cycle 0→1 each `len`; the very end of the span holds the final pose.
+          const phase = len > 0 ? (local >= span ? 1 : (local % len) / len) : 0;
+          active.push({ clip: seg.clip, phase, release: 0, ease });
         } else if (seg.transOut > 0) {
-          const release = (local - len) / seg.transOut;   // 0 at end → 1 fully back to base
+          const release = (local - span) / seg.transOut;   // 0 at end → 1 fully back to base
           // `<= 1`, not `< 1`: dropping the segment at release == 1 cut the fade
           // one step short, so the last 1/rel of the travel happened in a single
           // frame — a visible snap back to idle on a short transOut. At exactly

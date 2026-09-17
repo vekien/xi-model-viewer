@@ -239,7 +239,7 @@ const ZONE_ARGS = [
   {
     flag: '--objects', kind: 'flag', group: 'Layout',
     label: 'Per-object files',
-    hint: 'Write each mesh as its own .glb into a <stem>_objects/ folder (local space, at the '
+    hint: 'Write each mesh as its own .glb straight into the output folder (local space, at the '
       + 'origin) instead of one combined zone file.',
   },
   {
@@ -266,6 +266,13 @@ const ZONE_ARGS = [
       + 'weather ambient sounds, companion DATs and sub-area interiors.',
   },
   ALPHA_SCALE,
+  {
+    flag: '--opaque', kind: 'flag', group: 'Textures',
+    label: 'Opaque materials',
+    hint: 'Write non-blend materials as OPAQUE instead of MASK. Many zone textures carry junk alpha '
+      + 'the client ignores, which under MASK clips whole floors and walls into a checkerboard in '
+      + 'Blender. Real alpha-blend submeshes stay BLEND and foliage stays MASK.',
+  },
   {
     flag: '--base', kind: 'flag', group: 'Source',
     label: 'Pristine base',

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button } from '@headlessui/react';
+import { Button, Checkbox, Field, Label } from '@headlessui/react';
 import { backend } from '../js/backend.js';
 import { loadList } from '../js/lists.js';
 import { gameCandidates } from '../js/gamePath.js';
@@ -12,7 +12,9 @@ import {
 import { ArgsInput } from './ArgsInput.jsx';
 import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
-import { EXPORT_COMMANDS, addToken, animLayout, tokenValue } from './exportArgs.js';
+import {
+  EXPORT_COMMANDS, addToken, animLayout, findArg, removeFlag, tokenValue,
+} from './exportArgs.js';
 import {
   AnimLayoutOptions, EXPORT_KINDS, animOutputDir, buildXiArgs, loadArgs, sanitizeFileName,
   shellQuote, xiEnvFromSpec,
@@ -78,13 +80,53 @@ const stemOf = (rel) => (normRel(rel).split('\\').pop() || 'export').replace(/\.
 /**
  * Where one job's `xi … export` writes. Meshes and single clips mirror the game
  * folder (`…\ROM\27\82.glb`); a split animation export gets a folder of the DAT's
- * own under that (`…\ROM\27\82\idl0.gltf`); a categorised one hands xi the export
- * root and lets it build `race\category\action\` underneath.
+ * own under that (`…\ROM\27\82\idl0.gltf`), and so does a per-object zone, whose
+ * meshes xi writes loose — zones sharing a ROM folder would otherwise overwrite
+ * each other's same-named ones; a categorised animation export hands xi the
+ * export root and lets it build `race\category\action\` underneath.
  */
 function jobOutDir(folder, rel, catalog, args) {
-  if (catalog !== 'anim') return outDirFor(folder, rel);
+  const dir = outDirFor(folder, rel);
+  if (catalog === 'zone') return tokenValue(args, '--objects') != null ? `${dir}\\${stemOf(rel)}` : dir;
+  if (catalog !== 'anim') return dir;
   if (animLayout(args).categories) return folder;
-  return animOutputDir(outDirFor(folder, rel), stemOf(rel), args);
+  return animOutputDir(dir, stemOf(rel), args);
+}
+
+/** Zone flags common enough to tick rather than hunt for in the args picker. */
+const ZONE_CHECKS = [
+  { label: 'Contents', flags: ['--no-sky', '--no-vfx', '--no-subareas'] },
+  { label: 'Output', flags: ['--objects', '--opaque', '--collision', '--json'] },
+];
+
+/** Each box is its flag's chip in the args box, so ticking one adds or removes it there. */
+function ZoneOptions({ args, onChange, disabled = false }) {
+  return (
+    <>
+      {ZONE_CHECKS.map((group) => (
+        <div key={group.label} className="form-row">
+          <label className="form-label">{group.label}</label>
+          {group.flags.map((flag) => {
+            const arg = findArg('zone', flag);
+            return (
+              <Tooltip key={flag} content={`${arg.hint} Adds ${flag}.`}>
+                <Field className="check-field" disabled={disabled}>
+                  <Checkbox
+                    checked={tokenValue(args, flag) != null}
+                    onChange={(on) => onChange(on ? addToken('zone', args, flag) : removeFlag(args, flag))}
+                    className="checkbox"
+                  >
+                    <span className="icon check-icon">check</span>
+                  </Checkbox>
+                  <Label className="check-label">{arg.label}</Label>
+                </Field>
+              </Tooltip>
+            );
+          })}
+        </div>
+      ))}
+    </>
+  );
 }
 
 function loadFormat(store) {
@@ -511,6 +553,7 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
     ? null
     : buildXiArgs(catalog, sampleDat, jobOutDir(folder || '…', sampleDat, catalog, args), format, args);
   const animOpts = effKind === 'anim' ? animLayout(args) : { split: false, categories: false };
+  const perObject = effKind === 'zone' && tokenValue(args, '--objects') != null;
   const sampleOut = tab === 'music'
     ? `…\\sound\\win\\music\\data\\${naming === 'file' ? 'music101' : 'Ronfaure'}.wav`
     : `…\\sound\\win\\se\\se003\\${naming === 'file' ? 'se003022' : 'Fire'}.wav`;
@@ -704,10 +747,13 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
               )}
 
               {tab === 'zones' && (
-                <div className="form-hint">
-                  Every zone in <span className="mono">lists/zones.json</span> — the same list the
-                  Zones panel shows.
-                </div>
+                <>
+                  <div className="form-hint">
+                    Every zone in <span className="mono">lists/zones.json</span> — the same list the
+                    Zones panel shows.
+                  </div>
+                  <ZoneOptions args={args} onChange={setArgList} disabled={running} />
+                </>
               )}
 
               {isAudio && (
@@ -893,6 +939,10 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
                     <>Each DAT gets a folder of its own under its game folder
                       (<span className="mono">…\ROM\27\82\idl0.{kind.ext(format === 'fbx')}</span>),
                       one file per animation.</>
+                  ) : perObject ? (
+                    <>Each zone gets a folder of its own under its game folder
+                      (<span className="mono">…\ROM\1\41\</span>), one file per mesh, so zones
+                      that share mesh names don&apos;t overwrite each other.</>
                   ) : (
                     <>Each DAT lands under its own game folder
                       (<span className="mono">…\ROM\27\82.{kind.ext(format === 'fbx')}</span>) so

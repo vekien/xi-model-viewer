@@ -301,28 +301,33 @@ export function flattenRoutine(routine, byId, globalById = null) {
   const actorCalls = [];
   const seen = new Set();
 
-  const walk = (r, offset, depth) => {
+  // `via`: on everything a link out of this DAT plays (into the shared DAT, or
+  // a schedule on the actor), the id that link named, the outermost one. The
+  // Ability Mixer keeps a link whole on one lane (sharedLinkLane, laneSlice).
+  const walk = (r, offset, depth, via) => {
     if (!r || depth > 8 || seen.has(r)) return;   // cycle / runaway guard
     seen.add(r);
-    for (const c of r.commands) commands.push({ ...c, delay: c.delay + offset });
-    for (const s of r.sounds) sounds.push({ ...s, delay: s.delay + offset });
-    for (const a of r.anims ?? []) anims.push({ ...a, delay: a.delay + offset });
-    for (const st of r.stops ?? []) stops.push({ ...st, delay: st.delay + offset });
-    for (const v of r.vis ?? []) vis.push({ ...v, delay: v.delay + offset });
+    const tag = via ? { via } : null;
+    for (const c of r.commands) commands.push({ ...c, delay: c.delay + offset, ...tag });
+    for (const s of r.sounds) sounds.push({ ...s, delay: s.delay + offset, ...tag });
+    for (const a of r.anims ?? []) anims.push({ ...a, delay: a.delay + offset, ...tag });
+    for (const st of r.stops ?? []) stops.push({ ...st, delay: st.delay + offset, ...tag });
+    for (const v of r.vis ?? []) vis.push({ ...v, delay: v.delay + offset, ...tag });
     for (const call of r.calls) {
+      const local = byId.has(call.routineId);
       const next = byId.get(call.routineId) ?? globalById?.get(call.routineId) ?? null;
       if (!next) {
         // Neither this DAT nor the shared one has it — it is a schedule on the
         // ACTOR's own DAT. That is where the cast motions live: Fire calls
         // `shbk`, a Ninjutsu spell calls `shnj`, a cure calls `shwh`. Handing
         // the id up lets the caller resolve it against the loaded character.
-        actorCalls.push({ scheduleId: call.routineId, delay: offset + call.delay });
+        actorCalls.push({ scheduleId: call.routineId, delay: offset + call.delay, via: via ?? call.routineId });
         continue;
       }
-      walk(next, offset + call.delay, depth + 1);
+      walk(next, offset + call.delay, depth + 1, via ?? (local ? null : call.routineId));
     }
   };
-  walk(routine, 0, 0);
+  walk(routine, 0, 0, null);
 
   // Several ops can name the same sound a frame or two apart (Cure's `main`
   // carries 0303 on both 0x53 and 0x0b), which would fire the one-shot twice and
@@ -343,4 +348,50 @@ export function flattenRoutine(routine, byId, globalById = null) {
   actorCalls.sort((a, b) => a.delay - b.delay);
   vis.sort((a, b) => a.delay - b.delay);
   return { commands, sounds: deduped, anims, stops, vis, actorCalls, length: routineLength(commands) };
+}
+
+/**
+ * The Ability Mixer lane a link out of a DAT goes on. A link runs its routine
+ * whole, so it takes one lane, by what that routine plays: any visual generator
+ * is `vfx` (eis1, the weapon-skill burst, even with its impact sound in it);
+ * else a sound or an audio generator is `sound`; else a clip or a call into the
+ * actor's schedules is `motion`. A routine the shared DAT does not have is one
+ * of those actor schedules (a cast motion: shbk, shnj), so `motion`. Nothing the
+ * stage plays (mdam, proc) is `keep`.
+ *
+ * @param {string} routineId
+ * @param {Map<string,Object>|null} globalById  the shared DAT's routines
+ * @param {(genId: string) => boolean} isAudioGen  a generator that emits sound, not particles
+ */
+export function sharedLinkLane(routineId, globalById, isAudioGen) {
+  if (!globalById?.size) return 'keep';
+  const r = globalById.get(routineId);
+  if (!r) return 'motion';
+  const flat = flattenRoutine(r, globalById, globalById);
+  if (flat.commands.some((c) => !isAudioGen(c.genId))) return 'vfx';
+  if (flat.commands.length || flat.sounds.length) return 'sound';
+  if (flat.anims.length || flat.actorCalls.length) return 'motion';
+  return 'keep';
+}
+
+/**
+ * The part of a flattened routine that one Ability Mixer lane takes: exactly
+ * what a pick onto that lane brings (mixer.js eventsFromInspect), so a preview
+ * on the lane plays the same thing. The DAT's own commands go by kind: `motion`
+ * its clips and actor calls, `vfx` its visual generators, `sound` its sounds and
+ * audio generators. Everything a link plays goes with the link, on the lane
+ * `linkLane(via)` gives it.
+ */
+export function laneSlice(flat, lane, { isAudioGen, linkLane }) {
+  const takes = (x, own) => (x.via ? linkLane(x.via) === lane : own);
+  const commands = flat.commands.filter((c) => takes(c, lane !== 'motion' && isAudioGen(c.genId) === (lane === 'sound')));
+  const ownGens = new Set(commands.filter((c) => !c.via).map((c) => c.genId));
+  return {
+    ...flat,
+    commands,
+    sounds: flat.sounds.filter((s) => takes(s, lane === 'sound')),
+    stops: (flat.stops ?? []).filter((st) => takes(st, ownGens.has(st.genId))),
+    anims: (flat.anims ?? []).filter((a) => takes(a, lane === 'motion')),
+    actorCalls: (flat.actorCalls ?? []).filter((a) => takes(a, lane === 'motion')),
+  };
 }

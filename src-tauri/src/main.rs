@@ -690,9 +690,24 @@ fn xi_setup(folder: String, install: bool) -> XiSetupReport {
 }
 
 #[tauri::command]
-fn pick_file(initial: Option<String>) -> Option<String> {
-    let mut dialog = rfd::FileDialog::new().set_title("Open a DAT file");
+fn pick_file(
+    initial: Option<String>,
+    title: Option<String>,
+    exts: Option<Vec<String>>,
+) -> Option<String> {
+    let mut dialog =
+        rfd::FileDialog::new().set_title(title.as_deref().unwrap_or("Open a DAT file"));
+    // Optional extension filter (e.g. ["exe"] for a Blender browse). An empty
+    // list adds nothing, so the dialog shows everything as before.
+    if let Some(list) = exts {
+        let refs: Vec<&str> = list.iter().map(String::as_str).collect();
+        if !refs.is_empty() {
+            dialog = dialog.add_filter("Files", &refs);
+        }
+    }
     if let Some(p) = initial {
+        // `initial` may be a file (start beside it) or a folder (start in its
+        // parent, as the DAT-open callers have always done).
         if let Some(dir) = Path::new(&p).parent() {
             if dir.is_dir() {
                 dialog = dialog.set_directory(dir);

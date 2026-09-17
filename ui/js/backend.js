@@ -16,11 +16,11 @@ async function tauriInvoke(cmd, args) {
 // user would be answering pickers they never asked for. Late callers get null,
 // the same as a cancel.
 let pickerOpen = false;
-async function pickOnce(cmd, initial) {
+async function pickOnce(cmd, initial, extra) {
   if (!isTauri() || pickerOpen) return null;
   pickerOpen = true;
   try {
-    return await tauriInvoke(cmd, { initial: initial || null });
+    return await tauriInvoke(cmd, { initial: initial || null, ...extra });
   } finally {
     pickerOpen = false;
   }
@@ -323,9 +323,13 @@ export const backend = {
     });
   },
 
-  /** Native file picker (Tauri only) for opening a DAT. Returns the chosen path or null. */
-  async pickFile(initial) {
-    return pickOnce('pick_file', initial);
+  /**
+   * Native file picker (Tauri only). Returns the chosen path or null.
+   * `opts` = `{ title, exts }` — e.g. `{ title: 'Locate blender.exe', exts: ['exe'] }`;
+   * omit it for the default DAT-open dialog.
+   */
+  async pickFile(initial, opts) {
+    return pickOnce('pick_file', initial, opts);
   },
 
   /** Writes bytes to a file (creates parent dirs). */

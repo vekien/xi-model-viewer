@@ -397,7 +397,9 @@ export function resolveScheduleClip(model, schedule) {
     // Scheduler delays are 1/60s ticks; segment starts are 30fps clip frames.
     // Retail writes a chained clip's delay as the previous clip's window
     // (2 × its frame count), so ÷2 makes chains seamless (see effect.js).
-    for (const g of groupAnimations(clips)) segments.push({ clip: g.clip, delay: (cmd.delay ?? 0) / 2, transOut: cmd.transOut ?? 0 });
+    // `loops` (maxLoops, +30): 1 play once, N play N then hold, 0 loop forever — carried
+    // so a sustained motion (a bard singing, a held cast) repeats instead of playing once.
+    for (const g of groupAnimations(clips)) segments.push({ clip: g.clip, delay: (cmd.delay ?? 0) / 2, transOut: cmd.transOut ?? 0, loops: cmd.maxLoops ?? 1 });
   }
 
   // Fallback for routines whose commands didn't resolve (older/odd layouts).
@@ -407,7 +409,9 @@ export function resolveScheduleClip(model, schedule) {
     for (const g of groupAnimations(clips)) segments.push({ clip: g.clip, delay: 0 });
   }
 
-  if (segments.length === 1 && segments[0].delay === 0) return segments[0].clip;
+  // A lone clip at frame 0 is just that clip — unless it loops (N≠1), which only the
+  // segment path honours, so keep it as a segment then.
+  if (segments.length === 1 && segments[0].delay === 0 && (segments[0].loops ?? 1) === 1) return segments[0].clip;
 
   const lengthInFrames = Math.max(...segments.map((s) => s.delay + s.clip.lengthInFrames));
   // Union of tracked joints: lets callers test what the schedule drives (e.g.

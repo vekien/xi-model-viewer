@@ -373,6 +373,12 @@ export function SettingsModal({
     );
     if (picked) setDraft({ ...draft, navmeshPath: picked });
   };
+  const browseBlender = async () => {
+    const picked = await backend.pickFile(draft.blenderPath || '', {
+      title: 'Locate blender.exe', exts: ['exe'],
+    });
+    if (picked) setDraft({ ...draft, blenderPath: picked });
+  };
 
   const doInstallOrUpdate = async () => {
     setToolsBusy(true);
@@ -1023,6 +1029,32 @@ export function SettingsModal({
                       </Checkbox>
                       <Label className="check-label">Auto-close console (10s)</Label>
                     </Field>
+                  </div>
+                </div>
+              </section>
+
+              <section className="settings-panel">
+                <div className="settings-panel-title">Blender</div>
+                <div className="settings-panel-body">
+                  <div className="form-row">
+                    <label className="form-label">Blender executable</label>
+                    <div className="form-inline">
+                      <input
+                        type="text"
+                        value={draft.blenderPath ?? ''}
+                        spellCheck={false}
+                        placeholder={'e.g. C:\\Program Files\\Blender Foundation\\Blender 5.1\\blender.exe'}
+                        onChange={(e) => setDraft({ ...draft, blenderPath: e.target.value })}
+                      />
+                      <Button onClick={browseBlender}>
+                        <span className="icon">folder_open</span>
+                        Browse
+                      </Button>
+                    </div>
+                    <div className="form-hint">
+                      Sets <span className="mono">BLENDER_PATH</span> for FBX exports. Leave empty to
+                      use xi-tools&rsquo; default install path.
+                    </div>
                   </div>
                 </div>
               </section>

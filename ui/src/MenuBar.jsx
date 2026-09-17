@@ -69,7 +69,7 @@ const MENUS = [
   {
     label: 'Tools',
     items: [
-      { id: 'assets-mixer', label: 'Ability Mixer', icon: 'tune' },
+      { id: 'assets-mixer', label: 'Ability Mixer (Experimental)', icon: 'timeline' },
       { id: 'camera-sequencer', label: 'Camera Sequencer', icon: 'movie', check: 'sequencer' },
     ],
   },

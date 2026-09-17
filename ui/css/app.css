@@ -511,7 +511,7 @@ body:has(#img-sprites) #placements {
 .menu-panel {
   z-index: 300;
   min-width: 200px;
-  padding: 10px;
+  padding: 6px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 40%),
     var(--gray-850);
@@ -1708,7 +1708,9 @@ body:has(#weather) #scenes {
 .plc-tool.on:hover { background: rgba(100, 180, 255, 0.22); }
 .plc-tool .icon { font-size: 18px; }
 
-/* Per-row visibility eye (before name) */
+/* Per-row visibility eye (before name) — revealed on row hover to keep the
+   list light. A row that's hidden or partly hidden keeps its eye on so the
+   state stays visible without hovering. */
 .plc-vis {
   width: 20px;
   height: 20px;
@@ -1721,7 +1723,11 @@ body:has(#weather) #scenes {
   box-shadow: none;
   color: var(--gray-400);
   opacity: 0.75;
+  visibility: hidden;
 }
+.plc-row:hover .plc-vis,
+.plc-vis.off,
+.plc-vis.mixed { visibility: visible; }
 .plc-vis:hover {
   opacity: 1;
   background: rgba(255, 255, 255, 0.1);
@@ -1730,28 +1736,49 @@ body:has(#weather) #scenes {
 .plc-vis.off { color: var(--gray-500); opacity: 0.55; }
 .plc-vis.mixed { color: var(--accent); opacity: 0.9; }
 .plc-vis .icon { font-size: 15px; }
+/* Eye on the light selection gradient. */
+.plc-group.selected > .plc-mesh .plc-vis,
+.plc-row.selected .plc-vis { color: #0b1420; }
+.plc-group.selected > .plc-mesh .plc-vis:hover,
+.plc-row.selected .plc-vis:hover { background: rgba(0, 0, 0, 0.12); color: #0b1420; }
 .plc-row.vis-off .plc-name,
 .plc-group.vis-off > .plc-mesh .plc-name { opacity: 0.45; }
 
-/* Reset button on moved placement rows */
+/* Reset button on moved rows: absolutely placed in the index's slot and
+   revealed on hover, so a moved row keeps the exact shape of its neighbours —
+   no reserved column, no index shift. */
+.plc-row.plc-inst.moved { position: relative; }
 .plc-reset {
-  width: 22px;
-  height: 22px;
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
   min-height: 0;
-  flex: 0 0 auto;
-  margin-left: 2px;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
   background: transparent;
   border: none;
   box-shadow: none;
   color: #f0b060;
-  opacity: 0.85;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease;
 }
+.plc-row.plc-inst.moved:hover .plc-reset { opacity: 0.95; pointer-events: auto; }
 .plc-reset:hover {
   opacity: 1;
   background: rgba(240, 176, 96, 0.16);
   color: #ffd08a;
 }
-.plc-reset .icon { font-size: 16px; }
+.plc-reset .icon { font-size: 15px; }
+/* Index yields to the reset button on hover so they never overlap. */
+.plc-row.plc-inst.moved:hover .plc-idx { opacity: 0; }
 .plc-row.plc-inst.moved .plc-name { color: #f0c080; }
 
 .plc-sfx-play {
@@ -1786,16 +1813,16 @@ body:has(#weather) #scenes {
   border-bottom: none;
 }
 
-/* Dark inset list well (tabs / settings language). */
+/* Subtle inset list well — lighter than a settings panel so it reads like
+   the left tree rather than a heavy sunk box. */
 .plc-list-shell {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: rgba(0, 0, 0, 0.28);
+  background: rgba(0, 0, 0, 0.14);
   border: 1px solid var(--ring);
   border-radius: 9px;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
   overflow: hidden;
 }
 .plc-body {
@@ -1839,23 +1866,35 @@ body:has(#weather) #scenes {
 .plc-section + .plc-section { margin-top: 2px; }
 .plc-group > .plc-mesh .caret { transition: transform 0.12s ease; }
 .plc-group.open > .plc-mesh .caret { transform: rotate(90deg); }
+/* Rows echo the left tree: inset rounded pills, roomier padding. */
 .plc-row {
   display: flex; align-items: center; gap: 4px;
-  padding: 1px 8px 1px 4px;
+  padding: 2px 8px 2px 4px;
+  margin: 0 4px;
+  border-radius: 6px;
   cursor: pointer;
   white-space: nowrap;
-  min-height: 20px;
-  line-height: 1.15;
+  min-height: 22px;
+  line-height: 1.2;
 }
-.plc-row:hover { background: rgba(255, 255, 255, 0.06); }
+.plc-row:hover { background: rgba(255, 255, 255, 0.07); }
 .plc-group.selected > .plc-mesh,
-.plc-row.selected { background: rgba(100, 180, 255, 0.18); }
+.plc-row.selected {
+  background: linear-gradient(180deg, #b8d9fd, #8cbffb);
+  color: #0b1420;
+}
+.plc-group.selected > .plc-mesh .icon,
+.plc-row.selected .icon { color: #0b1420; }
+.plc-group.selected > .plc-mesh .plc-idx,
+.plc-row.selected .plc-idx { color: #21344a; }
 .plc-row .caret { width: 14px; font-size: 14px; color: var(--gray-500); flex: 0 0 auto; }
 .plc-row .kind { font-size: 14px; color: var(--gray-400); flex: 0 0 auto; }
 .plc-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
 .plc-idx { color: var(--gray-500); margin-left: auto; flex: 0 0 auto; font-size: 11px; }
 .plc-instances { padding-left: 6px; }
 .plc-inst .kind { color: var(--gray-500); }
+/* Reserves the width the instance kind icon used to take, keeping names aligned. */
+.plc-inst-gap { width: 14px; flex: 0 0 auto; }
 #placements .plc-row .badge {
   font-size: 10px;
   min-width: 1.4em;
@@ -1863,6 +1902,17 @@ body:has(#weather) #scenes {
   line-height: 16px;
   height: 16px;
 }
+.plc-group.selected > .plc-mesh .badge,
+.plc-row.selected .badge { color: #0b1420; background: rgba(0, 0, 0, 0.15); }
+
+/* Prefix colour coding (plain world meshes only): _xi_ is xi-zone-editor
+   custom content, other _-prefixed names are alpha/base geometry. */
+.plc-group.plc-custom .plc-name { color: #6fce93; }
+.plc-group.plc-alpha .plc-name { color: #c9bdf0; }
+.plc-group.plc-custom.selected > .plc-mesh .plc-name,
+.plc-group.plc-alpha.selected > .plc-mesh .plc-name,
+.plc-group.plc-custom .plc-inst.selected .plc-name,
+.plc-group.plc-alpha .plc-inst.selected .plc-name { color: #0b1420; }
 #placements .plc-vis {
   width: 18px;
   height: 18px;
@@ -1882,15 +1932,15 @@ body:has(#weather) #scenes {
 .plc-group.env-unplaced .plc-name { color: var(--gray-400); font-style: italic; }
 .plc-group.env-unplaced .kind { color: var(--gray-500); }
 .plc-group.env-unplaced.dim { opacity: 0.45; }
-.plc-group.env-unplaced.selected > .plc-mesh .plc-name { color: var(--text); font-style: normal; }
+.plc-group.env-unplaced.selected > .plc-mesh .plc-name { color: #0b1420; font-style: normal; }
 .plc-group.env-collision .plc-name { color: var(--gray-400); font-style: italic; }
 .plc-group.env-collision .kind { color: #d98a8a; }
 .plc-group.env-collision.dim { opacity: 0.45; }
-.plc-group.env-collision.selected > .plc-mesh .plc-name { color: var(--text); font-style: normal; }
+.plc-group.env-collision.selected > .plc-mesh .plc-name { color: #0b1420; font-style: normal; }
 .plc-group.env-subarea .plc-name { color: var(--gray-400); font-style: italic; }
 .plc-group.env-subarea .kind { color: #c9a227; }
 .plc-group.env-subarea.dim { opacity: 0.45; }
-.plc-group.env-subarea.selected > .plc-mesh .plc-name { color: var(--text); font-style: normal; }
+.plc-group.env-subarea.selected > .plc-mesh .plc-name { color: #0b1420; font-style: normal; }
 .plc-footer {
   flex: 0 0 auto;
   border-top: 1px solid var(--ring);
@@ -6629,10 +6679,7 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .sp { flex: 1 1 auto; }
 
 
-/* Timeline dock: the mixer's timeline broken out along the bottom of the stage,
-   above the status bars, resizable from its top edge. */
-/* Recipe organizer (the side panel's main body now that the timeline is docked). */
-/* The organizer is an inset like the timeline's track. */
+/* The saved-mix rows (MixerLibrary.jsx): an inset like the timeline's track. */
 .mixer-recipes { display: flex; flex-direction: column; gap: 2px; overflow: auto; max-height: 40vh; padding: 6px; border-radius: 8px; background: rgba(0, 0, 0, 0.28); box-shadow: inset 0 0 10px #00000070; }
 .mixer-recipe-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
 .mixer-recipe-row:hover { background: var(--gray-900); }
@@ -6645,6 +6692,17 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mixer-recipe-row:hover .mixer-recipe-acts, .mixer-recipe-row.busy .mixer-recipe-acts { display: inline-flex; }
 .mixer-save { display: flex; align-items: center; gap: 6px; }
 .mixer-save input { flex: 1 1 auto; min-width: 0; font: 600 12px/1.3 var(--font-mono); color: var(--text); background: var(--gray-900); border: 1px solid var(--accent); border-radius: 6px; padding: 3px 6px; }
+/* The Mixes panel (MixerLibrary.jsx, what Load opens): one folding group per category, the rows above inside. */
+.mixer-lib-list { max-height: min(64vh, 720px); }
+.mixer-lib-group + .mixer-lib-group { margin-top: 4px; }
+.mixer-lib-cat { display: flex; align-items: center; gap: 4px; padding: 3px 6px 3px 2px; border-radius: 6px; cursor: pointer; user-select: none; font: 600 11px/1.2 var(--font-ui); text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-300); }
+.mixer-lib-cat:hover { background: rgba(255, 255, 255, 0.06); }
+.mixer-lib-cat .caret { font-size: 16px; width: 16px; flex: 0 0 16px; color: var(--muted); transition: transform 0.1s ease; }
+.mixer-lib-group.open > .mixer-lib-cat .caret { transform: rotate(90deg); }
+.mixer-lib-cat-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mixer-lib-group .mixer-recipe-row { margin-left: 14px; }
+.mixer-lib-edit { flex-wrap: wrap; }
+.mixer-lib-edit input { flex: 1 1 110px; }
 /* Sound blocks in the dock: real length, waveform, speaker to audition. Overlapping
    sounds are laid out in sub-rows (inline top/height) so none hides another. */
 .mixer-marquee { position: absolute; border: 1px dashed #fff; background: rgba(255, 255, 255, 0.12); pointer-events: none; z-index: 2; }
@@ -6656,9 +6714,20 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mixer-editor-title { display: flex; align-items: center; gap: 8px; }
 /* Short fields in a row, the sequencer's input style; a frame count is never wide. */
 .mixer-fields { display: flex; flex-wrap: wrap; gap: 6px 14px; }
-.mixer-field { display: flex; flex-direction: column; gap: 3px; width: 96px; font: 500 10px/1.2 var(--font-ui); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
-.mixer-field input.mixer-num { width: 96px; height: 26px; min-height: 26px; flex: 0 0 auto; font: 400 12px/1.3 var(--font-mono); }
+/* A field is as wide as its label (never under 96px), and its box fills that width,
+   so a long label such as "blend out (frames)" cannot run into the next field. */
+.mixer-field { display: flex; flex-direction: column; gap: 3px; width: auto; min-width: 96px; font: 500 10px/1.2 var(--font-ui); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+.mixer-field input.mixer-num { width: 100%; box-sizing: border-box; height: 26px; min-height: 26px; flex: 0 0 auto; font: 400 12px/1.3 var(--font-mono); }
 .mixer-editor-note { color: var(--muted); }
+/* Preview (blue, generators only) and Disable / Re-Enable open the fields row, level with the inputs. */
+.mixer-editor-acts { display: flex; align-items: center; gap: 6px; align-self: flex-end; }
+.mixer-editor-acts .cseq-btn { height: 26px; min-height: 26px; }
+/* Both labels share one grid cell, so flipping Disable / Re-Enable never moves the fields beside it. */
+.mixer-toggle-btn { display: inline-grid; place-items: center; }
+.mixer-toggle-btn > span { grid-area: 1 / 1; }
+.mixer-toggle-btn > .mixer-toggle-alt { visibility: hidden; }
+.mixer-preview-btn { background: linear-gradient(180deg, var(--accent), var(--accent-deep)); border-color: var(--accent-deep); color: #0b1420; }
+.mixer-preview-btn:hover { background: linear-gradient(180deg, #62b0ff, var(--accent)); }
 
 .mixer-parts { display: flex; flex-direction: column; gap: 2px; }
 .mixer-part { display: flex; align-items: center; gap: 8px; padding: 2px 4px; border-radius: 4px; }
@@ -6732,10 +6801,23 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
   border-radius: 999px;
   font: 500 10px/16px var(--font-mono); color: #0d1012;
   padding: 0 7px; white-space: nowrap; overflow: hidden;
-  cursor: grab; min-width: 8px; box-sizing: border-box; z-index: 2;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  cursor: grab; min-width: 48px; box-sizing: border-box; z-index: 2;   /* MIN_PILL_PX in MixerTimeline.jsx */
+  box-shadow: 0 1px 2px 1px rgb(0 0 0 / 49%);
+}
+/* A block that starts no generator (dampen, link, clip…): the lane colour as rim and label on a dark fill,
+   beside the solid generator pills. --pill is the lane colour, set inline. */
+.mseq-pill.nogen {
+  background: color-mix(in srgb, var(--pill) 22%, #0d1012);
+  color: var(--pill);
+  box-shadow: inset 0 0 0 1px var(--pill), 0 1px 2px 1px rgb(0 0 0 / 49%);
 }
 .mseq-pill:active { cursor: grabbing; }
+/* A clip's blend windows (MixerTimeline.jsx): a ramp up from the left edge over the
+   blend in, down to the right edge over the blend out, the part still blending shaded. */
+.mseq-blend { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.mseq-blend-shade { fill: rgb(0 0 0 / 40%); }
+.mseq-blend-line { stroke: var(--pill, #fff); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.mseq-pill-label { position: relative; }
 .mseq-pill.on { outline: 2px solid #fff; outline-offset: -1px; }
 .mseq-pill.off { opacity: 0.4; filter: grayscale(1); }
 .mseq-pill.wave { display: flex; align-items: center; gap: 4px; padding: 0 6px 0 3px; }
@@ -6744,6 +6826,13 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mseq-pill .mseq-wave-label { flex: 0 0 auto; }
 .mseq-pill.ghost { background: repeating-linear-gradient(45deg, rgba(224, 168, 62, 0.45) 0 6px, rgba(224, 168, 62, 0.2) 6px 12px) !important; border: 1px dashed rgba(224, 168, 62, 0.9); color: var(--text); pointer-events: none; cursor: default; }
 .mseq-pill.ghost.fx { background: repeating-linear-gradient(45deg, rgba(217, 123, 196, 0.45) 0 6px, rgba(217, 123, 196, 0.2) 6px 12px) !important; border-color: rgba(217, 123, 196, 0.9); display: inline-flex; align-items: center; gap: 4px; }
+/* Loop repeats of a clip: faint dashed echoes of the pill, one per extra play (MixerTimeline pill). */
+.mseq-pill.mseq-loop-ghost {
+  background: color-mix(in srgb, var(--pill) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pill) 45%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--pill) 65%, transparent);
+  opacity: 0.75; pointer-events: none; cursor: default; z-index: 1; min-width: 0;
+}
 .mseq-strike { position: absolute; top: 22px; bottom: 0; width: 0; border-left: 2px solid #fff; opacity: 0.45; pointer-events: none; z-index: 1; }
 .mseq-past-loop { position: absolute; top: 22px; bottom: 0; background: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.04) 0 6px, rgba(255, 255, 255, 0.09) 6px 12px); pointer-events: none; }
 .mseq-loopend { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px dashed var(--accent); opacity: 0.8; z-index: 1; }
@@ -6822,7 +6911,20 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mseq-x:hover, .mseq-add:hover { color: var(--text); background: rgba(255, 255, 255, 0.1); }
 .mseq-x .icon, .mseq-add .icon { font-size: 12px; }
 /* Timeline toolbar: the Add track combo is the sequencer's Load combo, wider for its placeholder. */
-.mseq-add-track { width: 200px; }
+.mseq-add-track { width: 150px; }
+/* The mix Type dropdown, left of Add Track. */
+.mseq-type { width: 110px; }
+/* A motion track the current Type can't play (baked-per-race under a job ability or spell). */
+.mseq-label.bad { color: #f0a8a2 !important; }
+.mseq-label.bad .mseq-label-src { color: #f0a8a2; }
+.mseq-lane.bad { background: rgba(240, 168, 162, 0.10); box-shadow: inset 0 0 0 1px rgba(240, 168, 162, 0.5); }
+.mseq-motion-warn {
+  display: flex; align-items: flex-start; gap: 6px; flex: 0 0 auto;
+  margin: 0 0 6px; padding: 6px 9px; border-radius: 6px;
+  background: rgba(240, 168, 162, 0.12); border: 1px solid rgba(240, 168, 162, 0.4);
+  color: #f6c2bd; font: 500 11.5px/1.35 var(--font-ui);
+}
+.mseq-motion-warn .icon { font-size: 15px; flex: 0 0 auto; margin-top: 1px; }
 .mseq-toolbar .cseq-zoom { margin-left: auto; }
 .pc-look-label { margin-top: 8px; }
 .gs-tabs { margin: 4px 0 6px; }
@@ -6834,9 +6936,11 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 
 /* Timeline toolbar: the saved-mix row shares the line with Add track and zoom. */
 .mseq-toolbar .mseq-mix-name { flex: 1 1 120px; min-width: 90px; }
-.mseq-toolbar .cseq-load:not(.mseq-add-track) { width: 150px; }
+.mseq-toolbar .mseq-mix-cat { flex: 0 1 140px; min-width: 90px; }
+.mseq-load-btn.on { background: rgba(255, 255, 255, 0.12); }
+/* A category field's suggestions: the dropdown panel, portaled and fixed under the field (CategoryInput.jsx). */
+.cat-menu { position: fixed; margin: 0; }
 .mseq-publish { margin-bottom: 8px; }
-.mseq-shuffle { margin-right: 6px; }
 
 /* Timeline header: the green Publish beside the close glyph. */
 .mseq-publish-btn { display: inline-flex; align-items: center; gap: 4px; margin-right: 6px; background: #1f8a4c; border-color: #2aa85f; color: #fff; }
@@ -6853,8 +6957,6 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mixer-row button.mixer-add:hover { color: var(--accent); }
 .mseq-lane.drop-ok { background: rgba(63, 189, 187, 0.12); box-shadow: inset 0 0 0 1px var(--accent); }
 
-/* Timeline: a pill dragged past the last lane of its kind — the drop makes a new track. */
-.mseq-lane.drop-new { box-shadow: inset 0 -3px 0 var(--accent); }
 /* Manage: the publish choices and the check's placement table. */
 .mseq-manage-btn { margin-right: 6px; }
 .mseq-manage-btn.on { background: rgba(255, 255, 255, 0.12); }
@@ -6862,7 +6964,8 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mseq-manage .mixer-field { width: auto; }
 .mseq-manage .mseq-manage-kind .cseq-load { width: 140px; height: 26px; }
 .mseq-manage .mseq-manage-kind .combo-input { height: 26px; min-height: 26px; }
-.mseq-manage .mseq-manage-force { height: 26px; }
+.mseq-manage .mseq-manage-force,
+.mseq-manage .mseq-manage-pivot { height: 26px; }
 .mseq-plan-wrap { max-height: 200px; overflow: auto; display: flex; flex-direction: column; gap: 4px; }
 .mseq-plan { border-collapse: collapse; font: 400 11px/1.4 var(--font-mono); color: var(--text); }
 .mseq-plan th { text-align: left; font: 500 10px/1.2 var(--font-ui); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 14px 2px 0; }
@@ -6870,3 +6973,5 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mseq-plan td.warn { color: #ffd078; }
 .mseq-plan td.dim { color: var(--muted); }
 .mseq-plan-err { color: #f0a8a2; margin: 0; white-space: pre-wrap; }
+/* A race built without part of its motion: said, not an error. */
+.mseq-plan-warn { color: #ffd078; margin: 0; white-space: pre-wrap; }

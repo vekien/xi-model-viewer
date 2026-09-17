@@ -53,6 +53,8 @@ const OP_NAMES = {
   0x59: 'Lock magic', 0x5e: 'Knockback', 0x60: 'Sound', 0x2a: 'Actor fade', 0x29: 'Actor fade',
 };
 export const opName = (op) => OP_NAMES[op] ?? `op${op.toString(16).padStart(2, '0').toUpperCase()}`;
+/** Ops that start a generator of their own: what Preview can play alone. */
+export const isGeneratorOp = (op) => op === 0x02 || op === 0x3f;
 
 /** Which mixer lane an inspector event belongs to (by opcode); everything else is "keep". */
 export function laneForOp(op) {
@@ -86,6 +88,19 @@ export function withIds(events) {
 }
 
 /** Strip client-only fields before writing the recipe file. */
+/**
+ * A clip event's [blend in, blend out] in frames: its own `blend` when set, else
+ * the source command's, which compose keeps (u16 at bytes 24 and 28 of `raw`,
+ * where effect.js reads transIn / transOut).
+ */
+export function clipBlend(ev) {
+  if (Array.isArray(ev?.blend) && ev.blend.length === 2) return ev.blend.map((v) => Math.max(0, Number(v) || 0));
+  const hex = typeof ev?.raw === 'string' ? ev.raw : '';
+  if (hex.length < 64) return [0, 0];
+  const u16 = (o) => parseInt(hex.substr(o * 2, 2), 16) | (parseInt(hex.substr(o * 2 + 2, 2), 16) << 8);
+  return [u16(24), u16(28)];
+}
+
 /** A frame count as the schema wants it: a whole, non-negative integer. */
 const frames = (v) => Math.max(0, Math.round(Number(v) || 0));
 
@@ -104,8 +119,9 @@ export function serializeRecipe(recipe) {
       return out;
     });
   // `total` is the routine's end (the timeline's loop marker): whole frames,
-  // and absent rather than null when it is left to compose.
-  const { total, ...rest } = recipe;
+  // and absent rather than null when it is left to compose. `category` is the
+  // organiser's, kept in its own index beside the files (the schema has no room).
+  const { total, category, ...rest } = recipe;
   const totalOut = Number.isFinite(Number(total)) && Number(total) > 0 ? { total: frames(total) } : {};
   return JSON.stringify({ schema: RECIPE_SCHEMA, ...rest, ...totalOut, events }, null, 2);
 }
@@ -116,15 +132,23 @@ export function serializeRecipe(recipe) {
  * carried whole by their link command, exactly as compose does).
  */
 const LINK_OPS = new Set([0x03, 0x09, 0x3b, 0x3c, 0x57]);
+export const isLinkOp = (op) => LINK_OPS.has(op);
 
 export function eventsFromInspect(info, track, opts = {}) {
   const wantKeep = opts.keep !== false;
   const kind = opts.kind ?? kindOf(track);
   const refs = opts.refs ?? null;     // a Set: take the events naming these refs, whatever their kind
-  // A motion source's own generators ride on its track (`kind: 'vfx'` events
-  // on a motion track): a weapon skill's flashes and trails are part of the
-  // motion, and they used to wait behind a "take" box in the Parts window.
-  const withGens = !!opts.withGens && kind === 'motion';
+  // A source brings its own kind and nothing else: a motion track gets the
+  // clips and traces, an effects track the generators, a sound track the
+  // sounds. A weapon skill's own flashes and hit sparks therefore stay behind
+  // on a motion pick; to have Apex Arrow's motion and its effects, put it on a
+  // Motion track and on an Effects track.
+  // A link out of the DAT (a shared ROM/0/0.DAT routine, or a schedule on the
+  // actor) runs whole, so it goes on the lane of what it plays: opts.linkLane,
+  // effect.js sharedLinkLane. Combo's eis1 burst is effects, a cast motion like
+  // shbk is motion. A preview on a lane plays the same slice (laneSlice).
+  // Without linkLane, links are "keep".
+  const linkLane = opts.linkLane ?? null;
   const out = [];
   for (const e of info.timeline) {
     // The inspector already expands local sub-routines at absolute frames, so
@@ -133,8 +157,8 @@ export function eventsFromInspect(info, track, opts = {}) {
     // lane. Links the DAT cannot satisfy (mdam, proc, eis1…) stay: they are
     // the client's shared routines.
     if (LINK_OPS.has(e.op) && e.detail?.local) continue;
-    const laneOf = laneForEvent(e);
-    if (refs ? !refs.has(e.ref) : (laneOf !== kind && !(withGens && laneOf === 'vfx') && !(wantKeep && laneOf === 'keep'))) continue;
+    const laneOf = linkLane && LINK_OPS.has(e.op) && e.ref && e.detail?.local === false ? linkLane(e.ref) : laneForEvent(e);
+    if (refs ? !refs.has(e.ref) : (laneOf !== kind && !(wantKeep && laneOf === 'keep'))) continue;
     out.push({
       from: track,
       op: e.op,
@@ -341,6 +365,41 @@ export function mixerDir(xiPath) {
 }
 
 /**
+ * The organiser's categories: `_categories.json` beside the recipes, mix name →
+ * category. The recipe schema allows no extra fields, so a category never goes
+ * into the recipe itself; a mix the index does not name is uncategorised.
+ */
+const CATEGORY_INDEX = '_categories.json';
+const categoryIndexPath = (xiPath) => `${mixerDir(xiPath)}\\${CATEGORY_INDEX}`;
+
+/** Mix name → category, for every mix the index names. */
+export async function readCategories(xiPath) {
+  try {
+    const text = await backend.readTextFile(categoryIndexPath(xiPath));
+    const map = text ? JSON.parse(text) : {};
+    return map && typeof map === 'object' && !Array.isArray(map) ? map : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Change the index through `edit(map)` and write it back, names A–Z. A blank
+ * category drops the entry, so clearing the field files the mix as uncategorised.
+ */
+export async function updateCategories(xiPath, edit) {
+  const map = { ...(await readCategories(xiPath)) };
+  edit(map);
+  const out = {};
+  for (const name of Object.keys(map).sort()) {
+    const cat = typeof map[name] === 'string' ? map[name].trim().replace(/\s+/g, ' ') : '';
+    if (cat) out[name] = cat;
+  }
+  await backend.writeTextFile(categoryIndexPath(xiPath), JSON.stringify(out, null, 2));
+  return out;
+}
+
+/**
  * Where compose and publish read the mix from: a scratch copy under `_work`,
  * not the mixer folder itself. The saved list is that folder's `*.recipe.json`
  * files, so writing the working copy beside them made every preview — a
@@ -372,11 +431,12 @@ export async function composeForPreview(recipe, xiRace, xiPath, env, onLine) {
  * Publish through `xi dats`: the recipe becomes an `ability` action in
  * projects/<name>.json (`dats prepare … --type ability --replace`, which keeps
  * a slot an earlier build took), then `dats build <name>` — with --dry-run for
- * the plan, without to write the DATs and register the file ids. Same manifest
- * the wizard and the CLI use, so the ability is rebuilt, listed and undone with
- * the rest of the project.
+ * the plan, without to write the DATs and register the file ids, and with
+ * --pivot to build into the pivot folder (FFXI_PIVOT_DIR) instead of the game
+ * folder. Same manifest the wizard and the CLI use, so the ability is rebuilt,
+ * listed and undone with the rest of the project.
  */
-export async function publishRecipe(recipe, { dryRun, animation = null, kind = null, subdir = null, force = false }, xiPath, env, onLine) {
+export async function publishRecipe(recipe, { dryRun, animation = null, kind = null, subdir = null, force = false, pivot = false }, xiPath, env, onLine) {
   const recipePath = workRecipePath(xiPath, recipe.name);
   await backend.writeTextFile(recipePath, serializeRecipe(recipe));
   const lines = [];
@@ -394,6 +454,7 @@ export async function publishRecipe(recipe, { dryRun, animation = null, kind = n
   const build = ['dats', 'build', recipe.name, '--only', `ability.${slug(recipe.name)}`];
   if (dryRun) build.push('--dry-run');
   if (force) build.push('--force');
+  if (pivot) build.push('--pivot');
   const ok = await run(build);
   return { ok, text: lines.join('\n') };
 }
@@ -406,7 +467,7 @@ export async function publishRecipe(recipe, { dryRun, animation = null, kind = n
  * placeholder for a free extended slot, or another skill's DAT).
  */
 export function parsePublishPlan(text) {
-  const out = { kind: null, animation: null, files: [], server: null, errors: [] };
+  const out = { kind: null, animation: null, files: [], server: null, errors: [], warnings: [] };
   for (const raw of String(text ?? '').split(/\r?\n/)) {
     const line = raw.trim();
     let m = line.match(/\(ability\):\s+(ja|spell|ws) animation (\d+)/);
@@ -428,6 +489,9 @@ export function parsePublishPlan(text) {
     }
     m = line.match(/^server:\s+(\S+)/);
     if (m) { out.server = m[1]; continue; }
+    // A race built without part of its motion (no copy of an emote, no such clip).
+    m = line.match(/^⚠\s+(.+)$/);
+    if (m) { out.warnings.push(m[1]); continue; }
     if (/^Error:/i.test(line)) out.errors.push(line.replace(/^Error:\s*/i, ''));
   }
   return out;

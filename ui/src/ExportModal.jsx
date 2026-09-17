@@ -115,6 +115,9 @@ export function xiEnvFromSpec(spec) {
   if (spec?.gamePath) env.FFXI_DIR = spec.gamePath;
   if (spec?.pivotPath) env.FFXI_PIVOT_DIR = spec.pivotPath;
   if (spec?.hdPath) env.FFXI_HD_DIR = spec.hdPath;
+  // Points xi at blender.exe for the --fbx conversion pass; without it xi falls
+  // back to its own default install path (C:\Program Files\Blender Foundation\…).
+  if (spec?.blenderPath) env.BLENDER_PATH = spec.blenderPath;
   return Object.keys(env).length ? env : null;
 }
 

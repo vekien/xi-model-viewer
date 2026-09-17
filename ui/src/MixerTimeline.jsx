@@ -1,13 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Tooltip } from './Tooltip.jsx';
 import { Combo } from './Combo.jsx';
-import { KEEP_LANE, LANES, LANE_BY_ID, kindOf, opName, recipeLength, trackLabel } from '../js/mixer.js';
+import { CategoryInput } from './CategoryInput.jsx';
+import { KEEP_LANE, LANES, LANE_BY_ID, clipBlend, isGeneratorOp, isLinkOp, kindOf, opName, recipeLength, trackLabel } from '../js/mixer.js';
 
 /** Drag type prefix shared with MixerList; the lane kind follows it. */
 export const DRAG_TYPE = 'application/x-mixer-entry+';
 
-const SHUFFLE_KINDS = [{ id: 'ws', label: 'WS' }, { id: 'ja', label: 'Ability' }, { id: 'spell', label: 'Spell' }];
+const MIX_TYPES = [{ id: 'ws', label: 'WS' }, { id: 'ja', label: 'Ability' }, { id: 'spell', label: 'Spell' }];
+const KIND_LABEL = { ws: 'Weapon Skill', ja: 'Job Ability', spell: 'Spell' };
+/** A job ability or spell references base motion (`ja:`/`spell:`); anything else — a
+ *  weapon skill, an emote, a race's own motion — is baked per race and is WS only. */
+const motionOkForKind = (spec, kind) => kind === 'ws' || /^(ja|spell):\d+/.test(String(spec ?? ''));
 
 // The mixer's timeline as a floating window built from the Camera Sequencer's
 // chrome (#camseq / .cseq-*): the same title bar, dragged by it; the same inset
@@ -20,12 +25,14 @@ const POS_KEY = 'mixerSeqPos';
 const SIZE_KEY = 'mixerSeqSize';
 const FPS = 60;                       // routine ticks run at 60/s; the ruler reads seconds
 const LANE_H = 25;                    // one lane line (see .cseq-lane)
+const MIN_PILL_PX = 48;               // a pill is never narrower (see .mseq-pill)
 const RULER_H = 22;
 const MIN_W = 700;
 const DEFAULT_W = 940;
 const MIN_H = 200;
 const maxH = () => Math.floor(window.innerHeight * 0.9);   // the window fits its content up to this (see #mixer-seq)
 const MIN_LEN = 120;
+const EMPTY_SET = new Set();
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 8;
 
@@ -90,12 +97,14 @@ export function TimelineWindow({
   getSoundPeaks = null, ghosts = null,
   transport, canPlay, playTip, onPlayPause, onStop, onSeek,
   speed, onSpeed, loop, onLoop, onSnapLane, viewerRace,
-  // The saved-mix row (the Camera Sequencer's New / name / Save / Load / Delete),
-  // the publish plan, and the shuffle kind — what the Recipes window used to hold.
-  name = '', onName, onNew, onSave, saved = [], onOpen, onDelete,
+  // The saved-mix row (the Camera Sequencer's New / name / Save / Load / Delete,
+  // plus the category the Mixes panel files it under; Load opens that panel),
+  // the publish plan, and the shuffle kind.
+  name = '', onName, onNew, onSave, saved = [], onDelete,
+  category = '', onCategory, categories = [], onLoad, loadOpen = false,
   publishPlan = null, onPublish, busy = false,
   publishCfg = null, onPublishCfg, onCheckPublish,
-  shuffleKind = 'ws', onShuffleKind, onRandomise, canPublish = false,
+  kind = 'ws', onKind, onRandomise, canPublish = false, baseMotionSpecs = null,
   onDropEntry,
   editor = null,
 }) {
@@ -230,6 +239,9 @@ export function TimelineWindow({
   // A little past the armed routine's end too, so a loop marker sitting there stays on the ruler.
   const len = Math.ceil(Math.max(MIN_LEN, recipeLength(events) + 20, soundEnd + 20, minLen + 20));
   const ticks = rulerTicks(len, FPS, zoom);
+  // The track's width in px (measured below): a short block's pill still takes
+  // MIN_PILL_PX, so the stacking must count that much of the lane as used.
+  const [trackPx, setTrackPx] = useState(0);
 
   // Each lane's stacking is remembered (collapse from the glyph by the label).
   const [laneRowsOpen, setLaneRowsOpen] = useState(() => readJson('mixerLaneRows') ?? {});
@@ -254,10 +266,10 @@ export function TimelineWindow({
     const laneEvents = t.kind === 'keep' ? events.filter((e) => e.kind === 'keep')
       : t.kind === 'sound' && t.first ? [...own, ...ghostEvents]
         : t.kind === 'vfx' && t.first ? [...own, ...ghostGenEvents] : own;
-    const minTicks = len * 0.012;
-    const endOf = (e) => e.start + (t.kind === 'sound'
+    const minTicks = Math.max(len * 0.012, trackPx ? (MIN_PILL_PX / trackPx) * len : 0);
+    const endOf = (e) => e.start + Math.max(minTicks, t.kind === 'sound'
       ? (e.op === 0x1e ? 8 : Math.max(soundTicks(e), 8))
-      : Math.max(e.dur || 0, minTicks));
+      : (e.dur || 0));
     const rows = stackRows(laneEvents, endOf);
     // Overlaps stack open by default; the keep lane (locks, hits, links) starts
     // collapsed — it is bookkeeping, not the mix — until its glyph opens it.
@@ -269,6 +281,13 @@ export function TimelineWindow({
   // ── Pointer work on the track: scrub, block drag, lane shift, marquee ──────
   const trackRef = useRef(null);
   const rootRef = useRef(null);
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return undefined;
+    const ro = new ResizeObserver(() => setTrackPx(el.clientWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [open]);
   const drag = useRef(null);
   const [marquee, setMarquee] = useState(null);   // root-relative px while rubber-banding
   const [loopDrag, setLoopDrag] = useState(null); // loop marker mid-drag, in frames
@@ -278,7 +297,6 @@ export function TimelineWindow({
   const [dropLane, setDropLane] = useState(null);
   // A pill dragged onto another lane: that lane lights up; below the last lane
   // of its kind, the last lane shows a bar — the drop makes a new track there.
-  const [dropNew, setDropNew] = useState(null);
   const [manageOpen, setManageOpen] = useState(false);
   const dragTypeFor = (t) => `${DRAG_TYPE}${t.kind}`;
   const dragFits = (e, t) => t.kind !== 'keep' && Array.from(e.dataTransfer?.types ?? []).includes(dragTypeFor(t));
@@ -309,7 +327,15 @@ export function TimelineWindow({
     return r?.width ? clamp(((clientX - r.left) / r.width) * len, 0, len) : 0;
   };
 
-  const scrubTo = (clientX) => onSeek?.(Math.round(frameAt(clientX)));
+  // Where the cursor was put, drawn until the stage has caught up: a scrub on a
+  // stopped timeline may be waiting for the mix to compose.
+  const [scrubAt, setScrubAt] = useState(null);
+  useEffect(() => { if (!busy && drag.current?.kind !== 'scrub') setScrubAt(null); }, [busy]);
+  const scrubTo = (clientX) => {
+    const f = Math.round(frameAt(clientX));
+    setScrubAt(f);
+    onSeek?.(f);
+  };
   const startScrub = (e) => {
     e.stopPropagation();
     drag.current = { kind: 'scrub' };
@@ -333,7 +359,7 @@ export function TimelineWindow({
     const ids = inGroup ? selectedIds : new Set([ev._id]);
     if (!inGroup) onSelect(ev._id, 'only');
     const starts = events.filter((x) => ids.has(x._id)).map((x) => ({ id: x._id, start0: x.start }));
-    drag.current = { kind: 'block', x0: e.clientX, y0: e.clientY, ev, starts, moved: false, inGroup, over: null, newFor: null };
+    drag.current = { kind: 'block', x0: e.clientX, y0: e.clientY, ev, starts, moved: false, inGroup };
     e.target.setPointerCapture?.(e.pointerId);
   };
   const startLaneDrag = (e, laneId) => {
@@ -361,7 +387,6 @@ export function TimelineWindow({
     const frames = Math.round((e.clientX - d.x0) / pxPerFrame());
     if (d.kind === 'block') {
       if (frames || Math.abs(e.clientY - d.y0) > 6) d.moved = true;
-      trackDropTarget(d, e.clientY);
       let delta = Math.max(frames, -Math.min(...d.starts.map((s) => s.start0)));
       if (snap) {
         // Nearest target to the grabbed block's start or end wins; the whole
@@ -392,6 +417,10 @@ export function TimelineWindow({
     const d = drag.current;
     drag.current = null;
     if (!d) return;
+    if (d.kind === 'scrub') {
+      if (!busy) setScrubAt(null);
+      return;
+    }
     if (d.kind === 'loop') {
       setLoopDrag(null);
       onLoopEnd?.(Math.max(1, Math.round(frameAt(e.clientX))));
@@ -419,47 +448,9 @@ export function TimelineWindow({
       if (d.inGroup) onSelect(d.ev._id, 'only');
       if (isSoundEvent(d.ev)) onPreview?.(d.ev);
     }
-    if (d.kind === 'block') {
-      setDropLane(null);
-      setDropNew(null);
-      const target = d.newFor ? nextTrackId(d.newFor) : (d.over && d.over !== d.ev.from ? d.over : null);
-      if (target) {
-        const laneKind = d.newFor ?? lanes.find((l) => l.t.id === target)?.t.kind;
-        const byId = new Map(events.map((x) => [x._id, x]));
-        onMoveMany(d.starts.map((st) => {
-          const ev = byId.get(st.id);
-          const fits = ev && laneKind && (ev.kind === laneKind || kindOf(ev.from) === laneKind);
-          return { id: st.id, start: ev?.start ?? st.start0, ...(fits ? { from: target } : {}) };
-        }));
-      }
-    }
-  };
-  /** Which lane the pointer is over during a block drag, and whether it is past the last lane of the pill's kind. */
-  const trackDropTarget = (d, clientY) => {
-    const laneKind = kindOf(d.ev.from);
-    let over = null;
-    let lastBottom = -Infinity;
-    for (const row of rootRef.current?.querySelectorAll('.mseq-lane') ?? []) {
-      const r = row.getBoundingClientRect();
-      const id = row.dataset.lane;
-      if (id !== 'keep' && kindOf(id) === laneKind) lastBottom = Math.max(lastBottom, r.bottom);
-      if (clientY >= r.top && clientY < r.bottom) over = id;
-    }
-    const overKind = over && over !== 'keep' ? lanes.find((l) => l.t.id === over)?.t.kind : null;
-    const fits = !!overKind && (overKind === d.ev.kind || overKind === laneKind);
-    d.over = fits ? over : null;
-    d.newFor = !fits && clientY > lastBottom ? laneKind : null;
-    const wantLane = d.over && d.over !== d.ev.from ? d.over : null;
-    const wantNew = d.newFor ? lanes.filter((l) => l.t.kind === d.newFor).at(-1)?.t.id ?? null : null;
-    if (wantLane !== dropLane) setDropLane(wantLane);
-    if (wantNew !== dropNew) setDropNew(wantNew);
-  };
-  /** The id the next extra track of `kind` gets (recipeTracks numbers them from 2). */
-  const nextTrackId = (kind) => {
-    const used = new Set(tracks.map((t) => t.id));
-    let n = 2;
-    while (used.has(`${kind}${n}`)) n++;
-    return `${kind}${n}`;
+    // A block only moves in time: it never changes track, since its generators,
+    // clips and sounds are read from that track's source DAT (a Barrage
+    // generator nudged onto a Charm track broke compose).
   };
 
   // ── Pills ───────────────────────────────────────────────────────────────────
@@ -499,7 +490,7 @@ export function TimelineWindow({
         </Tooltip>
       );
     }
-    if (t.kind === 'sound') {
+    if (t.kind === 'sound' && !isLinkOp(ev.op)) {
       const pk = peaks.get(soundIdOf(ev));
       return (
         <Tooltip key={ev._id} content={`${opName(ev.op)} ${ev.ref ?? ''} @${ev.start}${pk ? ` · ${pk.seconds.toFixed(2)}s` : ''} · click the speaker to hear it${ev.enabled === false ? ' · muted (M to unmute)' : ''}`}>
@@ -513,15 +504,65 @@ export function TimelineWindow({
         </Tooltip>
       );
     }
-    return (
-      <Tooltip key={ev._id} content={`${opName(ev.op)} ${ev.ref ?? ''} @${ev.start}${ev.dur ? ` for ${ev.dur}` : ''}`}>
-        <span className={`mseq-pill${state}`} style={{ left: x(ev.start), width: `${Math.max(1.2, ((ev.dur || 0) / len) * 100)}%`, background: color, top }}
-          onPointerDown={(e) => startDragBlock(e, ev)}>{ev.ref ? ev.ref.replace(/\?$/, '') : opName(ev.op)}</span>
+    // A block that starts no generator (a dampen, link, clip…) is the outlined twin of
+    // the solid generator pills around it. The keep lane holds no generators to tell apart.
+    const nogen = t.kind !== 'keep' && !isGeneratorOp(ev.op);
+    // A clip's blend windows as ramps: up from the left edge over the blend in,
+    // down to the right edge over the blend out, the part still blending shaded.
+    const blend = ev.op === 0x05 && ev.dur > 0 ? clipBlend(ev) : [0, 0];
+    const ramp = (v) => clamp((v / ev.dur) * 100, 0, 100);
+    // Loop repeats: a clip with loops ≠ 1 plays again each cycle — draw the extra plays
+    // as faint ghost pills (N−1 of them; 0 = ∞, filled to the loop end) so the timeline
+    // shows how long the motion sustains. Ghosts tile by the pill's *shown* width, so a
+    // short clip forced to MIN_PILL_PX doesn't stack its repeats on top of each other.
+    const clipLoops = ev.op === 0x05 ? (ev.loops ?? 1) : 1;
+    const cycle = ev.dur || 0;
+    const minTicks = trackPx ? (MIN_PILL_PX / trackPx) * len : 0;
+    const cycleShown = Math.max(cycle, minTicks);
+    const ghosts = [];
+    if (clipLoops !== 1 && cycle > 0) {
+      const endF = clipLoops === 0 ? Math.max(loopEnd || 0, ev.start + cycleShown, len) : ev.start + clipLoops * cycleShown;
+      for (let i = 1; ev.start + i * cycleShown < endF - 1 && i <= 32; i++) ghosts.push(ev.start + i * cycleShown);
+    }
+    const pillWidth = `${Math.max(1.2, (cycle / len) * 100)}%`;
+    const ghostWidth = `${Math.max(1.2, (cycleShown / len) * 100)}%`;
+    const mainPill = (
+      <Tooltip key={ev._id} content={`${opName(ev.op)} ${ev.ref ?? ''} @${ev.start}${ev.dur ? ` for ${ev.dur}` : ''}${clipLoops !== 1 ? ` · loops ${clipLoops === 0 ? '∞' : clipLoops}` : ''}${blend[0] || blend[1] ? ` · blend in ${blend[0]} / out ${blend[1]} frames` : ''}`}>
+        <span className={`mseq-pill${nogen ? ' nogen' : ''}${state}`}
+          style={{ left: x(ev.start), width: pillWidth, top, ...(nogen ? { '--pill': color } : { background: color }) }}
+          onPointerDown={(e) => startDragBlock(e, ev)}>
+          {(blend[0] > 0 || blend[1] > 0) && (
+            <svg className="mseq-blend" viewBox="0 0 100 16" preserveAspectRatio="none" aria-hidden="true">
+              {blend[0] > 0 && <path className="mseq-blend-shade" d={`M0,0 L${ramp(blend[0])},0 L0,16 Z`} />}
+              {blend[0] > 0 && <line className="mseq-blend-line" x1="0" y1="16" x2={ramp(blend[0])} y2="0" />}
+              {blend[1] > 0 && <path className="mseq-blend-shade" d={`M${100 - ramp(blend[1])},0 L100,0 L100,16 Z`} />}
+              {blend[1] > 0 && <line className="mseq-blend-line" x1={100 - ramp(blend[1])} y1="0" x2="100" y2="16" />}
+            </svg>
+          )}
+          <span className="mseq-pill-label">{ev.ref ? ev.ref.replace(/\?$/, '') : opName(ev.op)}{clipLoops !== 1 ? ` ×${clipLoops === 0 ? '∞' : clipLoops}` : ''}</span>
+        </span>
       </Tooltip>
+    );
+    if (!ghosts.length) return mainPill;
+    return (
+      <Fragment key={ev._id}>
+        {mainPill}
+        {ghosts.map((g, i) => (
+          <span key={`${ev._id}:loop:${i}`} className="mseq-pill mseq-loop-ghost"
+            style={{ left: x(g), width: ghostWidth, top, '--pill': color }} aria-hidden="true" />
+        ))}
+      </Fragment>
     );
   };
 
-  const shown = clamp(Math.round(playhead ?? 0), 0, len);
+  // Motion tracks whose source can't play as the chosen Type: baked per-race motion
+  // under a job ability or spell (one DAT for every race). The track goes red. A base
+  // motion (the always-loaded race base, listed in the catalog) is fine — it is referenced,
+  // not baked — so its DAT spec is whitelisted even though it is not a `ja:`/`spell:` id.
+  const okMotion = (spec) => motionOkForKind(spec, kind) || !!baseMotionSpecs?.has?.(spec);
+  const badTracks = kind === 'ws' ? EMPTY_SET
+    : new Set(Object.entries(sources).filter(([id, s]) => kindOf(id) === 'motion' && s?.spec && !okMotion(s.spec)).map(([id]) => id));
+  const shown = clamp(Math.round(scrubAt ?? playhead ?? 0), 0, len);
   const playing = transport === 'playing';
   const style = {
     width: size.w,
@@ -534,18 +575,20 @@ export function TimelineWindow({
     <div id="mixer-seq" className="panel" ref={panelRef} style={style}>
       <div className="cseq-header" ref={headerRef} onPointerDown={startDrag}>
         <span className="icon">timeline</span>
-        <span className="cseq-title">Timeline</span>
+        <span className="cseq-title">Ability Mixer</span>
         <span className="mono mseq-name">{recipeName}</span>
         <span className={`mseq-note${failed ? ' is-failed' : ''}`}>{failed ? error?.title : note}</span>
         {onPublishCfg && (
-          <Tooltip content="Manage: how this mix publishes — kind, animation slot, ROM10 folder — and a check of where its DATs would land" placement="bottom">
+          <Tooltip content="Manage: how this mix publishes — kind, animation slot, ROM10 folder, game or pivot folder — and a check of where its DATs would land" placement="bottom">
             <button type="button" className={`cseq-btn mseq-manage-btn${manageOpen ? ' on' : ''}`} onClick={() => setManageOpen((v) => !v)}>
               <span className="icon">tune</span>Manage
             </button>
           </Tooltip>
         )}
         {onPublish && (
-          <Tooltip content="Publish: build this mix into the game folder now (xi dats build) — the console shows it as it runs" placement="bottom">
+          <Tooltip content={publishCfg?.pivot
+            ? 'Publish: build this mix into the pivot folder (FFXI_PIVOT_DIR) now (xi dats build --pivot) — the console shows it as it runs'
+            : 'Publish: build this mix into the game folder now (xi dats build) — the console shows it as it runs'} placement="bottom">
             <button type="button" className="cseq-btn mseq-publish-btn" disabled={!canPublish} onClick={() => onPublish()}>
               <span className="icon">publish</span>Publish
             </button>
@@ -607,11 +650,24 @@ export function TimelineWindow({
                   </label>
                 </Tooltip>
               </label>
+              <label className="mixer-field">
+                <span>pivot</span>
+                <Tooltip content="Build into the pivot folder (FFXI_PIVOT_DIR) instead of the game folder (FFXI_DIR) — xi dats build --pivot. Check looks there too." placement="top">
+                  <label className="switch cseq-switch mseq-manage-pivot">
+                    <input type="checkbox" checked={!!publishCfg.pivot} onChange={(e) => onPublishCfg({ pivot: e.target.checked })} />
+                    <span className="track" />
+                    <span className="cseq-switch-label">Use Pivot Folder</span>
+                  </label>
+                </Tooltip>
+              </label>
             </div>
             {publishPlan && (
               <div className="mseq-plan-wrap">
                 {publishPlan.animation != null && (
                   <div className="mono-small">{publishPlan.kind} animation <b>{publishPlan.animation}</b> · {publishPlan.files.length} DAT{publishPlan.files.length === 1 ? '' : 's'}{publishPlan.server ? ` · server: ${publishPlan.server}` : ''}</div>
+                )}
+                {publishPlan.warnings?.length > 0 && (
+                  <pre className="mono-small mseq-plan-warn">{publishPlan.warnings.join('\n')}</pre>
                 )}
                 {!publishPlan.ok && (
                   <pre className="mono-small mseq-plan-err">{(publishPlan.errors.length ? publishPlan.errors : String(publishPlan.text ?? '').trim().split(/\r?\n/).filter(Boolean).slice(-6)).join('\n')}</pre>
@@ -637,10 +693,16 @@ export function TimelineWindow({
         {/* Above the track, the sequencer's settings row: add a track, then the
             saved-mix row exactly as the Camera Sequencer has it, zoom on the right */}
         <div className="cseq-row cseq-settings mseq-toolbar">
-          <span className="cseq-label">Add Track</span>
+          {/* The mix Type: what it publishes as, and which motions the list offers.
+              WS shows every motion (baked per race); Ability / Spell only base motions. */}
+          <Tooltip content="Type: what this mix publishes as. Weapon skill bakes any motion per race; a job ability or spell is one DAT for every race, so it can only use motions the game always keeps loaded." placement="top">
+            <div className="cseq-load mseq-type">
+              <Combo value={kind} items={MIX_TYPES} onChange={(k) => k && onKind?.(k)} />
+            </div>
+          </Tooltip>
           <div className="cseq-load mseq-add-track">
-            <Combo value="" items={LANES.map((l) => ({ id: l.id, label: l.label, color: l.color }))} placeholder="Motion, Effects, Sound…"
-              onChange={(kind) => kind && onAddTrack?.(kind)} />
+            <Combo value="" items={LANES.map((l) => ({ id: l.id, label: l.label, color: l.color }))} placeholder="Add Track"
+              onChange={(k) => k && onAddTrack?.(k)} />
           </div>
           <div className="cseq-bar-sep" />
           <Tooltip content="Start a new empty mix" placement="top">
@@ -654,19 +716,13 @@ export function TimelineWindow({
             spellCheck={false}
             onChange={(e) => onName?.(e.target.value.replace(/[^A-Za-z0-9_-]/g, '_'))}
           />
+          {/* Where the Mixes panel files it; the categories already in use drop down as you type. */}
+          <CategoryInput className="cseq-text mseq-mix-cat" value={category} onChange={onCategory} options={categories} placeholder="Category" />
           <Tooltip content={saved.some((r) => r.name === name.trim()) ? 'Save over the mix with this name (Ctrl+S)' : 'Save under this name (Ctrl+S)'} placement="top">
             <button type="button" className="cseq-btn" disabled={!name.trim() || busy} onClick={onSave}>Save</button>
           </Tooltip>
-          <Tooltip content={saved.length ? 'Load a saved mix' : 'Nothing saved yet — Save writes one into exports/ability/mixer'} placement="top">
-            <div className="cseq-load">
-              <Combo
-                value={saved.some((r) => r.name === name.trim()) ? name.trim() : ''}
-                items={saved.map((r) => ({ id: r.name, label: r.name }))}
-                placeholder={saved.length ? 'Load…' : 'None saved'}
-                onChange={(n) => n && onOpen?.(n)}
-              />
-            </div>
-          </Tooltip>
+          {/* Load opens the Mixes panel — every saved mix by category — rather than one long list of names. */}
+          <button type="button" className={`cseq-btn mseq-load-btn${loadOpen ? ' on' : ''}`} onClick={onLoad}>Load</button>
           <Tooltip content="Delete the saved mix with this name" placement="top">
             <button
               type="button"
@@ -693,12 +749,18 @@ export function TimelineWindow({
         </div>
 
         {/* The inset track: labels on the left, the scrolling ruler and lanes on the right */}
+        {badTracks.size > 0 && (
+          <div className="mseq-motion-warn">
+            <span className="icon">warning</span>
+            <span>These motions won't play as a {KIND_LABEL[kind]} — they're baked per race (emote, weapon skill or a race's own motion). Switch Type to WS, or replace them with a job-ability or spell motion.</span>
+          </div>
+        )}
         <div className="cseq-tl mseq-tl" style={{ height: trackH + 8 }} ref={rootRef} onPointerMove={onPointerMove} onPointerUp={endPointer} onPointerCancel={endPointer}>
           <div className="cseq-tl-labels">
             <div className="cseq-tl-spacer" />
             {lanes.map(({ t, rows, stacked, height }) => (
               <div key={t.id}
-                className={`cseq-tl-label mseq-label${t.kind === 'keep' ? '' : ' track'}${t.id === activeTrack ? ' active' : ''}`}
+                className={`cseq-tl-label mseq-label${t.kind === 'keep' ? '' : ' track'}${t.id === activeTrack ? ' active' : ''}${badTracks.has(t.id) ? ' bad' : ''}`}
                 style={{ height, color: t.color }}
                 onClick={() => t.kind !== 'keep' && onActivateTrack?.(t.id)}>
                 <Tooltip content={t.kind === 'keep' ? 'Drag to shift the lane'
@@ -735,7 +797,7 @@ export function TimelineWindow({
                 ))}
               </div>
               {lanes.map((lane) => (
-                <div key={lane.t.id} className={`cseq-lane mseq-lane${dropLane === lane.t.id ? ' drop-ok' : ''}${dropNew === lane.t.id ? ' drop-new' : ''}`} data-lane={lane.t.id} style={{ height: lane.height }} onPointerDown={startMarquee}
+                <div key={lane.t.id} className={`cseq-lane mseq-lane${dropLane === lane.t.id ? ' drop-ok' : ''}${badTracks.has(lane.t.id) ? ' bad' : ''}`} data-lane={lane.t.id} style={{ height: lane.height }} onPointerDown={startMarquee}
                   onDragOver={(e) => dragOverLane(e, lane.t)} onDragLeave={() => { if (dropLane === lane.t.id) setDropLane(null); }} onDrop={(e) => dropOnLane(e, lane.t)}>
                   {lane.laneEvents.map((ev) => pill(ev, lane))}
                 </div>
@@ -840,21 +902,11 @@ export function TimelineWindow({
             <>
               <div className="cseq-bar-sep" />
               <div className="cseq-bar-group">
-                <Tooltip content={`Randomise: a random ${shuffleKind === 'ws' ? 'weapon skill' : shuffleKind === 'ja' ? 'ability' : 'spell'} motion, random effects and a random sound, then play`} placement="top">
+                <Tooltip content={`Randomise: a random ${KIND_LABEL[kind].toLowerCase()} motion, random effects and a random sound, then play`} placement="top">
                   <button type="button" className="icon-btn cseq-icon" aria-label="Randomise" onClick={onRandomise}>
                     <span className="icon">casino</span>
                   </button>
                 </Tooltip>
-                {onShuffleKind && (
-                  <Tooltip content="What Randomise draws its motion from" placement="top">
-                    <div className="seg-tabs mseq-shuffle" role="tablist" aria-label="Randomise kind">
-                      {SHUFFLE_KINDS.map((k) => (
-                        <button key={k.id} type="button" role="tab" aria-selected={shuffleKind === k.id}
-                          className={`seg-tab${shuffleKind === k.id ? ' on' : ''}`} onClick={() => onShuffleKind(k.id)}>{k.label}</button>
-                      ))}
-                    </div>
-                  </Tooltip>
-                )}
               </div>
             </>
           )}

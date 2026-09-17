@@ -378,10 +378,12 @@ function renderMeshGroup(g, ctx) {
       : g.kind === 'unplaced' ? ' env-unplaced'
         : g.kind === 'collision' ? ' env-collision'
           : g.kind === 'subarea' ? ' env-subarea' : '';
+  // Prefix tint only for plain world meshes — env kinds carry their own colour.
+  const prefixClass = envClass ? '' : meshPrefixClass(g.mesh);
   const hidN = g.instances.reduce((n, p) => n + (isPlacementHidden?.(p) || p.userHidden ? 1 : 0), 0);
   const groupVis = hidN === 0 ? 'on' : hidN === g.instances.length ? 'off' : 'mixed';
   return (
-    <div key={openKey} className={`plc-group${isOpen ? ' open' : ''}${groupSel ? ' selected' : ''}${envClass}${groupVis === 'off' ? ' vis-off' : ''}`}>
+    <div key={openKey} className={`plc-group${isOpen ? ' open' : ''}${groupSel ? ' selected' : ''}${envClass}${prefixClass}${groupVis === 'off' ? ' vis-off' : ''}`}>
       <div
         ref={groupSel ? selectedRef : undefined}
         className="plc-row plc-mesh"
@@ -428,7 +430,7 @@ function renderMeshGroup(g, ctx) {
                       onClick={() => onTogglePlacementVisible(p)}
                     />
                   )}
-                  <span className="kind icon">place</span>
+                  <span className="plc-inst-gap" aria-hidden="true" />
                   <span className="plc-name">{p.name}</span>
                   {moved && typeof onResetPlacement === 'function' && (
                     <Tooltip content="Reset object placement">
@@ -609,6 +611,17 @@ function kindSearchMatch(q) {
     if (keys.some((k) => t === k || t === `${k}s`)) return pred;
   }
   return null;
+}
+
+/**
+ * Prefix tint for world meshes: `_xi_` is xi-zone-editor custom content,
+ * other `_`-prefixed names are alpha/base geometry. Everything else is plain.
+ */
+function meshPrefixClass(name) {
+  const s = String(name || '');
+  if (s.startsWith('_xi_')) return ' plc-custom';
+  if (s.startsWith('_')) return ' plc-alpha';
+  return '';
 }
 
 function displayLabel(g, hideKindPrefix = false) {

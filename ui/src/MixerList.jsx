@@ -30,6 +30,11 @@ const routineCache = new Map();
 
 const normRel = (p) => String(p ?? '').replace(/\\/g, '/');
 
+/** Row identity: the spec, plus the clip ref when several rows share one DAT — the base
+ *  motions all reference the one race-base DAT, told apart by their clip. A normal entry
+ *  has no `clip`, so this is just its spec. */
+const idOf = (e) => (e.clip ? `${e.spec}#${e.clip.ref}` : e.spec);
+
 function counts(e) {
   const bits = [];
   if (e.clips?.length) bits.push(`${e.clips.length} clip`);
@@ -43,6 +48,8 @@ function counts(e) {
 /** Tip text: the spec and section counts for a catalog entry, the DAT(s) for an action. */
 function tipFor(entry) {
   if (entry.kind === 'action') return entry.datPaths.map((p) => p.replace(/^ROM\//, '').replace(/\.DAT$/i, '')).join(' · ');
+  // A base motion is one clip the actor already carries — name it and the pool it plays from.
+  if (entry.pool && entry.clip) return `${entry.clip.ref} · ${entry.clip.frames}f · plays from the actor's own pool (every race)`;
   return [entry.spec, counts(entry)].filter(Boolean).join(' · ');
 }
 
@@ -66,7 +73,9 @@ function actionGroups(actions, catalog, race) {
     };
     const g = a.group || 'Others';
     if (!byGroup.has(g)) byGroup.set(g, []);
-    byGroup.get(g).push(entry);
+    // Two actions can resolve to one catalog entry; a group lists it once, since
+    // the row key is the spec and a repeat would be a duplicate key.
+    if (!byGroup.get(g).some((e) => e.spec === entry.spec)) byGroup.get(g).push(entry);
   }
   const rank = (g) => { const i = ACTION_FIRST.indexOf(g); return i < 0 ? ACTION_FIRST.length : i; };
   return [...byGroup.entries()]
@@ -130,7 +139,7 @@ function startEntryDrag(e, dragType, payload) {
 // the row can be dragged onto a timeline track of its kind.
 function Row({ entry, sub, focused, taken, onPreview, onAdd, addTip, dragType, payload, expandable, open, onToggle, children }) {
   return (
-    <div className={`node${focused ? ' selected' : ''}${open ? ' open' : ''}`} data-spec={entry.spec}>
+    <div className={`node${focused ? ' selected' : ''}${open ? ' open' : ''}`} data-spec={idOf(entry)}>
       <Tooltip content={tipFor(entry)} placement="right" delay={[350, 0]}>
         <div className={`row mixer-row${taken ? ' taken' : ''}`} onClick={() => onPreview(entry)}
           draggable onDragStart={(e) => startEntryDrag(e, dragType, payload())}>
@@ -165,7 +174,7 @@ function Group({ group, open, onToggle, children }) {
 export function MixerList({
   catalog, catalogBusy, onBuildCatalog,
   actions, race, readDat,
-  lane, onLane,
+  lane, onLane, kind = 'ws',
   onPick, onPreview, trackLabel = '',
 }) {
   const addTip = `Add to track: ${trackLabel || 'Motion'}`;
@@ -186,26 +195,60 @@ export function MixerList({
   const q = query.trim();
   const motion = lane === 'motion';
 
-  // Everything this lane can use, in catalog order — the tree's population.
-  const usable = useMemo(() => filterCatalog(entries, { lane, limit: Infinity }), [entries, lane]);
-  const actGroups = useMemo(() => (motion ? actionGroups(actions, catalog, race) : []), [motion, actions, catalog, race]);
+  // A job ability or spell can only use motion that lives in the always-loaded race
+  // base (referenced, not baked). Rather than list every spell whose motion is really
+  // one of a few base casts, the motion lane shows the curated base-motion list
+  // (abilities.json `base_motions`, one row per cast / ability motion). WS bakes anything
+  // per race, so it shows the full list. Only the motion lane narrows.
+  const baseOnly = motion && (kind === 'ja' || kind === 'spell');
+  // The base motions, as pick entries: a bare clip pack (`routine: null`), `pool: true`
+  // so a preview plays the clip from the actor's own pool. Both ja and spell casts are
+  // shown together on either type — the pick carries its own kind and sets the mix Type.
+  const baseMotions = useMemo(
+    () => (catalog?.base_motions ?? []).map((b) => ({ ...b, routine: null, pool: true })),
+    [catalog]);
+  // Everything this lane can use, in catalog order — the tree's population. On ja/spell
+  // that is the base-motion list; an install whose catalog predates it falls back to the
+  // old ja/spell entries so the lane is never empty.
+  const usable = useMemo(() => {
+    if (baseOnly) {
+      if (baseMotions.length) return baseMotions;
+      return filterCatalog(entries, { lane, limit: Infinity }).filter((e) => e.kind === 'ja' || e.kind === 'spell');
+    }
+    return filterCatalog(entries, { lane, limit: Infinity });
+  }, [entries, lane, baseOnly, baseMotions]);
+  const actGroups = useMemo(() => (motion && !baseOnly ? actionGroups(actions, catalog, race) : []), [motion, baseOnly, actions, catalog, race]);
   const catGroups = useMemo(() => catalogGroups(usable, motion && actGroups.length ? 'All: ' : ''), [usable, motion, actGroups.length]);
 
   // Flat, cross-group matches while searching; null means "not searching",
-  // which switches the view back to the collapsible tree.
+  // which switches the view back to the collapsible tree. Each spec once: a
+  // weapon skill sits in its weapon group AND in the catalog, and the row key
+  // is the spec — listed twice it was a duplicate key, which left React's DOM
+  // with rows that piled up on every keystroke and outlived the search.
   const results = useMemo(() => {
     if (!q) return null;
     const ql = q.toLowerCase();
     const out = [];
+    const seen = new Set();
+    const take = (e) => { if (!seen.has(idOf(e))) { seen.add(idOf(e)); out.push(e); } };
     for (const g of actGroups) {
       const groupHit = g.label.toLowerCase().includes(ql);
       for (const e of g.entries) {
-        if (groupHit || e.name.toLowerCase().includes(ql)) out.push({ ...e, cat: g.label });
+        if (groupHit || e.name.toLowerCase().includes(ql)) take({ ...e, cat: g.label });
       }
     }
-    if (out.length < MAX_RESULTS) out.push(...filterCatalog(entries, { query: q, lane, limit: MAX_RESULTS - out.length }));
+    // The base-motion list is its own short set, matched by name, not the ability catalog.
+    if (baseOnly && baseMotions.length) {
+      for (const e of usable) if (e.name.toLowerCase().includes(ql)) take(e);
+      return out;
+    }
+    for (const e of filterCatalog(entries, { query: q, lane, limit: MAX_RESULTS })) {
+      if (out.length >= MAX_RESULTS) break;
+      if (baseOnly && e.kind !== 'ja' && e.kind !== 'spell') continue;
+      take(e);
+    }
     return out;
-  }, [entries, q, lane, actGroups]);
+  }, [entries, q, lane, actGroups, baseOnly, baseMotions, usable]);
 
   // The rows on screen, in order — what the arrow keys walk.
   const visible = useMemo(() => {
@@ -270,7 +313,7 @@ export function MixerList({
   // click that lands while the DAT is still being read finishes when it arrives.
   const pendingPick = useRef(null);
   const withResolved = (entry, fn) => {
-    setFocus(visible.findIndex((v) => v.spec === entry.spec));
+    setFocus(visible.findIndex((v) => idOf(v) === idOf(entry)));
     if (entry.kind !== 'action') { fn(entry); return; }
     const rs = routinesFor(entry);
     if (rs === 'loading') { pendingPick.current = { spec: entry.spec, fn }; return; }
@@ -305,7 +348,7 @@ export function MixerList({
         ? Math.min(visible.length - 1, focus + 1)
         : Math.max(0, focus - 1);
       setFocus(next);
-      const spec = visible[next]?.spec;
+      const spec = visible[next] ? idOf(visible[next]) : null;
       const el = spec ? scrollRef.current?.querySelector(`.node[data-spec="${CSS.escape(spec)}"]`) : null;
       el?.scrollIntoView({ block: 'nearest' });
     } else if (e.key === 'Enter' && focus >= 0) {
@@ -315,7 +358,7 @@ export function MixerList({
   };
 
   const current = null;   // the track's source is on the timeline's label, with its own X
-  const focusedSpec = focus >= 0 ? visible[focus]?.spec : null;
+  const focusedId = focus >= 0 && visible[focus] ? idOf(visible[focus]) : null;
   const isTaken = (entry) => (entry.kind === 'action'
     ? entry.datPaths.includes(current?.spec)
     : current?.spec === entry.spec);
@@ -325,7 +368,7 @@ export function MixerList({
     const open = expandable && openActions.has(e.spec);
     const rs = open ? routinesFor(e) : null;
     return (
-      <Row key={e.spec} entry={e} sub={sub} focused={e.spec === focusedSpec} taken={isTaken(e)}
+      <Row key={idOf(e)} entry={e} sub={sub} focused={idOf(e) === focusedId} taken={isTaken(e)}
         onPreview={preview} onAdd={add} addTip={addTip} dragType={dragType} payload={() => dragEntry(e)}
         expandable={expandable} open={open} onToggle={toggleAction}>
         {open && (
@@ -420,7 +463,16 @@ export function MixerList({
           <div className="side-note">Showing first {MAX_RESULTS} — refine your search.</div>
         )}
 
-        {catalog && !results && blocks.map((groups, i) => (
+        {/* The base-motion shortlist (ja/spell) is a handful of rows: show it flat and
+            open, not folded into a single collapsed group. */}
+        {catalog && !results && baseOnly && baseMotions.length > 0 && (
+          <>
+            <div className="side-separator">Ability &amp; spell casts · from the actor’s pool</div>
+            {usable.map((e) => renderRow(e))}
+          </>
+        )}
+
+        {catalog && !results && !(baseOnly && baseMotions.length > 0) && blocks.map((groups, i) => (
           groups.length > 0 && (
             <Fragment key={i}>
               {i > 0 && <div className="tree-sep" />}
