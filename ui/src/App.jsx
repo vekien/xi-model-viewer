@@ -6840,6 +6840,9 @@ export default function App({ launch = null }) {
   const mixerComposedRef = useRef(null);
   const mixerRecipeRef = useRef(mixerRecipe);
   mixerRecipeRef.current = mixerRecipe;
+  // The mix Type, for callbacks declared before `mixKind` is computed (a job ability
+  // or spell bakes a race-bound motion into its single DAT, so compose must know it).
+  const mixKindRef = useRef('ws');
 
   const xiCtx = useCallback(() => {
     const st = settingsRef.current;
@@ -6980,9 +6983,12 @@ export default function App({ launch = null }) {
           setTimeout(() => { if (mixerReloadWaitRef.current === resolve) { mixerReloadWaitRef.current = null; resolve(); } }, 15000);
         })
         : Promise.resolve();
-      const composeKey = `${xiRace}|${serializeRecipe(recipe)}`;
+      // The kind is part of the key: a job ability or spell bakes a race-bound motion
+      // into one DAT, a weapon skill composes it per race — different output.
+      const kind = mixKindRef.current;
+      const composeKey = `${xiRace}|${kind}|${serializeRecipe(recipe)}`;
       const reuse = mixerComposedRef.current?.key === composeKey ? mixerComposedRef.current : null;
-      const composeP = reuse ? Promise.resolve(reuse) : composeForPreview(recipe, xiRace, ctx.xiPath, ctx.env);
+      const composeP = reuse ? Promise.resolve(reuse) : composeForPreview(recipe, xiRace, ctx.xiPath, ctx.env, null, kind);
       await reloadDone;
       const { datPath, report } = await composeP;
       mixerComposedRef.current = { key: composeKey, datPath, report };
@@ -7557,6 +7563,7 @@ export default function App({ launch = null }) {
     if (/^ja:/.test(m)) return 'ja';
     return baseMotionKind ?? 'ws';
   }, [mixerPublishCfg, mixerRecipe.sources, baseMotionKind]);
+  mixKindRef.current = mixKind;
   const publishOpts = (cfg) => ({
     kind: cfg.kind && cfg.kind !== 'auto' ? cfg.kind : baseMotionKind,
     animation: cfg.animation === '' || cfg.animation == null ? null : Number(cfg.animation),

@@ -555,13 +555,14 @@ export function TimelineWindow({
     );
   };
 
-  // Motion tracks whose source can't play as the chosen Type: baked per-race motion
-  // under a job ability or spell (one DAT for every race). The track goes red. A base
-  // motion (the always-loaded race base, listed in the catalog) is fine — it is referenced,
-  // not baked — so its DAT spec is whitelisted even though it is not a `ja:`/`spell:` id.
-  const okMotion = (spec) => motionOkForKind(spec, kind) || !!baseMotionSpecs?.has?.(spec);
-  const badTracks = kind === 'ws' ? EMPTY_SET
-    : new Set(Object.entries(sources).filter(([id, s]) => kindOf(id) === 'motion' && s?.spec && !okMotion(s.spec)).map(([id]) => id));
+  // No motion is off-limits for a Type any more: on a job ability or spell, a source that
+  // is neither a `ja:`/`spell:` id nor a base-pool clip is BAKED from one race's copy into
+  // the single DAT (as retail Blue Magic carries its own wz* clips) and plays on every
+  // race — worth a note in the strip, not a red track.
+  const badTracks = EMPTY_SET;
+  const bakedTracks = kind === 'ws' ? EMPTY_SET
+    : new Set(Object.entries(sources).filter(([id, s]) => kindOf(id) === 'motion' && s?.spec
+      && !motionOkForKind(s.spec, kind) && !baseMotionSpecs?.has?.(s.spec)).map(([id]) => id));
   const shown = clamp(Math.round(scrubAt ?? playhead ?? 0), 0, len);
   const playing = transport === 'playing';
   const style = {
@@ -749,10 +750,10 @@ export function TimelineWindow({
         </div>
 
         {/* The inset track: labels on the left, the scrolling ruler and lanes on the right */}
-        {badTracks.size > 0 && (
-          <div className="mseq-motion-warn">
-            <span className="icon">warning</span>
-            <span>These motions won't play as a {KIND_LABEL[kind]} — they're baked per race (emote, weapon skill or a race's own motion). Switch Type to WS, or replace them with a job-ability or spell motion.</span>
+        {bakedTracks.size > 0 && (
+          <div className="mseq-motion-warn mseq-motion-note">
+            <span className="icon">info</span>
+            <span>This motion is baked from one race's copy into the {KIND_LABEL[kind]}'s single DAT and plays on every race (as retail Blue Magic carries its own clips). Preview bakes the viewer's race; Publish bakes Hume ♂.</span>
           </div>
         )}
         <div className="cseq-tl mseq-tl" style={{ height: trackH + 8 }} ref={rootRef} onPointerMove={onPointerMove} onPointerUp={endPointer} onPointerCancel={endPointer}>

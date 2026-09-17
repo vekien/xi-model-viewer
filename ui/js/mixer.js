@@ -415,13 +415,16 @@ export function composedDatName(recipe, xiRace) {
 }
 
 /** Write the recipe, compose it for one race, return the absolute DAT path to preview. */
-export async function composeForPreview(recipe, xiRace, xiPath, env, onLine) {
+export async function composeForPreview(recipe, xiRace, xiPath, env, onLine, kind = null) {
   const dir = mixerDir(xiPath);
   const recipePath = workRecipePath(xiPath, recipe.name);
   await backend.writeTextFile(recipePath, serializeRecipe(recipe));
   const outDir = `${dir}\\${recipe.name}`;
   const args = ['ability', 'compose', recipePath, '--out', outDir, '--json'];
   if (xiRace) args.push('--race', xiRace);
+  // The publish kind: a job ability or spell bakes a race-bound motion from the
+  // viewer's race into its single DAT, so the preview plays what would ship.
+  if (kind && kind !== 'auto') args.push('--kind', kind);
   const report = await xiJson(args, xiPath, env, onLine);
   const row = Array.isArray(report) ? report[0] : report;
   return { recipePath, datPath: row.dat, report: row };

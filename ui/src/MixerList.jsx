@@ -200,24 +200,19 @@ export function MixerList({
   // one of a few base casts, the motion lane shows the curated base-motion list
   // (abilities.json `base_motions`, one row per cast / ability motion). WS bakes anything
   // per race, so it shows the full list. Only the motion lane narrows.
-  const baseOnly = motion && (kind === 'ja' || kind === 'spell');
+  // A job ability or spell can use ANY motion: a base-pool cast is referenced by name,
+  // and anything else (an emote, a weapon skill, a race's own motion) is BAKED from one
+  // race's copy into the single DAT — the way retail Blue Magic carries its own clips.
+  // So the full list shows on every type; on ja/spell the base motions lead as a shortlist.
+  const showBase = motion && (kind === 'ja' || kind === 'spell');
   // The base motions, as pick entries: a bare clip pack (`routine: null`), `pool: true`
-  // so a preview plays the clip from the actor's own pool. Both ja and spell casts are
-  // shown together on either type — the pick carries its own kind and sets the mix Type.
+  // so a preview plays the clip from the actor's own pool. Picking one sets the mix Type.
   const baseMotions = useMemo(
     () => (catalog?.base_motions ?? []).map((b) => ({ ...b, routine: null, pool: true })),
     [catalog]);
-  // Everything this lane can use, in catalog order — the tree's population. On ja/spell
-  // that is the base-motion list; an install whose catalog predates it falls back to the
-  // old ja/spell entries so the lane is never empty.
-  const usable = useMemo(() => {
-    if (baseOnly) {
-      if (baseMotions.length) return baseMotions;
-      return filterCatalog(entries, { lane, limit: Infinity }).filter((e) => e.kind === 'ja' || e.kind === 'spell');
-    }
-    return filterCatalog(entries, { lane, limit: Infinity });
-  }, [entries, lane, baseOnly, baseMotions]);
-  const actGroups = useMemo(() => (motion && !baseOnly ? actionGroups(actions, catalog, race) : []), [motion, baseOnly, actions, catalog, race]);
+  // Everything this lane can use, in catalog order — the tree's population.
+  const usable = useMemo(() => filterCatalog(entries, { lane, limit: Infinity }), [entries, lane]);
+  const actGroups = useMemo(() => (motion ? actionGroups(actions, catalog, race) : []), [motion, actions, catalog, race]);
   const catGroups = useMemo(() => catalogGroups(usable, motion && actGroups.length ? 'All: ' : ''), [usable, motion, actGroups.length]);
 
   // Flat, cross-group matches while searching; null means "not searching",
@@ -237,26 +232,23 @@ export function MixerList({
         if (groupHit || e.name.toLowerCase().includes(ql)) take({ ...e, cat: g.label });
       }
     }
-    // The base-motion list is its own short set, matched by name, not the ability catalog.
-    if (baseOnly && baseMotions.length) {
-      for (const e of usable) if (e.name.toLowerCase().includes(ql)) take(e);
-      return out;
-    }
+    // The base-motion shortlist joins the search on ja/spell, matched by name.
+    if (showBase) for (const e of baseMotions) if (e.name.toLowerCase().includes(ql)) take(e);
     for (const e of filterCatalog(entries, { query: q, lane, limit: MAX_RESULTS })) {
       if (out.length >= MAX_RESULTS) break;
-      if (baseOnly && e.kind !== 'ja' && e.kind !== 'spell') continue;
       take(e);
     }
     return out;
-  }, [entries, q, lane, actGroups, baseOnly, baseMotions, usable]);
+  }, [entries, q, lane, actGroups, showBase, baseMotions]);
 
   // The rows on screen, in order — what the arrow keys walk.
   const visible = useMemo(() => {
     if (results) return results;
-    const out = [];
+    // The base-motion shortlist is drawn open on ja/spell, so it walks with the arrows.
+    const out = showBase ? [...baseMotions] : [];
     for (const g of [...actGroups, ...catGroups]) if (openCats.has(g.id)) out.push(...g.entries);
     return out;
-  }, [results, actGroups, catGroups, openCats]);
+  }, [results, showBase, baseMotions, actGroups, catGroups, openCats]);
 
   useEffect(() => { setFocus(-1); }, [query, lane]);
 
@@ -465,14 +457,15 @@ export function MixerList({
 
         {/* The base-motion shortlist (ja/spell) is a handful of rows: show it flat and
             open, not folded into a single collapsed group. */}
-        {catalog && !results && baseOnly && baseMotions.length > 0 && (
+        {catalog && !results && showBase && baseMotions.length > 0 && (
           <>
             <div className="side-separator">Ability &amp; spell casts · from the actor’s pool</div>
-            {usable.map((e) => renderRow(e))}
+            {baseMotions.map((e) => renderRow(e))}
+            <div className="tree-sep" />
           </>
         )}
 
-        {catalog && !results && !(baseOnly && baseMotions.length > 0) && blocks.map((groups, i) => (
+        {catalog && !results && blocks.map((groups, i) => (
           groups.length > 0 && (
             <Fragment key={i}>
               {i > 0 && <div className="tree-sep" />}
