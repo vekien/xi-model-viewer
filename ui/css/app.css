@@ -6974,3 +6974,24 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mseq-plan-err { color: #f0a8a2; margin: 0; white-space: pre-wrap; }
 /* A race built without part of its motion: said, not an error. */
 .mseq-plan-warn { color: #ffd078; margin: 0; white-space: pre-wrap; }
+/* Manage: which animation numbers Publish can hand out, and a plan that needs the client plugin. */
+.mseq-band-note { color: var(--muted); margin-top: 6px; }
+.mseq-band-note b { color: var(--text); font-weight: 600; }
+/* Manage > Slots: every weapon-skill number and what holds it; a free row is a pick. */
+.mseq-slots { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.mseq-slots-note { color: var(--muted); }
+.mseq-slots-note b { color: var(--text); font-weight: 600; }
+.mseq-slots-scroll { max-height: 220px; overflow: auto; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.mseq-slots-table { width: 100%; }
+.mseq-slots-table thead th { position: sticky; top: 0; background: var(--panel-bg, #15181d); z-index: 1; padding-top: 4px; }
+.mseq-slots-table tr.is-free { cursor: pointer; }
+.mseq-slots-table tr.is-free:hover td { background: rgba(255, 255, 255, 0.06); }
+.mseq-slots-table tr.is-picked td { background: rgba(109, 202, 150, 0.12); }
+.mseq-slots-table td b { font-weight: 600; }
+.mseq-slots-next { margin-left: 6px; padding: 0 5px; border-radius: 3px; font: 500 9.5px/14px var(--font-ui); text-transform: uppercase; letter-spacing: 0.05em; color: #6dca96; border: 1px solid rgba(109, 202, 150, 0.4); }
+/* Settings › XI Tools › Custom animation bands: a kind per row, small number fields, the range. */
+.band-row { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+.band-row > b { flex: 0 0 92px; font-weight: 500; font-size: 12px; padding-bottom: 7px; }
+.band-num { display: flex; flex-direction: column; gap: 2px; font-size: 10.5px; color: var(--muted); }
+.band-num input { width: 88px; }
+.band-row .band-range { font: 500 11px/1 var(--font-mono); color: var(--muted); padding-bottom: 8px; }

@@ -22,7 +22,7 @@ import { DEFAULT_LIGHT, lightRgb } from '../js/lightUtil.js';
 import { findDbTable } from '../js/database.js';
 import { MenuBar } from './MenuBar.jsx';
 import { NpcList } from './NpcList.jsx';
-import { CharacterList, useCharacter } from './CharacterList.jsx';
+import { CharacterList, datKey, useCharacter } from './CharacterList.jsx';
 import { EffectActorsPanel } from './EffectActorsPanel.jsx';
 import { CreationList, useCreation } from './CreationList.jsx';
 import {
@@ -62,7 +62,7 @@ import { MixerList } from './MixerList.jsx';
 import { MixerPanel } from './MixerPanel.jsx';
 import { Floating } from './Floating.jsx';
 import { RightRail } from './RightRail.jsx';
-import { RACE_TO_XI, buildCatalogArgs, clipBlend, composeForPreview, emptyRecipe, entryPathForRace, eventsFromInspect, inspectSpec, kindOf, laneForEvent, loadCatalog, mixerDir, parsePublishPlan, publishRecipe, readCategories, recipeTracks, serializeRecipe, soundIdsFromInfo, trackLabel, updateCategories, withIds } from '../js/mixer.js';
+import { ANIM_BANDS_KEY, RACE_TO_XI, buildCatalogArgs, clipBlend, composeForPreview, emptyRecipe, entryPathForRace, eventsFromInspect, inspectSpec, kindOf, laneForEvent, listWsSlots, loadAnimBands, loadCatalog, mixerDir, normalizeAnimBands, parsePublishPlan, publishRecipe, readCategories, recipeTracks, serializeRecipe, soundIdsFromInfo, trackLabel, updateCategories, withIds } from '../js/mixer.js';
 import { ZoneMeshPreviewModal } from './ZoneMeshPreviewModal.jsx';
 import { armGeneratorPreview } from '../js/particlePreview.js';
 import { checkForUpdate, checkForUpdateManual, dismissUpdate } from '../js/update.js';
@@ -168,7 +168,7 @@ const MIXER_RAIL = [
 ];
 const ORBIT_VIEWS = new Set(['files', 'npc', 'pc', 'creation']);
 /** Publish choices for a mix (the Timeline's Manage panel); see setMixerPublishCfg. */
-const PUBLISH_CFG_DEFAULT = { kind: 'auto', animation: '', subdir: 20, force: false, pivot: false };
+const PUBLISH_CFG_DEFAULT = { kind: 'auto', animation: '', from: '', subdir: 20, force: false, pivot: false };
 // Seconds of real time one in-game day takes when the day/night cycle is
 // playing. 60 is what the button did before it was configurable.
 const DAY_LENGTH_DEFAULT = 60;
@@ -439,12 +439,14 @@ async function mergeWaistPacks({
  * equipped, because equipping one is what loads the battle pack. It only ever
  * showed on weapons whose grip pose differs from the empty hand.
  */
-function withBaseIdle(model, clip) {
+function withBaseIdle(model, clip, { atRest = false } = {}) {
   if (!clip || !model) return clip ?? null;
   const isBtl = clip.id === 'btl'
     || (Array.isArray(clip.parts) && clip.parts.length > 0 && clip.parts.every((p) => String(p).startsWith('btl')));
   const isResting = isRestingClip(clip);
-  const base = pickBaseIdle(model, { skipId: (isBtl || isResting) ? 'btl' : null });
+  // `atRest`: the character is not engaged (a job-ability or spell mix), so the clip
+  // comes back to the plain idle even with a battle pack loaded.
+  const base = pickBaseIdle(model, { skipId: (isBtl || isResting || atRest) ? 'btl' : null });
   if (!base || base === clip || base.id === clip.id) return clip;
   if (clip.baseClip === base) return clip;
   return { ...clip, baseClip: base };
@@ -570,6 +572,7 @@ const loadSettings = (gamePath) => {
     autoCloseXiConsole: localStorage.getItem('autoCloseXiConsole') === '1',
     xiPath: localStorage.getItem('xiPath') || '',
     blenderPath: localStorage.getItem('blenderPath') || '',
+    animBands: loadAnimBands(),
     showGrid: localStorage.getItem('showGrid') === '1',
     showAxes: localStorage.getItem('showAxes') === '1',
   };
@@ -665,8 +668,9 @@ function buildCasterCues(actor, routine, visCtx = null) {
     if (!parts.length) return null;
     return groupAnimations(parts)[0]?.clip ?? null;
   };
-  // `idl` and nothing else. `std` is a stand-UP motion, not a stance.
-  const idleClip = () => findClip('idl?') ?? pickBaseIdle(actor);
+  // `idl` and nothing else. `std` is a stand-UP motion, not a stance. The mixer asks
+  // for the battle stance under a weapon skill (visCtx.engaged), as actorIdleClip does.
+  const idleClip = () => (visCtx?.engaged ? findClip('btl?') : null) ?? findClip('idl?') ?? pickBaseIdle(actor);
 
   // A call the effect DAT can't satisfy is a schedule on the ACTOR — this
   // is where the cast motions live (`shbk` black, `shnj` ninjutsu, `shwh`
@@ -1476,7 +1480,8 @@ export default function App({ launch = null }) {
   // motion effect or an effect cue; applyWeaponVis evaluates them at a frame
   // and pushes the deny-list when the hidden set changes.
   const weaponBaseRef = useRef(null);
-  const weaponVisRef = useRef({ vis: [], end: 0, engaged: false });
+  const weaponVisRef = useRef({ vis: [], end: 0, engaged: false, emote: false });
+  const mixerEmoteRefsRef = useRef([]);                     // clip refs of the mix's emote motion lanes
   const mixerPreviewRef = useRef(false);                    // the Mixer's Animation Preview owns the stage
   const weaponVisKeyRef = useRef('');
   const rangedInfoRef = useRef(null);                       // ranged weapon info.rangeType → lc/ls routine
@@ -1485,18 +1490,22 @@ export default function App({ launch = null }) {
     const base = weaponBaseRef.current;
     if (!r?.setHiddenSources || !base) return;
     const st = weaponVisRef.current;
+    // Past the motion's own length (a montage tail) the client is back on
+    // its idle: hands shown, ranged stowed.
+    const past = st.end > 0 && frame >= st.end;
     let hidden;
     if (st.vis.length === 0) {
       // Nothing in the DATs says: characters.json rangedDisplay decides the
       // ranged slot (fishing, the weapon-skill packs), hands stay shown.
       hidden = base.rangedInUse ? new Set() : new Set([SLOT.range]);
     } else {
-      // Past the motion's own length (a montage tail) the client is back on
-      // its idle: hands shown, ranged stowed. Tags run on 60/s ticks, the
-      // clip on 30fps frames.
-      const past = st.end > 0 && frame >= st.end;
+      // Tags run on 60/s ticks, the clip on 30fps frames.
       hidden = hiddenSlotsAt(past ? [] : st.vis, Math.floor(frame * 2), { engaged: st.engaged }).hidden;
     }
+    // An emote puts the hand weapons away while the character is engaged, and brings
+    // them back when it ends; at rest they stay where they are, sheathed. No tag says
+    // so — the emote routines (em00…) are a bare PlayClip — it is what the game does.
+    if (st.emote && st.engaged && !past) { hidden.add(SLOT.main); hidden.add(SLOT.sub); }
     const key = [...hidden].sort().join(',');
     if (key === weaponVisKeyRef.current) return;
     weaponVisKeyRef.current = key;
@@ -1519,6 +1528,9 @@ export default function App({ launch = null }) {
    * plays disengaged, weapons sheathed.
    */
   const engagedFor = useCallback((clip) => {
+    // The mixer's stage follows the mix Type: a weapon skill plays from the battle
+    // stance, a job ability or spell from idle (actorIdleClip rests it the same way).
+    if (leftViewRef.current === 'mixer') return mixKindRef.current === 'ws';
     if (baseAnimRef.current === 'btl') return true;
     const ids = clip ? [clip.id, ...(Array.isArray(clip.parts) ? clip.parts : [])].filter(Boolean).map(String) : [];
     if (ids.length && ids.every((id) => /^btl/i.test(id))) return true;
@@ -1529,10 +1541,14 @@ export default function App({ launch = null }) {
   const cueWeaponVis = useCallback((a) => {
     const engaged = engagedFor(a.clip);
     if (rendererRef.current) rendererRef.current.actorEngaged = engaged;
+    const ids = a.clip ? [a.clip.id, ...(a.clip.parts ?? [])].filter(Boolean).map(String) : [];
+    const emote = leftViewRef.current === 'mixer'
+      && mixerEmoteRefsRef.current.some((ref) => matchAnimRef(ref, ids).length > 0);
     weaponVisRef.current = {
       vis: a.vis ?? [],
       end: a.clip?.lengthInFrames ?? 0,
       engaged,
+      emote,
     };
     weaponVisKeyRef.current = '';
   }, [engagedFor]);
@@ -3259,7 +3275,7 @@ export default function App({ launch = null }) {
       // no hand-back to idle. Only a Motion preview moves it.
       const drivesActor = onActor && showCharAnimRef.current && !keepActorAnim
         && (!only || (only === 'motion' && (play.anims.length > 0 || play.actorCalls.length > 0)));
-      const { animCues, windup, windupFrom = 0 } = drivesActor ? buildCasterCues(actor, only ? { ...routine, flat: play } : routine, { globalById: globalEffectsRef.current?.routines ?? null, rangeType: rangedInfoRef.current, extraClips: effectClipsRef.current }) : { animCues: [], windup: 0 };
+      const { animCues, windup, windupFrom = 0 } = drivesActor ? buildCasterCues(actor, only ? { ...routine, flat: play } : routine, { globalById: globalEffectsRef.current?.routines ?? null, rangeType: rangedInfoRef.current, extraClips: effectClipsRef.current, engaged: leftViewRef.current === 'mixer' && mixKindRef.current === 'ws' }) : { animCues: [], windup: 0 };
       if (onActor) renderer.actorFollowsEffect = drivesActor;
       if (onActor && !keepActorAnim && !drivesActor && !only) {
         renderer.setAnimation(actorIdleClip());
@@ -3479,10 +3495,11 @@ export default function App({ launch = null }) {
     const actor = modelRef.current;
     if (!actor?.animations?.length) return null;
     const ids = actor.animations.map((a) => a.id);
-    // The mixer rests the character in whatever stance is loaded — a Battle
-    // action or an equipped weapon brings a btl clip — so an ability is seen
-    // from the pose it plays from in game. Elsewhere the plain idle stays.
-    const refs = leftViewRef.current === 'mixer' ? ['btl?', 'idl?'] : ['idl?'];
+    // The mixer rests the character in the stance its mix plays from in game: a
+    // weapon skill from the battle stance (a Battle action or an equipped weapon
+    // brings the btl clip), a job ability or spell from idle. Elsewhere the plain
+    // idle stays.
+    const refs = leftViewRef.current === 'mixer' && mixKindRef.current === 'ws' ? ['btl?', 'idl?'] : ['idl?'];
     for (const ref of refs) {
       const parts = matchAnimRef(ref, ids)
         .map((id) => actor.animations.find((a) => a.id === id))
@@ -3526,7 +3543,7 @@ export default function App({ launch = null }) {
     const actor = modelRef.current;
     const onActor = !!(actor && actor.kind !== 'zone' && actor.isRenderable && renderer.model === actor);
     const drivesActor = onActor && showCharAnimRef.current;
-    const { animCues, windup, windupFrom = 0 } = drivesActor ? buildCasterCues(actor, routine, { globalById: globalEffectsRef.current?.routines ?? null, rangeType: rangedInfoRef.current, extraClips: effectClipsRef.current }) : { animCues: [], windup: 0 };
+    const { animCues, windup, windupFrom = 0 } = drivesActor ? buildCasterCues(actor, routine, { globalById: globalEffectsRef.current?.routines ?? null, rangeType: rangedInfoRef.current, extraClips: effectClipsRef.current, engaged: leftViewRef.current === 'mixer' && mixKindRef.current === 'ws' }) : { animCues: [], windup: 0 };
     if (onActor) {
       renderer.actorFollowsEffect = drivesActor;
       if (!drivesActor) {
@@ -4471,7 +4488,10 @@ export default function App({ launch = null }) {
       }
       const engaged = engagedFor(clip);
       if (rendererRef.current) rendererRef.current.actorEngaged = engaged;
-      weaponVisRef.current = { vis, end, engaged };
+      const clipIds = clip ? [clip.id, ...(clip.parts ?? [])].map(String) : [];
+      const emote = !!pcRef.current?.actionIsEmote && clipIds.length > 0
+        && !isRestingClip(clip) && !clipIds.every((id) => /^btl/i.test(id));
+      weaponVisRef.current = { vis, end, engaged, emote };
       weaponVisKeyRef.current = '';
       applyWeaponVis(rendererRef.current?.animFrame ?? 0);
     };
@@ -5192,7 +5212,7 @@ export default function App({ launch = null }) {
     const entry = animsRef.current.find((g) => g.id === id);
     const model = modelRef.current;
     startMotion(
-      entry ? asMontage(model, withBaseIdle(model, entry.clip), baseAnimRef.current) : null,
+      entry ? asMontage(model, withBaseIdle(model, entry.clip, { atRest: leftViewRef.current === 'mixer' && mixKindRef.current !== 'ws' }), baseAnimRef.current) : null,
       restart,
     );
   };
@@ -6770,7 +6790,7 @@ export default function App({ launch = null }) {
     anims.sort((a, b) => a.delay - b.delay);
     actorCalls.sort((a, b) => a.delay - b.delay);
     const { animCues, windup, windupFrom } = buildCasterCues(actor, { flat: { anims, actorCalls } },
-      { globalById: globalEffectsRef.current?.routines ?? null, rangeType: rangedInfoRef.current, extraClips: effectClipsRef.current });
+      { globalById: globalEffectsRef.current?.routines ?? null, rangeType: rangedInfoRef.current, extraClips: effectClipsRef.current, engaged: leftViewRef.current === 'mixer' && mixKindRef.current === 'ws' });
     // The same hold a Play mix applies (loadEffect): what comes at or after the cast waits for its release.
     const shift = (arr) => (windup ? arr.map((x) => (x.delay >= windupFrom ? { ...x, delay: x.delay + windup } : x)) : arr);
     const emitSpan = Math.max(1, ...commands.map((c) => c.delay + Math.max(c.dur, 1)));
@@ -7514,6 +7534,7 @@ export default function App({ launch = null }) {
    * a build actually did rather than what to ask for next time.
    *   kind       auto | ja | spell | ws — what xi dats publishes it as
    *   animation  '' = auto (the next free slot), or the number to take
+   *   from       '' = the first free number of all, or where auto starts looking
    *   subdir     the ROM10 folder the DATs are written into
    *   force      take the slot even when its file ids point at another DAT
    *   pivot      build into the pivot folder (FFXI_PIVOT_DIR) instead of the game folder
@@ -7524,6 +7545,8 @@ export default function App({ launch = null }) {
   };
   const [mixerPublishCfg, setMixerPublishCfgState] = useState(() => loadPublishCfg(mixerRecipe.name));
   const [mixerPublishPlan, setMixerPublishPlan] = useState(null);   // parsePublishPlan of the last Check
+  // Manage › Slots: null (closed) | { loading } | { error } | the `xi ability slots` report
+  const [mixerSlots, setMixerSlots] = useState(null);
   useEffect(() => { setMixerPublishCfgState(loadPublishCfg(mixerRecipe.name)); setMixerPublishPlan(null); }, [mixerRecipe.name]);
   const setMixerPublishCfg = useCallback((patch) => {
     setMixerPublishCfgState((c) => {
@@ -7532,6 +7555,7 @@ export default function App({ launch = null }) {
       return next;
     });
     setMixerPublishPlan(null);   // a check is for one set of choices
+    if ('pivot' in patch) setMixerSlots(null);   // the listing is of one folder's tables
   }, []);
   // A base-motion source (a race-base DAT shared by several cast / ability motions) can't
   // be told apart as ja vs spell by the build — both just reference always-loaded clips —
@@ -7564,9 +7588,33 @@ export default function App({ launch = null }) {
     return baseMotionKind ?? 'ws';
   }, [mixerPublishCfg, mixerRecipe.sources, baseMotionKind]);
   mixKindRef.current = mixKind;
+  // Clip refs the mix plays from an emote pack (characters.json, any race's copy): the
+  // weapon rules put the hand weapons away for those while the mix is a weapon skill.
+  mixerEmoteRefsRef.current = useMemo(() => {
+    const emoteDats = pc.emotePaths;
+    if (!emoteDats?.size) return [];
+    const lanes = new Set(Object.entries(mixerRecipe.sources || {})
+      .filter(([id, src]) => kindOf(id) === 'motion' && emoteDats.has(datKey(src?.spec)))
+      .map(([id]) => id));
+    return [...new Set(mixerRecipe.events.filter((e) => e.op === 0x05 && lanes.has(e.from) && e.ref).map((e) => e.ref))];
+  }, [mixerRecipe.sources, mixerRecipe.events, pc.emotePaths]);
+  // A change of Type re-rests a parked stage on the new stance (battle ↔ idle); a cue
+  // in flight keeps playing and picks the stance up on its next arm.
+  useEffect(() => {
+    const r = rendererRef.current;
+    if (leftViewRef.current !== 'mixer' || !r || mixerPreviewRef.current) return;
+    const cur = r.currentAnimation;
+    const ids = cur ? [cur.id, ...(cur.parts ?? [])].map(String) : [];
+    if (cur && !isRestingClip(cur) && !ids.every((id) => /^btl/i.test(id))) return;
+    const idle = actorIdleClip();
+    if (!idle || idle === cur) return;
+    r.setAnimation(idle);
+    cueWeaponVis({ clip: idle, vis: [] });
+  }, [mixKind, actorIdleClip, cueWeaponVis]);
   const publishOpts = (cfg) => ({
     kind: cfg.kind && cfg.kind !== 'auto' ? cfg.kind : baseMotionKind,
     animation: cfg.animation === '' || cfg.animation == null ? null : Number(cfg.animation),
+    animationFrom: cfg.from === '' || cfg.from == null ? null : Number(cfg.from),
     subdir: Number.isFinite(Number(cfg.subdir)) && String(cfg.subdir) !== '' ? Number(cfg.subdir) : null,
     force: !!cfg.force,
     pivot: !!cfg.pivot,
@@ -7586,6 +7634,18 @@ export default function App({ launch = null }) {
       setMixerBusy(false);
     }
   }, [xiCtx, mixerPublishCfg]);
+  /** Manage › Slots: every weapon-skill number in the game or pivot folder and what holds it. */
+  const mixerListSlots = useCallback(async (open = true) => {
+    if (!open) { setMixerSlots(null); return; }
+    const ctx = xiCtx();
+    if (!ctx) return;
+    setMixerSlots({ loading: true });
+    try {
+      setMixerSlots(await listWsSlots({ pivot: !!mixerPublishCfg.pivot }, ctx.xiPath, ctx.env));
+    } catch (e) {
+      setMixerSlots({ error: String(e?.message ?? e) });
+    }
+  }, [xiCtx, mixerPublishCfg.pivot]);
   /** Publish: the real build, straight away, its output streaming into the console as it runs. */
   const mixerPublish = useCallback(async () => {
     const ctx = xiCtx();
@@ -7601,6 +7661,7 @@ export default function App({ launch = null }) {
       setCliOutput({ title: `${title} · ${res.ok ? 'done' : 'failed'}`, text: res.text });
       setStatusText(res.ok ? `Published ${recipe.name} — restart the client to see it` : 'Publish failed — see the console.');
       setMixerPublishPlan(null);
+      setMixerSlots(null);   // what it listed has just changed
       refreshMixerRecipes();
     } finally {
       setMixerBusy(false);
@@ -9321,6 +9382,7 @@ export default function App({ launch = null }) {
       localStorage.setItem('autoCloseXiConsole', draft.autoCloseXiConsole ? '1' : '0');
       localStorage.setItem('xiPath', xiPath);
       localStorage.setItem('blenderPath', blenderPath);
+      localStorage.setItem(ANIM_BANDS_KEY, JSON.stringify(normalizeAnimBands(draft.animBands)));
       // Grid/axes live on the toolbar only — don't clobber them from Settings save.
       // Clearing a root forces its toggle off.
       if (!hdPath) localStorage.setItem('hdEnabled', '0');
@@ -9338,6 +9400,7 @@ export default function App({ launch = null }) {
       navmeshPath,
       xiPath,
       blenderPath,
+      animBands: normalizeAnimBands(draft.animBands),
       autoWasdZones: draft.autoWasdZones !== false,
       autoWeatherZones: draft.autoWeatherZones !== false,
       autoFocusZoneObject: draft.autoFocusZoneObject !== false,
@@ -11437,6 +11500,8 @@ export default function App({ launch = null }) {
             onPublishCfg={setMixerPublishCfg}
             publishPlan={mixerPublishPlan}
             onCheckPublish={mixerCheckPublish}
+            slots={mixerSlots}
+            onListSlots={mixerListSlots}
             onSaveAs={mixerSaveAs}
             onDelete={mixerDelete}
             onRename={mixerRename}
@@ -11469,6 +11534,7 @@ export default function App({ launch = null }) {
             kind={mixKind}
             onKind={(k) => setMixerPublishCfg({ kind: k })}
             baseMotionSpecs={mixerBaseMotionSpecs}
+            animBands={settings?.animBands}
             viewerRace={RACE_TO_XI[pc.race] ?? 'HumeMale'}
             panels={mixerPanels}
             onPanel={setMixerPanel}

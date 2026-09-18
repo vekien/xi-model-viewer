@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Checkbox, Field, Label } from '@headlessui/react';
 import { backend } from '../js/backend.js';
+import { animBandsEnv } from '../js/mixer.js';
 import { ArgsInput } from './ArgsInput.jsx';
 import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
@@ -119,6 +120,9 @@ export function xiEnvFromSpec(spec) {
   // back to its own default install path (C:\Program Files\Blender Foundation\…).
   if (spec?.blenderPath) env.BLENDER_PATH = spec.blenderPath;
   return Object.keys(env).length ? env : null;
+  // Custom animation bands (Settings › XI Tools): where Publish may allocate past what a
+  // stock client loads. Sent whenever the settings carry them — as zeros when switched off.
+  if (spec && 'animBands' in spec) Object.assign(env, animBandsEnv(spec.animBands));
 }
 
 /**

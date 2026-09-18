@@ -5,6 +5,7 @@ import { clampUiScale, sliderToUiScale, uiScaleToSlider } from '../js/uiScale.js
 import { GAME_CHECK, checkGamePath } from '../js/gameCheck.js';
 import { formatProgressDetail } from '../js/toolsBoot.js';
 import { loadNotes, notesFilePath, revealNotesFile } from '../js/notes.js';
+import { ANIM_BANDS_DEFAULT, STOCK_ANIM_RANGE, animBandRange } from '../js/mixer.js';
 import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
 
@@ -378,6 +379,22 @@ export function SettingsModal({
       title: 'Locate blender.exe', exts: ['exe'],
     });
     if (picked) setDraft({ ...draft, blenderPath: picked });
+  };
+
+  // Custom animation bands: kept as typed while editing (digits only); Save normalises
+  // them (App.jsx), so a field cleared mid-edit does not snap back under the cursor.
+  const bandsDraft = { ...ANIM_BANDS_DEFAULT, ...(draft.animBands || {}) };
+  const setBand = (patch) => setDraft({ ...draft, animBands: { ...bandsDraft, ...patch } });
+  const bandNum = (key, label) => (
+    <label className="band-num">
+      <span>{label}</span>
+      <input type="text" inputMode="numeric" spellCheck={false} disabled={!bandsDraft.on}
+        value={bandsDraft[key] ?? ''} onChange={(e) => setBand({ [key]: e.target.value.replace(/[^0-9]/g, '') })} />
+    </label>
+  );
+  const bandRange = (kind) => {
+    const r = animBandRange(kind, bandsDraft);
+    return r ? `${r[0]}–${r[1]}` : '—';
   };
 
   const doInstallOrUpdate = async () => {
@@ -1054,6 +1071,66 @@ export function SettingsModal({
                     <div className="form-hint">
                       Sets <span className="mono">BLENDER_PATH</span> for FBX exports. Leave empty to
                       use xi-tools&rsquo; default install path.
+                    </div>
+                  </div>
+                </div>
+              </section>
+              <section className="settings-panel">
+                <div className="settings-panel-title">Custom animation bands</div>
+                <div className="settings-panel-body">
+                  <div className="form-row">
+                    <Field className="check-field">
+                      <Checkbox
+                        checked={!!bandsDraft.on}
+                        onChange={(v) => setBand({ on: v })}
+                        className="checkbox"
+                      >
+                        <span className="icon check-icon">check</span>
+                      </Checkbox>
+                      <Label className="check-label">The game client runs a band plugin (cexislots)</Label>
+                    </Field>
+                    <div className="form-hint">
+                      A stock client loads only a few free animation numbers — weapon
+                      skill {STOCK_ANIM_RANGE.ws[0]}–{STOCK_ANIM_RANGE.ws[1]}, job
+                      ability {STOCK_ANIM_RANGE.ja[0]}–{STOCK_ANIM_RANGE.ja[1]},
+                      spell {STOCK_ANIM_RANGE.spell[0]}–{STOCK_ANIM_RANGE.spell[1]}. With this on, the
+                      Ability Mixer&rsquo;s Publish goes on into the ranges below once those are
+                      used up. Off, it never hands out a number the client could not load.
+                    </div>
+                  </div>
+                  <div className="band-row">
+                    <b>Weapon skill</b>
+                    {bandNum('wsFirst', 'first number')}
+                    {bandNum('wsSlots', 'slots')}
+                    {bandNum('wsBase', 'file id base')}
+                    <span className="band-range">{bandRange('ws')}</span>
+                  </div>
+                  <div className="band-row">
+                    <b>Job ability</b>
+                    {bandNum('jaFirst', 'first number')}
+                    {bandNum('jaBase', 'file id base')}
+                    <span className="band-range">{bandRange('ja')}</span>
+                  </div>
+                  <div className="band-row">
+                    <b>Spell</b>
+                    {bandNum('spellFirst', 'first number')}
+                    {bandNum('spellBase', 'file id base')}
+                    <span className="band-range">{bandRange('spell')}</span>
+                  </div>
+                  <div className="form-row">
+                    <div className="form-inline">
+                      <Button onClick={() => setBand({ ...ANIM_BANDS_DEFAULT, on: bandsDraft.on })}>
+                        <span className="icon">restart_alt</span>
+                        cexislots defaults
+                      </Button>
+                    </div>
+                    <div className="form-hint">
+                      These must match the plugin the client runs (cexislots
+                      <span className="mono"> sites.h</span>: WS_CUSTOM_FIRST / WS_SLOTS / WS_BASE,
+                      FX_JA_*, FX_SPELL_*). They are passed to xi-tools
+                      as <span className="mono">FX_*_BAND_*</span> on every run and override its
+                      <span className="mono"> .env</span>. Publish with <i>Use Pivot Folder</i> so the
+                      overlay&rsquo;s ROM10 tables register the ids.
                     </div>
                   </div>
                 </div>

@@ -417,6 +417,14 @@ function newId(prefix) {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
+/** The action group whose motions are emotes (characters.json `group`). */
+export const EMOTE_GROUP = 'Emote';
+/** A DAT path as a comparable key: `ROM\\37\\13.DAT`, `rom/37/13` → `ROM/37/13.DAT`. */
+export const datKey = (p) => {
+  const k = String(p ?? '').replace(/\\/g, '/').toUpperCase();
+  return k.endsWith('.DAT') ? k : `${k}.DAT`;
+};
+
 /** Snapshot the current look as race + per-slot SlotRefs (exact DATs; portable across races). */
 function snapshotLoadout(race, sel, slots) {
   const gear = {};
@@ -516,6 +524,9 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
           ...(data.gearSections ?? {}),
           rangedDisplay: data.rangedDisplay ?? null,
           engagedDisplay: data.engagedDisplay ?? null,
+          emotePaths: new Set(data.races.flatMap((r) => (r.actions ?? [])
+            .filter((a) => a.group === EMOTE_GROUP)
+            .flatMap((a) => [...(a.paths ?? []), ...(a.motionPaths ?? [])].map(datKey)))),
         };
         const rs = data.races.map((r) => ({ id: r.id, label: r.label, base: r.base,
                                             lookRace: r.lookRace }));
@@ -849,6 +860,11 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
     // Action groups whose motions play with the weapons drawn (the client's
     // engaged state) — App's engagedFor. Same source, characters.json.
     engagedDisplay: sectionCfg.current.engagedDisplay ?? null,
+    // An emote puts the hand weapons away while the character is engaged (App's
+    // weapon rules): true for the current action, and every race's emote DATs for a
+    // motion that arrives by path (the Ability Mixer's motion lanes).
+    actionIsEmote: actionGroup === EMOTE_GROUP,
+    emotePaths: sectionCfg.current.emotePaths ?? null,
     rangedPaths: slots?.range?.find((it) => it.id === sel.range)?.paths ?? null,
     // The hand weapons' DATs, per slot: the scheduler shows and hides weapons
     // by slot (wep0 main, wep1 sub, wep2 ranged — js/weaponVis.js).

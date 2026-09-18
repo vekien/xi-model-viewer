@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Tooltip } from './Tooltip.jsx';
 import { Combo } from './Combo.jsx';
 import { CategoryInput } from './CategoryInput.jsx';
-import { KEEP_LANE, LANES, LANE_BY_ID, clipBlend, isGeneratorOp, isLinkOp, kindOf, opName, recipeLength, trackLabel } from '../js/mixer.js';
+import { KEEP_LANE, LANES, LANE_BY_ID, STOCK_ANIM_RANGE, animBandRange, clipBlend, isGeneratorOp, isLinkOp, kindOf, opName, recipeLength, trackLabel } from '../js/mixer.js';
 
 /** Drag type prefix shared with MixerList; the lane kind follows it. */
 export const DRAG_TYPE = 'application/x-mixer-entry+';
@@ -88,6 +88,51 @@ const HELP = [
   'Click a sound pill’s speaker to hear it.',
 ];
 
+/**
+ * Manage › Slots: the weapon-skill numbers Publish can hand out and what holds each
+ * (`xi ability slots`). `#` is the number's place in its bank — 0–255 across the plugin
+ * band. The row marked "next" is the one an automatic number would take from `from`;
+ * a click on a free row asks for that number outright.
+ */
+function SlotTable({ slots, from = '', animation = '', onPick }) {
+  if (slots.loading) return <div className="mono-small mseq-slots-note">Reading the weapon-skill slots…</div>;
+  if (slots.error) return <pre className="mono-small mseq-plan-err">{slots.error}</pre>;
+  const rows = slots.slots ?? [];
+  const start = from === '' || from == null ? 0 : Number(from);
+  const next = animation === '' || animation == null ? rows.find((r) => r.free && r.animation >= start)?.animation : null;
+  const free = rows.filter((r) => r.free).length;
+  return (
+    <div className="mseq-slots">
+      <div className="mono-small mseq-slots-note">
+        Weapon-skill slots in the {slots.target === 'pivot' ? 'pivot' : 'game'} folder: <b>{free}</b> free of {rows.length}
+        {slots.band ? <> · plugin band {slots.band[0]}–{slots.band[1]}</> : <> · custom band off</>}
+      </div>
+      <div className="mseq-slots-scroll">
+        <table className="mseq-plan mseq-slots-table">
+          <thead><tr><th>#</th><th>animation</th><th>bank</th><th>file id</th><th>holds</th></tr></thead>
+          <tbody>
+            {rows.map((r) => {
+              const picked = String(r.animation) === String(animation);
+              return (
+                <tr key={r.animation} className={`${r.free ? 'is-free' : 'is-taken'}${picked ? ' is-picked' : ''}`}
+                  onClick={r.free ? () => onPick?.(r.animation) : undefined}>
+                  <td className="dim">{r.index}</td>
+                  <td><b>{r.animation}</b>{r.animation === next && <span className="mseq-slots-next">next</span>}{picked && <span className="mseq-slots-next">chosen</span>}</td>
+                  <td className="dim">{r.plugin ? 'plugin band' : 'any client'}</td>
+                  <td className="dim">{r.file_id}</td>
+                  <td className={r.free ? 'dim' : 'warn'}>
+                    {r.free ? 'free' : `${r.owner ? `${r.owner} — ` : ''}${r.dats.slice(0, 2).join(', ')}${r.dats.length > 2 ? ' …' : ''} (${r.races.length >= 8 ? 'every race' : r.races.join(', ')})`}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function TimelineWindow({
   open, onClose,
   recipeName, note, failed, error, onDismissError,
@@ -103,8 +148,8 @@ export function TimelineWindow({
   name = '', onName, onNew, onSave, saved = [], onDelete,
   category = '', onCategory, categories = [], onLoad, loadOpen = false,
   publishPlan = null, onPublish, busy = false,
-  publishCfg = null, onPublishCfg, onCheckPublish,
-  kind = 'ws', onKind, onRandomise, canPublish = false, baseMotionSpecs = null,
+  publishCfg = null, onPublishCfg, onCheckPublish, slots = null, onListSlots,
+  kind = 'ws', onKind, onRandomise, canPublish = false, baseMotionSpecs = null, animBands = null,
   onDropEntry,
   editor = null,
 }) {
@@ -619,6 +664,11 @@ export function TimelineWindow({
               <Tooltip content={canPublish ? 'Check: a dry run with these choices — the slot it takes and where every DAT lands, nothing written' : 'Pick a motion, effect or sound first'} placement="top">
                 <button type="button" className="cseq-btn" disabled={!canPublish || !onCheckPublish} onClick={onCheckPublish}>Check</button>
               </Tooltip>
+              {onListSlots && (
+                <Tooltip content={`Slots: every weapon-skill number in the ${publishCfg.pivot ? 'pivot' : 'game'} folder — 264–271, then the plugin band 0–255 — and what holds each. Click a free one to take it.`} placement="top">
+                  <button type="button" className={`cseq-btn${slots ? ' on' : ''}`} disabled={busy || !!slots?.loading} onClick={() => onListSlots(!slots)}>Slots</button>
+                </Tooltip>
+              )}
             </div>
             <div className="mixer-fields">
               <label className="mixer-field mseq-manage-kind">
@@ -635,6 +685,14 @@ export function TimelineWindow({
                 <span>animation</span>
                 <input type="text" inputMode="numeric" className="cseq-text mixer-num" placeholder="auto" spellCheck={false}
                   value={publishCfg.animation ?? ''} onChange={(e) => onPublishCfg({ animation: e.target.value.replace(/[^0-9]/g, '') })} />
+              </label>
+              <label className="mixer-field">
+                <span>start at</span>
+                <Tooltip content="Where an automatic number starts: Publish takes the first free one at or above this (272 goes straight to the plugin band). Blank = the first free number of all. Check shows the one it lands on." placement="top">
+                  <input type="text" inputMode="numeric" className="cseq-text mixer-num" placeholder="first free" spellCheck={false}
+                    disabled={!!publishCfg.animation}
+                    value={publishCfg.from ?? ''} onChange={(e) => onPublishCfg({ from: e.target.value.replace(/[^0-9]/g, '') })} />
+                </Tooltip>
               </label>
               <label className="mixer-field">
                 <span>ROM10 folder</span>
@@ -662,6 +720,26 @@ export function TimelineWindow({
                 </Tooltip>
               </label>
             </div>
+            {/* The numbers Publish can hand out for this kind: what any client loads, then the
+                plugin band when Settings › XI Tools says the client runs one (cexislots). */}
+            {(() => {
+              const k = publishCfg.kind && publishCfg.kind !== 'auto' ? publishCfg.kind : kind;
+              const stock = STOCK_ANIM_RANGE[k];
+              if (!stock) return null;
+              const band = animBandRange(k, animBands);
+              return (
+                <div className="mono-small mseq-band-note">
+                  {KIND_LABEL[k]} numbers: {stock[0]}–{stock[1]} on any client
+                  {band
+                    ? <> · then <b>{band[0]}–{band[1]}</b> with the client plugin (cexislots)</>
+                    : <> · custom bands are off — Settings › XI Tools › Custom animation bands adds more with cexislots</>}
+                </div>
+              );
+            })()}
+            {slots && (
+              <SlotTable slots={slots} from={publishCfg.from} animation={publishCfg.animation}
+                onPick={(n) => onPublishCfg({ kind: 'ws', animation: String(n) })} />
+            )}
             {publishPlan && (
               <div className="mseq-plan-wrap">
                 {publishPlan.animation != null && (

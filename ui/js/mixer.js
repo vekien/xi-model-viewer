@@ -216,6 +216,66 @@ export function shiftLane(events, lane, delta) {
   return events.map((e) => (e.from === lane ? { ...e, start: Math.max(0, e.start + delta) } : e));
 }
 
+// ── Custom animation bands ──────────────────────────────────────────────────────
+// A stock client reaches only a few free animation numbers per kind: weapon skill
+// 264–271, job ability 339–499, spell 1012–1611. A client-side plugin (cexislots) patches
+// the number → file-id arithmetic so numbers at or above a threshold resolve into a
+// reserved region, and xi-tools allocates there once the stock numbers are used up
+// (FX_*_BAND_*, xi_config.py). On unless switched off — the client is assumed to run the
+// plugin — and the defaults are cexislots' own (cexidats src/cexislots/sites.h); they
+// must match the plugin the client runs.
+export const ANIM_BANDS_DEFAULT = Object.freeze({
+  on: true,
+  wsFirst: 272, wsSlots: 256, wsBase: 431344,
+  jaFirst: 500, jaBase: 427248,
+  spellFirst: 1612, spellBase: 423152,
+});
+const BAND_KEYS = ['wsFirst', 'wsSlots', 'wsBase', 'jaFirst', 'jaBase', 'spellFirst', 'spellBase'];
+const ANIMATION_MAX = 4095;   // the action packet carries the animation number in 12 bits
+/** What a stock client can load, per kind — the numbers Publish tries first. */
+export const STOCK_ANIM_RANGE = Object.freeze({ ws: [264, 271], ja: [339, 499], spell: [1012, 1611] });
+
+export const ANIM_BANDS_KEY = 'customAnimBands';   // localStorage
+
+/** The settings' band block with every number whole and positive (a blank falls back to the default). */
+export function normalizeAnimBands(raw) {
+  const out = { ...ANIM_BANDS_DEFAULT, on: raw?.on !== false };
+  for (const k of BAND_KEYS) {
+    const v = Math.round(Number(raw?.[k]));
+    if (Number.isFinite(v) && v > 0) out[k] = v;
+  }
+  return out;
+}
+
+export function loadAnimBands() {
+  try { return normalizeAnimBands(JSON.parse(localStorage.getItem(ANIM_BANDS_KEY) || 'null')); } catch { return { ...ANIM_BANDS_DEFAULT }; }
+}
+
+/**
+ * FX_*_BAND_* for xi. All seven, always — zeros when the switch is off — so the viewer's
+ * setting, not a line left in xi-tools' .env, decides whether Publish may hand out
+ * numbers that only a patched client can load (a real env var wins over .env).
+ */
+export function animBandsEnv(bands) {
+  const b = normalizeAnimBands(bands);
+  const v = (n) => String(b.on ? n : 0);
+  return {
+    FX_WS_BAND_FIRST: v(b.wsFirst), FX_WS_BAND_SLOTS: v(b.wsSlots), FX_WS_BAND_BASE: v(b.wsBase),
+    FX_JA_BAND_FIRST: v(b.jaFirst), FX_JA_BAND_BASE: v(b.jaBase),
+    FX_SPELL_BAND_FIRST: v(b.spellFirst), FX_SPELL_BAND_BASE: v(b.spellBase),
+  };
+}
+
+/** `[first, last]` of the plugin band for a kind, or null when the bands are off. */
+export function animBandRange(kind, bands) {
+  const b = normalizeAnimBands(bands);
+  if (!b.on) return null;
+  if (kind === 'ws') return [b.wsFirst, Math.min(ANIMATION_MAX, b.wsFirst + b.wsSlots - 1)];
+  if (kind === 'ja') return [b.jaFirst, ANIMATION_MAX];
+  if (kind === 'spell') return [b.spellFirst, ANIMATION_MAX];
+  return null;
+}
+
 // ── Catalog ─────────────────────────────────────────────────────────────────────
 
 /** The list file `xi mv update --only abilities` bakes (`{ races, entries }`). */
@@ -437,9 +497,10 @@ export async function composeForPreview(recipe, xiRace, xiPath, env, onLine, kin
  * the plan, without to write the DATs and register the file ids, and with
  * --pivot to build into the pivot folder (FFXI_PIVOT_DIR) instead of the game
  * folder. Same manifest the wizard and the CLI use, so the ability is rebuilt,
- * listed and undone with the rest of the project.
+ * listed and undone with the rest of the project. `animationFrom` is where an
+ * automatic number starts (the first free one at or above it).
  */
-export async function publishRecipe(recipe, { dryRun, animation = null, kind = null, subdir = null, force = false, pivot = false }, xiPath, env, onLine) {
+export async function publishRecipe(recipe, { dryRun, animation = null, animationFrom = null, kind = null, subdir = null, force = false, pivot = false }, xiPath, env, onLine) {
   const recipePath = workRecipePath(xiPath, recipe.name);
   await backend.writeTextFile(recipePath, serializeRecipe(recipe));
   const lines = [];
@@ -451,6 +512,7 @@ export async function publishRecipe(recipe, { dryRun, animation = null, kind = n
   };
   const prep = ['dats', 'prepare', recipePath, '--project', recipe.name, '--type', 'ability', '--replace'];
   if (animation != null) prep.push('--animation', String(animation));
+  else if (animationFrom != null) prep.push('--animation-from', String(animationFrom));   // where auto starts
   if (kind && kind !== 'auto') prep.push('--kind', kind);
   if (subdir != null) prep.push('--subdir', String(subdir));
   if (!(await run(prep))) return { ok: false, text: lines.join('\n') };
@@ -460,6 +522,17 @@ export async function publishRecipe(recipe, { dryRun, animation = null, kind = n
   if (pivot) build.push('--pivot');
   const ok = await run(build);
   return { ok, text: lines.join('\n') };
+}
+
+/**
+ * `xi ability slots --json`: every weapon-skill number Publish can hand out in the
+ * game or pivot folder — 264–271, then the plugin band — and what holds each:
+ * `{ stock, band, slots: [{ animation, bank, index, fileId?, plugin, free, races, dats, owner }] }`.
+ */
+export async function listWsSlots({ pivot = false } = {}, xiPath, env) {
+  const args = ['ability', 'slots', '--json'];
+  if (pivot) args.push('--pivot');
+  return xiJson(args, xiPath, env);
 }
 
 /**
