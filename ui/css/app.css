@@ -1375,7 +1375,10 @@ button.cli-output-stop:hover {
   color: #ffc8b8;
   border-color: rgba(255, 140, 120, 0.5);
 }
-.cli-output-close {
+.cli-output-close,
+.cli-output-copy {
+  position: relative;
+  z-index: 4; /* stay clickable where the top-right resize grip overlaps */
   flex: 0 0 auto;
   width: 24px;
   height: 24px;
@@ -1385,7 +1388,54 @@ button.cli-output-stop:hover {
   border: none;
   box-shadow: none;
 }
-.cli-output-close:hover { background: rgba(255, 255, 255, 0.08); }
+.cli-output-close:hover,
+.cli-output-copy:hover { background: rgba(255, 255, 255, 0.08); }
+.cli-output-copy .icon { font-size: 15px; }
+.cli-output-copy.is-copied .icon { color: #6dca96; }
+button.cli-output-stop { position: relative; z-index: 4; }
+
+/* Resize handles — the panel is pinned bottom-left, so dragging the top edge,
+   right edge, or top-right corner grows it up / right. */
+.cli-resize {
+  position: absolute;
+  z-index: 3;
+  touch-action: none;
+}
+.cli-resize-n {
+  top: 0;
+  left: 8px;
+  right: 8px;
+  height: 7px;
+  cursor: ns-resize;
+}
+.cli-resize-e {
+  top: 8px;
+  bottom: 8px;
+  right: 0;
+  width: 7px;
+  cursor: ew-resize;
+}
+.cli-resize-ne {
+  top: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nesw-resize;
+}
+.cli-resize-ne .cli-resize-grip {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 8px;
+  height: 8px;
+  border-top: 2px solid var(--gray-500);
+  border-right: 2px solid var(--gray-500);
+  border-top-right-radius: 3px;
+  opacity: 0.55;
+  pointer-events: none;
+}
+.cli-resize-ne:hover .cli-resize-grip { opacity: 1; border-color: var(--accent, #7aa2ff); }
+#cliOutput.is-resizing { user-select: none; }
 .cli-output-body {
   flex: 1 1 auto;
   min-height: 0;
