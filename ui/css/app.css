@@ -2937,6 +2937,27 @@ button.details-path-link.mono { font-family: var(--font-mono); font-size: 11px; 
   flex-direction: column;
 }
 .modal.export-modal .modal-body { overflow-y: auto; min-height: 0; }
+/* xi exports are two columns: what/where on the left, the args on the right. */
+.modal.export-modal.wide { width: min(880px, calc(100vw - 32px)); }
+.modal.export-modal .modal-body.export-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px 18px;
+  align-items: start;
+}
+.export-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+@media (max-width: 760px) {
+  .modal.export-modal .modal-body.export-cols { grid-template-columns: minmax(0, 1fr); }
+}
+/* Checkboxes for the catalog's `quick` args, under the args box. */
+.quick-args-grid {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 9px 14px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--ring);
+  border-radius: 8px;
+}
 .modal.export-modal .modal-header,
 .modal.export-modal .modal-actions,
 .modal.export-modal .settings-tabs { flex: 0 0 auto; }
@@ -4824,27 +4845,6 @@ button.update-dl-btn .update-dl-meta {
   background: var(--gray-850);
   color: var(--muted); font-size: 11px; line-height: 1.4;
 }
-
-/* The generated command. A textarea rather than a block of wrapped text: the paths make
-   it long enough to swamp the dialog, and this way it scrolls, and is selectable. */
-textarea.args-preview {
-  width: 100%;
-  box-sizing: border-box;
-  /* Read-only command echo — nothing to drag out, and the grip sat on the
-     corner of a box the user cannot type in. `none`, not just dropping the
-     line: a bare textarea resizes BOTH ways by default. */
-  resize: none;
-  color: var(--gray-500);
-  background: var(--gray-900);
-  border: 1px solid var(--ring);
-  border-radius: 6px;
-  padding: 6px 8px;
-  font-size: 11px; line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-all;
-  overflow-y: auto;
-}
-textarea.args-preview:focus { outline: none; border-color: var(--ring-strong); }
 
 /* --- Radio row (Export type) ---------------------------------------------- */
 

@@ -19,8 +19,10 @@
 //   'value'  — needs a value (`--lod 2`)
 //   'opt'    — value optional; bare flag is meaningful (`--mesh`)
 // plus optional `values` (suggested completions), `defaultHint`, `conflicts`
-// (flags dropped when this one is added) and `managed` (owned by a dedicated
-// control in the dialog, so it never shows up in the picker).
+// (flags dropped when this one is added), `managed` (owned by a dedicated
+// control in the dialog, so it never shows up in the picker) and `quick` (a
+// number: the arg also gets a checkbox under the args box, in that order — a
+// value arg is ticked on with its `defaultHint`).
 
 /** The `xi …` sub-command each type exports through. */
 export const EXPORT_COMMANDS = {
@@ -208,18 +210,18 @@ const ZONE_ARGS = [
   OUTPUT_DIR,
   FBX,
   {
-    flag: '--no-sky', kind: 'flag', group: 'Contents',
+    flag: '--no-sky', kind: 'flag', quick: 1, group: 'Contents',
     label: 'Omit skybox',
     hint: 'Drop the skybox/celestial chunks (sun, moon, stars, clouds) that sit at the origin.',
   },
   {
-    flag: '--no-vfx', kind: 'flag', group: 'Contents',
+    flag: '--no-vfx', kind: 'flag', quick: 2, group: 'Contents',
     label: 'Omit VFX / unplaced',
     hint: 'Drop every unplaced mesh — effect-placed VFX (water jets, light glows) and dead '
       + 'geometry. Only placed world geometry remains.',
   },
   {
-    flag: '--no-subareas', kind: 'flag', group: 'Contents',
+    flag: '--no-subareas', kind: 'flag', quick: 4, group: 'Contents',
     label: 'Omit sub-areas',
     hint: 'Drop placements tagged with a sub-area id: shop and inn interiors, and in Ru’Aun a '
       + 'second low-detail copy of the sky. Included by default.',
@@ -248,13 +250,47 @@ const ZONE_ARGS = [
     hint: 'Omit the orientation-correction node — view-only; a raw export is not meant to be re-imported.',
   },
   {
-    flag: '--right-handed', kind: 'flag', group: 'Layout',
-    label: 'Right-handed geometry',
-    hint: 'Bake the handedness flip into geometry for engines that drop negative node-scale '
-      + '(Godot/Unreal) — un-mirrored and collidable.',
+    flag: '--right-handed', kind: 'flag', quick: 8, group: 'Layout',
+    label: 'Right-handed (engines)',
+    hint: 'Export for Unreal/Godot/Unity. Bakes the handedness flip into geometry (engines drop '
+      + 'the negative node-scale, mirroring the zone and breaking collision) AND flips winding to '
+      + 'CCW-front. FFXI terrain is clockwise-front and two-sided; a single-sided engine culls it, '
+      + 'so the ground looks black from above and only lights from below. This makes it render '
+      + 'right-side-up and lit. Pair with Weld UV seams for connected terrain.',
   },
   {
-    flag: '--collision', kind: 'flag', group: 'Extras',
+    flag: '--no-weld', kind: 'flag', group: 'Geometry', conflicts: ['--weld'],
+    label: "Don't weld vertices",
+    hint: 'Keep the original per-triangle vertices instead of welding coincident corners into a '
+      + 'shared, indexed mesh. Welding is on by default.',
+  },
+  {
+    flag: '--weld', kind: 'flag', group: 'Geometry', conflicts: ['--no-weld'],
+    label: 'Weld vertices (default)',
+    hint: 'Weld coincident corners by position + UV + baked colour into one indexed, joined mesh '
+      + '(like Noesis). On by default, so this flag is only worth adding for clarity.',
+  },
+  {
+    flag: '--weld-seams', kind: 'flag', quick: 7, group: 'Geometry', conflicts: ['--no-weld'],
+    label: 'Weld UV seams (FBX)',
+    hint: 'Also fuse the UV-seam splits the default weld leaves on tiled terrain. Needs FBX output: '
+      + 'the merge runs in Blender, which stores UVs per face-corner, so the geometry connects with '
+      + 'the texture intact (a GLB can’t do this). Welds per material, so FFXI’s blended '
+      + 'ground overlays are kept, not deleted. Merge radius follows Merge precision (dp).',
+  },
+  {
+    flag: '--mesh-merge-dp', kind: 'value', group: 'Geometry', defaultHint: '4',
+    label: 'Merge precision (dp)',
+    values: [
+      { value: '3', label: 'coarser — more merging' },
+      { value: '4', label: 'default' },
+      { value: '5', label: 'finer — less merging' },
+    ],
+    hint: 'Decimal places used when deduplicating vertices (4 = 0.0001 units). Lower = more '
+      + 'aggressive merging.',
+  },
+  {
+    flag: '--collision', kind: 'flag', quick: 5, group: 'Extras',
     label: 'Collision mesh',
     hint: 'Also dump the player-collision MZB to <stem>.collision.obj, in the same frame as the '
       + 'glb so it overlays the model.',
@@ -265,9 +301,9 @@ const ZONE_ARGS = [
     hint: 'Also write <stem>.zone.json: placements (full TRS + LOD + links), mesh list, textures, '
       + 'weather ambient sounds, companion DATs and sub-area interiors.',
   },
-  ALPHA_SCALE,
+  { ...ALPHA_SCALE, quick: 6 },
   {
-    flag: '--opaque', kind: 'flag', group: 'Textures',
+    flag: '--opaque', kind: 'flag', quick: 3, group: 'Textures',
     label: 'Opaque materials',
     hint: 'Write non-blend materials as OPAQUE instead of MASK. Many zone textures carry junk alpha '
       + 'the client ignores, which under MASK clips whole floors and walls into a checkerboard in '
@@ -416,6 +452,18 @@ export function pickableArgs(type) {
     return (ga < 0 ? GROUP_ORDER.length : ga) - (gb < 0 ? GROUP_ORDER.length : gb);
   });
 }
+
+/** Args that get a checkbox under the args box, in their `quick` order. */
+export function quickArgs(type) {
+  return (ARG_CATALOG[type] ?? [])
+    .filter((a) => a.quick && !a.managed)
+    .sort((a, b) => a.quick - b.quick);
+}
+
+/** The token a quick checkbox adds: the bare flag, or a value arg at its default. */
+export const quickToken = (arg) => (
+  arg.kind === 'value' && arg.defaultHint ? `${arg.flag} ${arg.defaultHint}` : arg.flag
+);
 
 export function findArg(type, flag) {
   return (ARG_CATALOG[type] ?? []).find((a) => a.flag === flag);

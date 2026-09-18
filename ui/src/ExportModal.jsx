@@ -7,7 +7,8 @@ import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
 import { parseAudioHeader, toWav, FMT_ATRAC3 } from '../js/audio.js';
 import {
-  EXPORT_COMMANDS, addToken, animLayout, removeFlag, tokenValue, tokensToArgv,
+  EXPORT_COMMANDS, addToken, animLayout, quickArgs, quickToken, removeFlag, tokenFlag,
+  tokenValue, tokensToArgv,
 } from './exportArgs.js';
 
 /** Windows-illegal characters out of a name we're about to make a filename of. */
@@ -119,10 +120,10 @@ export function xiEnvFromSpec(spec) {
   // Points xi at blender.exe for the --fbx conversion pass; without it xi falls
   // back to its own default install path (C:\Program Files\Blender Foundation\…).
   if (spec?.blenderPath) env.BLENDER_PATH = spec.blenderPath;
-  return Object.keys(env).length ? env : null;
   // Custom animation bands (Settings › XI Tools): where Publish may allocate past what a
   // stock client loads. Sent whenever the settings carry them — as zeros when switched off.
   if (spec && 'animBands' in spec) Object.assign(env, animBandsEnv(spec.animBands));
+  return Object.keys(env).length ? env : null;
 }
 
 /**
@@ -204,6 +205,37 @@ export function AnimLayoutOptions({ args, onChange, disabled = false }) {
           <Label className="check-label">Race \ category \ action folders</Label>
         </Field>
       </Tooltip>
+    </div>
+  );
+}
+
+/**
+ * Checkboxes for the args a kind marks `quick` in the catalog — the ones reached for
+ * on nearly every export, so they need not be picked out of the args box each time.
+ * They are the same tokens: ticking one adds its chip, removing the chip unticks it.
+ */
+export function QuickArgs({ type, tokens, onChange }) {
+  const quick = quickArgs(type);
+  if (!quick.length) return null;
+  const on = new Set(tokens.map(tokenFlag));
+  const toggle = (arg, v) => onChange(v
+    ? addToken(type, tokens, quickToken(arg))
+    : removeFlag(tokens, arg.flag));
+  return (
+    <div className="form-row">
+      <label className="form-label">Quick options</label>
+      <div className="quick-args-grid">
+        {quick.map((arg) => (
+          <Tooltip key={arg.flag} content={arg.hint} placement="left">
+            <Field className="check-field">
+              <Checkbox checked={on.has(arg.flag)} onChange={(v) => toggle(arg, v)} className="checkbox">
+                <span className="icon check-icon">check</span>
+              </Checkbox>
+              <Label className="check-label">{arg.label}</Label>
+            </Field>
+          </Tooltip>
+        ))}
+      </div>
     </div>
   );
 }
@@ -303,6 +335,8 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
   const setArgList = (next) => { setArgs(next); saveArgs(store, next); };
 
   const animId = tokenValue(args, '--anim');
+  // Zone export as one file per mesh rather than the combined zone.
+  const perObject = kindId === 'zone' && args.some((t) => tokenFlag(t) === '--objects');
   // Full Pose exports either the single frame on screen or the whole clip.
   const allFrames = args.some((t) => t.trim() === '--all-frames');
   const setAllFrames = (on) => setArgList(on
@@ -351,16 +385,9 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
   const headTitle = isXi
     ? `Export ${kind.label}: ${spec.name || datStem}`
     : `Export ${spec.typeLabel}: ${spec.title}`;
-  // Written next to the model at export time, and named in the preview so the command
-  // shown is the command that runs. It stays behind as a record of the exact pose.
+  // Written next to the model at export time. It stays behind as a record of the exact pose.
   const poseFileName = isPose ? `${poseStem}.pose.json` : null;
-  const poseFileFor = (dir) => (isPose && spec.capturePose ? `${dir}\\${poseFileName}` : null);
   const xiOutDir = (dir) => (kindId === 'anim' ? animOutputDir(dir, datStem, args) : dir);
-  const previewArgs = !isXi ? null
-    : (isPose
-      ? buildPoseArgs({ ...pose, stem: poseStem }, folder || '…', format, args,
-        poseFileFor(folder || '…'))
-      : buildXiArgs(catalog, activePath, xiOutDir(folder || '…'), format, args));
 
   const doExport = async () => {
     if (!folder) { onStatus?.('Choose an export folder first.'); return; }
@@ -468,7 +495,7 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
 
   return (
     <div className="modal-backdrop" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal export-modal" ref={panelRef} style={style}>
+      <div className={`modal export-modal${isXi ? ' wide' : ''}`} ref={panelRef} style={style}>
         <div className="modal-header" onPointerDown={startDrag} onPointerMove={onDrag} onPointerUp={endDrag}>
           <span className="icon">download</span>
           <Tooltip content={headTitle}>
@@ -497,7 +524,9 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
           </div>
         )}
 
-        <div className="modal-body">
+        {/* xi exports: what and where on the left, how (the args) on the right. */}
+        <div className={`modal-body${isXi ? ' export-cols' : ''}`}>
+          <div className="export-col">
           <div className="export-summary">
             <span className="icon export-glyph">{isXi ? kind.icon : spec.icon}</span>
             <div>
@@ -521,7 +550,7 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
 
           <div className="export-outrow">
             <span className="icon">{isXi ? kind.icon : 'audio_file'}</span>
-            <span>Exports to <strong>{outStem}.{outExt}</strong></span>
+            <span>Exports to <strong>{perObject ? `one .${outExt} per object` : `${outStem}.${outExt}`}</strong></span>
           </div>
 
           {needsXi && (
@@ -574,23 +603,26 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
                 />
               </div>
 
-              {kindId === 'anim' && <AnimLayoutOptions args={args} onChange={setArgList} />}
+              {kindId === 'zone' && (
+                <div className="form-row">
+                  <Field className="check-field">
+                    <Checkbox checked={perObject} className="checkbox"
+                      onChange={(v) => setArgList(v
+                        ? addToken(catalog, args, '--objects')
+                        : removeFlag(args, '--objects'))}>
+                      <span className="icon check-icon">check</span>
+                    </Checkbox>
+                    <Label className="check-label">Per-object files</Label>
+                  </Field>
+                  <div className="form-hint">
+                    Writes every mesh as its own .{outExt} straight into the export folder, in
+                    local space at the origin, instead of one combined zone file. Adds --objects.
+                    {format === 'fbx' && ' With FBX, Blender runs once per object, so a full zone takes a while.'}
+                  </div>
+                </div>
+              )}
 
-              <div className="form-row">
-                <label className="form-label">
-                  Arguments <span className="form-label-dim">· xi {EXPORT_COMMANDS[catalog].join(' ')}</span>
-                </label>
-                <ArgsInput type={catalog} tokens={args} onChange={setArgList}
-                  dynamicValues={{ '--anim': (spec.animations ?? []).map((a) => ({ value: a.id })) }} />
-                <textarea
-                  className="args-preview mono"
-                  readOnly
-                  spellCheck={false}
-                  rows={3}
-                  value={previewArgs.map(shellQuote).join(' ')}
-                  onFocus={(e) => e.target.select()}
-                />
-              </div>
+              {kindId === 'anim' && <AnimLayoutOptions args={args} onChange={setArgList} />}
 
               {((kindId === 'mesh' && animId) || (isPose && animFrames > 1)) && !allFrames && (
                 <div className="export-frame-row">
@@ -615,6 +647,20 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
               <Button onClick={browse}><span className="icon">folder_open</span>Browse</Button>
             </div>
           </div>
+          </div>
+
+          {isXi && (
+            <div className="export-col">
+              <div className="form-row">
+                <label className="form-label">
+                  Arguments <span className="form-label-dim">· xi {EXPORT_COMMANDS[catalog].join(' ')}</span>
+                </label>
+                <ArgsInput type={catalog} tokens={args} onChange={setArgList}
+                  dynamicValues={{ '--anim': (spec.animations ?? []).map((a) => ({ value: a.id })) }} />
+              </div>
+              <QuickArgs type={catalog} tokens={args} onChange={setArgList} />
+            </div>
+          )}
         </div>
 
         <div className="modal-actions">
