@@ -5340,6 +5340,9 @@ button.data-zone-tab.on .icon { color: var(--accent); }
 }
 .data-flags { color: var(--accent); font-size: 10px; flex: 0 0 auto; }
 .data-size { margin-left: auto; flex: 0 0 auto; color: var(--gray-500); font-size: 11px; }
+/* A row's second view: the row itself plays a generator, this glyph (pc-tbtn) opens its table. */
+.data-row .pc-tbtn { width: 20px; height: 16px; border-radius: 4px; }
+.data-row .pc-tbtn .icon { font-size: 14px; }
 
 /* Texture rows — light green so they stand out from meshes/skeletons. */
 .data-res-tex .data-kind,
@@ -6743,6 +6746,7 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mixer-save { display: flex; align-items: center; gap: 6px; }
 .mixer-save input { flex: 1 1 auto; min-width: 0; font: 600 12px/1.3 var(--font-mono); color: var(--text); background: var(--gray-900); border: 1px solid var(--accent); border-radius: 6px; padding: 3px 6px; }
 /* The Mixes panel (MixerLibrary.jsx, what Load opens): one folding group per category, the rows above inside. */
+.mixer-lib-top { display: flex; align-items: center; gap: 6px; }   /* the search box, then Import */
 .mixer-lib-list { max-height: min(64vh, 720px); }
 .mixer-lib-group + .mixer-lib-group { margin-top: 4px; }
 .mixer-lib-cat { display: flex; align-items: center; gap: 4px; padding: 3px 6px 3px 2px; border-radius: 6px; cursor: pointer; user-select: none; font: 600 11px/1.2 var(--font-ui); text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-300); }
@@ -6772,12 +6776,82 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 /* Preview (blue, generators only) and Disable / Re-Enable open the fields row, level with the inputs. */
 .mixer-editor-acts { display: flex; align-items: center; gap: 6px; align-self: flex-end; }
 .mixer-editor-acts .cseq-btn { height: 26px; min-height: 26px; }
+/* Edit generator while the Generator window shows this block's generator. */
+.mixer-editor-acts .cseq-btn.on { background: rgba(255, 255, 255, 0.12); }
 /* Both labels share one grid cell, so flipping Disable / Re-Enable never moves the fields beside it. */
 .mixer-toggle-btn { display: inline-grid; place-items: center; }
 .mixer-toggle-btn > span { grid-area: 1 / 1; }
 .mixer-toggle-btn > .mixer-toggle-alt { visibility: hidden; }
 .mixer-preview-btn { background: linear-gradient(180deg, var(--accent), var(--accent-deep)); border-color: var(--accent-deep); color: #0b1420; }
 .mixer-preview-btn:hover { background: linear-gradient(180deg, #62b0ff, var(--accent)); }
+
+/* The Generator window (MixerGeneratorPanel.jsx): a generator's fields by group, one row
+   a field — label, control, revert. An edited row carries the accent on its left edge. */
+.mixer-generator { overflow: hidden; }
+.mgen-src { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mgen-status { color: var(--muted); }
+.mgen-body { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; padding: 6px; border-radius: 8px; background: rgba(0, 0, 0, 0.28); box-shadow: inset 0 0 10px #00000070; }
+.mgen-badge { color: var(--accent); }
+.mgen-row { display: grid; grid-template-columns: 138px minmax(0, 1fr) 22px; align-items: center; gap: 4px 8px; padding: 3px 2px 3px 18px; border-radius: 6px; }
+.mgen-row.edited, .mgen-curve.edited { background: color-mix(in srgb, var(--accent) 10%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
+.mgen-label { display: flex; align-items: center; gap: 4px; min-width: 0; font: 500 11px/1.3 var(--font-ui); color: var(--gray-200); cursor: help; }
+.mgen-label .icon { font-size: 13px; color: var(--muted); flex: 0 0 auto; }
+.mgen-row.locked .mgen-label, .mgen-ro, .mgen-unit { color: var(--muted); }
+.mgen-ro { overflow-wrap: anywhere; }
+.mgen-vec { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px 6px; min-width: 0; }
+.mgen-unit { align-self: center; }
+.mgen-num { display: flex; flex-direction: column; gap: 2px; font: 500 9px/1.1 var(--font-ui); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.mgen-num input.mixer-num { width: 62px; height: 24px; min-height: 24px; flex: 0 0 auto; box-sizing: border-box; padding: 0 6px; font: 400 12px/1.3 var(--font-mono); }
+.mgen-num input.mixer-num:disabled { opacity: 0.5; }
+.mgen-flags { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.mgen-flags .cseq-switch { white-space: normal; }
+.mgen-locked { opacity: 0.55; }
+.cseq-load.mgen-combo { width: 100%; max-width: 236px; }
+.mgen-undo .icon { font-size: 15px; }
+.mgen-note { padding: 2px 4px 4px 18px; font-size: 11px; }
+.mgen-error { color: #ff9b9b; }
+.mgen-hue { display: flex; flex-direction: column; gap: 6px; padding: 4px 6px 8px 18px; }
+.mgen-hue .mgen-note { padding-left: 0; }
+.mgen-hue-lab { cursor: help; }
+.mgen-op { margin-bottom: 6px; }
+.mgen-op-head { padding: 4px 4px 2px 18px; color: var(--accent); }
+.mgen-curve { margin: 2px 2px 4px 18px; padding: 6px 8px; border-radius: 6px; background: rgba(0, 0, 0, 0.28); }
+.mgen-curve-head { display: flex; align-items: center; gap: 8px; min-height: 22px; }
+.mgen-shared { color: #e0a83e; cursor: help; }
+.mgen-keys { display: grid; grid-template-columns: repeat(2, max-content); align-items: end; gap: 3px 18px; margin-top: 4px; }
+.mgen-key { display: flex; align-items: flex-end; gap: 4px; }
+.mgen-tip { display: block; max-width: 340px; white-space: pre-line; text-align: left; }
+/* Texture tiles, at the top of Texture & mesh: a checkerboard thumbnail that picks a PNG
+   (the .tex-bg-swatch checker), then the texture's name, size, users and buttons. */
+.mgen-texs { display: flex; flex-direction: column; gap: 6px; padding: 4px 2px 6px 18px; }
+.mgen-tex { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: start; gap: 8px; padding: 6px; border-radius: 6px; background: rgba(0, 0, 0, 0.28); }
+.mgen-tex.replaced { background: color-mix(in srgb, var(--accent) 10%, rgba(0, 0, 0, 0.28)); box-shadow: inset 2px 0 0 var(--accent); }
+button.mgen-tex-thumb,
+button.mgen-tex-thumb:hover,
+button.mgen-tex-thumb:active {
+  position: relative;
+  width: 72px; height: 72px; min-height: 0;
+  padding: 0; gap: 0;
+  border: 1px solid var(--ring-strong); border-radius: 6px;
+  box-shadow: none;
+  overflow: hidden;
+  background-color: #23262a;
+  background-image:
+    linear-gradient(45deg, #34383d 25%, transparent 25%, transparent 75%, #34383d 75%),
+    linear-gradient(45deg, #34383d 25%, transparent 25%, transparent 75%, #34383d 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 4px 4px;
+}
+button.mgen-tex-thumb:hover:not(:disabled) { border-color: var(--accent); }
+button.mgen-tex-thumb:disabled { cursor: default; }
+.mgen-tex-img { display: block; flex: 0 0 auto; image-rendering: pixelated; pointer-events: none; }
+.mgen-tex-none { font-size: 22px; color: var(--muted); }
+.mgen-tex-mark { position: absolute; left: 0; right: 0; bottom: 0; padding: 1px 0; font: 600 9px/1.3 var(--font-ui); letter-spacing: 0.05em; text-transform: uppercase; text-align: center; color: #0b1420; background: var(--accent); }
+.mgen-tex-info { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.mgen-tex-name { max-width: 100%; white-space: pre; overflow: hidden; text-overflow: ellipsis; color: var(--gray-200); }
+.mgen-tex-note { padding: 2px 0 0; font-size: 11px; }
+.mgen-tex-acts { display: flex; align-items: center; gap: 6px; align-self: stretch; margin-top: 4px; }
+.cseq-btn.mgen-tex-btn { height: 24px; min-height: 24px; padding: 0 8px; font-size: 11px; }
 
 .mixer-parts { display: flex; flex-direction: column; gap: 2px; }
 .mixer-part { display: flex; align-items: center; gap: 8px; padding: 2px 4px; border-radius: 4px; }
@@ -6834,11 +6908,17 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mseq-error > span:not(.icon) { flex: 1; }
 .mseq-error b { display: block; font: 600 12.5px/1.3 var(--font-ui); color: #f6c2bd; margin-bottom: 3px; }
 .mseq-error .pc-tbtn { flex: 0 0 auto; margin: -4px -4px 0 0; }
-/* The inset track. Lanes stack overlapping pills into sub-rows, so a lane is n × 25px
-   and draws one line per row; the sequencer's single centre line is turned off. */
+/* The inset track. A track's pills sit in rows, so a lane is n × 25px and draws one
+   line per row; the sequencer's single centre line is turned off. */
 .mseq-tl { position: relative; flex: 0 0 auto; }
-.mseq-label { justify-content: space-between; gap: 4px; box-sizing: border-box; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
-.mseq-label-text { cursor: ew-resize; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Wider than the sequencer's label column: a track's name shares its row with the
+   rows badge, the + that adds a row and the × that clears the track. */
+.mseq-tl .cseq-tl-labels { flex-basis: 148px; }
+/* A label is as tall as its lane. Its own controls keep to the first row (the head);
+   each further row has its delete (.mseq-row-x) at that row's height. */
+.mseq-label { position: relative; align-items: flex-start; box-sizing: border-box; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+.mseq-label-head { flex: 1 1 auto; min-width: 0; height: 24px; display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.mseq-label-text { flex: 1 1 auto; min-width: 0; cursor: ew-resize; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mseq-rows { display: inline-flex; align-items: center; gap: 2px; font: 600 9px/1 var(--font-ui); color: var(--muted); background: transparent; border: 1px solid var(--ring); border-radius: 8px; padding: 1px 5px; min-height: 0; cursor: pointer; flex: 0 0 auto; }
 .mseq-rows .icon { font-size: 12px; }
 .mseq-rows:hover { color: var(--accent); border-color: var(--accent); }
@@ -6846,6 +6926,10 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mseq-ruler { cursor: ew-resize; }
 .mseq-lane { box-sizing: border-box; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
 .mseq-lane::after { display: none; }
+/* A lane showing its rows: a faint line under each. */
+.mseq-lane.rows { background-image: repeating-linear-gradient(to bottom, transparent 0 24px, rgba(255, 255, 255, 0.035) 24px 25px); }
+/* A pill dragged below the last row: the edge the lane grows a row under on the drop. */
+.mseq-lane.grow { box-shadow: inset 0 -2px 0 var(--accent); }
 .mseq-pill {
   position: absolute; height: 16px; transform: translateY(-50%);
   border-radius: 999px;
@@ -6874,6 +6958,8 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mseq-pill .mseq-spk { font-size: 13px; line-height: 1; cursor: pointer; flex: 0 0 auto; }
 .mseq-pill .mseq-wave { flex: 1 1 auto; min-width: 0; height: 100%; opacity: 0.8; }
 .mseq-pill .mseq-wave-label { flex: 0 0 auto; }
+/* A generator the mix edits (the Generator window): a small pencil before the pill's label. */
+.mseq-pill .mseq-edited { position: relative; font-size: 11px; line-height: 16px; vertical-align: top; margin-right: 2px; }
 .mseq-pill.ghost { background: repeating-linear-gradient(45deg, rgba(224, 168, 62, 0.45) 0 6px, rgba(224, 168, 62, 0.2) 6px 12px) !important; border: 1px dashed rgba(224, 168, 62, 0.9); color: var(--text); pointer-events: none; cursor: default; }
 .mseq-pill.ghost.fx { background: repeating-linear-gradient(45deg, rgba(217, 123, 196, 0.45) 0 6px, rgba(217, 123, 196, 0.2) 6px 12px) !important; border-color: rgba(217, 123, 196, 0.9); display: inline-flex; align-items: center; gap: 4px; }
 /* Loop repeats of a clip: faint dashed echoes of the pill, one per extra play (MixerTimeline pill). */
@@ -6883,8 +6969,18 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
   border: 1px dashed color-mix(in srgb, var(--pill) 65%, transparent);
   opacity: 0.75; pointer-events: none; cursor: default; z-index: 1; min-width: 0;
 }
+/* The line from a looping clip's pill to its first repeat and from each repeat to the
+   next, in the pill's colour (--pill, set inline); each repeat starts after it
+   (LOOP_LINK_PX in MixerTimeline.jsx). A forever loop's last link fades out. */
+.mseq-loop-link { position: absolute; width: 6px; height: 2px; transform: translateY(-50%); background: var(--pill); opacity: 0.75; pointer-events: none; z-index: 1; }
+.mseq-loop-link.fade { background: linear-gradient(90deg, var(--pill), transparent); }
 .mseq-strike { position: absolute; top: 22px; bottom: 0; width: 0; border-left: 2px solid #fff; opacity: 0.45; pointer-events: none; z-index: 1; }
 .mseq-past-loop { position: absolute; top: 22px; bottom: 0; background: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.04) 0 6px, rgba(255, 255, 255, 0.09) 6px 12px); pointer-events: none; }
+/* A waiting link's hold (MixerTimeline.jsx): from the link's frame over every lane, as long
+   as the routine it runs; its label sits on the keep lane, the last one. */
+.mseq-hold { position: absolute; top: 22px; bottom: 0; background: repeating-linear-gradient(-45deg, rgba(150, 164, 255, 0.05) 0 5px, rgba(150, 164, 255, 0.12) 5px 10px); border-left: 2px solid rgba(150, 164, 255, 0.6); border-right: 1px dashed rgba(150, 164, 255, 0.45); box-sizing: border-box; pointer-events: none; z-index: 1; }
+.mseq-hold.unknown { border-right: none; }
+.mseq-hold i { position: absolute; bottom: 4px; right: 3px; padding: 2px 5px; border-radius: 6px; font: 600 9px/1 var(--font-ui); font-style: normal; color: #b4beff; background: rgba(13, 16, 18, 0.85); border: 1px solid rgba(150, 164, 255, 0.45); white-space: nowrap; pointer-events: auto; cursor: help; }
 .mseq-loopend { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px dashed var(--accent); opacity: 0.8; z-index: 1; }
 .mseq-loopend i { position: absolute; top: 2px; left: 3px; font: 600 9px/1 var(--font-ui); font-style: normal; color: var(--accent); white-space: nowrap; cursor: help; }
 /* The red cursor is the sequencer's; its head is the grab handle for scrubbing. */
@@ -6960,6 +7056,10 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mseq-x, .mseq-add { flex: 0 0 auto; width: 16px; height: 16px; min-height: 0; padding: 0; display: grid; place-items: center; background: transparent; border: none; box-shadow: none; border-radius: 50%; color: var(--muted); cursor: pointer; }
 .mseq-x:hover, .mseq-add:hover { color: var(--text); background: rgba(255, 255, 255, 0.1); }
 .mseq-x .icon, .mseq-add .icon { font-size: 12px; }
+.mseq-add:disabled { opacity: 0.35; cursor: default; }
+/* A row's delete, shown while the pointer is over the track's label. */
+.mseq-row-x { position: absolute; right: 8px; opacity: 0; }
+.mseq-label:hover .mseq-row-x, .mseq-row-x:focus-visible { opacity: 1; }
 /* Timeline toolbar: the Add track combo is the sequencer's Load combo, wider for its placeholder. */
 .mseq-add-track { width: 150px; }
 /* The mix Type dropdown, left of Add Track. */
@@ -7011,10 +7111,40 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mseq-manage-btn.on { background: rgba(255, 255, 255, 0.12); }
 .mseq-manage { margin-bottom: 8px; }
 .mseq-manage .mixer-field { width: auto; }
-.mseq-manage .mseq-manage-kind .cseq-load { width: 140px; height: 26px; }
-.mseq-manage .mseq-manage-kind .combo-input { height: 26px; min-height: 26px; }
 .mseq-manage .mseq-manage-force,
 .mseq-manage .mseq-manage-pivot { height: 26px; }
+/* Overwrite and pivot: a line each under the fields, as a form's options read. */
+.mseq-manage-opts { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+
+/* The mixer's Help window (MixerHelpModal): the About window's floating frame and
+   boxes (.modal, .help-*), a guide in two balanced columns that scrolls under a
+   header that stays put. The (?) that opens it shows it is open. */
+.mseq-help-btn.on { color: var(--accent); }
+.modal.mixer-help-modal {
+  width: min(820px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.mixer-help-modal .modal-header { flex: 0 0 auto; }
+.mhelp-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; gap: 12px; padding: 4px 16px 16px; }
+.mhelp-body::-webkit-scrollbar { width: 6px; }
+.mhelp-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); border-radius: 3px; }
+.mhelp-lead { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--gray-300); }
+/* Cards flow down one column and on into the next; a narrow window gets one column. */
+.mhelp-cols { column-width: 330px; column-count: 2; column-gap: 12px; }
+.mhelp-cols > .mhelp-section { break-inside: avoid; margin-bottom: 12px; }
+.mhelp-title { display: flex; align-items: center; gap: 6px; }
+.mhelp-title .icon { font-size: 15px; }
+.mhelp-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
+.mhelp-list li { position: relative; padding-left: 12px; font-size: 12px; line-height: 1.5; color: var(--gray-300); }
+.mhelp-list li::before { content: ''; position: absolute; left: 1px; top: 0.66em; width: 4px; height: 4px; border-radius: 50%; background: var(--accent); opacity: 0.75; }
+.mhelp-list b { color: var(--gray-100); font-weight: 600; }
+.mhelp-list code { font: 400 11px/1 var(--font-mono); color: var(--gray-100); }
+/* A key chip inside a line of text: the About window's, slimmer. */
+kbd.mhelp-kbd { display: inline-block; padding: 0 5px; font-size: 11px; line-height: 16px; }
+.mhelp-lane { display: inline-block; padding: 0 6px; border: 1px solid currentColor; border-radius: 999px; font-size: 11px; line-height: 15px; white-space: nowrap; }
+.mhelp-note { margin-top: 6px; font-size: 11.5px; color: var(--muted); }
 .mseq-plan-wrap { max-height: 200px; overflow: auto; display: flex; flex-direction: column; gap: 4px; }
 .mseq-plan { border-collapse: collapse; font: 400 11px/1.4 var(--font-mono); color: var(--text); }
 .mseq-plan th { text-align: left; font: 500 10px/1.2 var(--font-ui); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 14px 2px 0; }
@@ -7039,6 +7169,34 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 .mseq-slots-table tr.is-picked td { background: rgba(109, 202, 150, 0.12); }
 .mseq-slots-table td b { font-weight: 600; }
 .mseq-slots-next { margin-left: 6px; padding: 0 5px; border-radius: 3px; font: 500 9.5px/14px var(--font-ui); text-transform: uppercase; letter-spacing: 0.05em; color: #6dca96; border: 1px solid rgba(109, 202, 150, 0.4); }
+/* Locks · hits · links: the lane label's warning badge (the rows badge in amber) and its
+   + lit while the strip under the track is open; the strip's pickers, as Manage's. */
+.mseq-keep-warn { display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto; min-height: 0; padding: 1px 5px; font: 600 9px/1 var(--font-ui); color: #ffd078; background: rgba(255, 208, 120, 0.1); border: 1px solid rgba(255, 208, 120, 0.45); border-radius: 8px; box-shadow: none; cursor: pointer; }
+.mseq-keep-warn .icon { font-size: 12px; }
+.mseq-keep-warn:hover { background: rgba(255, 208, 120, 0.2); }
+.mseq-add.on { color: var(--accent); }
+.mseq-keep-tip .mseq-keep-retail { align-self: flex-start; margin-top: 4px; }
+.mseq-keep { margin-bottom: 8px; }
+.mseq-keep .mixer-field, .mseq-keep-editor .mixer-field { width: auto; }
+.mseq-keep .mseq-keep-pick .cseq-load { width: 250px; height: 26px; }
+.mseq-keep .mseq-keep-pick .combo-input, .mseq-keep-editor .mseq-keep-variant .combo-input { height: 26px; min-height: 26px; }
+.mseq-keep .mixer-editor-acts .cseq-btn { height: 26px; min-height: 26px; }
+/* What is off, one line each; a line about blocks selects them. */
+.mseq-keep-warns { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font: 500 11.5px/1.35 var(--font-ui); color: #ffd078; }
+.mseq-keep-warns li { display: flex; align-items: flex-start; gap: 6px; }
+.mseq-keep-warns li.go { cursor: pointer; }
+.mseq-keep-warns li.go:hover { color: #ffe3ad; }
+.mseq-keep-warns .icon { font-size: 14px; flex: 0 0 auto; margin-top: 1px; }
+/* A lock, hit or link's editor: which of its kind it is, a link's routine and where the game finds it. */
+.mseq-keep-editor .mseq-keep-variant .cseq-load { width: 210px; height: 26px; }
+.mseq-keep-ref-row { display: flex; align-items: center; gap: 6px; }
+.mseq-keep-ref-row input.mixer-num { width: 72px; flex: 0 0 auto; text-transform: none; }
+.mseq-keep-where { padding: 3px 7px; border-radius: 999px; font: 600 10px/1 var(--font-mono); text-transform: none; letter-spacing: 0; color: #6dca96; background: rgba(109, 202, 150, 0.12); border: 1px solid rgba(109, 202, 150, 0.4); cursor: help; }
+.mseq-keep-where.nowhere, .mseq-keep-where.none, .mseq-keep-where.self { color: #f0a8a2; background: rgba(240, 168, 162, 0.12); border-color: rgba(240, 168, 162, 0.5); text-transform: uppercase; }
+.mseq-keep-where.unknown { color: var(--muted); background: transparent; border-color: var(--ring); }
+/* How long a waiting link holds the mix: the timeline's hold band colour. */
+.mseq-keep-where.hold { color: #b4beff; background: rgba(150, 164, 255, 0.12); border-color: rgba(150, 164, 255, 0.45); }
+.mseq-keep-where.hold.unknown { color: var(--muted); background: transparent; border-color: var(--ring); }
 /* Settings › XI Tools › Custom animation bands: a kind per row, small number fields, the range. */
 .band-row { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
 .band-row > b { flex: 0 0 92px; font-weight: 500; font-size: 12px; padding-bottom: 7px; }

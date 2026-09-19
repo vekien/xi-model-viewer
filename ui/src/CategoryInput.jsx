@@ -5,7 +5,9 @@ import { createPortal } from 'react-dom';
 // field cut down to one value. Click in or type and the categories the saved
 // mixes use drop down, narrowed by what is typed; arrows and Enter, or a click,
 // take one; anything else stays as typed. The menu is portaled and fixed: the
-// field sits in the timeline window, which clips its overflow.
+// field sits in the timeline window, which clips its overflow. An option is its
+// text, or `{ value, badge }` with a note drawn at the row's end (the keep lane's
+// routine field says where each routine lives); typing matches either.
 
 const MENU_H = 200;   // room the menu wants below the field before it flips above
 
@@ -19,10 +21,11 @@ export function CategoryInput({ value = '', onChange, options = [], placeholder 
   const inputRef = useRef(null);
   const menuRef = useRef(null);
 
+  const items = useMemo(() => options.map((o) => (typeof o === 'string' ? { value: o } : o)), [options]);
   const shown = useMemo(() => {
     const q = typed ? value.trim().toLowerCase() : '';
-    return q ? options.filter((o) => o.toLowerCase().includes(q)) : options;
-  }, [options, value, typed]);
+    return q ? items.filter((o) => `${o.value} ${o.badge ?? ''}`.toLowerCase().includes(q)) : items;
+  }, [items, value, typed]);
 
   // Under the field, or above it when the field sits too low; follows a resize or a scroll.
   useLayoutEffect(() => {
@@ -68,7 +71,7 @@ export function CategoryInput({ value = '', onChange, options = [], placeholder 
       return;
     }
     if (e.key === 'Enter') {
-      if (open && active >= 0 && shown[active] != null) { e.preventDefault(); pick(shown[active]); }
+      if (open && active >= 0 && shown[active] != null) { e.preventDefault(); pick(shown[active].value); }
       else setOpen(false);
       return;
     }
@@ -90,14 +93,15 @@ export function CategoryInput({ value = '', onChange, options = [], placeholder 
     >
       {shown.map((opt, i) => (
         <div
-          key={opt}
+          key={opt.value}
           className="combo-option"
           data-focus={i === active ? '' : undefined}
-          data-selected={opt === value.trim() ? '' : undefined}
+          data-selected={opt.value === value.trim() ? '' : undefined}
           onMouseEnter={() => setActive(i)}
-          onClick={() => pick(opt)}
+          onClick={() => pick(opt.value)}
         >
-          {opt}
+          {opt.value}
+          {opt.badge && <span className="opt-badge">{opt.badge}</span>}
         </div>
       ))}
     </div>,

@@ -717,6 +717,38 @@ fn pick_file(
     dialog.pick_file().map(|p| p.to_string_lossy().into_owned())
 }
 
+/// Native "save as" dialog: the path the user chose, or None on cancel. Nothing
+/// is written here — the caller writes the file through `write_file`.
+#[tauri::command]
+fn save_file(
+    initial: Option<String>,
+    title: Option<String>,
+    exts: Option<Vec<String>>,
+    file_name: Option<String>,
+) -> Option<String> {
+    let mut dialog = rfd::FileDialog::new().set_title(title.as_deref().unwrap_or("Save file"));
+    // The first extension is also what the dialog appends to a name typed
+    // without one.
+    if let Some(list) = exts {
+        let refs: Vec<&str> = list.iter().map(String::as_str).collect();
+        if !refs.is_empty() {
+            dialog = dialog.add_filter("Files", &refs);
+        }
+    }
+    if let Some(name) = file_name {
+        dialog = dialog.set_file_name(name);
+    }
+    if let Some(p) = initial {
+        // `initial` is the folder to start in; one that has gone leaves the
+        // dialog wherever the system last had it.
+        let dir = Path::new(&p);
+        if dir.is_dir() {
+            dialog = dialog.set_directory(dir);
+        }
+    }
+    dialog.save_file().map(|p| p.to_string_lossy().into_owned())
+}
+
 /// Apply optional env overrides (e.g. FFXI_DIR from Settings → Game path).
 fn apply_xi_env(
     cmd: &mut std::process::Command,
@@ -1227,6 +1259,7 @@ fn main() {
             default_game_path,
             pick_folder,
             pick_file,
+            save_file,
             decode_vgmstream,
             xi_mesh_export,
             xi_run,

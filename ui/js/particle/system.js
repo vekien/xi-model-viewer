@@ -682,6 +682,28 @@ export class ParticleSystem {
     return true;
   }
 
+  /**
+   * Start one generator of the armed routine over (the Ability Mixer, after its
+   * definition changed under it): its live particles end, and the command that last
+   * fired it fires again on the next tick — looked up afresh, so it runs the
+   * definition the tree holds by then. One that has not fired yet this pass, or a
+   * parked routine, needs nothing: it starts from the tree when its time comes.
+   */
+  restartGenerator(genId) {
+    const e = this._effect;
+    if (!e || e.done || e.stopped) return false;
+    const want = datKey(genId);
+    this.effectManager.stopGenerator(this._effectAssociation, want);
+    let last = -1;
+    for (const i of e.fired) {
+      const c = e.commands[i];
+      if (c && datKey(c.genId) === want && (last < 0 || c.delay >= e.commands[last].delay)) last = i;
+    }
+    if (last < 0) return false;
+    e.fired.delete(last);
+    return true;
+  }
+
   restartEffect() {
     if (!this._effect) return;
     this.effectManager.clearEffects(this._effectAssociation);

@@ -2933,6 +2933,25 @@ export class Renderer {
     return tex;
   }
 
+  /**
+   * New pixels for an effect texture already on the stage, under the same name
+   * (the Ability Mixer's texture replacement): `rgba` is top-down RGBA with
+   * FFXI's half-scale alpha, like the effect textures createTexture uploads.
+   * The size may differ from the old one (no mipmaps here). False when no
+   * texture goes by that name, or the model draws with it — an effect never
+   * repaints the model's own art. Every effect load builds its textures afresh.
+   */
+  replaceTexture(name, { width, height, rgba }) {
+    const tex = this.textures.get(name);
+    if (!tex || this.modelTextureNames.has(name)) return false;
+    const gl = this.gl;
+    const bound = gl.getParameter(gl.TEXTURE_BINDING_2D);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
+    gl.bindTexture(gl.TEXTURE_2D, bound);
+    return true;
+  }
+
   // -------------------------------------------------------------------------
 
   /**

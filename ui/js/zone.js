@@ -728,6 +728,27 @@ function parseTexture(bytes, dv, section) {
 }
 
 /**
+ * One 0x20 texture section decoded, `start` being its first byte (the 16-byte
+ * section header): `name16` is the name as stored, all 16 characters; `name` is
+ * what parseDatTextures keys it by, and so what the stage calls it. `rgba` is
+ * top-down with FFXI's half-scale alpha (0x80 is opaque). Null for a format
+ * this decoder does not read, or a section cut short.
+ */
+export function decodeTextureSection(bytes, start) {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const d = start + 0x10;
+  let img;
+  try { img = parseTexture(bytes, dv, { dataStart: d }); } catch { return null; }   // RangeError: cut short
+  if (!img) return null;
+  const tag = String.fromCharCode(...bytes.subarray(d + 0x39, d + 0x3D));
+  const bitCount = dv.getUint16(d + 0x1F, true);
+  // The labels the Data view's texture rows use (dat/inspect.js peekTexture).
+  const format = bytes[d] === 0xA1 ? (tag === '1TXD' ? 'DXT1' : 'DXT3') : bitCount === 32 ? 'RGBA32' : `palette ${bitCount}bpp`;
+  const name16 = String.fromCharCode(...bytes.subarray(d + 1, d + 0x11));
+  return { name16, name: img.name, width: img.width, height: img.height, format, rgba: img.rgba };
+}
+
+/**
  * 0x5D BumpMap — raw 8-bit height field → tangent-space normal map (xim
  * BumpMapSection: Sobel dX/dY, strength=1, wrap edges). Display/upload as RGBA32.
  */

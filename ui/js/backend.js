@@ -26,6 +26,26 @@ async function pickOnce(cmd, initial, extra) {
   }
 }
 
+// The browser's own file chooser (browser dev mode has no native picker): the
+// first file picked, read by `read(file)`, or null on cancel or a failed read.
+function browseFile(accept, read) {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = accept ?? '';
+    input.hidden = true;
+    const done = (value) => { input.remove(); resolve(value); };
+    input.addEventListener('change', async () => {
+      const file = input.files?.[0];
+      if (!file) { done(null); return; }
+      try { done(await read(file)); } catch { done(null); }
+    });
+    input.addEventListener('cancel', () => done(null));
+    document.body.appendChild(input);
+    input.click();
+  });
+}
+
 // Streamed xi runs go one at a time. Their lines arrive on one event channel
 // (`xi-log` / `xi-err`) that every live listener hears, so two runs at once —
 // Randomise inspecting the effect and the sound together — read each other's
@@ -330,6 +350,52 @@ export const backend = {
    */
   async pickFile(initial, opts) {
     return pickOnce('pick_file', initial, opts);
+  },
+
+  /**
+   * Native "save as" dialog (Tauri only). Returns the chosen path or null; it
+   * writes nothing — hand the path to `writeTextFile` / `writeFile`.
+   * `initial` is the folder to start in, `opts` = `{ title, exts, fileName }` —
+   * e.g. `{ title: 'Export mix', exts: ['json'], fileName: 'fire.recipe.json' }`.
+   */
+  async saveFileDialog(initial, opts) {
+    return pickOnce('save_file', initial, opts);
+  },
+
+  /**
+   * Browser dev mode's stand-in for `pickFile`: the browser's own file chooser,
+   * which hands over contents and a bare name, never a path. Resolves
+   * `{ name, text }`, or null on cancel.
+   */
+  browseTextFile(accept) {
+    return browseFile(accept, async (file) => ({ name: file.name, text: await file.text() }));
+  },
+
+  /**
+   * `browseTextFile` for a binary file (a PNG): resolves `{ name, bytes }`, the
+   * bytes an ArrayBuffer, or null on cancel. The desktop app reads a path from
+   * `pickFile` with `readFile` instead.
+   */
+  browseBinaryFile(accept) {
+    return browseFile(accept, async (file) => ({ name: file.name, bytes: await file.arrayBuffer() }));
+  },
+
+  /**
+   * Browser dev mode's stand-in for a save dialog: `data` (text or bytes) goes to
+   * the browser's downloads as `fileName`. The desktop app asks where to save
+   * through `saveFileDialog` instead.
+   */
+  downloadFile(fileName, data, type = 'application/json') {
+    const url = URL.createObjectURL(new Blob([data ?? ''], { type }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.hidden = true;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // The download reads the blob after the click returns; release it once it has.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   },
 
   /** Writes bytes to a file (creates parent dirs). */

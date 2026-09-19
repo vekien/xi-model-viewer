@@ -5,8 +5,9 @@ import { CategoryInput } from './CategoryInput.jsx';
 // The Mixes panel — what the timeline's Load opens: every saved mix, filed by
 // category, one folding group per category with the unfiled ones last. A row
 // opens its mix; on hover it can be renamed or re-filed (one inline form),
-// duplicated or deleted. A folded group stays folded across visits; a search
-// opens everything it hits.
+// duplicated, exported or deleted. A folded group stays folded across visits; a
+// search opens everything it hits. Import, beside the search box, brings in a
+// mix someone saved as a .json file; Export is how one leaves.
 
 const UNFILED = 'Uncategorised';
 const FOLD_KEY = 'mixerLibFolded';
@@ -34,8 +35,8 @@ function groupRows(rows) {
 const sourceLine = (r) => ['motion', 'vfx', 'sound'].map((l) => r.sources?.[l]?.name ?? r.sources?.[l]?.spec).filter(Boolean).join(' · ');
 const safeName = (s) => s.replace(/[^A-Za-z0-9_-]/g, '_');
 
-/** One saved mix: open on click; hover for edit (name and category), duplicate, delete. */
-function Row({ r, current, onStage, categories, onOpen, onRename, onSetCategory, onDuplicate, onDelete }) {
+/** One saved mix: open on click; hover for edit (name and category), duplicate, export, delete. */
+function Row({ r, current, onStage, categories, onOpen, onRename, onSetCategory, onDuplicate, onExport, onDelete }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(r.name);
   const [cat, setCat] = useState(r.category ?? '');
@@ -82,6 +83,7 @@ function Row({ r, current, onStage, categories, onOpen, onRename, onSetCategory,
         <span className="mixer-recipe-acts" onClick={stop}>
           <Tooltip content="Rename, or file under another category"><button type="button" className="pc-tbtn" aria-label="Edit" onClick={begin}><span className="icon">edit</span></button></Tooltip>
           <Tooltip content="Duplicate"><button type="button" className="pc-tbtn" aria-label="Duplicate" onClick={() => onDuplicate?.(r.name)}><span className="icon">content_copy</span></button></Tooltip>
+          <Tooltip content="Export: save this mix as a .json file"><button type="button" className="pc-tbtn" aria-label="Export" onClick={() => onExport?.(r.name)}><span className="icon">download</span></button></Tooltip>
           {/* One click: a mix is a small JSON file, cheap to recreate. */}
           <Tooltip content="Delete"><button type="button" className="pc-tbtn" aria-label="Delete" onClick={() => onDelete?.(r.name)}><span className="icon">delete</span></button></Tooltip>
         </span>
@@ -90,7 +92,7 @@ function Row({ r, current, onStage, categories, onOpen, onRename, onSetCategory,
   );
 }
 
-export function MixerLibrary({ recipes = [], current = '', stageName = null, onOpen, onRename, onSetCategory, onDuplicate, onDelete, onClose }) {
+export function MixerLibrary({ recipes = [], current = '', stageName = null, onOpen, onRename, onSetCategory, onDuplicate, onDelete, onImport, onExport, onClose }) {
   const [query, setQuery] = useState('');
   const [folded, setFolded] = useState(readFolded);
   const toggle = (cat) => setFolded((prev) => {
@@ -117,8 +119,11 @@ export function MixerLibrary({ recipes = [], current = '', stageName = null, onO
           <span className="icon">close</span>
         </button>
       </div>
-      <input type="text" className="list-search" placeholder="Search mixes…" value={query} spellCheck={false}
-        onChange={(e) => setQuery(e.target.value)} />
+      <div className="mixer-lib-top">
+        <input type="text" className="list-search" placeholder="Search mixes…" value={query} spellCheck={false}
+          onChange={(e) => setQuery(e.target.value)} />
+        <Tooltip content="Import: add a mix from a .json file"><button type="button" className="pc-tbtn" aria-label="Import" onClick={() => onImport?.()}><span className="icon">upload_file</span></button></Tooltip>
+      </div>
       <div className="mixer-recipes mixer-lib-list">
         {!recipes.length && <div className="side-note">Nothing saved yet — Save writes a mix into exports/ability/mixer.</div>}
         {recipes.length > 0 && !shown.length && <div className="side-note">Nothing matches “{query.trim()}”.</div>}
@@ -134,7 +139,7 @@ export function MixerLibrary({ recipes = [], current = '', stageName = null, onO
               </div>
               {open && g.rows.map((r) => (
                 <Row key={r.name} r={r} current={r.name === current} onStage={r.name === stageName} categories={categories}
-                  onOpen={onOpen} onRename={onRename} onSetCategory={onSetCategory} onDuplicate={onDuplicate} onDelete={onDelete} />
+                  onOpen={onOpen} onRename={onRename} onSetCategory={onSetCategory} onDuplicate={onDuplicate} onExport={onExport} onDelete={onDelete} />
               ))}
             </div>
           );

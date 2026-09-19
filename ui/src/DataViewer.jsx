@@ -1798,6 +1798,20 @@ function ResRow({ res, depth, onOpenTexture, onOpenSkeleton, onOpenZoneDef, onOp
         {clickable && !res.detail && (
           <span className="data-detail data-tex-hint">click to view</span>
         )}
+        {/* The row plays the generator; its header fields and ops open as a table. */}
+        {isParticle && typeof onOpenDataTable === 'function' && (
+          <Tooltip content={`View every field and op as a table · ${at}`} placement="top">
+            <button
+              type="button"
+              className="pc-tbtn"
+              aria-label="Attribute table"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onOpenDataTable(res); }}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <span className="icon">table_rows</span>
+            </button>
+          </Tooltip>
+        )}
         {flags.length > 0 && <span className="data-flags mono">{flags.join(' ')}</span>}
         <span className="data-size mono">{fmtBytes(res.size)}</span>
       </div>

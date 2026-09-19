@@ -8,7 +8,7 @@ import { baseMotionCompanions, battleSkirtPath, weaponSkillWaistPaths } from '..
 import { animDisplayName, groupAnimations, matchAnimRef, mergeModels, parseEntity, resolveScheduleClip } from '../js/dat.js';
 import { Renderer } from '../js/renderer.js';
 import { isRestingClip } from '../js/pose.js';
-import { collectVis, hiddenSlotsAt, SLOT } from '../js/weaponVis.js';
+import { collectVis, hiddenSlotsAt, rangedRoutineId, SLOT } from '../js/weaponVis.js';
 import { FileTree } from './FileTree.jsx';
 import { DatabaseList } from './DatabaseList.jsx';
 import { DatabaseViewer, invalidateDbCache, dbDataDir, importDbFolder } from './DatabaseViewer.jsx';
@@ -55,14 +55,15 @@ import { LightGizmo, DEFAULT_LIGHT_DIR } from './LightGizmo.jsx';
 
 import { CameraSequencer } from './CameraSequencer.jsx';
 import { parseFloorTexture } from '../js/dat.js';
-import { extractKeyTables, parseZone, parseDatTextures, parseZoneDefAt, parseZoneMeshAt } from '../js/zone.js';
+import { decodeTextureSection, extractKeyTables, parseZone, parseDatTextures, parseZoneDefAt, parseZoneMeshAt } from '../js/zone.js';
 import { ZoneDefModal } from './ZoneDefModal.jsx';
 import { ParticlePreviewModal } from './ParticlePreviewModal.jsx';
 import { MixerList } from './MixerList.jsx';
 import { MixerPanel } from './MixerPanel.jsx';
 import { Floating } from './Floating.jsx';
 import { RightRail } from './RightRail.jsx';
-import { ANIM_BANDS_KEY, RACE_TO_XI, buildCatalogArgs, clipBlend, composeForPreview, emptyRecipe, entryPathForRace, eventsFromInspect, inspectSpec, kindOf, laneForEvent, listWsSlots, loadAnimBands, loadCatalog, mixerDir, normalizeAnimBands, parsePublishPlan, publishRecipe, readCategories, recipeTracks, serializeRecipe, soundIdsFromInfo, trackLabel, updateCategories, withIds } from '../js/mixer.js';
+import { ANIM_BANDS_KEY, RACE_TO_XI, baseMotionRefs, buildCatalogArgs, castRelease, chantStages, clipBlend, composeForPreview, dropLaneEdits, emptyRecipe, entryPathForRace, eventsFromInspect, hasTrack, holdClock, holdPlan, inlineRecipeTextures, inspectSpec, isBlockingOp, isComposed, keepCopies, keepEventFromBytes, kindOf, laneForEvent, listWsSlots, loadAnimBands, loadCatalog, makeKeepEvents, mixerDir, normalizeAnimBands, parsePublishPlan, pickStages, publishRecipe, readCategories, recipeFromImport, recipeTextures, recipeTracks, rowOfEvent, safeRecipeName, serializeRecipe, soundIdsFromInfo, stageLoops, stageTimeline, trackLabel, trackShift, updateCategories, withIds } from '../js/mixer.js';
+import { lanesThatCarry, lanesToSync, pngPixels, seedTouched, sourceOf, syncEdits, textureSection, textureSwaps } from '../js/mixerLive.js';
 import { ZoneMeshPreviewModal } from './ZoneMeshPreviewModal.jsx';
 import { armGeneratorPreview } from '../js/particlePreview.js';
 import { checkForUpdate, checkForUpdateManual, dismissUpdate } from '../js/update.js';
@@ -81,14 +82,14 @@ import { makeParsers } from '../js/dat/sections.js';
 import { parseParticleGenerator } from '../js/particle/parser.js';
 import { ParticleSystem } from '../js/particle/system.js';
 import { LinkedDataType } from '../js/particle/types.js';
-import { parseEffectRoutines, flattenRoutine, laneSlice, sharedLinkLane } from '../js/effect.js';
+import { CASTER_OPS, parseEffectRoutines, flattenRoutine, laneSlice, routineTicks, sharedLinkLane } from '../js/effect.js';
 import { graftRig } from '../js/dat.js';
 import { EffectList } from './EffectList.jsx';
 import { ensureXiToolsOnBoot } from '../js/toolsBoot.js';
 import { WeatherAudio } from '../js/particle/audio.js';
 import { toAudioBuffer, parseAudioHeader, FMT_ATRAC3 } from '../js/audio.js';
 import { parseImageDat, textureForSet } from '../js/images.js';
-import { inspectDat, parseInspectSkeleton, parseInspectRoute, parseInspectUiMenu, parseInspectUiElementGroup, parseInspectDataTable, parseInspectEffectRoutine, parseInspectSpriteSheet, parseInspectParticleMesh, parseInspectKeyFrame, parseInspectWeightedMesh, parseInspectSkeletonMesh, parseInspectInfo, parseInspectSkeletonAnimation, parseInspectZoneInteractions, parseInspectEnvironment, inspectDmsg, attachDataTableNames } from '../js/dat/inspect.js';
+import { inspectDat, parseInspectSkeleton, parseInspectRoute, parseInspectUiMenu, parseInspectUiElementGroup, parseInspectDataTable, parseInspectEffectRoutine, parseInspectSpriteSheet, parseInspectParticleMesh, parseInspectParticleGenerator, parseInspectKeyFrame, parseInspectWeightedMesh, parseInspectSkeletonMesh, parseInspectInfo, parseInspectSkeletonAnimation, parseInspectZoneInteractions, parseInspectEnvironment, inspectDmsg, attachDataTableNames } from '../js/dat/inspect.js';
 import { SkeletonModal } from './SkeletonModal.jsx';
 import { RouteModal } from './RouteModal.jsx';
 import { UiMenuModal } from './UiMenuModal.jsx';
@@ -164,11 +165,29 @@ const VIEWS = ['files', 'database', 'npc', 'pc', 'creation', 'music', 'sfx', 'zo
 const MIXER_RAIL = [
   { id: 'timeline', icon: 'timeline', label: 'Ability Mixer' },
   { id: 'library', icon: 'folder_open', label: 'Mixes' },
+  { id: 'generator', icon: 'bubble_chart', label: 'Generator' },
   { id: 'actors', icon: 'groups', label: 'Actors' },
 ];
 const ORBIT_VIEWS = new Set(['files', 'npc', 'pc', 'creation']);
 /** Publish choices for a mix (the Timeline's Manage panel); see setMixerPublishCfg. */
 const PUBLISH_CFG_DEFAULT = { kind: 'auto', animation: '', from: '', subdir: 20, force: false, pivot: false };
+const MIXER_FILE_DIR_KEY = 'mixerFileDir';   // localStorage: the folder the last mix was exported to or imported from
+const publishCfgKey = (name) => `mixerPublish:${name}`;   // localStorage, one per mix name
+const loadPublishCfg = (name) => {
+  try { return { ...PUBLISH_CFG_DEFAULT, ...JSON.parse(localStorage.getItem(publishCfgKey(name)) || '{}') }; } catch { return { ...PUBLISH_CFG_DEFAULT }; }
+};
+/**
+ * Start a mix name's publish settings afresh, with a publish kind when it has one.
+ * The kind lives outside the recipe file, so it is set here for a mix that arrives
+ * with one: an import (its target.kind), or a rename or duplicate (the kind the
+ * mix had — not its slot number, which stays with the name that published it).
+ * Every caller names a mix new to that name, so nothing a deleted or renamed mix
+ * left under it (a slot, force) carries over.
+ */
+const storePublishKind = (name, kind) => {
+  const cfg = { ...PUBLISH_CFG_DEFAULT, ...(['ja', 'spell', 'ws'].includes(kind) ? { kind } : {}) };
+  try { localStorage.setItem(publishCfgKey(name), JSON.stringify(cfg)); } catch { /* quota */ }
+};
 // Seconds of real time one in-game day takes when the day/night cycle is
 // playing. 60 is what the button did before it was configurable.
 const DAY_LENGTH_DEFAULT = 60;
@@ -495,13 +514,15 @@ function asMontage(model, clip, mode) {
     // tuned to hand joints between them. Only the command that finishes last
     // hands back to the base — the rest hold, so the routine reads as one
     // action instead of sagging toward the resting pose between commands.
+    // A command's play lasts its window when it has one (pose.js `loopFrames`).
+    const segEnd = (seg) => seg.delay + (seg.loopFrames > 0 ? seg.loopFrames : seg.clip.lengthInFrames);
     let lastEnd = -Infinity;
     for (const seg of clip.segments) {
-      lastEnd = Math.max(lastEnd, seg.delay + seg.clip.lengthInFrames);
+      lastEnd = Math.max(lastEnd, segEnd(seg));
     }
     const segments = clip.segments.map((seg) => ({
       ...seg,
-      transOut: (seg.delay + seg.clip.lengthInFrames) >= lastEnd ? blend : 0,
+      transOut: segEnd(seg) >= lastEnd ? blend : 0,
     }));
     return {
       ...clip,
@@ -631,15 +652,43 @@ function mixLoopAt({ total, windup, span, animCues, sounds }) {
 }
 
 /**
+ * How long each of a character's own routines runs (effect.js routineTicks), for the
+ * hold a blocking `3C` link to one puts on the routine it is in: a race's `shbk` is one
+ * tick, then it waits out ROM/0/0.DAT's `wash` (60). A name the character does not
+ * have holds nothing — the game logs it and goes on. Null without a character; before
+ * the shared DAT is read, null for a routine the character has, which waits on it.
+ */
+function actorScheduleTicks(actor, globalById = null) {
+  const scheds = actor && actor.kind !== 'zone' && Array.isArray(actor.schedules) ? actor.schedules : null;
+  if (!scheds) return null;
+  const byId = new Map(scheds.map((s) => [s.id, s]));
+  if (!globalById?.size) return (id) => (byId.has(id) ? null : 0);
+  // A race routine's own links look where the game looks: 0x3B in its DAT and then the
+  // shared one, 0x3C on the caster.
+  const find = (id, op) => (op === 0x3c ? (byId.get(id) ?? null) : (byId.get(id) ?? globalById?.get(id) ?? null));
+  const memo = new Map();
+  return (id) => {
+    if (!byId.has(id)) return 0;
+    if (!memo.has(id)) memo.set(id, routineTicks(byId.get(id), find));
+    return memo.get(id);
+  };
+}
+
+/**
  * Effects view > Show Character Animation: the caster clips scheduled by a
  * routine's 0x05 commands (and its `ca*`/`sh*` actor calls), resolved against
  * THIS character's clips. A ref that doesn't resolve is dropped, which is how the
  * weapon-skill (`wz*`) refs degrade when the motion pack holding them isn't
- * loaded. `windup` is the routine-clock delay the effect must be shifted by so
- * it lands on the cast's release frame, applied to everything at or after
- * `windupFrom`, the tick the cast is called on (a blocking link holds the rest of
- * its routine). Module-level so the Schedule combo and the toggle itself can
- * re-bake the cues without reloading the DAT.
+ * loaded. The routine's delays already hold everything after a blocking link for
+ * as long as the routine it runs (flattenRoutine; the mixer's holdPlan), a cast
+ * release's `3C sh··` included, so a cast plays on its link's tick and the rest
+ * follows it as timed. `windup` is the one shift left to the caller:
+ * `visCtx.leadIn` (the Effects view) plays one cycle of the chant before the first
+ * cast's release — in game the client chants for the whole cast before the
+ * spell's DAT runs, and the mixer, which is that DAT, leaves it out — so
+ * everything from that cast's tick (`windupFrom`) moves back by the chant.
+ * Module-level so the Schedule combo and the toggle itself can re-bake the cues
+ * without reloading the DAT.
  */
 function buildCasterCues(actor, routine, visCtx = null) {
   // The effect DAT's own 0x2B clips come first: a composed mix carries the
@@ -672,77 +721,107 @@ function buildCasterCues(actor, routine, visCtx = null) {
   // for the battle stance under a weapon skill (visCtx.engaged), as actorIdleClip does.
   const idleClip = () => (visCtx?.engaged ? findClip('btl?') : null) ?? findClip('idl?') ?? pickBaseIdle(actor);
 
-  // A call the effect DAT can't satisfy is a schedule on the ACTOR — this
-  // is where the cast motions live (`shbk` black, `shnj` ninjutsu, `shwh`
-  // white). Every race ships the `sh*` schedules EMPTY while the `ca*`
-  // twin carries the ref, so read the twin's ref when the direct one is
-  // blank (verified identical on Hume/Taru/Galka/Mithra).
+  // A call the effect DAT can't satisfy is a schedule on the ACTOR — this is
+  // where the cast motions live: `sh··` is the release a spell's DAT opens with
+  // (`shbk` black, `shnj` ninjutsu, `shwh` white; retail links it `3C` at frame
+  // 0) and `ca··` the chant the client plays while it is cast.
   const schedById = new Map((actor.schedules ?? []).map((sc) => [sc.id, sc]));
-  const schoolRef = (id) => (schedById.get(id)?.refs ?? [])[0]
-    ?? (id.startsWith('sh') ? (schedById.get(`ca${id.slice(2)}`)?.refs ?? [])[0] : null)
-    ?? null;
-
   /**
-   * Full cast — wind-up → hold → release — as ONE clip with `segments`,
-   * not a run of setAnimation calls. That hands the whole thing to
-   * SkeletonPose.evaluate, which already cross-fades a finished segment
-   * back to `baseClip` over `transOut` frames and rests undriven joints
-   * there instead of the bind pose. Firing separate clips could only
-   * snap.
-   *
-   * The three stages are the same clip base with the stage digit walked
-   * (`mb0?`/`mb1?`/`mb2?` for black magic), so this is derived, not a
-   * table. Segment delays are 30fps clip frames; the routine clock is
-   * 60/s, hence the doubling on the way out.
+   * The clip commands a cast schedule plays, on its own clock: its own — dat.js
+   * folds in the `ss··` routine a release links, `mb1?` then `mb2?` twice for
+   * black magic — else those of the `lc··` / `ls··` routine its StartRanged /
+   * FinishRanged picks by the ranged weapon (a song, geomancy).
    */
-  const buildCast = (scheduleId) => {
-    // ONLY the magic-cast schedules have the three-stage structure.
-    // `ca<school>` / `sh<school>` map to `m*0/1/2` = wind-up/hold/release.
-    // Everything else a routine can call — res0, damg, sway, gurd, pary —
-    // is a self-contained motion, and walking its stage digit invents a
-    // sequence that does not exist: `res0` refs `rx0?`, so the walk
-    // played rx0 → rx1 → rx2, i.e. Raise I then II then III.
-    if (!/^(ca|sh)/.test(scheduleId)) return null;
-    const ref = schoolRef(scheduleId);
-    if (!ref) return null;
-    const base = ref.slice(0, 2);
-    // Belt and braces: the cast families all start with `m`.
-    if (!base.startsWith('m')) return null;
-    const inC = findClip(`${base}0?`);
-    const holdC = findClip(`${base}1?`);
-    const outC = findClip(`${base}2?`);
-    if (!inC || !outC) return null;
-    const len = (c) => c.lengthInFrames ?? 0;
-    const segments = [{ clip: inC, delay: 0, transOut: CAST_BLEND_FRAMES }];
-    let at = len(inC);
-    if (holdC) {
-      segments.push({ clip: holdC, delay: at, transOut: CAST_BLEND_FRAMES });
-      at += len(holdC);
-    }
-    // The release runs its own length (~1s for most schools) and then
-    // fades out over CAST_BLEND_FRAMES rather than cutting to idle.
-    segments.push({ clip: outC, delay: at, transOut: CAST_BLEND_FRAMES });
-    return { segments, releaseFrame: at, endFrame: at + len(outC) + CAST_BLEND_FRAMES, scheduleId };
+  const castCommands = (sched) => {
+    if (!sched) return [];
+    if (sched.commands?.length) return sched.commands;
+    const ranged = (sched.vis ?? []).find((v) => v.op === 0x76 || v.op === 0x77);
+    const via = ranged ? schedById.get(rangedRoutineId(ranged.op === 0x76, ranged.subtype ?? 0, visCtx?.rangeType ?? null)) : null;
+    return (via?.commands ?? []).map((c) => ({ ...c, delay: c.delay + ranged.delay }));
+  };
+  // The chant twin of a cast (`shbk` → `cabk`) and the clip it chants with.
+  const chantOf = (scheduleId) => {
+    const sched = schedById.get(`ca${scheduleId.slice(2)}`);
+    const cmd = castCommands(sched)[0] ?? null;
+    return cmd ? { cmd, clip: findClip(cmd.ref) } : null;
   };
 
-  // The first magic cast the routine calls runs on the tick it is called on,
-  // and the routine's own 0x05 clips play around it. Retail calls its cast at
-  // tick 0 and carries no clips of its own, so there the cast is the whole
-  // motion and the effect shifts as a unit; a mix can call it later (the
-  // timeline's `shbk` at frame 13) beside clips from another source.
-  const called = (routine.flat.actorCalls ?? []).map((c) => ({ c, cast: buildCast(c.scheduleId) })).find((x) => x.cast);
-  const cast = called?.cast ?? null;
-  const windupFrom = called ? Math.max(0, called.c.delay || 0) : 0;
-  if (cast) windup = cast.releaseFrame * 2;   // the effect lands on the release
+  /**
+   * A cast as ONE clip with `segments`, not a run of setAnimation calls. That
+   * hands the whole thing to SkeletonPose.evaluate, which already cross-fades a
+   * finished segment back to `baseClip` over `transOut` frames and rests
+   * undriven joints there instead of the bind pose. Firing separate clips could
+   * only snap.
+   *
+   * The segments are what the schedule plays, each in the window the client
+   * plays it, a repeat laid as a segment of its own (only a lone clip loops in
+   * a segment) and a looping chant cut to the cycles a pick lays; `lead` puts
+   * one cycle of the chant before a release. A release the race files leave
+   * empty plays its chant twin's clip family, stages 1 and 2 at their own
+   * lengths (`mb0?` → `mb1?`, `mb2?`). Segment delays are 30fps clip frames;
+   * the routine clock is 60/s, hence the halving.
+   */
+  const buildCast = (scheduleId, lead = false) => {
+    // ONLY the magic-cast schedules. Everything else a routine can call —
+    // res0, damg, sway, gurd, pary — is a self-contained motion this does not
+    // play; walking a stage digit there invents a sequence that does not
+    // exist (`res0` refs `rx0?`: rx0 → rx1 → rx2 is Raise I, II and III).
+    if (!/^(ca|sh)/.test(scheduleId)) return null;
+    const release = scheduleId.startsWith('sh');
+    let cmds = castCommands(schedById.get(scheduleId));
+    const chant = release ? chantOf(scheduleId) : null;
+    if (!cmds.length && release) {
+      const base = chant?.cmd.ref.slice(0, 2);
+      // Belt and braces: the cast families all start with `m`.
+      if (base?.startsWith('m')) cmds = [`${base}1?`, `${base}2?`].map((ref) => ({ ref, delay: null, duration: 0, maxLoops: 1 }));
+    }
+    const segments = [];
+    let at = 0;   // clip frames: where the segments laid so far end
+    const lay = (clip, delay, loopFrames, loops) => {
+      const len = loopFrames > 0 ? loopFrames : (clip.lengthInFrames ?? 0);
+      for (let i = 0; i < loops; i++) segments.push({ clip, delay: delay + i * len, loopFrames, transOut: CAST_BLEND_FRAMES });
+      at = Math.max(at, delay + loops * len);
+    };
+    let leadFrames = 0;
+    if (lead && chant?.clip) {
+      lay(chant.clip, 0, chant.cmd.duration > 0 ? Math.max(1, chant.cmd.duration / 2) : 0, 1);
+      leadFrames = at;
+    }
+    for (const c of cmds) {
+      const clip = findClip(c.ref);
+      if (!clip) continue;
+      lay(clip, c.delay == null ? at : leadFrames + c.delay / 2, c.duration > 0 ? Math.max(1, c.duration / 2) : 0, stageLoops({ loops: c.maxLoops }));
+    }
+    if (segments.length <= (leadFrames ? 1 : 0)) return null;
+    // The last one runs its window and then fades out over CAST_BLEND_FRAMES rather than cutting to idle.
+    return { segments, leadFrames, endFrame: at + CAST_BLEND_FRAMES, scheduleId };
+  };
+
+  // Each cast the routine calls where the game looks for it — on the caster
+  // (0x3C, 0x57; a 0x03 or 0x3B never reaches the actor, and a 0x09 plays on the
+  // target) — runs on the tick it is called on, and the routine's own 0x05 clips
+  // play around it. With `leadIn` the first cast chants first, and everything
+  // from its tick waits for the chant.
+  const casts = [];
+  let windupFrom = 0;
+  for (const c of routine.flat.actorCalls ?? []) {
+    if (c.op != null && !CASTER_OPS.has(c.op)) continue;
+    const cast = buildCast(c.scheduleId, !!visCtx?.leadIn && !casts.length);
+    if (!cast) continue;
+    if (!casts.length && cast.leadFrames) { windup = cast.leadFrames * 2; windupFrom = Math.max(0, c.delay || 0); }
+    casts.push({ cast, at: Math.max(0, c.delay || 0) });
+  }
+  const later = (d) => (windup && d >= windupFrom ? d + windup : d);
   const idle = idleClip();
   const items = (routine.flat.anims ?? [])
-    .map((a) => ({ a, clip: findClip(a.ref), delay: cast && a.delay >= windupFrom ? a.delay + windup : a.delay }))
+    .map((a) => ({ a, clip: findClip(a.ref), delay: later(a.delay) }))
     .filter((x) => x.clip);
-  if (cast) items.push({ cast, delay: windupFrom });
+  casts.forEach((x, i) => items.push({ cast: x.cast, delay: i === 0 ? x.at : later(x.at) }));
   items.sort((x, y) => x.delay - y.delay);
   items.forEach((it, i) => {
     const next = items[i + 1];
     if (it.cast) {
+      const { cast } = it;
       const jointTracks = new Map();
       for (const s of cast.segments) for (const [j, t] of s.clip.jointTracks) jointTracks.set(j, t);
       // TWO cues, not one. Stretching the cast clip to cover the effect
@@ -783,7 +862,12 @@ function buildCasterCues(actor, routine, visCtx = null) {
     // back to the idle over the command's own transOut. A bare clip looped on
     // its own length instead, and the hold never ended.
     const { a, clip } = it;
-    const len = clip.lengthInFrames ?? 0;
+    // One play lasts the command's `dur`, the window the client time-scales the clip
+    // into (ticks, so ÷2 for clip frames; never under a frame, as the client clamps
+    // it): Black Magic's Start stretches its 14-frame chant over 33 ticks. A command
+    // with no `dur` plays the clip at its own length.
+    const loopFrames = a.dur > 0 ? Math.max(1, a.dur / 2) : 0;
+    const len = loopFrames || (clip.lengthInFrames ?? 0);
     // `loops` repeats the clip: 1 once (the default), N N times then hold, 0 forever
     // (until the next cue or the mix's loop point) — so a sustained motion, a bard
     // singing, holds instead of playing once. `cycles` 0 is the infinite case; the
@@ -797,7 +881,7 @@ function buildCasterCues(actor, routine, visCtx = null) {
       delay: it.delay,
       clip: idle ? {
         id: clip.id,
-        segments: [{ clip, delay: 0, transOut, loops: cycles }],
+        segments: [{ clip, delay: 0, loopFrames, transOut, loops: cycles }],
         jointTracks: clip.jointTracks,
         // One frame past the hand-over so the renderer never wraps first; an infinite
         // loop wraps on its own length so the repeat is seamless.
@@ -2462,7 +2546,10 @@ export default function App({ launch = null }) {
         const cands = rel !== path
           ? gameCandidates(rel, settings, { skipHd })
           : (skipHd ? gameCandidates(path, settings, { skipHd: true }) : [path]);
-        const list = cands.length ? cands : [path];
+        // `opts.exact`: files the DAT Browser clicked, read as they are before any
+        // HD or pivot copy of the same ROM key.
+        const exact = opts.exact?.includes(path);
+        const list = exact ? [path, ...cands.filter((c) => c !== path)] : (cands.length ? cands : [path]);
         const key = list.join('|');
         const cached = datCacheGet(key);
         if (cached) return cached;
@@ -3133,7 +3220,10 @@ export default function App({ launch = null }) {
     const settings = settingsRef.current;
     if (!settings?.gamePath) { setStatusText('Set a game path in Settings first.'); return; }
     const rel = normRel(entry.path);
-    const abs = `${settings.gamePath}\\${rel}`;
+    // The file actually read, once read, so Data Struct and a reload describe what is on
+    // the stage. A DAT Browser click passes the clicked file as `entry.abs`, which is read
+    // before any HD or pivot copy of the same ROM key.
+    let abs = entry.abs ? normRel(entry.abs) : `${settings.gamePath}\\${rel}`;
     const token = ++effectTokenRef.current;
     // Silence the outgoing effect on the click, not when the new one finishes
     // loading — reading and parsing the DAT takes long enough that the old
@@ -3144,7 +3234,9 @@ export default function App({ launch = null }) {
     setStatusText(`Loading ${entry.name}…`);
 
     try {
-      const { data: buf } = await backend.readPrefer(gameCandidates(rel, settings));
+      const cands = gameCandidates(rel, settings);
+      const { path: readPath, data: buf } = await backend.readPrefer(entry.abs ? [entry.abs, ...cands] : cands);
+      abs = normRel(readPath);
       const parsed = parseEffectRoutines(buf);
       // Its own motion clips, for the caster cues (see buildCasterCues).
       let ownClips = [];
@@ -3157,9 +3249,12 @@ export default function App({ launch = null }) {
       // Expand each routine's 0x03 calls now, so picking one from the Schedule
       // combo is just a lookup. A `main` that spawns nothing itself usually
       // delegates to another routine (Cure: main → tgt0) — see flattenRoutine.
+      // A blocking link to the caster's own routine (a spell's `3C shbk`) holds
+      // the rest for as long as that routine runs on the stage character.
       const byId = new Map(parsed.map((r) => [r.id, r]));
       const globalById = globalEffectsRef.current?.routines ?? null;
-      const routines = parsed.map((r) => ({ ...r, flat: flattenRoutine(r, byId, globalById) }));
+      const actorTicks = actorScheduleTicks(modelRef.current, globalById);
+      const routines = parsed.map((r) => ({ ...r, flat: flattenRoutine(r, byId, globalById, { actorTicks }) }));
 
       const tree = buildParticleTree(buf, particleParsers(false, warnings), warnings);
       // The effect's own images; the shared ROM/0/0.DAT set is merged in for
@@ -3275,7 +3370,9 @@ export default function App({ launch = null }) {
       // no hand-back to idle. Only a Motion preview moves it.
       const drivesActor = onActor && showCharAnimRef.current && !keepActorAnim
         && (!only || (only === 'motion' && (play.anims.length > 0 || play.actorCalls.length > 0)));
-      const { animCues, windup, windupFrom = 0 } = drivesActor ? buildCasterCues(actor, only ? { ...routine, flat: play } : routine, { globalById: globalEffectsRef.current?.routines ?? null, rangeType: rangedInfoRef.current, extraClips: effectClipsRef.current, engaged: leftViewRef.current === 'mixer' && mixKindRef.current === 'ws' }) : { animCues: [], windup: 0 };
+      // The mixer plays a spell's DAT as the game runs it at the finish: no chant first (leadIn).
+      const inMixer = leftViewRef.current === 'mixer';
+      const { animCues, windup, windupFrom = 0 } = drivesActor ? buildCasterCues(actor, only ? { ...routine, flat: play } : routine, { globalById: globalEffectsRef.current?.routines ?? null, rangeType: rangedInfoRef.current, extraClips: effectClipsRef.current, engaged: inMixer && mixKindRef.current === 'ws', leadIn: !inMixer }) : { animCues: [], windup: 0 };
       if (onActor) renderer.actorFollowsEffect = drivesActor;
       if (onActor && !keepActorAnim && !drivesActor && !only) {
         renderer.setAnimation(actorIdleClip());
@@ -3284,6 +3381,9 @@ export default function App({ launch = null }) {
       // Shift the effect so it fires on the cast's release frame: everything at
       // or after the cast's own tick (all of it for retail, which casts at 0).
       const shift = (arr) => (windup ? arr.map((x) => (x.delay >= windupFrom ? { ...x, delay: x.delay + windup } : x)) : arr);
+      // Where a mix's blocking links hold it, for the timeline's cursor and seeks: the
+      // stage runs held, the timeline shows the frames compose wrote.
+      mixerHoldsRef.current = opts.hardLoop ? (routine.flat.holds ?? []) : [];
       let armed = false;
       const armRoutine = () => system.playEffectRoutine(shift(play.commands), {
         // Only the re-fires overlap; the first arm still clears the stage.
@@ -3306,8 +3406,10 @@ export default function App({ launch = null }) {
         // A once-through Effects or Sound preview is not over before its last
         // command has fired and had a moment to show: an instant generator would
         // otherwise count as finished on the tick it fires, before any particle.
+        // A mix's own end (`total`) is a frame of its DAT; its blocking links hold the
+        // routine past it (holdClock), as they hold everything else.
         loopAt: opts.hardLoop
-          ? mixLoopAt({ total: opts.loopAt, windup, span: routine.flat.length, animCues, sounds: routine.flat.sounds })
+          ? mixLoopAt({ total: opts.loopAt > 0 ? holdClock(routine.flat.holds).toStage(opts.loopAt, true) : opts.loopAt, windup, span: routine.flat.length, animCues, sounds: routine.flat.sounds })
           : only === 'motion' ? mixLoopAt({ windup, span: 0, animCues, sounds: [] })
             : only ? Math.max(1, ...play.commands.map((c) => c.delay + Math.max(c.dur, 1)), ...play.sounds.map((s) => s.delay + 1)) + 30
               : null,
@@ -3543,7 +3645,8 @@ export default function App({ launch = null }) {
     const actor = modelRef.current;
     const onActor = !!(actor && actor.kind !== 'zone' && actor.isRenderable && renderer.model === actor);
     const drivesActor = onActor && showCharAnimRef.current;
-    const { animCues, windup, windupFrom = 0 } = drivesActor ? buildCasterCues(actor, routine, { globalById: globalEffectsRef.current?.routines ?? null, rangeType: rangedInfoRef.current, extraClips: effectClipsRef.current, engaged: leftViewRef.current === 'mixer' && mixKindRef.current === 'ws' }) : { animCues: [], windup: 0 };
+    const inMixer = leftViewRef.current === 'mixer';
+    const { animCues, windup, windupFrom = 0 } = drivesActor ? buildCasterCues(actor, routine, { globalById: globalEffectsRef.current?.routines ?? null, rangeType: rangedInfoRef.current, extraClips: effectClipsRef.current, engaged: inMixer && mixKindRef.current === 'ws', leadIn: !inMixer }) : { animCues: [], windup: 0 };
     if (onActor) {
       renderer.actorFollowsEffect = drivesActor;
       if (!drivesActor) {
@@ -3948,8 +4051,10 @@ export default function App({ launch = null }) {
       beginLoad(displayName, 'Reading DAT…');
       overlayGenRef.current = gen;
       player.stop();
+      // `zone.abs`: a DAT Browser click, read as the clicked file before any HD or pivot copy.
+      const zoneCands = gameCandidates(rel, settings);
       const [{ data: datBuf, path: resolvedAbs }, keyTables] = await Promise.all([
-        backend.readPrefer(gameCandidates(rel, settings)),
+        backend.readPrefer(zone.abs ? [zone.abs, ...zoneCands] : zoneCands),
         getKeyTables(),
       ]);
       if (!stillCurrent()) { releaseOverlay(); return; }
@@ -5691,13 +5796,17 @@ export default function App({ launch = null }) {
     if (!opts.overlay) setStatusText(`Reading ${rel}…`);
     // Highlight immediately so the tree tracks the click even if parse is slow.
     if (!opts.overlay) setSelectedDat(String(path).toLowerCase().replace(/\//g, '\\'));
+    // The file itself first: Data Struct describes the file that was clicked or is on the
+    // stage, not whichever HD or pivot copy of its ROM key the toggles would pick.
     const readAbs = async (abs) => {
-      const r = relFromAbs(abs, settings);
-      if (r !== abs) {
+      try {
+        return await backend.readFile(abs);
+      } catch (e) {
+        const r = relFromAbs(abs, settings);
+        if (r === abs) throw e;
         const { data } = await backend.readPrefer(gameCandidates(r, settings));
         return data;
       }
-      return backend.readFile(abs);
     };
     try {
       // FTABLE/VTABLE pairs get the id → DAT listing, not a section walk.
@@ -6248,6 +6357,8 @@ export default function App({ launch = null }) {
         table = parseInspectSpriteSheet(dataBufRef.current, res.offset);
       } else if (res?.isParticleMesh || res?.type === 0x1F || res?.name === 'ParticleMesh') {
         table = parseInspectParticleMesh(dataBufRef.current, res.offset);
+      } else if (res?.isParticleGenerator || res?.type === 0x05 || res?.name === 'ParticleGenerator') {
+        table = parseInspectParticleGenerator(dataBufRef.current, res.offset);
       } else if (res?.isKeyFrame || res?.type === 0x19 || res?.name === 'ParticleKeyFrameData') {
         table = parseInspectKeyFrame(dataBufRef.current, res.offset);
       } else if (res?.isWeightedMesh || res?.type === 0x25 || res?.name === 'WeightedMesh') {
@@ -6677,6 +6788,10 @@ export default function App({ launch = null }) {
   // lives only in mixerExtraTracks.
   const [mixerLane, setMixerLane] = useState('motion');
   const [mixerExtraTracks, setMixerExtraTracks] = useState([]);
+  // Rows a track holds open though no pill sits in them yet (the label's +):
+  // track → row count. Like an empty extra track, it lives only here.
+  const [mixerExtraRows, setMixerExtraRows] = useState({});
+  const mixerHoldRows = useCallback((track, count) => setMixerExtraRows((m) => ({ ...m, [track]: Math.max(0, count) })), []);
   const [mixerCatalog, setMixerCatalog] = useState(null);
   const [mixerCatalogBusy, setMixerCatalogBusy] = useState(false);
   const [mixerLaneInfo, setMixerLaneInfo] = useState({});
@@ -6710,7 +6825,7 @@ export default function App({ launch = null }) {
   // The mixer view's right rail: one glyph per panel, the Animation panel first.
   // Which are open is remembered; a panel's own close glyph reports back here.
   const [mixerPanels, setMixerPanels] = useState(() => {
-    const d = { actors: false, timeline: true, library: false };
+    const d = { actors: false, timeline: true, library: false, generator: false };
     try { return { ...d, ...JSON.parse(localStorage.getItem('mixerPanels') || '{}') }; } catch { return d; }
   });
   const setMixerPanel = useCallback((id, v) => setMixerPanels((m) => {
@@ -6731,19 +6846,23 @@ export default function App({ launch = null }) {
    * What the shared routines a recipe links (mdam, eis1, proc… from ROM/0/0.DAT)
    * contribute at absolute ticks: their own generators, sounds, clips and stops.
    * The game runs them the same way, so the timeline shows their sounds as ghost
-   * blocks and a live re-time keeps them.
+   * blocks and a live re-time keeps them. `lateOf(ev)`: how far a link plays behind
+   * its frame for the blocking links before it (holdPlan); the ghosts keep frames.
    */
-  const mixerLinked = useCallback((events) => {
+  const mixerLinked = useCallback((events, lateOf = null) => {
     const g = globalEffectsRef.current;
     const out = { commands: [], sounds: [], anims: [], stops: [], actorCalls: [] };
     if (!g?.routines) return out;
     for (const ev of events) {
       if (ev.enabled === false || !MIXER_LINK_OPS.has(ev.op) || !ev.ref) continue;
+      // 0x3C looks on the caster alone: a shared routine of its name is not what it runs.
+      if (ev.op === 0x3c) continue;
       const r = g.routines.get(ev.ref);
       if (!r) continue;
       const flat = flattenRoutine(r, g.routines, g.routines);
+      const at = ev.start + (lateOf?.(ev) ?? 0);
       for (const k of ['commands', 'sounds', 'anims', 'stops', 'actorCalls']) {
-        for (const x of flat[k] ?? []) out[k].push({ ...x, delay: x.delay + ev.start, via: ev.ref, linkStart: ev.start });
+        for (const x of flat[k] ?? []) out[k].push({ ...x, delay: x.delay + at, via: ev.ref, linkStart: ev.start });
       }
     }
     return out;
@@ -6761,41 +6880,75 @@ export default function App({ launch = null }) {
     const sys = r?.particleSystem;
     const actor = modelRef.current;
     if (!map || !sys?._effect || !actor) return false;
+    // The holds a Play mix plays (loadEffect's flattenRoutine), from the recipe: each
+    // blocking link holds what compose writes after it for as long as the routine it
+    // runs — a track's routine as composed, a shared one, or the stage character's own
+    // (a spell's `3C sh··`, 61 ticks).
+    const shared = globalEffectsRef.current?.routines ?? null;
+    const actorTicks = actorScheduleTicks(actor, shared);
+    const composed = new Map(effectRoutinesRef.current.map((x) => [x.id, x]));
+    const find = (id, op) => (op === 0x3c ? (actorTicks?.(id) ?? null) : (composed.get(id) ?? shared?.get(id) ?? null));
+    const holdOf = (ev) => {
+      if (!isBlockingOp(ev.op) || !ev.ref) return 0;
+      if (ev.op === 0x3c) return actorTicks?.(ev.ref) ?? 0;
+      const own = hasTrack(ev) ? composed.get(map.byId.get(ev._id)) : null;
+      return routineTicks(own ?? shared?.get(ev.ref) ?? null, find);
+    };
+    const { holds, offsets } = holdPlan(recipe.events, holdOf);
+    const late = (ev) => ev.start + (offsets.get(ev._id) ?? 0);
     const commands = []; const sounds = []; const anims = []; const stops = []; const actorCalls = [];
     for (const ev of recipe.events) {
       if (ev.enabled === false) continue;
       const ref = ev.ref ? (map.byId.get(ev._id) ?? map.byFromRef.get(`${ev.from}:${ev.ref}`) ?? null) : null;
       if (ev.op === 0x02) {
         if (!ref) return false;
-        commands.push({ genId: ref, delay: ev.start, dur: ev.dur || 0 });
+        commands.push({ genId: ref, delay: late(ev), dur: ev.dur || 0 });
       } else if (SOUND_OPS_LIVE.has(ev.op)) {
         if (!ref) return false;
-        sounds.push({ soundId: ref, delay: ev.start });
+        sounds.push({ soundId: ref, delay: late(ev) });
       } else if (ev.op === 0x05) {
         const [transIn, transOut] = clipBlend(ev);
-        anims.push({ ref: ev.ref, delay: ev.start, dur: ev.dur || 0, transIn, transOut, loops: ev.loops ?? 1 });
+        anims.push({ ref: ev.ref, delay: late(ev), dur: ev.dur || 0, transIn, transOut, loops: ev.loops ?? 1 });
       } else if (ev.op === 0x1e) {
         if (!ref) return false;
-        stops.push({ genId: ref, delay: ev.start });
-      } else if (MIXER_LINK_OPS.has(ev.op) && ev.ref && !globalEffectsRef.current?.routines?.has(ev.ref)) {
-        // A link to a schedule on the actor (`shbk`, the black-magic cast).
-        actorCalls.push({ scheduleId: ev.ref, delay: ev.start });
+        stops.push({ genId: ref, delay: late(ev) });
+      } else if (MIXER_LINK_OPS.has(ev.op) && ev.ref && (ev.op === 0x3c || !shared?.has(ev.ref))) {
+        // A link into its track's own routine (0x03 and 0x3B look in the mix's DAT
+        // first): compose carried the routine, under the name it reports, so what it
+        // plays is the composed DAT's. One linked, or pointed at another routine, since
+        // that compose is not in it yet.
+        if (hasTrack(ev) && (ev.op === 0x03 || ev.op === 0x3b)) {
+          if (!map.byId.has(ev._id) || map.refs?.get(ev._id) !== ev.ref) return false;
+          const sub = effectRoutinesRef.current.find((x) => x.id === ref);
+          if (sub) {
+            for (const [key, into] of [['commands', commands], ['sounds', sounds], ['anims', anims], ['stops', stops], ['actorCalls', actorCalls]]) {
+              for (const x of sub.flat?.[key] ?? []) into.push({ ...x, delay: x.delay + late(ev) });
+            }
+            continue;
+          }
+        }
+        // A link to a schedule on the actor (`shbk`, the black-magic release); its op
+        // says whether the game looks there at all (buildCasterCues).
+        actorCalls.push({ scheduleId: ev.ref, delay: late(ev), op: ev.op });
       }
-      // Locks and hits have no live counterpart; shared links are expanded below.
+      // Locks and hits have no live counterpart; shared links, hand-added or picked, are expanded below.
     }
-    const linked = mixerLinked(recipe.events);
+    const linked = mixerLinked(recipe.events, (ev) => offsets.get(ev._id) ?? 0);
     commands.push(...linked.commands); sounds.push(...linked.sounds); anims.push(...linked.anims); stops.push(...linked.stops); actorCalls.push(...linked.actorCalls);
     commands.sort((a, b) => a.delay - b.delay);
     sounds.sort((a, b) => a.delay - b.delay);
     anims.sort((a, b) => a.delay - b.delay);
     actorCalls.sort((a, b) => a.delay - b.delay);
-    const { animCues, windup, windupFrom } = buildCasterCues(actor, { flat: { anims, actorCalls } },
-      { globalById: globalEffectsRef.current?.routines ?? null, rangeType: rangedInfoRef.current, extraClips: effectClipsRef.current, engaged: leftViewRef.current === 'mixer' && mixKindRef.current === 'ws' });
-    // The same hold a Play mix applies (loadEffect): what comes at or after the cast waits for its release.
-    const shift = (arr) => (windup ? arr.map((x) => (x.delay >= windupFrom ? { ...x, delay: x.delay + windup } : x)) : arr);
+    // The mixer plays no chant before a cast (no leadIn), so there is no windup to shift by.
+    const { animCues, windup } = buildCasterCues(actor, { flat: { anims, actorCalls } },
+      { globalById: shared, rangeType: rangedInfoRef.current, extraClips: effectClipsRef.current, engaged: leftViewRef.current === 'mixer' && mixKindRef.current === 'ws' });
     const emitSpan = Math.max(1, ...commands.map((c) => c.delay + Math.max(c.dur, 1)));
-    const loopAt = mixLoopAt({ total: recipe.total, windup, span: emitSpan, animCues, sounds });
-    return sys.retimeEffect({ commands: shift(commands), sounds: shift(sounds), anims: animCues, stops: shift(stops), loopAt });
+    // The routine's own end (`total`) is a frame too: its holds run past it.
+    const total = recipe.total > 0 ? holdClock(holds).toStage(recipe.total, true) : recipe.total;
+    const loopAt = mixLoopAt({ total, windup, span: emitSpan, animCues, sounds });
+    const ok = sys.retimeEffect({ commands, sounds, anims: animCues, stops, loopAt });
+    if (ok) mixerHoldsRef.current = holds;
+    return ok;
   }, [mixerLinked]);
 
   /**
@@ -6834,16 +6987,272 @@ export default function App({ launch = null }) {
   // mixerLoaded: the shared DAT is read on the first effect load, so recompute after Play mix.
   }, [mixerRecipe.events, mixerLinked, mixerLoaded]);   // eslint-disable-line react-hooks/exhaustive-deps
 
+  /**
+   * What a link on the keep lane can name, for its routine field, the lane's
+   * warnings and the holds its blocking links put on the mix (mixer.js
+   * resolveKeepRef, linkHold): the shared routines of ROM/0/0.DAT, the stage
+   * character's own routines (its race's `sh··` cast releases and the rest), and
+   * each track's source routines (inspect's `routines` but the root; null while a
+   * source is not read) — each with how long it runs as the game waits for it
+   * (effect.js routineTicks: `wash` 60, a race's `shbk` 61). Read when asked, from
+   * whatever is loaded then; the same object comes back while none of that changes.
+   */
+  const mixerTargetsRef = useRef(null);
+  const mixerLinkTargets = useCallback(() => {
+    const g = globalEffectsRef.current;
+    const model = modelRef.current;
+    const c = mixerTargetsRef.current;
+    if (c && c.g === g && c.model === model && c.info === mixerLaneInfo) return c.out;
+    const shared = g?.routines?.size ? g.routines : null;
+    const actor = model && model.kind !== 'zone' ? model.schedules ?? [] : [];
+    const actorTicks = actor.length ? actorScheduleTicks(model, shared) : null;
+    // A track source's routine as its inspect gives it: its own clock (the header's
+    // total), and the blocking links its timeline lists in it.
+    const sourceRoutines = new Map();
+    const sourceRoutine = (track, id) => {
+      const info = mixerLaneInfo[track]?.info;
+      const own = info?.routines?.[id];
+      if (!own) return null;
+      const key = `${track}:${id}`;
+      if (!sourceRoutines.has(key)) {
+        sourceRoutines.set(key, {
+          total: Number(own.total) || 0,
+          calls: (info.timeline ?? []).filter((e) => e.routine === id && isBlockingOp(e.op) && e.ref).map((e) => ({ routineId: e.ref, op: e.op })),
+        });
+      }
+      return sourceRoutines.get(key);
+    };
+    const ticks = new Map();
+    const measure = (key, routine, local) => {
+      if (!ticks.has(key)) {
+        ticks.set(key, routineTicks(routine, (id, op) => (op === 0x3c ? (actorTicks?.(id) ?? null) : (local?.(id) ?? shared?.get(id) ?? null))));
+      }
+      return ticks.get(key);
+    };
+    const out = {
+      shared: shared ? new Set(shared.keys()) : null,
+      sharedTicks: (ref) => (shared?.has(ref) ? measure(`shared:${ref}`, shared.get(ref), null) : 0),
+      actorTicks,
+      trackTicks: (track, ref) => {
+        const routine = sourceRoutine(track, ref);
+        return routine ? measure(`${track}:${ref}`, routine, (id) => sourceRoutine(track, id)) : null;
+      },
+      actor: actor.length ? new Set(actor.map((s) => s.id)) : null,
+      tracks: new Map(Object.entries(mixerLaneInfo).map(([lane, held]) => {
+        const r = held?.info?.routines;
+        return [lane, r && typeof r === 'object' ? new Set(Object.keys(r).filter((id) => id !== (held.info.root ?? 'main'))) : null];
+      })),
+    };
+    mixerTargetsRef.current = { g, model, info: mixerLaneInfo, out };
+    return out;
+  }, [mixerLaneInfo]);
+
+  /**
+   * A track's source DAT, read once per file, for the generator editor and for
+   * putting its edits on the stage: `{ bytes, sections, ids, path }`, never written.
+   * A `ws:` track has a file per race, so the viewer's race picks it. Null when
+   * neither the catalog nor the spec itself says which file it is.
+   */
+  const mixerSourceCache = useRef(new Map());   // DAT path → Promise
+  const mixerLaneSource = useCallback((lane) => {
+    const spec = mixerRecipeRef.current.sources?.[lane]?.spec;
+    if (!spec) return Promise.resolve(null);
+    const held = mixerLaneInfo[lane]?.entry;
+    const entry = held?.spec === spec ? held : (mixerCatalog?.entries ?? []).find((e) => e.spec === spec);
+    const path = entry ? entryPathForRace(entry, pc.race)
+      : (/^ROM\d*[\\/]\d+[\\/]\d+(\.DAT)?$/i.test(spec) ? spec.replace(/(\.DAT)?$/i, '.DAT') : null);
+    if (!path) return Promise.resolve(null);
+    const cache = mixerSourceCache.current;
+    if (!cache.has(path)) {
+      if (cache.size >= 24) cache.delete(cache.keys().next().value);
+      cache.set(path, backend.readPrefer(gameCandidates(normRel(path), settingsRef.current))
+        .then(({ data }) => ({ ...sourceOf(data), path }))
+        .catch((e) => { cache.delete(path); throw e; }));
+    }
+    return cache.get(path);
+  }, [mixerLaneInfo, mixerCatalog, pc.race]);
+  /** ROM/0/0.DAT as mixerLaneSource reads a source, for the generator editor to show a
+   *  texture a generator draws from there (a mix never carries it). */
+  const mixerSharedSource = useCallback(() => {
+    const path = 'ROM\\0\\0.DAT';
+    const cache = mixerSourceCache.current;
+    if (!cache.has(path)) {
+      cache.set(path, backend.readPrefer(gameCandidates(path, settingsRef.current))
+        .then(({ data }) => ({ ...sourceOf(data), path }))
+        .catch((e) => { cache.delete(path); throw e; }));
+    }
+    return cache.get(path);
+  }, []);
+
+  // The generator preview on the stage ({ lane, genId, dur, tree }), while that is what it holds.
+  const mixerSoloRef = useRef(null);
+  const mixerSeekRef = useRef(null);   // mixerSeekTicks, which is declared further down
+  const mixerSoloPlay = useCallback((solo) => {
+    const r = rendererRef.current;
+    const system = r?.particleSystem;
+    if (!system) return;
+    weatherAudioRef.current?.stopOneShots();
+    r.actorFollowsEffect = false;
+    system.playEffectRoutine([{ genId: solo.genId, delay: 0, dur: solo.dur }], { loop: false, sounds: [], anims: [], loopAt: solo.dur + 30 });
+    r.effectPaused = false;
+    setEffectTransport('playing');
+  }, []);
+  /**
+   * The recipe's texture replacements on what the stage holds (`on`, the composed mix
+   * or a generator preview, and its tree): each effect texture of the stage DAT that a
+   * replacement names gets the PNG's pixels, alpha halved as compose stores it, and one
+   * taken back gets its own again — the stage DAT's, or the track's source texture for
+   * a replacement compose baked in. What each shows beyond its own pixels stays with
+   * the tree (ctx.mixerTexShown): every effect load builds its GL textures afresh, and
+   * a fresh tree with them. Only textures the stage DAT holds are written, never one of
+   * the shared ROM/0/0.DAT (mixerLive.js textureSwaps). False when the stage cannot
+   * show the recipe's textures and it has to be composed.
+   */
+  const mixerTexGen = useRef(0);
+  const mixerSyncTextures = useCallback(async (on, tree, system, isSolo) => {
+    const gen = ++mixerTexGen.current;   // a later pass takes over from this one
+    const recipe = mixerRecipeRef.current;
+    const shown = (tree.ctx.mixerTexShown ??= new Map());
+    const list = recipeTextures(recipe);
+    const baked = isSolo ? [] : on.bakedTex ?? [];
+    if (!shown.size && !baked.length && !list.some((t) => !isSolo || t.lane === on.lane)) return true;
+    // A composed mix also reads the tracks that may draw a texture of the same name, to
+    // see they still agree; one that cannot be read is left out of that check.
+    const lanes = isSolo ? [on.lane] : [...new Set([...list.map((t) => t.lane), ...baked.map((t) => t.lane), ...lanesThatCarry(recipe)])];
+    // A track picked onto another source since compose: the stage holds the old source's textures.
+    if (!isSolo && lanes.some((lane) => { const spec = recipe.sources?.[lane]?.spec; return spec && spec !== on.specs?.[lane]; })) return false;
+    const sources = new Map();
+    await Promise.all(lanes.map((lane) => mixerLaneSource(lane).then((src) => { if (src) sources.set(lane, src); }, () => {})));
+    if (gen !== mixerTexGen.current) return true;   // a newer pass has the stage
+    if (rendererRef.current?.particleSystem !== system) return false;
+    let plan;
+    try {
+      plan = textureSwaps(tree.ctx.bytes, {
+        recipe: mixerRecipeRef.current, sources, shown, lane: isSolo ? on.lane : null,
+        names: isSolo ? null : on.texNames, baked: isSolo ? null : baked,
+      });
+    } catch (e) {
+      plan = { ok: false, why: String(e?.message ?? e) };
+    }
+    if (!plan.ok) { console.debug('[mixer] texture not shown live:', plan.why); return false; }
+    for (const s of plan.swaps) {
+      let px;
+      try {
+        px = s.png ? await pngPixels(s.png) : decodeTextureSection(s.bytes, s.start);
+      } catch (e) {
+        console.debug('[mixer] texture not shown live:', String(e?.message ?? e));
+        return false;
+      }
+      if (gen !== mixerTexGen.current) return true;
+      if (rendererRef.current?.particleSystem !== system) return false;
+      if (!px || !rendererRef.current.replaceTexture(s.name, px)) continue;
+      if (s.show == null) shown.delete(s.name); else shown.set(s.name, s.show);
+    }
+    return true;
+  }, [mixerLaneSource]);
+
+  /**
+   * The recipe's generator and curve edits on what the stage holds, without
+   * composing: the composed mix (each edited section rebuilt the way compose writes
+   * it and parsed afresh, its generator started over) or a generator preview (the
+   * track's source DAT, shown with that track's edits and played again). Texture
+   * replacements go first (mixerSyncTextures). The shared ROM/0/0.DAT tree is never
+   * touched. False when the stage cannot show the recipe as it stands: nothing of
+   * the mix is on it, or an edit needs a compose (mixerLive.js syncEdits).
+   */
+  const mixerSyncStage = useCallback(async ({ replay = true } = {}) => {
+    const system = rendererRef.current?.particleSystem;
+    const tree = system?.zoneRoot;
+    const comp = mixerComposeRef.current;
+    const solo = mixerSoloRef.current;
+    const on = tree?.ctx && comp?.tree === tree ? comp : (tree?.ctx && solo?.tree === tree ? solo : null);
+    if (!on) return false;
+    // Textures before the preview's way out below: a preview can show a replacement and no edit.
+    const texOk = await mixerSyncTextures(on, tree, system, on === solo);
+    if (rendererRef.current?.particleSystem !== system) return false;
+    // What the tree holds edited stays with the tree: a fresh load starts from what compose baked in.
+    const touched = (tree.ctx.mixerTouched ??= new Set(on === comp ? comp.baked : []));
+    const lanes = lanesToSync(mixerRecipeRef.current, touched);
+    // A preview of a track the mix does not edit, on a tree nothing was written to: it is the source already.
+    if (on === solo && !touched.size && !lanes.includes(solo.lane)) return texOk;
+    const sources = new Map();
+    // A composed mix also needs every track that may bring a copy of an edited section:
+    // compose shares identical bytes across tracks, whatever their source, and syncEdits
+    // checks a shared copy still agrees. lanesToSync alone stays what the preview test above reads.
+    const want = on === solo ? [solo.lane] : [...new Set([...lanes, ...lanesThatCarry(mixerRecipeRef.current)])];
+    try {
+      await Promise.all(want.map(async (lane) => {
+        const src = await mixerLaneSource(lane);
+        if (src) sources.set(lane, src);
+      }));
+    } catch {
+      return false;
+    }
+    if (rendererRef.current?.particleSystem !== system) return false;   // the stage changed hands while the sources were read
+    let res;
+    try {
+      res = syncEdits(tree, {
+        recipe: mixerRecipeRef.current, sources, touched,
+        renames: on === comp ? comp.renames : null, lane: on === solo ? solo.lane : null,
+      });
+    } catch (e) {
+      res = { ok: false, why: String(e?.message ?? e) };
+    }
+    if (!res.ok) { console.debug('[mixer] edit not shown live:', res.why); return false; }
+    const shown = res.gens.length > 0 || res.curves.length > 0;
+    if (on === solo) {
+      if (replay && shown) mixerSoloPlay(solo);
+    } else if (shown && rendererRef.current.effectPaused && system._effect && !system._effect.done) {
+      // Paused (or scrubbed to a frame): nothing ticks, so run the mix to this frame again with the edit in it.
+      mixerSeekRef.current?.(system._effect.playhead);
+    } else {
+      for (const name of res.gens) system.restartGenerator(name);
+    }
+    return texOk;
+  }, [mixerLaneSource, mixerSoloPlay, mixerSyncTextures]);
+  // A dragged slider edits many times a second; the stage follows once it rests.
+  const mixerSyncTimer = useRef(0);
+  const mixerSyncSoon = useCallback(() => {
+    clearTimeout(mixerSyncTimer.current);
+    // No mix on the stage to patch (never played, or a list preview took it): Play composes the edits in.
+    if (!mixerComposeRef.current) setMixerDirty(true);
+    if (!mixerComposeRef.current && !mixerSoloRef.current) return;
+    mixerSyncTimer.current = setTimeout(() => {
+      mixerSyncStage().catch((e) => { console.debug('[mixer] edit not shown live:', String(e?.message ?? e)); return false; }).then((ok) => { if (!ok && mixerComposeRef.current) setMixerDirty(true); });
+    }, 120);
+  }, [mixerSyncStage]);
+
   /** Panel edits reach the stage live when the mix on it can be re-timed; otherwise
-   *  the mix is flagged stale and Play mix recomposes. */
-  const mixerEdit = useCallback((next) => {
+   *  the mix is flagged stale and Play mix recomposes. `arg`: the next recipe, or a
+   *  function from the mix as it is now to the next. */
+  const mixerEdit = useCallback((arg) => {
+    const cur = mixerRecipeRef.current;
+    // An updater applies to the mix as it is now: a PNG picker answers after the edits made while it was open.
+    const next = typeof arg === 'function' ? arg(cur) : arg;
     // Events, or the loop point (`total`) the timeline's marker sets.
-    const changed = next.events !== mixerRecipeRef.current?.events || next.total !== mixerRecipeRef.current?.total;
+    const changed = next.events !== cur?.events || next.total !== cur?.total;
+    // The generator editor's: bytes of the sections the mix carries, and the textures they draw, not its timing.
+    const edited = next.generators !== cur?.generators || next.curves !== cur?.curves || next.textures !== cur?.textures;
     setMixerRecipe(next);
-    if (!changed) return;
+    if (!changed && !edited) return;
     mixerRecipeRef.current = next;
-    if (!mixerLiveSync(next)) setMixerDirty(true);
-  }, [mixerLiveSync]);
+    if (changed && !mixerLiveSync(next)) setMixerDirty(true);
+    if (edited) mixerSyncSoon();
+  }, [mixerLiveSync, mixerSyncSoon]);
+  /** The timeline filing pills that carry no row yet (an older mix, a fresh pick, a
+   *  paste) into the rows it drew them in. Layout only, not an edit: the stage is
+   *  left alone and the mix is not marked stale. A pill that has a row keeps it. */
+  const mixerAssignRows = useCallback((list) => {
+    const rows = new Map(list.map((m) => [m.id, m.row]));
+    setMixerRecipe((r) => ({
+      ...r,
+      events: r.events.map((e) => {
+        if (!rows.has(e._id) || rowOfEvent(e) != null) return e;
+        const { rowHint, ...rest } = e;   // a copy's wish for its original's row: spent once it is placed
+        return { ...rest, row: rows.get(e._id) };
+      }),
+    }));
+  }, []);
   const mixerInfoCache = useRef(new Map());
   const mixerLastCueRef = useRef(null);
   // Resolved when a Play-mix-triggered character reload (Action switch for a
@@ -6858,6 +7267,9 @@ export default function App({ launch = null }) {
   // The last compose ({ key, datPath, report }): Play or a scrub after a Stop or
   // a preview reloads that DAT while the recipe and race are unchanged.
   const mixerComposedRef = useRef(null);
+  // Where the mix on the stage waits on its blocking links ([{ at, ticks }], mixer.js
+  // holdClock): the stage's clock runs past each hold, the timeline's frames do not.
+  const mixerHoldsRef = useRef([]);
   const mixerRecipeRef = useRef(mixerRecipe);
   mixerRecipeRef.current = mixerRecipe;
   // The mix Type, for callbacks declared before `mixKind` is computed (a job ability
@@ -6975,6 +7387,7 @@ export default function App({ launch = null }) {
   const mixerLoadEntryOnStage = useCallback((entry, name, opts = {}) => {
     const path = entryPathForRace(entry, pc.race);
     mixerComposeRef.current = null;   // a preview replaces the mix on stage: edits must not re-time it
+    mixerSoloRef.current = null;
     return loadEffect({ name: name ?? entry.name, path, cat: 'Mixer' }, { keepCamera: true, ...opts });
   }, [loadEffect, pc.race]);
 
@@ -6982,7 +7395,7 @@ export default function App({ launch = null }) {
   const mixerPlayRecipe = useCallback(async (recipe) => {
     const ctx = xiCtx();
     if (!ctx) return;
-    if (!recipe.events.some((e) => e.enabled !== false)) { setStatusText('Nothing to play yet.'); return; }
+    if (!recipe.events.some(isComposed)) { setStatusText('Nothing to play yet.'); return; }
     mixerPreviewRef.current = false;
     setMixerBusy(true);
     setMixerError(null);
@@ -7004,7 +7417,9 @@ export default function App({ launch = null }) {
         })
         : Promise.resolve();
       // The kind is part of the key: a job ability or spell bakes a race-bound motion
-      // into one DAT, a weapon skill composes it per race — different output.
+      // into one DAT, a weapon skill composes it per race — different output. The
+      // recipe goes in as compose reads it, without the timeline's rows, so moving
+      // a pill to another row reuses the composed DAT.
       const kind = mixKindRef.current;
       const composeKey = `${xiRace}|${kind}|${serializeRecipe(recipe)}`;
       const reuse = mixerComposedRef.current?.key === composeKey ? mixerComposedRef.current : null;
@@ -7014,38 +7429,76 @@ export default function App({ launch = null }) {
       mixerComposedRef.current = { key: composeKey, datPath, report };
       await loadEffect({ name: recipe.name, path: datPath, cat: 'Mixer' }, { keepCamera: true, hardLoop: true, loopAt: recipe.total });
       // Compose lists the events it wrote in the same (start, order) sort it
-      // applied to the recipe's enabled events, with the refs as renamed.
+      // applied to the recipe's enabled events, with the refs as renamed — the ones
+      // serializeRecipe wrote (isComposed): a trackless command without bytes, or a
+      // trackless link that names no routine, is not among them.
       {
-        const written = recipe.events.filter((e) => e.enabled !== false)
+        const written = recipe.events.filter(isComposed)
           .map((e, i) => ({ e, i })).sort((a, b) => (a.e.start - b.e.start) || (a.i - b.i)).map((x) => x.e);
-        const byId = new Map(); const byFromRef = new Map();
+        const byId = new Map(); const byFromRef = new Map(); const refs = new Map();
         (report.timeline ?? []).forEach((t, i) => {
           const ev = written[i];
           if (!ev) return;
           byId.set(ev._id, t.ref);
+          refs.set(ev._id, ev.ref);
           if (ev.ref) byFromRef.set(`${ev.from}:${ev.ref}`, t.ref);
         });
-        mixerComposeRef.current = { byId, byFromRef };
+        // For the generator editor's live edits: the names compose changed, the edits
+        // and texture replacements it baked in, the name each replaced or renamed
+        // texture got, the source each track was composed from, and the tree the DAT
+        // loaded as (mixerSyncStage). `refs`: each event's own ref as composed, so a
+        // link pointed at another routine since is known to need a compose.
+        mixerComposeRef.current = {
+          byId, byFromRef, refs, renames: report.renames ?? {}, baked: seedTouched(recipe),
+          bakedTex: recipeTextures(recipe), texNames: Array.isArray(report.textures) ? report.textures : [],
+          specs: Object.fromEntries(Object.entries(recipe.sources ?? {}).map(([l, s]) => [l, s?.spec])),
+          tree: rendererRef.current?.particleSystem?.zoneRoot ?? null,
+        };
+        mixerSoloRef.current = null;
       }
       setMixerLoaded(true);
       setMixerDirty(false);
       setMixerStageName(recipe.name);
       const renames = Object.keys(report.renames ?? {}).length;
+      // Texture replacements compose baked in; the report marks one nothing the mix fires draws.
+      // A row names its texture by source id and source name (`renamed_from`, else `name`):
+      // textures may share an id. An entry without a name replaces the first section of its
+      // id, so it is matched by that section's name — else any unused row of the id (another
+      // texture of it that the mix carries and never draws) counted it as unused.
+      const texList = recipeTextures(recipe);
+      const clean = (s) => String(s ?? '').replace(/[\0 ]+$/, '');
+      const texRows = Array.isArray(report.textures) ? report.textures : [];
+      const firstName = new Map();   // entry → its section's 16-character name
+      await Promise.all(texList.filter((t) => t.name == null).map(async (t) => {
+        const src = await mixerLaneSource(t.lane).catch(() => null);
+        const sec = src ? textureSection(src, t.ref) : null;
+        if (sec) firstName.set(t, String.fromCharCode(...src.bytes.subarray(sec.start + 0x11, sec.start + 0x21)));
+      }));
+      const texUnused = texList.filter((t) => {
+        const name = t.name ?? firstName.get(t) ?? null;
+        return texRows.some((r) => r?.unused && r.lane === t.lane && clean(r.ref) === t.ref
+          && (name == null || typeof r.name !== 'string' || clean(r.renamed_from ?? r.name) === clean(name)));
+      }).length;
+      const texUsed = texList.length - texUnused;
+      const texNote = texList.length ? ` · ${texUsed} texture${texUsed === 1 ? '' : 's'} replaced${texUnused ? ` (${texUnused} drawn by nothing the mix fires)` : ''}` : '';
       // This race built without part of the motion (no copy of it, or no such clip).
       const warned = report.warnings ?? [];
-      setMixerNote(`${report.sections.length} sections · ${report.total} f${renames ? ` · ${renames} renamed` : ''}${warned.length ? ` · ⚠ ${warned[0]}${warned.length > 1 ? ` (+${warned.length - 1})` : ''}` : ''}`);
+      setMixerNote(`${report.sections.length} sections · ${report.total} f${renames ? ` · ${renames} renamed` : ''}${texNote}${warned.length ? ` · ⚠ ${warned[0]}${warned.length > 1 ? ` (+${warned.length - 1})` : ''}` : ''}`);
       if (warned.length) setStatusText(`⚠ ${warned.join(' · ')}`);
       return true;
     } catch (e) {
       setMixerNote('');
-      setMixerError({ title: 'Compose failed', text: String(e?.message ?? e) });
+      // An xi-tools older than locks, hits and links added here refuses an event with no track.
+      const msg = String(e?.message ?? e);
+      const older = /'from' \(lane\) is required/.test(msg) && recipe.events.some((ev) => ev.enabled !== false && !hasTrack(ev));
+      setMixerError({ title: 'Compose failed', text: older ? `${msg}\nThis xi-tools is older than locks, hits and links added in the mixer (commands of no track): update xi-tools, or mute them to play the rest.` : msg });
       setStatusText(`compose failed: ${e?.message ?? e}`);
-      setCliOutput({ title: 'xi ability compose · failed', text: String(e?.message ?? e) });
+      setCliOutput({ title: 'xi ability compose · failed', text: msg });
       return false;
     } finally {
       setMixerBusy(false);
     }
-  }, [xiCtx, pc.race, loadEffect, mixerCatalog, mixerSyncAction]);
+  }, [xiCtx, pc.race, loadEffect, mixerCatalog, mixerSyncAction, mixerLaneSource]);
 
   const mixerPlay = useCallback(() => mixerPlayRecipe(mixerRecipeRef.current), [mixerPlayRecipe]);
 
@@ -7058,34 +7511,83 @@ export default function App({ launch = null }) {
     // picking one sets the mix Type so it publishes and reads as that.
     if (entry.pool && entry.kind) setMixerPublishCfg({ kind: entry.kind });
     let next = null;
+    // A fresh mix is named after the first thing picked into it.
+    const nameFor = (r) => (r.events.length ? r.name : entry.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || r.name);
+    // A cast release added as a command of its own (`3C sh··`, no track).
+    const isRelease = (e) => !hasTrack(e) && e.op === 0x3c && /^sh/.test(e.ref ?? '');
+    // A spell cast's retail release (the list's first choice for it): not the stages
+    // but one command of no track, `3C sh··` — the link every retail spell's DAT opens
+    // with. It plays the release on the caster and holds the rest of the mix until it
+    // ends. It takes the track's place as a pick would, and the track keeps the cast as
+    // its source (a mix needs one); a release link the mix already had makes way.
+    const releasePick = (r) => {
+      const school = castRelease(entry.stages);
+      const [link] = makeKeepEvents('link-release', startAt, { school });
+      if (!link?.ref) throw new Error(`${entry.name} has no cast release to link`);
+      // First on its frame, as retail has it: compose writes a tie in the recipe's
+      // order, and the link holds what follows it.
+      const out = {
+        ...r, name: nameFor(r),
+        sources: { ...r.sources, [lane]: { spec: entry.spec, routine: null, name: entry.name } },
+        events: [link, ...r.events.filter((e) => e.from !== lane && !isRelease(e))],
+      };
+      return r.sources?.[lane]?.spec === entry.spec ? out : dropLaneEdits(out, lane);
+    };
     try {
-      // A bare clip from a clip pack has no routine to inspect: it is one
-      // PlayClip for the clip's own length, which compose builds from the
-      // template (the lane's `routine` is null). The window is in scheduler
-      // ticks (60/s) while the clip counts 30fps frames, so it is doubled —
-      // retail writes jb1 (120 frames) as a 244-tick PlayClip in `motw`.
-      const info = entry.clip
-        ? { timeline: [{ op: 0x05, ref: entry.clip.ref, start: 0, dur: entry.clip.frames * 2, name: 'PlayClip', summary: `${entry.clip.frames} f` }] }
-        : await mixerInfoFor(entry);
-      // A pick brings its own kind and nothing else: a motion pick is the clips
-      // and traces, not the source's own generators (put the same source on an
-      // Effects track for those) and not its locks and hits. A link out of the
-      // DAT goes with the lane of what it plays: Combo's eis1 burst comes with
-      // an Effects pick, exactly as its preview on Effects shows it.
-      const linkLane = linkLaneIn(await ensureGlobalEffects(settingsRef.current, []));
-      const fresh = eventsFromInspect(info, lane, { keep: false, linkLane })
-        .map((e) => (startAt ? { ...e, start: e.start + startAt } : e));
-      const r = mixerRecipeRef.current;
-      const keptEvents = r.events.filter((e) => e.from !== lane);
-      // routine: a tag, or null for a bare clip pack (no routine at all) — not 'main'.
-      const routine = entry.routine === undefined ? 'main' : entry.routine;
-      const sources = { ...r.sources, [lane]: { spec: entry.spec, routine, name: entry.name } };
-      const name = r.events.length ? r.name : entry.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || r.name;
-      next = { ...r, name, sources, events: [...keptEvents, ...fresh] };
-      mixerRecipeRef.current = next;
-      setMixerRecipe(next);
-      setMixerLaneInfo((m) => ({ ...m, [lane]: { entry, info } }));
-      setMixerNote(`${entry.name} → ${trackLabel(lane)}${startAt ? ` @${startAt}` : ''}`);
+      if (entry.castLink) {
+        next = releasePick(mixerRecipeRef.current);
+        mixerRecipeRef.current = next;
+        setMixerRecipe(next);
+        setMixerLaneInfo((m) => ({ ...m, [lane]: { entry, info: { timeline: [] } } }));
+        setMixerNote(`${entry.name} · retail release: 3C ${castRelease(entry.stages)} on Locks · hits · links${startAt ? ` @${startAt}` : ''} (the chant before it is the server's)`);
+      } else {
+        // A bare clip from a clip pack has no routine to inspect: it is one
+        // PlayClip for the clip's own length, which compose builds from the
+        // template (the lane's `routine` is null). The window is in scheduler
+        // ticks (60/s) while the clip counts 30fps frames, so it is doubled —
+        // retail writes jb1 (120 frames) as a 244-tick PlayClip in `motw`.
+        // A base motion that lists its stages (a cast: the chant, the release, the
+        // follow-through) lays them, one clip each, back to back in the windows
+        // retail plays them in — on a spell all but the chant, which is the server's
+        // (mixer.js pickStages); a list from before the stages has the first clip only.
+        const staged = entry.stages?.length ? stageTimeline(pickStages(entry)) : [];
+        const info = staged.length
+          ? { timeline: staged }
+          : entry.clip
+            ? { timeline: [{ op: 0x05, ref: entry.clip.ref, start: 0, dur: entry.clip.frames * 2, name: 'PlayClip', summary: `${entry.clip.frames} f` }] }
+            : await mixerInfoFor(entry);
+        // A pick brings its own kind and nothing else: a motion pick is the clips
+        // and traces, not the source's own generators (put the same source on an
+        // Effects track for those) and not its locks and hits. A link out of the
+        // DAT goes with the lane of what it plays: Combo's eis1 burst comes with
+        // an Effects pick, exactly as its preview on Effects shows it.
+        const linkLane = linkLaneIn(await ensureGlobalEffects(settingsRef.current, []));
+        const fresh = eventsFromInspect(info, lane, { keep: false, linkLane })
+          .map((e) => (startAt ? { ...e, start: e.start + startAt } : e))
+          // A cast lays its stages back to back on one row; the pick cleared the lane, so row 0 is free.
+          // Left rowless they are first-fitted by their 48px minimum width, which puts a short stage
+          // (Item Use's 28-tick Start) over the next one and files that one a row down.
+          .map((e) => (staged.length ? { ...e, row: 0 } : e));
+        const r = mixerRecipeRef.current;
+        // A track whose source is a base motion with nothing of its own laid holds a retail
+        // release picked before (releasePick): another base motion picked onto it takes its
+        // place, link and all. Any other command of no track stays, as on every pick.
+        const held = r.sources?.[lane];
+        const releaseHere = !!held && held.routine === null && held.spec === entry.spec && !!entry.pool
+          && !r.events.some((e) => e.from === lane);
+        const keptEvents = r.events.filter((e) => e.from !== lane && !(releaseHere && isRelease(e)));
+        // routine: a tag, or null for a bare clip pack (no routine at all) — not 'main'.
+        const routine = entry.routine === undefined ? 'main' : entry.routine;
+        const sources = { ...r.sources, [lane]: { spec: entry.spec, routine, name: entry.name } };
+        next = { ...r, name: nameFor(r), sources, events: [...keptEvents, ...fresh] };
+        // Generator edits name sections of the track's source: another source, no edits.
+        if (r.sources?.[lane]?.spec !== entry.spec) next = dropLaneEdits(next, lane);
+        mixerRecipeRef.current = next;
+        setMixerRecipe(next);
+        setMixerLaneInfo((m) => ({ ...m, [lane]: { entry, info } }));
+        const chant = entry.stages?.length ? chantStages(entry) : [];
+        setMixerNote(`${entry.name}${staged.length ? ` (${staged.map((s) => s.name).join(' › ')})` : ''} → ${trackLabel(lane)}${startAt ? ` @${startAt}` : ''}${chant.length ? ` · ${chant.map((s) => s.label).join(' and ')} left out: the chant is the server's` : ''}`);
+      }
     } catch (e) {
       setMixerError({ title: `Pick failed · ${entry.name}`, text: String(e?.message ?? e) });
       setStatusText(`pick failed: ${e?.message ?? e}`);
@@ -7107,6 +7609,58 @@ export default function App({ launch = null }) {
   }, [mixerPickInto]);
 
   /**
+   * A base motion's stages on the character, one after the other as a pick lays
+   * them (a spell's without its chant); for a spell's retail release, the link it
+   * lays, which plays the character's own `sh··`. They go through the caster cues a
+   * mix plays its clips with (buildCasterCues), armed as a routine of those cues and
+   * nothing else, so the character rests on its idle after the last stage and the
+   * preview loops like any other motion preview. False when the character holds
+   * none of the clips.
+   */
+  const mixerPreviewStages = (entry) => {
+    const r = rendererRef.current;
+    const actor = modelRef.current;
+    if (!r || !actor?.animations?.length || actor.kind === 'zone' || !actor.isRenderable || r.model !== actor) return false;
+    const release = entry.castLink ? castRelease(entry.stages) : null;
+    const anims = release ? [] : stageTimeline(pickStages(entry))
+      .map((t) => ({ ref: t.ref, delay: t.start, dur: t.dur, transIn: t.blend[0], transOut: t.blend[1], loops: t.loops }));
+    const actorCalls = release ? [{ scheduleId: release, delay: 0, op: 0x3c }] : [];
+    const { animCues } = buildCasterCues(actor, { flat: { anims, actorCalls } },
+      { globalById: globalEffectsRef.current?.routines ?? null, rangeType: rangedInfoRef.current, engaged: leftViewRef.current === 'mixer' && mixKindRef.current === 'ws' });
+    if (!animCues.length) return false;
+    effectTokenRef.current++;   // a list preview still being read must not land on top of this one
+    weatherAudioRef.current?.stopOneShots();
+    let system = r.particleSystem;
+    if (!system) {
+      // Nothing has played on this stage yet. The cues run on a routine's clock, and
+      // that clock is a particle system's: an empty one (no DAT, no generators) keeps it.
+      system = new ParticleSystem({ zoneRoot: null, globalRoot: globalEffectsRef.current?.root ?? null, camera: null, environment: null });
+      r.attachFxToActor = attachFxRef.current;
+      r.attachEffectSystem(system, new Map());
+    }
+    // The cues own the actor and its weapons, as a mix's do (not the Characters view's rules).
+    mixerPreviewRef.current = false;
+    r.actorFollowsEffect = true;
+    system.playEffectRoutine([], {
+      loop: effectLoopRef.current,
+      loopAt: mixLoopAt({ windup: 0, span: 0, animCues, sounds: [] }),
+      anims: animCues,
+      onAnim: (a) => {
+        const rr = rendererRef.current;
+        if (!rr || !a.clip) return;
+        rr.setAnimation(a.clip);
+        cueWeaponVis(a);
+        rr.playing = !rr.effectPaused;
+      },
+      onFinished: effectFinishedRef.current,
+    });
+    r.effectPaused = false;
+    r.playing = true;
+    setEffectTransport('playing');
+    return true;
+  };
+
+  /**
    * Left list click: the entry plays on the stage, nothing else. A pack motion
    * (a clip or a schedule of an Action) needs that Action on the character, so
    * it is set and its reload awaited, as Play mix does for a weapon skill; a
@@ -7117,12 +7671,18 @@ export default function App({ launch = null }) {
     // it, so the playhead, the length and Play stop following what the stage
     // plays. Play mix composes and arms the recipe again.
     mixerComposeRef.current = null;
+    mixerSoloRef.current = null;
     setMixerLoaded(false);
     setMixerDirty(false);
     setMixerStageName(null);
     // A base motion (a job-ability / spell cast) plays from the actor's always-loaded
     // pool — its race-base DAT has no `main` to load as an effect — so preview it by
-    // playing the clip on the character, the way a character Action does.
+    // playing the clip on the character, the way a character Action does. One that
+    // lists its stages plays what a pick lays, in order.
+    if (entry.pool && entry.stages?.length && mixerPreviewStages(entry)) {
+      setStatusText(`preview ${entry.name} · ${entry.castLink ? `retail release 3C ${castRelease(entry.stages)}` : pickStages(entry).map((s) => s.label).join(' › ')}`);
+      return;
+    }
     if (entry.pool && entry.clip) {
       mixerPreviewTake();
       handleAnimChange(entry.clip.id ?? entry.clip.ref.replace(/\?$/, ''));
@@ -7187,6 +7747,7 @@ export default function App({ launch = null }) {
       };
       mixerRecipeRef.current = next;
       setMixerRecipe(next);
+      setMixerExtraRows({});
       setMixerLaneInfo({ motion: { entry: motion, info: mInfo }, vfx: { entry: vfx, info: vInfo }, sound: { entry: sound, info: sInfo } });
       setMixerNote(`shuffle: ${motion.name} · ${vfx.name} · ${sound.name}`);
     } catch (e) {
@@ -7201,9 +7762,10 @@ export default function App({ launch = null }) {
     setMixerRecipe((r) => {
       const sources = { ...r.sources };
       delete sources[lane];
-      return { ...r, sources, events: r.events.filter((e) => e.from !== lane) };
+      return dropLaneEdits({ ...r, sources, events: r.events.filter((e) => e.from !== lane) }, lane);
     });
     setMixerLaneInfo((m) => { const n = { ...m }; delete n[lane]; return n; });
+    setMixerExtraRows((m) => { const n = { ...m }; delete n[lane]; return n; });
   }, []);
 
   /** A new empty track of a kind (motion2, motion3…), made the active one. */
@@ -7234,13 +7796,58 @@ export default function App({ launch = null }) {
     else if (r.events.some((e) => e.from === lane && e.ref === ref)) {
       next = { ...r, events: r.events.map((e) => (e.from === lane && e.ref === ref ? { ...e, enabled: true } : e)) };
     } else {
-      const fresh = eventsFromInspect(src.info, lane, { refs: new Set([ref]) });
+      // At the track's place, not the source's frames: its pick and lane drags moved it.
+      const shift = trackShift(r.events, lane, src.info.timeline);
+      const fresh = eventsFromInspect(src.info, lane, { refs: new Set([ref]) })
+        .map((e) => (shift ? { ...e, start: Math.max(0, e.start + shift) } : e));
       next = { ...r, events: [...r.events, ...withIds(fresh)] };
     }
     mixerRecipeRef.current = next;
     setMixerRecipe(next);
     mixerPlayRecipe(next);
   }, [mixerLaneInfo, mixerPlayRecipe]);
+
+  /**
+   * Locks · hits · links › copy from a track's source: the locks, flinches, hits and
+   * keep-lane links its routine carries (a pick leaves them behind) join the mix as
+   * commands of its own — no track, each with its bytes (mixer.js keepCopies), so they
+   * stay when the track is picked again. What the mix already has at the same frame is
+   * left out. Returns the new events' ids.
+   */
+  const mixerCopyKeep = useCallback(async (track) => {
+    const src = mixerRecipeRef.current.sources?.[track];
+    if (!src?.spec) return [];
+    const name = src.name ?? src.spec;
+    setMixerError(null);
+    try {
+      // A cast from the base motions, or a bare clip, plays from the character's own
+      // motions: there is no routine of its own to read.
+      const held = mixerLaneInfo[track];
+      const pool = !!held?.entry?.pool || (mixerCatalog?.base_motions ?? []).some((b) => b.spec === src.spec);
+      if (pool || !src.routine) { setMixerNote(`${name} plays from the character's own motions: no routine of its own, so no locks or hits to copy`); return []; }
+      // The inspect its pick keeps, else read now.
+      const info = held?.info?.routines && held.entry?.spec === src.spec ? held.info
+        : await mixerInfoFor({ spec: src.spec, routine: src.routine, name });
+      const linkLane = linkLaneIn(await ensureGlobalEffects(settingsRef.current, []));
+      const r = mixerRecipeRef.current;
+      // The copies land where the track sits (its pick and lane drags moved it off the
+      // source's frames), shifted before keepCopies compares them with the mix's own.
+      const shift = trackShift(r.events, track, info.timeline);
+      const inspected = eventsFromInspect(info, track, { keep: true, linkLane })
+        .map((e) => (shift ? { ...e, start: Math.max(0, e.start + shift) } : e));
+      const copies = keepCopies(inspected, r.events);
+      if (!copies.length) { setMixerNote(`${name}: no locks or hits the mix does not already have`); return []; }
+      // A waiting link goes first on its frame, as retail has it: compose writes a tie in
+      // the recipe's order, and the link holds what follows it.
+      const waits = copies.filter((e) => isBlockingOp(e.op));
+      mixerEdit({ ...r, events: [...waits, ...r.events, ...copies.filter((e) => !isBlockingOp(e.op))] });
+      setMixerNote(`copied ${copies.length} lock, hit and link command${copies.length === 1 ? '' : 's'} from ${name} (${trackLabel(track)})`);
+      return copies.map((e) => e._id);
+    } catch (e) {
+      setMixerError({ title: `Copy failed · ${name}`, text: String(e?.message ?? e) });
+      return [];
+    }
+  }, [mixerLaneInfo, mixerCatalog, mixerInfoFor, ensureGlobalEffects, mixerEdit]);
 
   /**
    * The block editor's Preview: one generator of a track's source on its own,
@@ -7267,16 +7874,17 @@ export default function App({ launch = null }) {
     setMixerStageName(null);
     const path = entryPathForRace(entry, pc.race);
     if (effectEntryRef.current?.path !== path) await mixerLoadEntryOnStage(entry, entry.name, { only: 'vfx' });
-    const r = rendererRef.current;
-    const system = r?.particleSystem;
-    if (!system) return;
-    weatherAudioRef.current?.stopOneShots();
-    r.actorFollowsEffect = false;
-    system.playEffectRoutine([{ genId, delay: 0, dur: dur || 0 }], { loop: false, sounds: [], anims: [], loopAt: (dur || 0) + 30 });
-    r.effectPaused = false;
-    setEffectTransport('playing');
+    const tree = rendererRef.current?.particleSystem?.zoneRoot;
+    if (!tree) return;
+    // The source DAT as this track has it: the recipe's edits go on before it plays,
+    // and an edit made while it is up plays it again (mixerSyncStage).
+    const solo = { lane: track, genId, dur: dur || 0, tree };
+    mixerSoloRef.current = solo;
+    await mixerSyncStage({ replay: false });
+    if (mixerSoloRef.current !== solo) return;
+    mixerSoloPlay(solo);
     setStatusText(`preview ${genId}`);
-  }, [mixerLaneInfo, mixerLane, mixerCatalog, pc.race, mixerLoadEntryOnStage]);
+  }, [mixerLaneInfo, mixerLane, mixerCatalog, pc.race, mixerLoadEntryOnStage, mixerSyncStage, mixerSoloPlay]);
 
   /** Peak envelope + length of a sound id, for the docked timeline's waveforms. */
   const mixerSoundPeaks = useCallback((soundId) => getWeatherAudio().peaks(soundId, 256), [getWeatherAudio]);
@@ -7292,12 +7900,12 @@ export default function App({ launch = null }) {
   }, [playDataSound]);
 
   /**
-   * Scrub the mix to an absolute frame (60/s routine ticks). Particles cannot run
+   * Scrub the mix to a tick of the stage's clock (60/s). Particles cannot run
    * backwards, so the routine is rewound and stepped forward silently to the
    * target; the clip the last cue started is then put on its matching frame
    * (clips are 30 fps, ticks 60/s). Leaves the stage paused.
    */
-  const mixerSeek = useCallback((frame) => {
+  const mixerSeekTicks = useCallback((ticks) => {
     const r = rendererRef.current;
     const sys = r?.particleSystem;
     if (!r || !sys?.hasEffectRoutine()) {
@@ -7318,7 +7926,7 @@ export default function App({ launch = null }) {
     const wasLoop = e?.loop;
     if (e) e.loop = false;
     const end = e?.loopAt != null ? Math.max(0, e.loopAt - 1) : Infinity;
-    const target = Math.min(Math.max(0, Math.round(frame)), end);
+    const target = Math.min(Math.max(0, Math.round(ticks)), end);
     for (let i = 0; i < target; i++) sys.update(1);
     if (e) e.loop = wasLoop;
     audio?.stopOneShots?.();
@@ -7333,8 +7941,18 @@ export default function App({ launch = null }) {
     }
     r.playing = false;
     setEffectTransport('paused');
-    setStatusText(`seek f${target}${cue?.clip ? ` · clip ${cue.clip.id ?? ''} @${Math.round((target - cue.delay) / 2)}` : ' · idle'}`);
+    const frame = holdClock(mixerComposeRef.current ? mixerHoldsRef.current : []).toFrame(target);
+    setStatusText(`seek f${frame}${frame !== target ? ` (the stage's tick ${target}: the waiting links before it hold it)` : ''}${cue?.clip ? ` · clip ${cue.clip.id ?? ''} @${Math.round((target - cue.delay) / 2)}` : ' · idle'}`);
   }, [actorIdleClip]);
+  mixerSeekRef.current = mixerSeekTicks;
+  /**
+   * Scrub the mix to a frame of the timeline. The stage plays everything after a
+   * blocking link that much later (holdClock), so a frame is the tick past the holds
+   * before it.
+   */
+  const mixerSeek = useCallback((frame) => mixerSeekTicks(
+    holdClock(mixerComposeRef.current ? mixerHoldsRef.current : []).toStage(Math.max(0, Math.round(frame))),
+  ), [mixerSeekTicks]);
 
   /**
    * The timeline cursor dragged or the ruler clicked. With the composed mix on
@@ -7356,11 +7974,15 @@ export default function App({ launch = null }) {
     }
   }, [mixerPlayRecipe, mixerSeek]);
 
-  /** Where the mix is: current tick and the loop length, for the scrubber. */
+  /** Where the mix is, for the scrubber: the timeline frame the routine is on (a hold
+   *  keeps it on its link's frame until the routine it waits for ends) and the loop
+   *  length, in frames. */
   const mixerPlayhead = useCallback(() => {
     const e = rendererRef.current?.particleSystem?._effect;
     if (!e) return { frame: 0, length: 0 };
-    return { frame: e.playhead, length: e.loopAt ?? e.expectedEnd ?? e.length };
+    const clock = holdClock(mixerComposeRef.current ? mixerHoldsRef.current : []);
+    const length = e.loopAt ?? e.expectedEnd ?? e.length;
+    return { frame: clock.toFrame(e.playhead), length: length > 0 ? clock.toFrame(length) : length };
   }, []);
 
   /** Start over: empty recipe, no lane sources, effect cleared, character back to idle. */
@@ -7370,11 +7992,13 @@ export default function App({ launch = null }) {
     setMixerRecipe(fresh);
     setMixerLaneInfo({});
     setMixerExtraTracks([]);
+    setMixerExtraRows({});
     setMixerLane('motion');
     setMixerNote('');
     setMixerLoaded(false);
     setMixerStageName(null);
     mixerComposeRef.current = null;
+    mixerSoloRef.current = null;
     stopEffect();
     const r = rendererRef.current;
     if (r && modelRef.current) {
@@ -7386,7 +8010,6 @@ export default function App({ launch = null }) {
   }, [stopEffect, actorIdleClip]);
 
   const recipePath = useCallback((name) => `${mixerDir(xiCtx()?.xiPath ?? '')}\\${name}.recipe.json`, [xiCtx]);
-  const safeRecipeName = (name) => String(name ?? '').replace(/[^A-Za-z0-9_-]/g, '_').replace(/^_+|_+$/g, '');
 
   /** Save under `name` (the file follows the recipe name); a new name leaves the old file alone. */
   const mixerSaveAs = useCallback(async (name) => {
@@ -7397,7 +8020,8 @@ export default function App({ launch = null }) {
     mixerRecipeRef.current = recipe;
     setMixerRecipe(recipe);
     const path = recipePath(safe);
-    await backend.writeTextFile(path, serializeRecipe(recipe));
+    // The saved file also carries the timeline's layout (each pill's row).
+    await backend.writeTextFile(path, serializeRecipe(recipe, { layout: true }));
     await updateCategories(ctx.xiPath, (m) => { m[safe] = recipe.category ?? ''; });
     setStatusText(`Saved ${path}`);
     refreshMixerRecipes();
@@ -7405,6 +8029,8 @@ export default function App({ launch = null }) {
 
   const mixerDelete = useCallback(async (name) => {
     await backend.deleteFile(recipePath(name));
+    // Its publish settings go too: a later mix under this name must not inherit its slot or force.
+    try { localStorage.removeItem(publishCfgKey(name)); } catch { /* private mode */ }
     const ctx = xiCtx();
     if (ctx) await updateCategories(ctx.xiPath, (m) => { delete m[name]; });
     setStatusText(`Deleted recipe ${name}`);
@@ -7415,14 +8041,32 @@ export default function App({ launch = null }) {
   const mixerRename = useCallback(async (from, to) => {
     const safe = safeRecipeName(to);
     if (!safe || safe === from) return from;
+    const ctx = xiCtx();
+    if (!ctx) return from;
+    // The disk ignores case: a case-only rename is the same file; any other name on disk is another mix.
+    const caseOnly = safe.toLowerCase() === from.toLowerCase();
+    if (!caseOnly) {
+      const taken = (await backend.listFiles(mixerDir(ctx.xiPath)))
+        .filter((n) => /\.recipe\.json$/i.test(n)).map((n) => n.replace(/\.recipe\.json$/i, '').toLowerCase());
+      if (taken.includes(safe.toLowerCase())) { setStatusText(`Not renamed: ${safe} is already a mix`); return from; }
+    }
     const text = await backend.readTextFile(recipePath(from));
     if (text == null) { setStatusText(`Could not read recipe ${from}`); return from; }
     let r;
     try { r = JSON.parse(text); } catch { setStatusText(`Recipe ${from} is not valid JSON`); return from; }
-    await backend.writeTextFile(recipePath(safe), JSON.stringify({ ...r, name: safe }, null, 2));
-    await backend.deleteFile(recipePath(from));
-    const ctx = xiCtx();
-    if (ctx) await updateCategories(ctx.xiPath, (m) => { if (m[from] != null) m[safe] = m[from]; delete m[from]; });
+    const out = JSON.stringify({ ...r, name: safe }, null, 2);
+    if (caseOnly) {
+      // Same file: writing would keep the old spelling and the delete after it would remove the mix.
+      // Delete first so the new spelling is created, and put the old file back if the write fails.
+      await backend.deleteFile(recipePath(from));
+      try { await backend.writeTextFile(recipePath(safe), out); }
+      catch (e) { await backend.writeTextFile(recipePath(from), text); setStatusText(`Rename failed: ${e?.message ?? e}`); return from; }
+    } else {
+      await backend.writeTextFile(recipePath(safe), out);
+      await backend.deleteFile(recipePath(from));
+    }
+    await updateCategories(ctx.xiPath, (m) => { if (m[from] != null) m[safe] = m[from]; delete m[from]; });
+    storePublishKind(safe, loadPublishCfg(from).kind);
     if (mixerRecipeRef.current.name === from) {
       const next = { ...mixerRecipeRef.current, name: safe };
       mixerRecipeRef.current = next;
@@ -7435,19 +8079,64 @@ export default function App({ launch = null }) {
   }, [xiCtx, recipePath, refreshMixerRecipes]);
 
   const mixerDuplicate = useCallback(async (name) => {
+    const ctx = xiCtx();
+    if (!ctx) return;
     const text = await backend.readTextFile(recipePath(name));
     if (text == null) { setStatusText(`Could not read recipe ${name}`); return; }
     let r;
     try { r = JSON.parse(text); } catch { setStatusText(`Recipe ${name} is not valid JSON`); return; }
-    const taken = new Set(mixerRecipes.map((x) => x.name));
+    // The names on disk right now, compared without case as the disk does: a copy never lands on another mix.
+    const taken = new Set((await backend.listFiles(mixerDir(ctx.xiPath)))
+      .filter((n) => /\.recipe\.json$/i.test(n)).map((n) => n.replace(/\.recipe\.json$/i, '').toLowerCase()));
     let copy = `${name}_copy`;
-    for (let i = 2; taken.has(copy); i++) copy = `${name}_copy${i}`;
+    for (let i = 2; taken.has(copy.toLowerCase()); i++) copy = `${name}_copy${i}`;
     await backend.writeTextFile(recipePath(copy), JSON.stringify({ ...r, name: copy }, null, 2));
-    const ctx = xiCtx();
-    if (ctx) await updateCategories(ctx.xiPath, (m) => { if (m[name] != null) m[copy] = m[name]; });
+    await updateCategories(ctx.xiPath, (m) => { if (m[name] != null) m[copy] = m[name]; });
+    storePublishKind(copy, loadPublishCfg(name).kind);
     setStatusText(`Duplicated ${name} → ${copy}`);
     refreshMixerRecipes();
-  }, [xiCtx, recipePath, mixerRecipes, refreshMixerRecipes]);
+  }, [xiCtx, recipePath, refreshMixerRecipes]);
+
+  /**
+   * Export: the mix's saved file to wherever the save dialog says, with the Type
+   * set in Manage written into `target.kind` when it is not auto. The file on disk
+   * is already a bare recipe `xi ability compose` takes; edits on the timeline
+   * that are not saved yet are not in it.
+   */
+  const mixerExport = useCallback(async (name) => {
+    let bytes;
+    try { bytes = await backend.readFile(recipePath(name)); } catch { setStatusText(`Could not read recipe ${name}`); return; }
+    // Manage › Type lives beside the file (localStorage, per name); set by hand it
+    // travels as `target.kind`, so an import seeds the same Type (mixerImport).
+    // Auto leaves the file alone: its target.kind, if any, is what auto publishes with.
+    const kind = loadPublishCfg(name).kind;
+    if (['ja', 'spell', 'ws'].includes(kind)) {
+      try {
+        const r = JSON.parse(new TextDecoder().decode(new Uint8Array(bytes)));
+        const t = r.target && typeof r.target === 'object' && !Array.isArray(r.target) ? r.target : {};
+        bytes = new TextEncoder().encode(JSON.stringify({ ...r, target: { ...t, kind } }, null, 2));
+      } catch { /* not JSON: export the file as it is */ }
+    }
+    const fileName = `${name}.recipe.json`;
+    if (!window.__TAURI__) {
+      // Browser dev mode has no save dialog: the file goes to the browser's downloads.
+      backend.downloadFile(fileName, bytes);
+      setStatusText(`Exported ${name} → ${fileName} (browser downloads)`);
+      return;
+    }
+    let lastDir = null;
+    try { lastDir = localStorage.getItem(MIXER_FILE_DIR_KEY); } catch { /* private mode */ }
+    const dest = await backend.saveFileDialog(lastDir, { title: `Export mix · ${name}`, exts: ['json'], fileName }).catch(() => null);
+    if (!dest) return;
+    try {
+      await backend.writeFile(dest, bytes);
+    } catch (e) {
+      setStatusText(`Export failed · ${dest}: ${e?.message ?? e}`);
+      return;
+    }
+    try { localStorage.setItem(MIXER_FILE_DIR_KEY, dest.replace(/[\\/][^\\/]*$/, '')); } catch { /* quota */ }
+    setStatusText(`Exported ${name} → ${dest}`);
+  }, [recipePath]);
 
   const mixerOpen = useCallback(async (name) => {
     const ctx = xiCtx();
@@ -7455,23 +8144,36 @@ export default function App({ launch = null }) {
     const text = await backend.readTextFile(`${mixerDir(ctx.xiPath)}\\${name}.recipe.json`);
     if (!text) { setStatusText(`Could not read recipe ${name}`); return; }
     try {
-      const r = JSON.parse(text);
+      // A texture given as a PNG beside the recipe (xi-tools' CLI form) comes in as its
+      // data: URI, as xi reads it: compose runs on a copy in _work, and Save writes the URI.
+      const dir = mixerDir(ctx.xiPath);
+      const { recipe: r, missing } = await inlineRecipeTextures(JSON.parse(text), (rel) => backend.readFile(`${dir}\\${rel.replace(/\//g, '\\')}`));
       // The file does not carry `kind`: locks and hits are the keep lane whatever
       // track they came from, and so is a link its track would not take (effect.js
-      // sharedLinkLane); everything else draws in its own track.
-      const linkLane = linkLaneIn(await ensureGlobalEffects(settingsRef.current, []));
-      const events = withIds((r.events ?? []).map((e) => {
+      // sharedLinkLane) or one into its track's own routine (0x03 / 0x3B to a name
+      // the shared DAT does not have: a pick never keeps those, the keep lane makes
+      // them); everything else draws in its own track.
+      const globals = await ensureGlobalEffects(settingsRef.current, []);
+      const linkLane = linkLaneIn(globals);
+      // A command of no track may carry its routine and duration only in its bytes: read
+      // them out first (the lane choice reads the ref, and Save writes the fields over the bytes).
+      const events = withIds((r.events ?? []).map(keepEventFromBytes).map((e) => {
         const own = kindOf(e.from) || 'keep';
+        const ownRoutine = (e.op === 0x03 || e.op === 0x3b) && !globals?.routines?.has(e.ref);
         const kind = MIXER_LINK_OPS.has(e.op) && e.ref
-          ? (linkLane(e.ref) === own ? own : 'keep')
+          ? (!ownRoutine && linkLane(e.ref) === own ? own : 'keep')
           : (laneForEvent(e) === 'keep' ? 'keep' : own);
         return { ...e, enabled: true, kind: e.kind ?? kind };
       }));
       // The category is the index's, not the file's (the schema has no field for it).
       const category = (await readCategories(ctx.xiPath))[name] ?? '';
-      const loaded = { name: r.name ?? name, category, sources: r.sources ?? {}, events, target: r.target };
+      // Every other key of the file rides along untouched (description, dir, total,
+      // target, generators, curves, textures but for a PNG path read in above…): Save
+      // writes back what Open read.
+      const loaded = { ...r, name: r.name ?? name, category, sources: r.sources ?? {}, events };
       mixerRecipeRef.current = loaded;
       setMixerExtraTracks([]);
+      setMixerExtraRows({});
       setMixerRecipe(loaded);
       setMixerLaneInfo({});
       // Nothing composed for this recipe yet: clear the stage mix and mark it
@@ -7482,7 +8184,8 @@ export default function App({ launch = null }) {
       setMixerDirty(false);
       setMixerStageName(null);
       mixerComposeRef.current = null;
-      setMixerNote(`opened ${name} · Play mix to hear it`);
+      mixerSoloRef.current = null;
+      setMixerNote(`opened ${name} · Play mix to hear it${missing.length ? ` · ${missing.length} texture replacement${missing.length === 1 ? '' : 's'} left out: ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} not a PNG in the mixer folder` : ''}`);
       // Resolve each lane's catalog entry so the Parts list works again.
       const cat = mixerCatalog?.entries ?? [];
       for (const [lane, src] of Object.entries(r.sources ?? {})) {
@@ -7539,10 +8242,6 @@ export default function App({ launch = null }) {
    *   force      take the slot even when its file ids point at another DAT
    *   pivot      build into the pivot folder (FFXI_PIVOT_DIR) instead of the game folder
    */
-  const publishCfgKey = (name) => `mixerPublish:${name}`;
-  const loadPublishCfg = (name) => {
-    try { return { ...PUBLISH_CFG_DEFAULT, ...JSON.parse(localStorage.getItem(publishCfgKey(name)) || '{}') }; } catch { return { ...PUBLISH_CFG_DEFAULT }; }
-  };
   const [mixerPublishCfg, setMixerPublishCfgState] = useState(() => loadPublishCfg(mixerRecipe.name));
   const [mixerPublishPlan, setMixerPublishPlan] = useState(null);   // parsePublishPlan of the last Check
   // Manage › Slots: null (closed) | { loading } | { error } | the `xi ability slots` report
@@ -7557,11 +8256,64 @@ export default function App({ launch = null }) {
     setMixerPublishPlan(null);   // a check is for one set of choices
     if ('pivot' in patch) setMixerSlots(null);   // the listing is of one folder's tables
   }, []);
+
+  /**
+   * Import: a mix handed over as a .json file becomes a saved mix here. The file
+   * is checked and cut down to a bare recipe (recipeFromImport), written under a
+   * free name — never over a mix already saved — and opened. A file that is not
+   * a mix changes nothing. Its category does not travel (that is the index's,
+   * beside the recipes); its publish kind does: target.kind sets Manage › Type,
+   * which a cast mix without its Start clip would otherwise infer as a weapon skill.
+   */
+  const mixerImport = useCallback(async () => {
+    const ctx = xiCtx();
+    if (!ctx) return;
+    let file;   // { name, text }
+    if (window.__TAURI__) {
+      let lastDir = null;
+      try { lastDir = localStorage.getItem(MIXER_FILE_DIR_KEY); } catch { /* private mode */ }
+      // pick_file opens in the parent of `initial`, so name a file inside the folder.
+      const path = await backend.pickFile(lastDir ? `${lastDir}\\x` : null, { title: 'Import a mix', exts: ['json'] }).catch(() => null);
+      if (!path) return;
+      const text = await backend.readTextFile(path);
+      if (text == null) { setStatusText(`Could not read ${path}`); return; }
+      try { localStorage.setItem(MIXER_FILE_DIR_KEY, path.replace(/[\\/][^\\/]*$/, '')); } catch { /* quota */ }
+      file = { name: path.split(/[\\/]/).pop(), text };
+    } else {
+      // Browser dev mode has no native dialog: the browser's own chooser hands over the text.
+      file = await backend.browseTextFile('.json,application/json');
+      if (!file) return;
+    }
+    // The names on disk right now, not the panel's last listing: nothing saved is written over.
+    const taken = (await backend.listFiles(mixerDir(ctx.xiPath)))
+      .filter((n) => /\.recipe\.json$/i.test(n)).map((n) => n.replace(/\.recipe\.json$/i, ''));
+    const res = recipeFromImport(file.text, { stem: file.name.replace(/(\.recipe)?\.json$/i, ''), taken });
+    if (res.error) { setStatusText(`Not imported: ${file.name} ${res.error}`); return; }
+    const dest = recipePath(res.name);
+    try {
+      await backend.writeTextFile(dest, res.text);
+    } catch (e) {
+      setStatusText(`Import failed · ${dest}: ${e?.message ?? e}`);
+      return;
+    }
+    storePublishKind(res.name, res.kind);
+    // An unsaved mix can already go by that name (nothing on disk clashed), and
+    // Manage only re-reads its settings when the name changes.
+    if (mixerRecipeRef.current.name === res.name) setMixerPublishCfgState(loadPublishCfg(res.name));
+    await refreshMixerRecipes();
+    await mixerOpen(res.name);
+    const clashNote = res.clash ? ` (${res.clash} is already a mix)` : '';
+    const kindNote = res.kind ? ` · Type ${{ ws: 'Weapon skill', ja: 'Job ability', spell: 'Spell' }[res.kind]}` : '';
+    const texNote = res.droppedTextures ? ` · ${res.droppedTextures} texture replacement${res.droppedTextures === 1 ? '' : 's'} left out: only one that holds a usable PNG inside the file comes along` : '';
+    setStatusText(`Imported ${file.name} as ${res.name}${clashNote}${kindNote} → ${dest}${texNote}`);
+  }, [xiCtx, recipePath, refreshMixerRecipes, mixerOpen]);
+
   // A base-motion source (a race-base DAT shared by several cast / ability motions) can't
   // be told apart as ja vs spell by the build — both just reference always-loaded clips —
   // so the mixer carries the kind the base-motion row declares, matched by the motion
-  // event's clip ref. Null when the motion is not a base motion (a ws:/ja:/spell: spec the
-  // build reads on its own).
+  // events' clip refs: any of the row's stages names it, so a cast with its Start pill
+  // deleted still reads as that cast. Null when the motion is not a base motion (a
+  // ws:/ja:/spell: spec the build reads on its own).
   const baseMotionKind = useMemo(() => {
     const src = mixerRecipe.sources || {};
     const motionKey = Object.keys(src).find((id) => kindOf(id) === 'motion');
@@ -7569,7 +8321,7 @@ export default function App({ launch = null }) {
     const bms = mixerCatalog?.base_motions ?? [];
     if (!m || !bms.some((b) => b.spec === m)) return null;
     const refs = new Set(mixerRecipe.events.filter((e) => e.from === motionKey && e.op === 0x05).map((e) => e.ref));
-    return bms.find((b) => b.spec === m && refs.has(b.clip?.ref))?.kind ?? null;
+    return bms.find((b) => b.spec === m && baseMotionRefs(b).some((ref) => refs.has(ref)))?.kind ?? null;
   }, [mixerRecipe.sources, mixerRecipe.events, mixerCatalog]);
   // The race-base DAT(s) the base motions reference: an always-loaded motion, valid on a
   // job ability or spell, so the timeline must not flag it as "baked per race".
@@ -7577,7 +8329,10 @@ export default function App({ launch = null }) {
     () => new Set((mixerCatalog?.base_motions ?? []).map((b) => b.spec)), [mixerCatalog]);
   // The mix Type shown in the toolbar and used to filter the motion list: the
   // publish kind when the user has set one, else inferred from the motion source so
-  // a fresh mix reads as what it would publish as.
+  // a fresh mix reads as what it would publish as. When the source decides nothing
+  // (a weapon skill's motion on a mix made as a job ability, a cast with every stage
+  // pill gone) the kind the file itself declares does: `target.kind`, which publish
+  // falls back to as well.
   const mixKind = useMemo(() => {
     const k = mixerPublishCfg?.kind;
     if (k && k !== 'auto') return k;
@@ -7585,8 +8340,9 @@ export default function App({ launch = null }) {
     const m = src.motion?.spec ?? Object.entries(src).find(([id]) => kindOf(id) === 'motion')?.[1]?.spec ?? '';
     if (/^spell:/.test(m)) return 'spell';
     if (/^ja:/.test(m)) return 'ja';
-    return baseMotionKind ?? 'ws';
-  }, [mixerPublishCfg, mixerRecipe.sources, baseMotionKind]);
+    const declared = mixerRecipe.target?.kind;
+    return baseMotionKind ?? (['ja', 'spell', 'ws'].includes(declared) ? declared : 'ws');
+  }, [mixerPublishCfg, mixerRecipe.sources, mixerRecipe.target, baseMotionKind]);
   mixKindRef.current = mixKind;
   // Clip refs the mix plays from an emote pack (characters.json, any race's copy): the
   // weapon rules put the hand weapons away for those while the mix is a weapon skill.
@@ -7833,8 +8589,9 @@ export default function App({ launch = null }) {
     setAnims([]);
     setCurrentAnim('');
     try {
+      // `entry.abs`: a DAT Browser click, read as the clicked file before any HD or pivot copy.
       const cands = gameCandidates(entry.path, settings);
-      const { path: resolved, data: buf } = await backend.readPrefer(cands);
+      const { path: resolved, data: buf } = await backend.readPrefer(entry.abs ? [entry.abs, ...cands] : cands);
       const doc = parseImageDat(buf);
       if (doc.kind === 'sets') {
         // Resolve each set's atlas once here so the panel and the viewer agree.
@@ -8961,15 +9718,18 @@ export default function App({ launch = null }) {
     setDataStructOpen(false);
     setStatusText(`Reading ${rel}…`);
     try {
-      // Always resolve through pivot/HD/game candidates when the path maps to a
-      // ROM\… key — re-clicks and pin clicks must not stick to a stale absolute.
+      // The clicked file itself: the game, HD and pivot copies of one ROM key are
+      // different files, and a DAT only the pivot folder holds must open with the
+      // PIVOT toggle off. A pin whose file has gone falls back to the candidates.
       const readAbs = async (abs) => {
-        const cands = gameCandidates(abs, settings);
-        if (cands.length) {
+        try {
+          return await backend.readFile(abs);
+        } catch (e) {
+          const cands = gameCandidates(abs, settings);
+          if (!cands.length) throw e;
           const { data } = await backend.readPrefer(cands);
           return data;
         }
-        return backend.readFile(abs);
       };
       const buf = await readAbs(path);
       const cls = classifyDat(buf, path);
@@ -9036,6 +9796,7 @@ export default function App({ launch = null }) {
             `${rel} · ${raceLabel}`,
             {
               displayPath: gearAbs,
+              exact: [gearAbs],
               parts: [
                 {
                   key: 'race', label: 'Race skeleton', itemLabel: raceLabel,
@@ -9072,11 +9833,12 @@ export default function App({ launch = null }) {
         const slash = rel.replace(/\\/g, '/');
         const zonePath = `game/${slash}`;
         // Prefer the baked zone name when this DAT is a known zone.
-        let zone = { id: null, name: rel, path: zonePath };
+        const zoneAbs = String(path).replace(/\//g, '\\');
+        let zone = { id: null, name: rel, path: zonePath, abs: zoneAbs };
         try {
           const zones = await loadList('zones.json');
           const hit = zones.find((z) => zoneDatRelPath(z.path).toLowerCase() === rel.toLowerCase());
-          if (hit) zone = { id: hit.id, name: hit.name, path: hit.path };
+          if (hit) zone = { id: hit.id, name: hit.name, path: hit.path, abs: zoneAbs };
         } catch { /* nameless is fine */ }
         const result = await loadZone(zone);
         if (result && result.ok === false) {
@@ -9127,7 +9889,7 @@ export default function App({ launch = null }) {
             return;
           }
         }
-        const result = await loadModel([path], rel);
+        const result = await loadModel([path], rel, { exact: [path] });
         if (result && result.ok === false) {
           // Retry gear pairing even if the first sniff/path failed early.
           if (peek.meshGroups.length && !peek.skeleton) {
@@ -9152,7 +9914,7 @@ export default function App({ launch = null }) {
         player.stop();
         unloadModel();
         setBrowserKind('image');
-        await loadImage({ name: rel.split(/[\\/]/).pop() || rel, path: rel });
+        await loadImage({ name: rel.split(/[\\/]/).pop() || rel, path: rel, abs: String(path).replace(/\//g, '\\') });
         setSelectedDat(lower);
         return;
       }
@@ -9184,7 +9946,7 @@ export default function App({ launch = null }) {
         player.stop();
         unloadModel();
         setBrowserKind('effect');
-        await loadEffect({ name: rel, path: rel });
+        await loadEffect({ name: rel, path: rel, abs: String(path).replace(/\//g, '\\') });
         setSelectedDat(lower);
         return;
       }
@@ -11483,6 +12245,9 @@ export default function App({ launch = null }) {
           <MixerPanel
             recipe={mixerRecipe}
             onRecipe={mixerEdit}
+            onAssignRows={mixerAssignRows}
+            extraRows={mixerExtraRows}
+            onHoldRows={mixerHoldRows}
             mixDirty={mixerDirty}
             lane={mixerLane}
             laneInfo={mixerLaneInfo[mixerLane]?.info ?? null}
@@ -11506,6 +12271,8 @@ export default function App({ launch = null }) {
             onDelete={mixerDelete}
             onRename={mixerRename}
             onDuplicate={mixerDuplicate}
+            onImport={mixerImport}
+            onExport={mixerExport}
             onSetCategory={mixerSetCategory}
             onShuffle={mixerShuffle}
             ghosts={mixerGhosts}
@@ -11522,6 +12289,8 @@ export default function App({ launch = null }) {
             error={mixerError}
             onDismissError={() => setMixerError(null)}
             onSolo={mixerSolo}
+            onLaneSource={mixerLaneSource}
+            onSharedSource={mixerSharedSource}
             onPlaySound={mixerPlaySound}
             getSoundPeaks={mixerSoundPeaks}
             speed={effectSpeed}
@@ -11530,6 +12299,8 @@ export default function App({ launch = null }) {
             onLoop={setEffectLoop}
             onTake={mixerTake}
             onDropEntry={mixerDrop}
+            linkTargets={mixerLinkTargets}
+            onCopyKeep={mixerCopyKeep}
             playingSoundKey={playingSoundKey}
             kind={mixKind}
             onKind={(k) => setMixerPublishCfg({ kind: k })}

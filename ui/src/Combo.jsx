@@ -230,7 +230,7 @@ function SearchCombo({ value, items, onChange, placeholder, className }) {
  * you are — results come back under their type headers, so there is no need to
  * back out of Katana to find a Great Katana.
  */
-function GroupedSearchCombo({ value, items: rawItems, onChange, placeholder, className, standardLabel }) {
+function GroupedSearchCombo({ value, items: rawItems, onChange, placeholder, className, standardLabel, autoOpen = false }) {
   const items = useMemo(() => normalizeTypeItems(rawItems, standardLabel), [rawItems, standardLabel]);
   const [query, setQuery] = useState('');
   // null = type list; string = that group's items.
@@ -290,6 +290,9 @@ function GroupedSearchCombo({ value, items: rawItems, onChange, placeholder, cla
       value={value ?? ''}
       onChange={(id) => { if (id != null) onChange(id); }}
       onClose={() => { setQuery(''); setScope(null); setOpen(false); }}
+      // autoOpen: the list drops as the combo mounts (focus opens it), for a picker
+      // that a button has just put on screen.
+      immediate={autoOpen}
     >
       {({ open: isOpen }) => (
         <div
@@ -302,6 +305,7 @@ function GroupedSearchCombo({ value, items: rawItems, onChange, placeholder, cla
               className="combo-value combo-search"
               autoComplete="off"
               spellCheck="false"
+              autoFocus={autoOpen}
               displayValue={() => (isOpen ? '' : label)}
               placeholder={ph}
               defaultValue={label}
@@ -367,7 +371,7 @@ function OpenTracker({ open, onOpen }) {
   return null;
 }
 
-export function Combo({ value, items, onChange, placeholder = '—', className = '', searchable, groupByType = false, standardLabel = STANDARD_GROUP }) {
+export function Combo({ value, items, onChange, placeholder = '—', className = '', searchable, groupByType = false, standardLabel = STANDARD_GROUP, autoOpen = false }) {
   const groups = useMemo(
     () => (groupByType ? listGroups(normalizeTypeItems(items, standardLabel)) : []),
     [groupByType, items, standardLabel],
@@ -375,7 +379,7 @@ export function Combo({ value, items, onChange, placeholder = '—', className =
   if (groupByType && groups.length >= 2) {
     return (
       <GroupedSearchCombo value={value} items={items} onChange={onChange}
-        placeholder={placeholder} className={className} standardLabel={standardLabel} />
+        placeholder={placeholder} className={className} standardLabel={standardLabel} autoOpen={autoOpen} />
     );
   }
   const Impl = (searchable ?? items.length >= SEARCH_MIN) ? SearchCombo : PlainCombo;

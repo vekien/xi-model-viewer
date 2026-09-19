@@ -264,7 +264,8 @@ function parseRoutine(r, sec) {
     }
     if (ROUTINE_CALL_OPS.has(op) && p + 12 <= end) {
       const ref = String.fromCharCode(r.bytes[p + 8], r.bytes[p + 9], r.bytes[p + 10], r.bytes[p + 11]).replace(/\0+$/, '');
-      if (/^[\x20-\x7e]{1,4}$/.test(ref)) calls.push({ routineId: ref.trimEnd(), delay: at });
+      // `op`: a 0x3B / 0x3C link holds the routine until the one it runs ends (effect.js routineTicks).
+      if (/^[\x20-\x7e]{1,4}$/.test(ref)) calls.push({ routineId: ref.trimEnd(), delay: at, op });
     }
     if (VIS_OPS.has(op)) {
       const v = readVisCommand(r.bytes, p, op, at, end);
@@ -275,8 +276,9 @@ function parseRoutine(r, sec) {
   }
 
   // Keep routines even with no clip refs (SFX/VFX-only) so the schedule list
-  // matches the full 0x07 set AltanaViewer shows.
-  return { id: sec.id, refs, commands, calls, vis, dur, maxLoops, transIn, transOut };
+  // matches the full 0x07 set AltanaViewer shows. `total`: where its own clock
+  // ends, the tick the routine ends on when nothing holds it.
+  return { id: sec.id, refs, commands, calls, vis, dur, maxLoops, transIn, transOut, total: clock };
 }
 
 // Ops that invoke another routine by id (same set as effect.js CALL_OPS).
@@ -399,7 +401,11 @@ export function resolveScheduleClip(model, schedule) {
     // (2 × its frame count), so ÷2 makes chains seamless (see effect.js).
     // `loops` (maxLoops, +30): 1 play once, N play N then hold, 0 loop forever — carried
     // so a sustained motion (a bard singing, a held cast) repeats instead of playing once.
-    for (const g of groupAnimations(clips)) segments.push({ clip: g.clip, delay: (cmd.delay ?? 0) / 2, transOut: cmd.transOut ?? 0, loops: cmd.maxLoops ?? 1 });
+    // `loopFrames`: one play lasts the command's `duration` (+6, ticks), and the client
+    // time-scales the clip into that window (never under a frame); none keeps the clip's
+    // own length (pose.js).
+    const loopFrames = cmd.duration > 0 ? Math.max(1, cmd.duration / 2) : 0;
+    for (const g of groupAnimations(clips)) segments.push({ clip: g.clip, delay: (cmd.delay ?? 0) / 2, loopFrames, transOut: cmd.transOut ?? 0, loops: cmd.maxLoops ?? 1 });
   }
 
   // Fallback for routines whose commands didn't resolve (older/odd layouts).
@@ -410,10 +416,15 @@ export function resolveScheduleClip(model, schedule) {
   }
 
   // A lone clip at frame 0 is just that clip — unless it loops (N≠1), which only the
-  // segment path honours, so keep it as a segment then.
-  if (segments.length === 1 && segments[0].delay === 0 && (segments[0].loops ?? 1) === 1) return segments[0].clip;
+  // segment path honours, so keep it as a segment then. In a window other than its own
+  // length it plays retimed: a plain clip samples by phase over lengthInFrames and the
+  // renderer wraps there, so a copy with the window as its length is that clip retimed.
+  if (segments.length === 1 && segments[0].delay === 0 && (segments[0].loops ?? 1) === 1) {
+    const { clip, loopFrames } = segments[0];
+    return loopFrames > 0 && loopFrames !== clip.lengthInFrames ? { ...clip, lengthInFrames: loopFrames } : clip;
+  }
 
-  const lengthInFrames = Math.max(...segments.map((s) => s.delay + s.clip.lengthInFrames));
+  const lengthInFrames = Math.max(...segments.map((s) => s.delay + (s.loopFrames > 0 ? s.loopFrames : s.clip.lengthInFrames)));
   // Union of tracked joints: lets callers test what the schedule drives (e.g.
   // the weapon hand-attach override) without knowing about segments.
   const jointTracks = new Map();

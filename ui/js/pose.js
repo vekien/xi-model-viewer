@@ -151,7 +151,11 @@ export class SkeletonPose {
     if (clip?.segments) {
       for (const seg of clip.segments) {
         if (frame < seg.delay) continue;
-        const len = seg.clip.lengthInFrames;
+        // One play of the clip lasts `loopFrames` when the segment carries it (its 0x05
+        // command's `dur` ÷ 2): the client time-scales the clip into that window, so it
+        // runs slower or faster to fill it exactly. Sampling is by phase, so only the
+        // cycle length changes. Without it a play lasts the clip's own length.
+        const len = seg.loopFrames > 0 ? seg.loopFrames : seg.clip.lengthInFrames;
         // How long the clip occupies before it blends out / holds. loops: 1 play once
         // (the default), N play N then hold, 0 loop forever — so a sustained motion (a
         // bard singing, a held cast) repeats instead of freezing after one play. Only a

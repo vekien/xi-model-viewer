@@ -196,7 +196,8 @@ export class ColorTransformApplier extends Updater {
   apply(elapsed, particle) {
     const ct = particle.getDynamic(this.allocationOffset);
     if (!ct) return;
-    const transform = new Color(ct.r >> 7, ct.g >> 7, ct.b >> 7, ct.a >> 7);
+    // The rate is 8.8 fixed point in colour bytes: 256 adds one byte per tick.
+    const transform = Color.fromBytes([ct.r >> 7, ct.g >> 7, ct.b >> 7, ct.a >> 7]);
     particle.color.addInPlace(transform.withMultiplied(0.5 * elapsed));
   }
 }

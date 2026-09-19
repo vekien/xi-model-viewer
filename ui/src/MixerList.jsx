@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Tooltip } from './Tooltip.jsx';
 import { DRAG_TYPE } from './MixerTimeline.jsx';
-import { LANES, filterCatalog, entryPathForRace } from '../js/mixer.js';
+import { LANES, castRelease, chantStages, filterCatalog, entryPathForRace, pickStages, stageLoops } from '../js/mixer.js';
 import { parseEntity, groupAnimations } from '../js/dat.js';
 import { CLIP_NAMES } from './AnimationPanel.jsx';
 
@@ -48,9 +48,41 @@ function counts(e) {
 /** Tip text: the spec and section counts for a catalog entry, the DAT(s) for an action. */
 function tipFor(entry) {
   if (entry.kind === 'action') return entry.datPaths.map((p) => p.replace(/^ROM\//, '').replace(/\.DAT$/i, '')).join(' · ');
-  // A base motion is one clip the actor already carries — name it and the pool it plays from.
+  // A base motion is clips the actor already carries: its stages in play order, as a pick
+  // lays them (one pill each, a looping stage with the cycles it gets; a spell's without
+  // its chant), and the pool they play from. A list from before the stages names the
+  // first clip alone.
+  if (entry.pool && entry.stages?.length) {
+    const stages = pickStages(entry).map((s) => `${s.label} ${s.ref}${stageLoops(s) > 1 ? ` ×${stageLoops(s)}` : ''}`);
+    const chant = chantStages(entry);
+    return `${stages.join(' › ')} · plays from the actor's own pool (every race)${chant.length ? ` · ${chant.map((s) => s.label).join(' and ')} left out: the server plays the chant while the spell is cast (spell_list.group)` : ''}`;
+  }
   if (entry.pool && entry.clip) return `${entry.clip.ref} · ${entry.clip.frames}f · plays from the actor's own pool (every race)`;
   return [entry.spec, counts(entry)].filter(Boolean).join(' · ');
+}
+
+/**
+ * A spell cast's ways into the mix, as its row lists them when opened: the retail release
+ * first — one waiting link, `3C sh··`, that plays the caster's own release (its race's
+ * files) and holds the rest of the mix until it ends — then the release and follow-through
+ * as pills, what the row's own + lays. Null for anything else: a job ability plays its
+ * whole motion from its DAT.
+ */
+function castChoices(entry) {
+  if (!entry.pool || entry.kind !== 'spell' || !entry.stages?.length) return null;
+  const release = castRelease(entry.stages);
+  if (!release) return null;
+  const laid = pickStages(entry);
+  return [
+    {
+      key: 'link', icon: 'link', label: `Retail release (link ${release})`, entry: { ...entry, castLink: true },
+      tip: `One command on Locks · hits · links: 3C ${release}, the link every retail spell's DAT opens with. The caster plays its own release from its race's files (the casting circle stops, the release burst and motion), and everything after the link waits for it, about a second.`,
+    },
+    {
+      key: 'stages', icon: 'animation', label: laid.map((s) => s.label).join(' › '), badge: 'default', entry,
+      tip: `${laid.map((s) => `${s.label} ${s.ref}`).join(' › ')} as pills from frame 0, each a clip to move, loop or delete: what the row's + lays. The chant before them is the server's.`,
+    },
+  ];
 }
 
 /** The Animation panel's actions as mixer entries, grouped; a weapon skill the ability
@@ -195,11 +227,6 @@ export function MixerList({
   const q = query.trim();
   const motion = lane === 'motion';
 
-  // A job ability or spell can only use motion that lives in the always-loaded race
-  // base (referenced, not baked). Rather than list every spell whose motion is really
-  // one of a few base casts, the motion lane shows the curated base-motion list
-  // (abilities.json `base_motions`, one row per cast / ability motion). WS bakes anything
-  // per race, so it shows the full list. Only the motion lane narrows.
   // Every motion is listed on every type. On a job ability or spell the base-pool casts
   // lead as a shortlist — they are referenced by name and proven. Anything else (an emote,
   // a weapon skill, a race's own motion) would be BAKED from one race's copy into the single
@@ -288,6 +315,14 @@ export function MixerList({
       return n;
     });
   };
+  /** A spell cast's row opens to its ways into the mix (castChoices): nothing to read.
+   *  The casts share one DAT, so each is kept open by its row identity. */
+  const toggleCast = (entry) => setOpenActions((s) => {
+    const n = new Set(s);
+    const id = idOf(entry);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
 
   /** A routine of an action, as the pick sends it: that DAT and routine; `main` keeps
    *  the action's own name, any other routine is suffixed with it. */
@@ -357,14 +392,33 @@ export function MixerList({
     : current?.spec === entry.spec);
 
   const renderRow = (e, sub) => {
-    const expandable = e.kind === 'action';
-    const open = expandable && openActions.has(e.spec);
-    const rs = open ? routinesFor(e) : null;
+    const choices = castChoices(e);
+    const expandable = e.kind === 'action' || !!choices;
+    const open = expandable && openActions.has(choices ? idOf(e) : e.spec);
+    const rs = open && !choices ? routinesFor(e) : null;
     return (
       <Row key={idOf(e)} entry={e} sub={sub} focused={idOf(e) === focusedId} taken={isTaken(e)}
         onPreview={preview} onAdd={add} addTip={addTip} dragType={dragType} payload={() => dragEntry(e)}
-        expandable={expandable} open={open} onToggle={toggleAction}>
-        {open && (
+        expandable={expandable} open={open} onToggle={choices ? toggleCast : toggleAction}>
+        {open && choices && (
+          <div className="children">
+            {choices.map((c) => (
+              <div key={`${idOf(e)}:${c.key}`} className="node">
+                <Tooltip content={c.tip} placement="right" delay={[350, 0]}>
+                  <div className="row mixer-row" onClick={() => onPreview?.(c.entry)}
+                    draggable onDragStart={(ev) => startEntryDrag(ev, dragType, c.entry)}>
+                    <span className="caret"><span className="icon" /></span>
+                    <span className="kind icon">{c.icon}</span>
+                    <span className="effect-name">{c.label}</span>
+                    {c.badge && <span className="badge">{c.badge}</span>}
+                    <AddButton tip={addTip} onAdd={() => onPick(c.entry)} />
+                  </div>
+                </Tooltip>
+              </div>
+            ))}
+          </div>
+        )}
+        {open && !choices && (
           <div className="children">
             {rs === 'loading' && <div className="side-note">Reading the DAT…</div>}
             {rs && rs !== 'loading' && !rs.clips.length && !rs.routines.length && <div className="side-note">No motion in this DAT.</div>}

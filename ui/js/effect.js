@@ -20,10 +20,22 @@ const CMD_SPAWN_GENERATOR = 0x02;   // ref is a generator DatId
 /**
  * Ops that run another 0x07 routine (xi-docs fx/effect_system.md §3):
  * 0x03 on the source actor, 0x09 on the target, 0x3B/0x3C as a blocking child.
- * The blocking behaviour isn't modelled — for a standalone preview all of them
- * amount to "play that routine too, starting at this command's time".
+ * Each plays that routine too, from this command's time; a blocking one also
+ * holds the rest of its own routine until that routine ends (BLOCKING_OPS).
  */
 const CALL_OPS = new Set([0x03, 0x09, 0x3b, 0x3c, 0x57]);
+/**
+ * Links that hold their routine: 0x3B (this DAT, then the shared one) and 0x3C
+ * (the caster's own files) run the routine they name and suspend the one they
+ * are in until it ends — YmParentTask::Suspend in the PS2 client's tag handler,
+ * resumed from the child's destructor (ymschdecript.cpp, ymsch.cpp). Everything
+ * after the link runs that much later: every retail spell opens with `3C sh··`,
+ * which waits out `wash`'s 60 ticks, so the rest of its `main` lands about 61
+ * ticks after the frame the DAT gives it.
+ */
+export const BLOCKING_OPS = new Set([0x3b, 0x3c]);
+/** Links that look on the caster's own files (0x57 after them, the shared DAT). */
+export const CASTER_OPS = new Set([0x3c, 0x57]);
 /**
  * SoundEffect ops (effect_system.md §3: positioned / player-only / nearest /
  * global variants). A ref that doesn't resolve to a 0x3D pointer is skipped.
@@ -156,7 +168,7 @@ function decideCondition(stack, regs) {
 function parseRoutineCommands(bytes, dv, section) {
   const base = section.start + 0x10;             // dataStart
   const end = section.start + section.size;
-  const empty = { commands: [], calls: [], sounds: [], anims: [], stops: [], vis: [] };
+  const empty = { commands: [], calls: [], sounds: [], anims: [], stops: [], vis: [], total: 0 };
   if (section.size < 0x30) return empty;
 
   const sec2 = dv.getInt32(base + 0x14, true);   // command-list pointer (body-relative)
@@ -171,6 +183,9 @@ function parseRoutineCommands(bytes, dv, section) {
   const regs = new Map();                        // bound as conditions are decided
   let stack = [];                                // operands awaiting the next 0x64
   let clock = 0;                                 // Σ delays of the entries BEFORE this one
+  // The order entries run in. Two on one tick run in list order, which is what
+  // decides whether a blocking link holds the other (flattenRoutine).
+  let seq = 0;
 
   // A tag executes IMMEDIATELY and its delay is the wait AFTER it, before the
   // next tag — XiClient CMoSchedulerTask::OnMove pumps
@@ -182,28 +197,29 @@ function parseRoutineCommands(bytes, dv, section) {
   const emit = (node) => {
     const { op, p } = node;
     const at = clock;
+    const s = seq++;
     clock += u16(p + 4);
     // Before the ref check: these tags carry numbers where the others carry an id.
     if (VIS_OPS.has(op)) {
       const v = readVisCommand(bytes, p, op, at, end);
-      if (v) vis.push(v);
+      if (v) vis.push({ ...v, seq: s });
       return;
     }
     if (p + 16 > end) return;
     const ref = cleanId(String.fromCharCode(bytes[p + 8], bytes[p + 9], bytes[p + 10], bytes[p + 11]));
     if (!/^[\x20-\x7e]{1,4}$/.test(ref)) return;
-    if (op === CMD_SPAWN_GENERATOR) commands.push({ genId: ref, delay: at, dur: u16(p + 6) });
-    else if (CALL_OPS.has(op)) calls.push({ routineId: ref, delay: at });
-    else if (SOUND_OPS.has(op)) sounds.push({ soundId: ref, delay: at });
+    if (op === CMD_SPAWN_GENERATOR) commands.push({ genId: ref, delay: at, dur: u16(p + 6), seq: s });
+    else if (CALL_OPS.has(op)) calls.push({ routineId: ref, delay: at, op, seq: s });
+    else if (SOUND_OPS.has(op)) sounds.push({ soundId: ref, delay: at, seq: s });
     else if (op === ANIM_OP) {
       // transIn/transOut are the scheduler's blend windows in ticks (u16 @+24 /
       // @+28), maxLoops @+30 (0 = loop forever).
       const long = p + 32 <= end;
       anims.push({
         ref, delay: at, dur: u16(p + 6),
-        transIn: long ? u16(p + 24) : 0, transOut: long ? u16(p + 28) : 0, loops: long ? u16(p + 30) : 1,
+        transIn: long ? u16(p + 24) : 0, transOut: long ? u16(p + 28) : 0, loops: long ? u16(p + 30) : 1, seq: s,
       });
-    } else if (op === DAMPEN_OP) stops.push({ genId: ref, delay: at });
+    } else if (op === DAMPEN_OP) stops.push({ genId: ref, delay: at, seq: s });
   };
 
   const run = (nodes) => {
@@ -248,7 +264,9 @@ function parseRoutineCommands(bytes, dv, section) {
   };
 
   run(nestBlocks(readEntries(bytes, base + (sec2 - 16), end)));
-  return { commands, calls, sounds, anims, stops, vis };
+  // `total`: where the routine's own clock ends, the tick it ends on when nothing
+  // holds it (the header's totalDelay on 98% of retail routines).
+  return { commands, calls, sounds, anims, stops, vis, total: clock };
 }
 
 /** Frames the routine spans, from its last generator's start + emit window. */
@@ -268,9 +286,9 @@ export function parseEffectRoutines(buf) {
   const routines = [];
   for (const s of parseSections(dv)) {
     if (s.typeCode !== EFFECT_ROUTINE) continue;
-    const { commands, calls, sounds, anims, stops, vis } = parseRoutineCommands(bytes, dv, s);
+    const { commands, calls, sounds, anims, stops, vis, total } = parseRoutineCommands(bytes, dv, s);
     routines.push({
-      id: cleanId(s.id) || 'main', commands, calls, sounds, anims, stops, vis, length: routineLength(commands),
+      id: cleanId(s.id) || 'main', commands, calls, sounds, anims, stops, vis, total, length: routineLength(commands),
     });
   }
   return routines;
@@ -288,18 +306,43 @@ export function parseEffectRoutines(buf) {
  *
  * Nested delays add up, so a call at delay 3 shifts everything it plays by 3.
  *
+ * A blocking link (BLOCKING_OPS) holds the rest of the routine it is in until the
+ * routine it runs has ended (routineTicks), so what comes after it in that routine
+ * — and everything that plays — runs that many ticks later: the delays here are
+ * when things play, not the frames the DAT writes. `holds` lists the top routine's
+ * own, `{ at, ticks, ref, op }` with `at` its frame in the DAT. A `3C sh··` runs on
+ * the caster, so only `actorTicks(scheduleId)` knows how long it holds (the stage
+ * character's routine; nothing is held without one).
+ *
  * @param {Object} routine        the routine to expand
  * @param {Map<string,Object>} byId      routines in this DAT
  * @param {Map<string,Object>} [globalById] routines in the shared effects DAT
+ * @param {{ actorTicks?: (id: string) => number|null }} [opts]
  */
-export function flattenRoutine(routine, byId, globalById = null) {
+export function flattenRoutine(routine, byId, globalById = null, { actorTicks = null } = {}) {
   const commands = [];
   const sounds = [];
   const anims = [];
   const stops = [];
   const vis = [];
   const actorCalls = [];
+  const holds = [];
   const seen = new Set();
+
+  // Where a blocking link finds its routine, as the client looks: 0x3B in this
+  // DAT then the shared one, 0x3C on the caster alone. One it cannot find is
+  // logged and skipped, and holds nothing.
+  const find = (id, op) => (op === 0x3c ? (actorTicks?.(id) ?? null) : (byId.get(id) ?? globalById?.get(id) ?? null));
+  const ticksOf = new Map();
+  const holdOf = (call) => {
+    if (!BLOCKING_OPS.has(call.op)) return 0;
+    const key = `${call.op}:${call.routineId}`;
+    if (!ticksOf.has(key)) {
+      const r = find(call.routineId, call.op);
+      ticksOf.set(key, typeof r === 'number' ? Math.max(0, r) : routineTicks(r, find));
+    }
+    return ticksOf.get(key);
+  };
 
   // `via`: on everything a link out of this DAT plays (into the shared DAT, or
   // a schedule on the actor), the id that link named, the outermost one. The
@@ -308,23 +351,30 @@ export function flattenRoutine(routine, byId, globalById = null) {
     if (!r || depth > 8 || seen.has(r)) return;   // cycle / runaway guard
     seen.add(r);
     const tag = via ? { via } : null;
-    for (const c of r.commands) commands.push({ ...c, delay: c.delay + offset, ...tag });
-    for (const s of r.sounds) sounds.push({ ...s, delay: s.delay + offset, ...tag });
-    for (const a of r.anims ?? []) anims.push({ ...a, delay: a.delay + offset, ...tag });
-    for (const st of r.stops ?? []) stops.push({ ...st, delay: st.delay + offset, ...tag });
-    for (const v of r.vis ?? []) vis.push({ ...v, delay: v.delay + offset, ...tag });
+    // This routine's own holds: each delays what runs after it here, in list
+    // order (a routine that parses without it falls back to its tick).
+    const own = (r.calls ?? []).filter((c) => BLOCKING_OPS.has(c.op)).map((c) => ({ c, ticks: holdOf(c) })).filter((h) => h.ticks > 0);
+    const after = (h, x) => (x.seq != null && h.c.seq != null ? x.seq > h.c.seq : x.delay > h.c.delay);
+    const at = (x) => own.reduce((n, h) => (after(h, x) ? n + h.ticks : n), x.delay + offset);
+    if (depth === 0) for (const h of own) holds.push({ at: h.c.delay, ticks: h.ticks, ref: h.c.routineId, op: h.c.op });
+    for (const c of r.commands) commands.push({ ...c, delay: at(c), ...tag });
+    for (const s of r.sounds) sounds.push({ ...s, delay: at(s), ...tag });
+    for (const a of r.anims ?? []) anims.push({ ...a, delay: at(a), ...tag });
+    for (const st of r.stops ?? []) stops.push({ ...st, delay: at(st), ...tag });
+    for (const v of r.vis ?? []) vis.push({ ...v, delay: at(v), ...tag });
     for (const call of r.calls) {
       const local = byId.has(call.routineId);
-      const next = byId.get(call.routineId) ?? globalById?.get(call.routineId) ?? null;
+      const next = call.op === 0x3c ? null : (byId.get(call.routineId) ?? globalById?.get(call.routineId) ?? null);
       if (!next) {
         // Neither this DAT nor the shared one has it — it is a schedule on the
         // ACTOR's own DAT. That is where the cast motions live: Fire calls
         // `shbk`, a Ninjutsu spell calls `shnj`, a cure calls `shwh`. Handing
-        // the id up lets the caller resolve it against the loaded character.
-        actorCalls.push({ scheduleId: call.routineId, delay: offset + call.delay, via: via ?? call.routineId });
+        // the id up lets the caller resolve it against the loaded character;
+        // `op` says whether the game would look there at all (CASTER_OPS).
+        actorCalls.push({ scheduleId: call.routineId, delay: at(call), via: via ?? call.routineId, op: call.op });
         continue;
       }
-      walk(next, offset + call.delay, depth + 1, via ?? (local ? null : call.routineId));
+      walk(next, at(call), depth + 1, via ?? (local ? null : call.routineId));
     }
   };
   walk(routine, 0, 0, null);
@@ -347,7 +397,28 @@ export function flattenRoutine(routine, byId, globalById = null) {
   anims.sort((a, b) => a.delay - b.delay);
   actorCalls.sort((a, b) => a.delay - b.delay);
   vis.sort((a, b) => a.delay - b.delay);
-  return { commands, sounds: deduped, anims, stops, vis, actorCalls, length: routineLength(commands) };
+  return { commands, sounds: deduped, anims, stops, vis, actorCalls, holds, length: routineLength(commands) };
+}
+
+/**
+ * How long a routine runs before it ends, in ticks: its own clock (`total`, the
+ * sum of its delays — a routine ends when its list runs out) plus the hold of every
+ * blocking link in it. `find(id, op)` gives what a blocking link reaches: a routine
+ * (anything with `total` and `calls`: parseEffectRoutines', or a character's
+ * schedule from dat.js), its ticks when they are known another way, or null when it
+ * reaches nothing (the game logs the name and goes on without waiting). `wash` is
+ * 60; a race's `shbk` is 61 — one tick, then it waits for `wash`.
+ */
+export function routineTicks(routine, find, seen = new Set()) {
+  if (!routine || typeof routine !== 'object' || seen.has(routine) || seen.size > 8) return 0;
+  const inner = new Set(seen).add(routine);
+  let ticks = Math.max(0, Number(routine.total) || 0);
+  for (const c of routine.calls ?? []) {
+    if (!BLOCKING_OPS.has(c.op)) continue;
+    const t = find(c.routineId, c.op);
+    ticks += typeof t === 'number' ? Math.max(0, t) : routineTicks(t, find, inner);
+  }
+  return ticks;
 }
 
 /**

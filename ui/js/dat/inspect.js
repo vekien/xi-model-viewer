@@ -12,6 +12,7 @@
 // sites). Bits 26+ are flags: is_shadow, is_extracted, ver_num, is_virtual.
 
 import { inspectAsHex, inspectUserDat } from './userdat.js';
+import { describeGenerator } from '../particle/fields.js';
 
 /** Section type-code -> name (xi-tools SECTION_TYPE_NAMES / xim SectionType). */
 export const SECTION_TYPE_NAMES = {
@@ -1174,6 +1175,109 @@ function peekParticleMesh(bytes, dv, s) {
   return total
     ? { text: `${total} mesh${total === 1 ? '' : 'es'}`, isParticleMesh: true }
     : { text: null, isParticleMesh: true };
+}
+
+/**
+ * 0x05 ParticleGenerator — every header field and every op with its operands,
+ * in byte order. The layouts live in particle/fields.js; this only lays them
+ * out as rows. An op gets a row of its own (unknown ops carry their bytes as
+ * hex there), then one row per operand.
+ */
+export function parseInspectParticleGenerator(buffer, offset) {
+  const bytes = buffer instanceof Uint8Array
+    ? buffer
+    : new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const start = offset | 0;
+  const gen = describeGenerator(bytes, start);
+  if (!gen) return null;
+
+  const rel = (n) => `+0x${n.toString(16).toUpperCase().padStart(3, '0')}`;
+  const opHex = (n) => `0x${n.toString(16).toUpperCase().padStart(2, '0')}`;
+  const typeOf = (x) => {
+    const base = x.type === 'flags' ? `flags ${x.wire}` : x.type;
+    if (x.mask != null && x.type !== 'flags') return `${base} & ${opHex(x.mask)}`;
+    return x.count > 1 ? `${base} ×${x.count}` : base;
+  };
+  // 0x80 is full brightness, so the tint a colour byte gives is twice its value.
+  const swatchOf = (x) => (x.type === 'rgba'
+    ? `rgb(${x.value.slice(0, 3).map((c) => Math.min(255, c * 2)).join(', ')})` : null);
+
+  const rows = [];
+  const fieldRow = (x, where) => rows.push({
+    idx: rows.length,
+    at: rel(x.offset),
+    where,
+    group: x.group,
+    label: x.label,
+    type: typeOf(x),
+    raw: x.raw,
+    value: x.display.text,
+    swatch: swatchOf(x),
+    edit: x.editable ? 'yes' : '',
+    note: x.note ?? '',
+    _offset: start + x.offset,
+  });
+
+  for (const x of gen.header) fieldRow(x, 'header');
+
+  let unknown = 0;
+  for (const stream of gen.streams) {
+    for (const op of stream.ops) {
+      if (!op.known) unknown++;
+      const where = `sec${op.sec} ${opHex(op.op)}${op.nth ? ` #${op.nth}` : ''}`;
+      const link = op.curve?.id
+        ? `← curve ${op.curve.id}`
+        : op.drives.length
+          ? `→ ${op.drives.map((d) => `sec3 ${opHex(d.op)} ${d.what ?? d.name}`).join(', ')}`
+          : '';
+      rows.push({
+        idx: rows.length,
+        at: rel(op.offset),
+        where,
+        group: op.group ?? '',
+        label: `${op.name} · ${stream.name}`,
+        type: `op ×${op.sizeWords} dw${op.alloc ? ` · slot ${op.alloc}` : ''}`,
+        raw: op.known && op.layoutOk ? '' : op.hex,
+        value: link,
+        edit: '',
+        note: op.note ?? '',
+        _offset: start + op.offset,
+      });
+      if (op.known && op.layoutOk) for (const x of op.fields) fieldRow(x, `${where} +${opHex(x.at)}`);
+    }
+  }
+
+  const byName = Object.fromEntries(gen.header.map((x) => [x.name, x]));
+  const setup = gen.streams[1].ops.find((o) => o.op === 0x01 && o.layoutOk);
+  const life = setup?.fields.find((x) => x.name === 'life')?.value;
+  const opCount = gen.streams.reduce((n, s) => n + s.ops.length, 0);
+  const bits = [`${opCount} op${opCount === 1 ? '' : 's'}${unknown ? ` (${unknown} unknown)` : ''}`];
+  bits.push(`spawns ${byName.spawnCount.value + 1} every ${byName.spawnInterval.value + 1} ticks`);
+  if (life != null) bits.push(life === 0 ? 'lives forever' : `life ${life} ticks`);
+
+  return {
+    kind: 'particleGenerator',
+    id: gen.id || 'gen',
+    title: 'ParticleGenerator',
+    subtitle: bits.join(' · '),
+    note: 'Every header field and op operand, in byte order; ticks are 1/60 s. Offsets count from the section start, '
+      + 'and the number after an op is the offset from its config dword. Editable marks what a mix may change; '
+      + 'the rest is structure, pointer slots, or operands nobody has pinned down.'
+      + (gen.warnings.length ? ` ${gen.warnings.join('. ')}.` : ''),
+    offset: start,
+    columns: [
+      { key: 'at', label: 'Offset' },
+      { key: 'where', label: 'Where' },
+      { key: 'group', label: 'Group' },
+      { key: 'label', label: 'Field' },
+      { key: 'type', label: 'Type' },
+      { key: 'raw', label: 'Raw' },
+      { key: 'value', label: 'Value' },
+      { key: 'edit', label: 'Editable' },
+      { key: 'note', label: 'Note' },
+    ],
+    rows,
+  };
 }
 
 /**
