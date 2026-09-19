@@ -544,6 +544,11 @@ class Handler(SimpleHTTPRequestHandler):
                             env[str(k)] = vs
                         elif str(k) in env:
                             del env[str(k)]
+                # Same rule as the Tauri shell's norm_arg: an absolute path the
+                # frontend built Windows-style reaches the CLI with "/" on POSIX.
+                if os.name != "nt":
+                    args = [a.replace("\\", "/") if isinstance(a, str) and a.startswith("/") else a
+                            for a in args]
                 r = subprocess.run(
                     [xi, *args], cwd=cwd, capture_output=True, text=True,
                     encoding="utf-8", errors="replace", env=env,
@@ -677,6 +682,10 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _resolve_any(self, raw):
         # Export destinations are user-chosen folders outside the game dir.
+        # The frontend joins them Windows-style (the mixer's recipes); on POSIX
+        # accept that, as the Tauri shell's norm() does.
+        if os.name != "nt":
+            raw = raw.replace("\\", "/")
         return Path(raw).resolve()
 
     def _list(self, raw):
