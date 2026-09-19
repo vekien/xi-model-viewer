@@ -1,5 +1,33 @@
-/** Normalize a game-relative path to Windows-style separators. */
-export const normRel = (rel) => String(rel || '').replace(/\//g, '\\').replace(/^[\\/]+/, '');
+/**
+ * macOS / Linux host. Only there can a leading `/` mean "absolute" — on Windows
+ * a path starts with a drive or `\\server`, and a leading slash is a stray
+ * separator on a relative path, which normRel strips as it always has.
+ */
+const POSIX_HOST = typeof navigator !== 'undefined'
+  && !/^win/i.test(navigator.platform || '')
+  && !/windows/i.test(navigator.userAgent || '');
+
+/**
+ * A POSIX absolute path (`/Users/me/xi-tools/exports/…/mix.DAT`) on a
+ * macOS/Linux host. The mixer's composed DATs live outside every game root,
+ * and xi returns them like this.
+ */
+export const isPosixAbs = (p) => POSIX_HOST && /^\/(?![\\/])/.test(String(p || ''));
+
+/** Absolute on this host: a drive (`C:\`), a UNC share, or POSIX-absolute. */
+export const isAbsPath = (p) => {
+  const s = String(p || '');
+  return /^[a-zA-Z]:[\\/]/.test(s) || s.startsWith('\\\\') || isPosixAbs(s);
+};
+
+/**
+ * Normalize a game-relative path to Windows-style separators. A POSIX absolute
+ * path is returned as-is: stripping its leading `/` would turn it into a
+ * relative path that gets joined onto the game folder.
+ */
+export const normRel = (rel) => (isPosixAbs(rel)
+  ? String(rel)
+  : String(rel || '').replace(/\//g, '\\').replace(/^[\\/]+/, ''));
 
 /** ROM-relative key for equality (HD/game/pivot abs → same `rom\…` key). */
 export function pathKey(path, settings) {
@@ -21,16 +49,19 @@ export function gameCandidates(relOrAbs, settings, opts = {}) {
   const stripped = relFromAbs(r, settings);
   if (stripped && stripped !== r) r = normRel(stripped);
   // Absolute path that still looks like …\ROM\… even outside configured roots
-  if (/^[a-zA-Z]:\\/.test(r) || r.startsWith('\\\\')) {
-    const m = r.match(/(?:^|\\)((?:ROM\d*|sound\d*|maps)\\.+)$/i);
-    if (m) r = m[1];
+  if (isAbsPath(r)) {
+    const m = r.match(/(?:^|[\\/])((?:ROM\d*|sound\d*|maps)[\\/].+)$/i);
+    if (m) r = normRel(m[1]);
   }
+  // Still absolute and outside every root (a composed mixer DAT): read it as-is.
+  // Joining it onto pivot/HD/game only builds paths that cannot exist.
+  if (isPosixAbs(r)) return [r];
   const out = [];
   if (settings?.pivotEnabled && settings?.pivotPath) out.push(`${settings.pivotPath}\\${r}`);
   if (!opts.skipHd && settings?.hdEnabled && settings?.hdPath) out.push(`${settings.hdPath}\\${r}`);
   if (settings?.gamePath) out.push(`${settings.gamePath}\\${r}`);
   // Last resort: original absolute path (Open DAT outside roots)
-  if (/^[a-zA-Z]:\\/.test(normRel(relOrAbs)) || String(relOrAbs).startsWith('\\\\')) {
+  if (isAbsPath(normRel(relOrAbs))) {
     const abs = normRel(relOrAbs);
     if (!out.some((p) => p.toLowerCase() === abs.toLowerCase())) out.push(abs);
   }
