@@ -35,6 +35,19 @@ fn norm(path: &str) -> std::path::PathBuf {
     }
 }
 
+/// An `xi` CLI argument, with `norm`'s rule applied to absolute paths only. The
+/// mixer builds recipe and output paths Windows-style and hands them to the CLI
+/// as plain arguments, which `norm` never sees; on POSIX the CLI then looks for
+/// a file literally named `xi-tools\exports\…`. Other arguments (specs, action
+/// ids, ROM-relative DATs the CLI normalises itself) are passed through as-is.
+fn norm_arg(arg: &str) -> String {
+    if !cfg!(windows) && arg.starts_with('/') && arg.contains('\\') {
+        arg.replace('\\', "/")
+    } else {
+        arg.to_string()
+    }
+}
+
 #[tauri::command]
 fn list_dir(path: String) -> Result<Vec<DirEntry>, String> {
     let path = norm(&path);
@@ -823,7 +836,7 @@ fn prepare_xi_cmd(
         .ok_or("xi CLI not found — set the xi-tools folder in Settings")?;
     let mut cmd = std::process::Command::new(&xi);
     for a in args {
-        cmd.arg(a);
+        cmd.arg(norm_arg(a));
     }
     apply_xi_env(&mut cmd, env);
     // Unbuffered Python so Click/print lines stream instead of batching.
@@ -1213,6 +1226,22 @@ mod tests {
             .unwrap_or_else(|e| panic!("failed to list {backslashed}: {e}"));
         let forward = list_dir(root.join(sub).display().to_string()).unwrap();
         assert_eq!(listed.len(), forward.len());
+    }
+
+    /// The mixer hands `xi ability compose` a recipe path built as
+    /// `<xi-tools>\exports\ability\mixer\…`; on unix the CLI must receive it
+    /// with forward slashes, while specs and ids pass through untouched.
+    #[test]
+    fn xi_args_normalise_windows_style_absolute_paths_only() {
+        let recipe = r"/Users/me/xi-tools\exports\ability\mixer\_work\a.recipe.json";
+        if cfg!(windows) {
+            assert_eq!(norm_arg(recipe), recipe);
+        } else {
+            assert_eq!(norm_arg(recipe), "/Users/me/xi-tools/exports/ability/mixer/_work/a.recipe.json");
+        }
+        for untouched in ["ability", "ws:1:HumeMale", "ability.tiger_fury", r"ROM\118\114.DAT", "/already/posix"] {
+            assert_eq!(norm_arg(untouched), untouched);
+        }
     }
 
     #[test]
