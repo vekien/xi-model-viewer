@@ -3626,7 +3626,7 @@ body.eyedrop-picking { user-select: none; }
 .cseq-close:hover { background: rgba(255, 255, 255, 0.1); }
 
 .cseq-body {
-  padding: 10px 12px 12px;
+  padding: 0 10px;
   display: flex;
   flex-direction: column;
   gap: 9px;
@@ -3932,7 +3932,7 @@ body.eyedrop-picking { user-select: none; }
   gap: 8px;
   flex-wrap: wrap;
   flex: 0 0 auto;
-  padding-top: 8px;
+  padding: 0 0 10px 0;
   row-gap: 6px;
 }
 .cseq-bar-group {
@@ -6910,12 +6910,43 @@ button.mgen-tex-thumb:disabled { cursor: default; }
    and the window shrinks to the header (the JS drops any remembered height). */
 #mixer-seq.is-collapsed .cseq-body,
 #mixer-seq.is-collapsed .cseq-resize,
-#mixer-seq.is-collapsed .mseq-resize-v { display: none; }
+#mixer-seq.is-collapsed .mseq-resize-v,
+#mixer-seq.is-collapsed .mseq-resize-c { display: none; }
+/* Bottom-right corner grip: width + height together, matching .fx-modal-resize. */
+.mseq-resize-c { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; z-index: 3; }
+.mseq-resize-c::after { content: ''; position: absolute; right: 3px; bottom: 3px; width: 8px; height: 8px; border-right: 2px solid var(--gray-500); border-bottom: 2px solid var(--gray-500); opacity: 0.7; }
+.mseq-resize-c:hover::after { border-color: var(--accent); opacity: 1; }
+/* Docked to the bottom of the app: full width, only the top corners rounded, and
+   the edge/corner grips give way to a single top-edge grip that sets the height. */
+#mixer-seq.is-docked { border-radius: 10px 10px 0 0; }
+#mixer-seq.is-docked .cseq-resize,
+#mixer-seq.is-docked .mseq-resize-v,
+#mixer-seq.is-docked .mseq-resize-c { display: none; }
+.mseq-dock-resize { position: absolute; top: 0; left: 0; right: 0; height: 7px; cursor: ns-resize; z-index: 3; }
+.mseq-dock-resize::after { content: ''; position: absolute; top: 2px; left: 50%; width: 32px; height: 3px; margin-left: -16px; border-radius: 2px; background: var(--gray-500); opacity: 0.5; }
+.mseq-dock-resize:hover::after { background: var(--accent); opacity: 0.9; }
+/* The Camera Sequencer docks the same way. */
+#camseq.is-docked { border-radius: 10px 10px 0 0; min-width: 0; }
+#camseq.is-docked .cseq-resize,
+#camseq.is-docked .mseq-resize-c { display: none; }
 /* Zoom now rides the bottom bar, just right of the frame readout. */
 .cseq-bar .mseq-zoom-bar { margin-left: 4px; }
 /* Only the track area scrolls: the toolbar rows above it and the transport bar
    below stay put, and the window's height still fits the content up to its cap. */
-#mixer-seq .cseq-body { overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+#mixer-seq .cseq-body { overflow: hidden; display: flex; flex-direction: column; min-height: 0; position: relative; }
+/* While the mix composes / loads assets (Play, a race switch): a blurred veil over
+   the body with a spinner, so it is clear the timeline is busy rather than frozen. */
+.mseq-loading {
+  position: absolute; inset: 0; z-index: 12;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  background: rgba(13, 16, 18, 0.32);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  color: var(--text); font: 600 13px/1 var(--font-ui); letter-spacing: 0.05em;
+  border-radius: 0 0 10px 10px;
+}
+.mseq-loading .icon { font-size: 30px; color: var(--accent); }
+.mseq-loading-spin { animation: mseq-spin 0.9s linear infinite; transform-origin: 50% 50%; }
+@keyframes mseq-spin { to { transform: rotate(360deg); } }
 #mixer-seq .mseq-tl { flex: 1 1 auto; min-height: 0; overflow: hidden auto; }
 /* The Details / Timeline tab strip sits flush at the top of the body (the body's
    own padding and gap space it); keep the segmented control's compact width. */
@@ -6930,7 +6961,7 @@ button.mgen-tex-thumb:disabled { cursor: default; }
 #mixer-seq .mseq-tl .cseq-tl-scroll { height: auto; min-height: 0; }
 #mixer-seq .mseq-tl::-webkit-scrollbar { width: 6px; }
 #mixer-seq .mseq-tl::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); border-radius: 3px; }
-.mseq-name { color: var(--text); font-size: 12px; flex: 0 0 auto; }
+.mseq-name { color: var(--text); font-size: 12px; flex: 0 0 auto; padding-right: 10px; }
 .mseq-note { flex: 1 1 auto; min-width: 0; color: var(--muted); font: 500 11px/1.2 var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mseq-note.is-failed { color: #f0a8a2; }
 .mseq-error { flex: 0 0 auto; font: 12px/1.4 var(--font-mono); }
@@ -6947,10 +6978,20 @@ button.mgen-tex-thumb:disabled { cursor: default; }
    each further row has its delete (.mseq-row-x) at that row's height. */
 .mseq-label { position: relative; align-items: flex-start; box-sizing: border-box; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
 .mseq-label-head { flex: 1 1 auto; min-width: 0; height: 24px; display: flex; align-items: center; justify-content: space-between; gap: 4px; }
-.mseq-label-text { flex: 1 1 auto; min-width: 0; cursor: ew-resize; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mseq-label-text { flex: 1 1 auto; min-width: 0; cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: none; }
 .mseq-rows { display: inline-flex; align-items: center; gap: 2px; font: 600 9px/1 var(--font-ui); color: var(--muted); background: transparent; border: 1px solid var(--ring); border-radius: 8px; padding: 1px 5px; min-height: 0; cursor: pointer; flex: 0 0 auto; }
 .mseq-rows .icon { font-size: 12px; }
 .mseq-rows:hover { color: var(--accent); border-color: var(--accent); }
+/* A lane minimised to a thin line (mseq-lane.min): its label becomes a compact,
+   clickable strip that expands it again; the track shows a 2px coloured mark for
+   each block. The minimise glyph sits with the lane's other head controls. */
+.mseq-min-btn { display: inline-flex; align-items: center; justify-content: center; background: transparent; border: none; box-shadow: none; color: var(--muted); cursor: pointer; padding: 0 2px; min-height: 0; flex: 0 0 auto; }
+.mseq-min-btn .icon { font-size: 14px; }
+.mseq-min-btn:hover { color: var(--accent); }
+.mseq-label-min { cursor: pointer; align-items: center; padding: 0 6px; overflow: hidden; }
+.mseq-label-min .mseq-min-name { font: 700 8px/1 var(--font-ui); letter-spacing: 0.04em; text-transform: uppercase; color: currentColor; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 2px; }
+.mseq-label-min:hover .mseq-min-name { opacity: 1; }
+.mseq-min-mark { position: absolute; top: 50%; height: 2px; transform: translateY(-50%); border-radius: 1px; min-width: 3px; opacity: 0.95; pointer-events: none; }
 .mseq-track { cursor: default; }
 .mseq-ruler { cursor: ew-resize; }
 .mseq-lane { box-sizing: border-box; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
@@ -6960,11 +7001,11 @@ button.mgen-tex-thumb:disabled { cursor: default; }
 /* A pill dragged below the last row: the edge the lane grows a row under on the drop. */
 .mseq-lane.grow { box-shadow: inset 0 -2px 0 var(--accent); }
 .mseq-pill {
-  position: absolute; height: 16px; transform: translateY(-50%);
+  position: absolute; height: 13px; transform: translateY(-50%);
   border-radius: 999px;
-  font: 500 10px/16px var(--font-mono); color: #0d1012;
-  padding: 0 7px; white-space: nowrap; overflow: hidden;
-  cursor: grab; min-width: 48px; box-sizing: border-box; z-index: 2;   /* MIN_PILL_PX in MixerTimeline.jsx */
+  font: 500 9px/13px var(--font-mono); color: #0d1012;
+  padding: 0 6px; white-space: nowrap; overflow: hidden;
+  cursor: grab; min-width: 46px; box-sizing: border-box; z-index: 2;   /* MIN_PILL_PX in MixerTimeline.jsx */
   box-shadow: 0 1px 2px 1px rgb(0 0 0 / 49%);
 }
 /* A block that starts no generator (dampen, link, clip…): the lane colour as rim and label on a dark fill,
@@ -6983,12 +7024,12 @@ button.mgen-tex-thumb:disabled { cursor: default; }
 .mseq-pill-label { position: relative; }
 .mseq-pill.on { outline: 2px solid #fff; outline-offset: -1px; }
 .mseq-pill.off { opacity: 0.4; filter: grayscale(1); }
-.mseq-pill.wave { display: flex; align-items: center; gap: 4px; padding: 0 6px 0 3px; }
-.mseq-pill .mseq-spk { font-size: 13px; line-height: 1; cursor: pointer; flex: 0 0 auto; }
+.mseq-pill.wave { display: flex; align-items: center; gap: 3px; padding: 0 5px 0 3px; }
+.mseq-pill .mseq-spk { font-size: 11px; line-height: 1; cursor: pointer; flex: 0 0 auto; }
 .mseq-pill .mseq-wave { flex: 1 1 auto; min-width: 0; height: 100%; opacity: 0.8; }
 .mseq-pill .mseq-wave-label { flex: 0 0 auto; }
 /* A generator the mix edits (the Generator window): a small pencil before the pill's label. */
-.mseq-pill .mseq-edited { position: relative; font-size: 11px; line-height: 16px; vertical-align: top; margin-right: 2px; }
+.mseq-pill .mseq-edited { position: relative; font-size: 10px; line-height: 13px; vertical-align: top; margin-right: 2px; }
 .mseq-pill.ghost { background: repeating-linear-gradient(45deg, rgba(224, 168, 62, 0.45) 0 6px, rgba(224, 168, 62, 0.2) 6px 12px) !important; border: 1px dashed rgba(224, 168, 62, 0.9); color: var(--text); pointer-events: none; cursor: default; }
 .mseq-pill.ghost.fx { background: repeating-linear-gradient(45deg, rgba(217, 123, 196, 0.45) 0 6px, rgba(217, 123, 196, 0.2) 6px 12px) !important; border-color: rgba(217, 123, 196, 0.9); display: inline-flex; align-items: center; gap: 4px; }
 /* Loop repeats of a clip: faint dashed echoes of the pill, one per extra play (MixerTimeline pill). */
@@ -7017,6 +7058,21 @@ button.mgen-tex-thumb:disabled { cursor: default; }
 .mseq-head { position: absolute; top: -2px; left: 50%; width: 14px; height: 18px; transform: translateX(-50%); pointer-events: auto; cursor: ew-resize; }
 .mseq-speed { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; width: 150px; }
 .mseq-speed .pc-frame-slider { flex: 1 1 auto; min-width: 0; }
+/* The transport bar's playback-options popover (the tune button opens it upward). */
+.mseq-bar-settings { position: relative; }
+.mseq-bar-menu {
+  position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 20;
+  display: flex; flex-direction: column; gap: 5px;
+  min-width: 208px; padding: 8px;
+  background: var(--gray-800); border: 1px solid var(--ring-strong); border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+}
+.mseq-bar-menu .mseq-bar-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 24px; padding: 0 2px; }
+.mseq-bar-menu .mseq-bar-speed { flex-direction: column; align-items: stretch; gap: 5px; }
+.mseq-bar-menu .mseq-bar-label { color: var(--muted); font: 500 11px/1 var(--font-ui); flex: 0 0 auto; }
+.mseq-bar-menu .mseq-bar-speed .mseq-speed { width: auto; }
+.mseq-bar-menu .cseq-btn.mseq-bar-btn { justify-content: flex-start; gap: 6px; width: 100%; }
+.mseq-bar-menu .mseq-bar-btn .icon { font-size: 15px; }
 .mseq-help { display: flex; flex-direction: column; gap: 3px; text-align: left; }
 .mseq-resize-v { position: absolute; left: 0; right: 0; bottom: 0; height: 8px; cursor: ns-resize; z-index: 2; }
 /* The same pill as the width handle, lying flat on the bottom edge. */

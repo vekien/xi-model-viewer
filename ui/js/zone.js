@@ -451,8 +451,18 @@ function parseZoneDef(bytes, dv, section, table1) {
     const b = ds + 0x20 + i * stride;
     if (b + 0x34 > sectionEnd) break;
     const meshId = strAt(bytes, b, 0x10);
+    // +0x34 is a 4-char link to a 0x36 ZoneInteraction by its sourceId — how a
+    // placement binds to an interaction volume: doors → '_' volumes, and the
+    // moving lift car (`liftall`) → its '@' elevator volume. Only the modern
+    // 0x64 record carries it; guard printable so a stray byte isn't a "link".
+    let link = null;
+    if (stride >= OBJ_STRIDE_MODERN) {
+      const raw = strAt(bytes, b + 0x34, 4);
+      if (raw.length >= 2 && /^[\x20-\x7e]+$/.test(raw)) link = raw;
+    }
     placements.push({
       meshId,
+      link,       // 0x36 interaction sourceId this placement is bound to (or null)
       index: i,   // stable DAT object index — lets edits target the EXACT instance of a shared mesh name
       // Sub-area id at +0x50 in the modern 0x64 record; absent on 0x54 proto.
       // Same id space as the 0x36 'm' trigger volumes — verified equal set on
@@ -549,6 +559,14 @@ function parseZoneInteractions(bytes, dv, section) {
       param: u32at(dv, b + 0x2C),                             // sub-area id (for 'm'); dest zone (for 'z')
       pos:  [dv.getFloat32(b, true), dv.getFloat32(b + 4, true), dv.getFloat32(b + 8, true)],
       size: [dv.getFloat32(b + 24, true), dv.getFloat32(b + 28, true), dv.getFloat32(b + 32, true)],
+      // Tail s16s at +0x34. Zero for most volumes; the '@' (elevator) kind carries
+      // its motion params here — [cycle, dwell] in 1/60s ticks (inferred). This is
+      // what drives an auto-running interaction with no server or player trigger.
+      params: [
+        dv.getInt16(b + 0x34, true), dv.getInt16(b + 0x36, true),
+        dv.getInt16(b + 0x38, true), dv.getInt16(b + 0x3A, true),
+        dv.getInt16(b + 0x3C, true), dv.getInt16(b + 0x3E, true),
+      ],
     });
   }
   return out;

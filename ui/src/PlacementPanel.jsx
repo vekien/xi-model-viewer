@@ -211,8 +211,7 @@ export function PlacementPanel({
     >
       <div className="plc-header">
         <span className="icon">lists</span>
-        <span className="plc-title">Objects</span>
-        <span className="plc-meta mono">{totalInst.toLocaleString()}</span>
+        <span className="plc-title">Objects{totalInst ? ` (${totalInst.toLocaleString()})` : ''}</span>
         {typeof onToggleLiveSelection === 'function' && tab === 'mesh' && (
           <Tooltip content={liveSelection
             ? 'Live Selection on — hover wireframe, click to select'

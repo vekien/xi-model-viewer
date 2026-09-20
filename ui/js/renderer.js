@@ -8,7 +8,7 @@ import { ParticleDrawer } from './particleDrawer.js';
 import { Vec3, Mat4 } from './particle/math.js';
 import { AttachType } from './particle/types.js';
 import { buildSolidGizmoMeshes, gizmoSize } from './zoneGizmo.js';
-import { bakeSpinnerDraws } from './zoneModel.js';
+import { bakeSpinnerDraws, bakeLiftDraws } from './zoneModel.js';
 
 // References 49-51 stand for the eight-point ring (13..20) around an actor.
 const RING_REF_START = 13;
@@ -1099,8 +1099,9 @@ export class Renderer {
     this.customSunDir = null;
 
     this.zoneBatches = [];
-    this.zoneSpinnerBatches = [];   // live-spin companions (mill on w_mill)
+    this.zoneSpinnerBatches = [];   // live-spin companions (mill) + auto-run lifts
     this.zoneSpinnerAngle = 0;
+    this.zoneLiftClock = 0;         // seconds, drives auto-running interactions (elevators)
     this.effectLayerFrames = 0;
     this.zoneDisableCull = false;   // debug: ignore the per-submesh cull flag
     // Coplanar water/overlay submeshes: retail-style LEQUAL lets equal-depth blend
@@ -1665,6 +1666,7 @@ export class Renderer {
     }
     this.zoneSpinnerBatches = [];
     this.zoneSpinnerAngle = 0;
+    this.zoneLiftClock = 0;
     this.effectLayerFrames = 0;
     this.particleDrawer?.disposeMeshes();
     this.particleSystem = null;
@@ -3092,8 +3094,9 @@ export class Renderer {
     if (this.windFactor >= 1) { this.windFactor = 1; this.windDir = -1; }
     else if (this.windFactor <= 0) { this.windFactor = 0; this.windDir = 1; }
 
-    if (this.model?.kind === 'zone' && this.model.zoneSpinners?.length) {
+    if (this.model?.kind === 'zone' && (this.model.zoneSpinners?.length || this.model.zoneLifts?.length)) {
       this.zoneSpinnerAngle += dtSeconds;
+      this.zoneLiftClock += dtSeconds;
       this._rebuildZoneSpinners();
     }
 
@@ -4756,14 +4759,25 @@ export class Renderer {
     }
     this.zoneSpinnerBatches = [];
     const spinners = this.model?.zoneSpinners;
-    if (!spinners?.length) return;
-    for (const sp of spinners) {
+    const lifts = this.model?.zoneLifts;
+    if (!spinners?.length && !lifts?.length) return;
+    for (const sp of spinners ?? []) {
       // The wheel's Objects row is this spinner's row — the static pass skips
       // it — so its eye (and drag hiding) has to gate the live copy too.
       const pl = sp.placement;
       if (pl && (pl.userHidden || pl.dragHidden)) continue;
       const angle = this.zoneSpinnerAngle * (sp.spinY || 0);
       for (const draw of bakeSpinnerDraws(sp, angle)) {
+        const batch = this.buildZoneBatch(draw);
+        if (batch) this.zoneSpinnerBatches.push(batch);
+      }
+    }
+    // Auto-running interactions (elevators) share the dynamic-batch path: the
+    // static pass skips their placement (lift), so the live copy is the only one.
+    for (const lf of lifts ?? []) {
+      const pl = lf.placement;
+      if (pl && (pl.userHidden || pl.dragHidden)) continue;
+      for (const draw of bakeLiftDraws(lf, this.zoneLiftClock)) {
         const batch = this.buildZoneBatch(draw);
         if (batch) this.zoneSpinnerBatches.push(batch);
       }

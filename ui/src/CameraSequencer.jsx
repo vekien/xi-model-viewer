@@ -26,6 +26,7 @@ const SCENE_HZ = 10;                // weather/time re-apply rate; see applyScen
 const MIN_W = 940;
 const DEFAULT_W = 940;
 const PANEL_H = 348;                // height with no actor lanes; drag clamp fallback
+const MIN_H = 220;                  // the corner grip can pull it no shorter (the body then scrolls)
 const LANE_H = 25;                  // one timeline lane (see .cseq-lane)
 const TL_BASE_H = 135;              // ruler + the four fixed lanes + scrollbar (see .cseq-tl)
 const CLIP_FPS = 30;                // FFXI motion clips run at 30 game-frames a second
@@ -354,6 +355,15 @@ export function CameraSequencer({
     const s = readJson(SIZE_KEY);
     return clamp(Math.round(s?.w ?? s ?? DEFAULT_W), MIN_W, 1600);
   });
+  // Height is content-driven unless the corner grip pins one; then the body scrolls.
+  const [heightOverride, setHeightOverride] = useState(() => {
+    const s = readJson(SIZE_KEY);
+    return s?.h ? Math.max(MIN_H, Math.round(s.h)) : null;
+  });
+  // Dock: pin the window across the bottom of the app, full width. Persisted. The
+  // top edge then sets the height (the bottom is against the app's edge).
+  const [docked, setDocked] = useState(() => readJson('camSeqDocked') === true);
+  const toggleDocked = () => setDocked((v) => { writeJson('camSeqDocked', !v); return !v; });
   const [name, setName] = useState('');
   const [lengthText, setLengthText] = useState(() => String(EMPTY_DOC.totalFrames));
 
@@ -465,7 +475,7 @@ export function CameraSequencer({
 
   useEffect(() => { writeJson(DRAFT_KEY, doc); }, [doc]);
   useEffect(() => { writeJson(POS_KEY, pos); }, [pos]);
-  useEffect(() => { writeJson(SIZE_KEY, { w: width }); }, [width]);
+  useEffect(() => { writeJson(SIZE_KEY, { w: width, h: heightOverride }); }, [width, heightOverride]);
   useEffect(() => { setLengthText(String(totalFrames)); }, [totalFrames]);
 
   const patch = (fields) => setDoc((d) => ({ ...d, ...fields }));
@@ -1206,6 +1216,7 @@ export function CameraSequencer({
   const panelDrag = useRef(null);
   const resizeRef = useRef(null);
   const startDrag = (e) => {
+    if (docked) return;   // docked is pinned; nothing to drag
     if (e.target.closest('button, input, select, a, [role="button"], .cseq-resize')) return;
     const rect = panelRef.current.getBoundingClientRect();
     // Pin absolute coords so width resize doesn't fight right:auto layout.
@@ -1225,19 +1236,30 @@ export function CameraSequencer({
   };
   const endDrag = () => { panelDrag.current = null; };
 
-  const startResize = (e) => {
+  const startResize = (axis) => (e) => {
     e.preventDefault();
     e.stopPropagation();
     const rect = panelRef.current.getBoundingClientRect();
     if (!pos) setPos({ x: rect.left, y: rect.top });
-    resizeRef.current = { x0: e.clientX, w0: rect.width };
+    resizeRef.current = { axis, x0: e.clientX, y0: e.clientY, w0: rect.width, h0: rect.height, top: rect.top };
     e.currentTarget.setPointerCapture(e.pointerId);
   };
   const onResizeMove = (e) => {
-    if (!resizeRef.current) return;
-    const { x0, w0 } = resizeRef.current;
-    const maxW = Math.max(MIN_W, window.innerWidth - 16);
-    setWidth(clamp(Math.round(w0 + (e.clientX - x0)), MIN_W, maxW));
+    const r = resizeRef.current;
+    if (!r) return;
+    // 'w' the right edge, 'wh' the bottom-right corner (height too — the body scrolls).
+    if (r.axis === 'w' || r.axis === 'wh') {
+      const maxW = Math.max(MIN_W, window.innerWidth - 16);
+      setWidth(clamp(Math.round(r.w0 + (e.clientX - r.x0)), MIN_W, maxW));
+    }
+    if (r.axis === 'h' || r.axis === 'wh') {
+      const maxH = Math.max(MIN_H, window.innerHeight - r.top - 12);
+      setHeightOverride(clamp(Math.round(r.h0 + (e.clientY - r.y0)), MIN_H, maxH));
+    }
+    if (r.axis === 'ht') {   // docked: the top edge — dragging up grows it
+      const maxH = Math.max(MIN_H, window.innerHeight - 24);
+      setHeightOverride(clamp(Math.round(r.h0 - (e.clientY - r.y0)), MIN_H, maxH));
+    }
   };
   const endResize = () => { resizeRef.current = null; };
 
@@ -1254,7 +1276,7 @@ export function CameraSequencer({
   useLayoutEffect(() => {
     const fit = () => {
       const el = panelRef.current;
-      if (!el) return;
+      if (!el || docked) return;   // docked spans the app; its own layout keeps it on screen
       const vw = window.innerWidth;
       const vh = window.innerHeight;
       // A hidden or minimised window measures zero — clamping against that
@@ -1283,7 +1305,7 @@ export function CameraSequencer({
     // fallback announces itself (see backend.setUiScale).
     window.addEventListener('resize', fit);
     return () => window.removeEventListener('resize', fit);
-  }, [width, curves.camPos, curves.camRot, doc.actors.length]);
+  }, [width, curves.camPos, curves.camRot, doc.actors.length, docked]);
 
   // --- render ---------------------------------------------------------------
 
@@ -1328,10 +1350,15 @@ export function CameraSequencer({
   // it; past the window the body scrolls.
   const extraH = actorLanes * LANE_H + (curves.camPos ? CURVE_H : 0) + (curves.camRot ? CURVE_H : 0);
   const tlHeight = TL_BASE_H + extraH;
-  const style = {
+  const style = docked ? {
+    zIndex,
+    left: 0, right: 0, bottom: 0, top: 'auto', width: 'auto', maxWidth: '100%',
+    height: heightOverride || 340,
+  } : {
     width,
     zIndex,
-    height: extraH ? Math.min(PANEL_H + extraH, Math.max(window.innerHeight - 70, PANEL_H)) : PANEL_H,
+    // The corner grip pins a height; otherwise it fits the content (actor lanes / curves).
+    height: heightOverride ?? (extraH ? Math.min(PANEL_H + extraH, Math.max(window.innerHeight - 70, PANEL_H)) : PANEL_H),
     ...(pos ? { left: pos.x, top: pos.y, right: 'auto' } : null),
   };
 
@@ -1493,7 +1520,7 @@ export function CameraSequencer({
   };
 
   return (
-    <div id="camseq" className="panel" ref={panelRef} style={style} onPointerDownCapture={onFocus ?? undefined}>
+    <div id="camseq" className={`panel${docked ? ' is-docked' : ''}`} ref={panelRef} style={style} onPointerDownCapture={onFocus ?? undefined}>
       <div
         className="cseq-header"
         onPointerDown={startDrag}
@@ -1502,6 +1529,11 @@ export function CameraSequencer({
       >
         <span className="icon">movie</span>
         <span className="cseq-title">Camera Sequencer</span>
+        <Tooltip content={docked ? 'Float the sequencer' : 'Dock to the bottom of the app'} placement="bottom">
+          <button type="button" className="icon-btn cseq-close cseq-min" onClick={toggleDocked} aria-label={docked ? 'Float' : 'Dock to bottom'}>
+            <span className="icon">{docked ? 'open_in_full' : 'vertical_align_bottom'}</span>
+          </button>
+        </Tooltip>
         <button type="button" className="icon-btn cseq-close" onClick={onClose} aria-label="Close">
           <span className="icon">close</span>
         </button>
@@ -1872,11 +1904,30 @@ export function CameraSequencer({
 
       <div
         className="cseq-resize"
-        onPointerDown={startResize}
+        onPointerDown={startResize('w')}
         onPointerMove={onResizeMove}
         onPointerUp={endResize}
         onPointerCancel={endResize}
       />
+      {/* Bottom-right corner: width and height together (matches the mixer's grip). */}
+      <div
+        className="mseq-resize-c"
+        onPointerDown={startResize('wh')}
+        onPointerMove={onResizeMove}
+        onPointerUp={endResize}
+        onPointerCancel={endResize}
+        onDoubleClick={() => setHeightOverride(null)}
+      />
+      {/* Docked: the bottom is pinned to the app, so the top edge sets the height. */}
+      {docked && (
+        <div
+          className="mseq-dock-resize"
+          onPointerDown={startResize('ht')}
+          onPointerMove={onResizeMove}
+          onPointerUp={endResize}
+          onPointerCancel={endResize}
+        />
+      )}
     </div>
   );
 }

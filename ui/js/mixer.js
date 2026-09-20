@@ -18,7 +18,7 @@ export const LANES = [
   { id: 'sound', label: 'Sound', color: '#E0A83E', ops: new Set([0x0a, 0x0b, 0x4a, 0x53, 0x60, 0x8a, 0x8b]) },
 ];
 export const LANE_BY_ID = new Map(LANES.map((l) => [l.id, l]));
-export const KEEP_LANE = { id: 'keep', label: 'Locks · hits · links', color: '#8B949A' };
+export const KEEP_LANE = { id: 'keep', label: 'Commands', color: '#8B949A' };
 
 // A recipe's lanes are tracks: the three kinds each start with one track named
 // after the kind (motion, vfx, sound) and can grow more (motion2, motion3…). An

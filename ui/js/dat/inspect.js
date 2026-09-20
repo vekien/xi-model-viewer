@@ -1704,6 +1704,7 @@ const INTERACTION_KIND = {
   _: 'Door',
   f: 'Fishing',
   e: 'Event',
+  '@': 'Elevator',
 };
 const INTERACTION_KIND_WORD = {
   'Sub-area': ['sub-area', 'sub-areas'],
@@ -1712,6 +1713,7 @@ const INTERACTION_KIND_WORD = {
   Door: ['door', 'doors'],
   Fishing: ['fishing', 'fishing'],
   Event: ['event', 'events'],
+  Elevator: ['elevator', 'elevators'],
 };
 const TERRAIN_TYPE = [
   'Object', 'Path', 'Grass', 'Sand', 'Snow', 'Stone', 'Metal', 'Wood',
@@ -1772,6 +1774,7 @@ export function parseInspectZoneInteractions(buffer, offset) {
     { key: 'size', label: 'Size' },
     { key: 'map', label: 'Map' },
     { key: 'flags', label: 'Flags' },
+    { key: 'motion', label: 'Motion' },
   ];
   const rows = [];
   const kindCounts = new Map();
@@ -1791,6 +1794,16 @@ export function parseInspectZoneInteractions(buffer, offset) {
     const flags = terrainFlags
       ? `0x${terrainFlags.toString(16)}${terrain ? ` ${terrain}` : ''}`
       : '—';
+    // Tail s16s at +0x34/+0x36. For the '@' (elevator) kind these are the TWO
+    // FLOOR HEIGHTS the car runs between: floor = param/256 + record.Y (PS2 decomp
+    // XiLiftActor::SetLift). Shown so the Data view says WHERE it stops — it runs
+    // on its own with no server or player trigger.
+    const p0 = dv.getInt16(off + 0x34, true);
+    const p1 = dv.getInt16(off + 0x36, true);
+    const recY = dv.getFloat32(off + 4, true);
+    const motion = (kindChar === '@' && (p0 || p1))
+      ? `auto · floors ${(p0 / 256 + recY).toFixed(1)} / ${(p1 / 256 + recY).toFixed(1)}`
+      : '—';
     kindCounts.set(kind, (kindCounts.get(kind) || 0) + 1);
     rows.push({
       idx: i,
@@ -1803,12 +1816,13 @@ export function parseInspectZoneInteractions(buffer, offset) {
       size: fmtVec3(dv, off + 24),
       map: mapId || '—',
       flags,
+      motion,
       _offset: off,
     });
   }
 
   const bits = [];
-  for (const name of ['Sub-area', 'Zone line', 'Entrance', 'Door', 'Fishing', 'Event']) {
+  for (const name of ['Sub-area', 'Zone line', 'Entrance', 'Door', 'Fishing', 'Event', 'Elevator']) {
     const n = kindCounts.get(name);
     if (!n) continue;
     const pair = INTERACTION_KIND_WORD[name] || [name.toLowerCase(), name.toLowerCase()];
@@ -1829,7 +1843,7 @@ export function parseInspectZoneInteractions(buffer, offset) {
     rows,
     offset: start,
     size: size || bodyEnd - start,
-    note: 'RID trigger volumes (0x40 OBB). Kind from source id: m = sub-area, z = zone line / entrance, _ = door, f = fishing. Param is sub-area id (m) or dest zone (z).',
+    note: 'RID trigger volumes (0x40 OBB). Kind from source id: m = sub-area, z = zone line / entrance, _ = door, f = fishing, @ = elevator. Param is sub-area id (m) or dest zone (z). @ auto-runs on the client clock — Motion is the two floor heights it runs between (param/256 + record.Y; PS2 decomp XiLiftActor::SetLift), no server / no player trigger.',
   };
 }
 

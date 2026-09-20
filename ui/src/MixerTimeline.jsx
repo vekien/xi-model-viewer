@@ -12,6 +12,15 @@ export const DRAG_TYPE = 'application/x-mixer-entry+';
 
 const MIX_TYPES = [{ id: 'ws', label: 'WS' }, { id: 'ja', label: 'Ability' }, { id: 'spell', label: 'Spell' }];
 const KIND_LABEL = { ws: 'Weapon Skill', ja: 'Job Ability', spell: 'Spell' };
+// The letter a track label leads with — (M) Emote · bow, (E) Charm, (S) Enthunder.
+const KIND_TAG = { motion: 'M', vfx: 'E', sound: 'S' };
+/** A track's shown name: its kind tag and source (or the plain lane name when empty). */
+const trackDisplay = (t, sources) => {
+  if (t.kind === 'keep') return t.label;
+  const src = sources?.[t.id]?.name;
+  const tag = KIND_TAG[t.kind];
+  return src && tag ? `(${tag}) ${src}` : t.label;
+};
 // The donor an insert clones when the server has no row with the mix's name (xi_db_apply
 // DEFAULT_DONOR). Shown so the user knows what a new spell/ability/WS starts life as.
 const DEFAULT_DONOR_LABEL = { spell: 'Cure', ja: 'Berserk', ws: 'Fast Blade' };
@@ -35,6 +44,7 @@ const POS_KEY = 'mixerSeqPos';
 const SIZE_KEY = 'mixerSeqSize';
 const FPS = 60;                       // routine ticks run at 60/s; the ruler reads seconds
 const LANE_H = 25;                    // one lane line (see .cseq-lane)
+const MIN_LANE_H = 10;                // a lane minimised to a thin line (see .mseq-lane.min)
 const LOOP_LINK_PX = 6;               // the line joining a looping clip's pill to each repeat (see .mseq-loop-link)
 const MIN_PILL_PX = 48;               // a pill is never narrower (see .mseq-pill)
 const RULER_H = 22;
@@ -145,7 +155,7 @@ export function TimelineWindow({
   // capture on the header: the canvas and the modals capture and swallow pointer
   // events of their own, and a stolen capture left a drag dead after one step.
   const startDrag = (e) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || docked) return;   // docked is pinned; nothing to drag
     if (e.target.closest('button, input, select, a, [role="button"], .cseq-resize, .mseq-resize-v')) return;
     const el = panelRef.current;
     const rect = el.getBoundingClientRect();
@@ -196,18 +206,27 @@ export function TimelineWindow({
   const onResizeMove = (e) => {
     const r = resizeRef.current;
     if (!r) return;
-    if (r.axis === 'w') {
-      setSize((s) => ({ ...s, w: clamp(Math.round(r.w0 + (e.clientX - r.x0)), MIN_W, Math.max(MIN_W, window.innerWidth - 16)) }));
-    } else {
+    // 'w' the right edge, 'h' the bottom edge, 'wh' the bottom-right corner (both).
+    const next = {};
+    if (r.axis === 'w' || r.axis === 'wh') {
+      next.w = clamp(Math.round(r.w0 + (e.clientX - r.x0)), MIN_W, Math.max(MIN_W, window.innerWidth - 16));
+    }
+    if (r.axis === 'h' || r.axis === 'wh') {
       const cap = Math.min(naturalH(), maxH());
       const h = Math.round(r.h0 + (e.clientY - r.y0));
-      setSize((s) => ({ ...s, h: h >= cap ? null : Math.max(MIN_H, h) }));
+      next.h = h >= cap ? null : Math.max(MIN_H, h);
     }
+    if (r.axis === 'ht') {   // docked: the top edge — dragging up grows it
+      next.h = clamp(Math.round(r.h0 - (e.clientY - r.y0)), MIN_H, maxH());
+    }
+    setSize((s) => ({ ...s, ...next }));
   };
   const endResize = () => { resizeRef.current = null; };
   // Content that shrank below a remembered height would leave a gap: let go of it.
+  // Not while docked — there the height is deliberate (the top-edge grip), and
+  // nulling it snapped the window back to its default.
   useEffect(() => {
-    if (!size.h || !open) return;
+    if (!size.h || !open || docked) return;
     if (size.h >= naturalH()) setSize((s) => ({ ...s, h: null }));
   });
   // The main window shrinking takes the timeline down with it (90% of its height at most).
@@ -279,6 +298,14 @@ export function TimelineWindow({
     writeJson('mixerLaneRows', next);
     return next;
   });
+  // A lane collapsed all the way to a thin line — only a coloured mark where each
+  // block plays, super compact. Remembered per lane, like the row stacking above.
+  const [laneMin, setLaneMin] = useState(() => readJson('mixerLaneMin') ?? {});
+  const toggleLaneMin = (laneId, min) => setLaneMin((m) => {
+    const next = { ...m, [laneId]: min };
+    writeJson('mixerLaneMin', next);
+    return next;
+  });
 
   // A keep pill is at least as wide as its label ("Lock target 0-80", "Hit · mdam"):
   // most are instants, and its label is all it shows. 10px mono is about 6px a character.
@@ -321,7 +348,9 @@ export function TimelineWindow({
     const stacked = count > 1 && rowsOpen;
     // Collapsed, every pill draws on the one line and drags in time only.
     const collapsed = count > 1 && !rowsOpen;
-    return { t, own, laneEvents, rows, endOf, count, ownRows, rowsOpen, stacked, collapsed, height: (stacked ? count : 1) * LANE_H };
+    // Minimised: the lane is a thin strip of marks (not the keep lane — it is bookkeeping).
+    const min = !keep && (laneMin[t.id] ?? false);
+    return { t, own, laneEvents, rows, endOf, count, ownRows, rowsOpen, stacked, collapsed, min, height: min ? MIN_LANE_H : (stacked ? count : 1) * LANE_H };
   });
   const trackH = RULER_H + lanes.reduce((a, l) => a + l.height, 0);
 
@@ -375,6 +404,10 @@ export function TimelineWindow({
   // Minimise: collapse everything but the header bar. Persisted, like the tab.
   const [collapsed, setCollapsed] = useState(() => readJson('mixerSeqCollapsed') === true);
   const toggleCollapsed = () => setCollapsed((v) => { writeJson('mixerSeqCollapsed', !v); return !v; });
+  // Dock: pin the window across the bottom of the app, full width. Persisted. The
+  // top edge then resizes the height (the bottom is against the app's edge).
+  const [docked, setDocked] = useState(() => readJson('mixerSeqDocked') === true);
+  const toggleDocked = () => setDocked((v) => { writeJson('mixerSeqDocked', !v); return !v; });
   // A Publish that needs a Confirm shows its row in Manage, which is on the Details
   // tab — jump there when the tick moves, not on mount: the panel remounts whenever
   // the mixer view comes back, and the tick App kept from an old Publish must not.
@@ -387,6 +420,14 @@ export function TimelineWindow({
   // The Help window (the bar's ?) goes with the timeline: closing the timeline closes it.
   const [helpOpen, setHelpOpen] = useState(false);
   useEffect(() => { if (!open) setHelpOpen(false); }, [open]);
+  // The transport bar's playback-options popover (speed, loop, snap, snaps, randomise).
+  const [barMenu, setBarMenu] = useState(false);
+  useEffect(() => {
+    if (!barMenu) return undefined;
+    const close = () => setBarMenu(false);
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
+  }, [barMenu]);
   // Locks · hits · links: the strip under the track, opened by the lane's + ('add': its
   // presets drop straight away) or its warning badge ('open').
   const [keepMenu, setKeepMenu] = useState(null);
@@ -745,7 +786,11 @@ export function TimelineWindow({
       && !motionOkForKind(s.spec, kind) && !baseMotionSpecs?.has?.(s.spec)).map(([id]) => id));
   const shown = clamp(Math.round(scrubAt ?? playhead ?? 0), 0, len);
   const playing = transport === 'playing';
-  const style = {
+  const style = docked ? {
+    zIndex,
+    left: 0, right: 0, bottom: 0, top: 'auto', width: 'auto', maxWidth: '100%',
+    ...(collapsed ? null : { height: size.h || 340 }),
+  } : {
     width: size.w,
     zIndex,
     ...(size.h && !collapsed ? { height: size.h } : null),
@@ -754,7 +799,7 @@ export function TimelineWindow({
 
   if (!open) return null;
   return createPortal(
-    <div id="mixer-seq" className={`panel${collapsed ? ' is-collapsed' : ''}`} ref={panelRef} style={style} onPointerDownCapture={onFocus ?? undefined}>
+    <div id="mixer-seq" className={`panel${collapsed ? ' is-collapsed' : ''}${docked ? ' is-docked' : ''}`} ref={panelRef} style={style} onPointerDownCapture={onFocus ?? undefined}>
       <div className="cseq-header" ref={headerRef} onPointerDown={startDrag}>
         <span className="icon">timeline</span>
         <div className="settings-tabs mseq-tabs" role="tablist">
@@ -778,6 +823,11 @@ export function TimelineWindow({
             </button>
           </Tooltip>
         )}
+        <Tooltip content={docked ? 'Float the mixer' : 'Dock to the bottom of the app'} placement="bottom">
+          <button type="button" className="icon-btn cseq-close cseq-min" onClick={toggleDocked} aria-label={docked ? 'Float' : 'Dock to bottom'}>
+            <span className="icon">{docked ? 'open_in_full' : 'vertical_align_bottom'}</span>
+          </button>
+        </Tooltip>
         <Tooltip content={collapsed ? 'Expand the mixer' : 'Minimise to the title bar'} placement="bottom">
           <button type="button" className="icon-btn cseq-close cseq-min" onClick={toggleCollapsed} aria-label={collapsed ? 'Expand' : 'Minimise'} aria-expanded={!collapsed}>
             <span className="icon">{collapsed ? 'expand_more' : 'expand_less'}</span>
@@ -789,6 +839,12 @@ export function TimelineWindow({
       </div>
 
       <div className="cseq-body" ref={bodyRef}>
+        {busy && (
+          <div className="mseq-loading" role="status" aria-live="polite">
+            <span className="icon mseq-loading-spin">progress_activity</span>
+            <span>Loading Assets…</span>
+          </div>
+        )}
         {failed && (
           <div className="form-error mseq-error" role="alert">
             <span className="icon">error</span>
@@ -1087,18 +1143,25 @@ export function TimelineWindow({
                 items={LANES.map((l) => ({ id: l.id, label: l.label, color: l.color }))}
                 placeholder="Add Track" onChange={(k) => k && onAddTrack?.(k)} />
             </div>
-            {lanes.map(({ t, count, ownRows, rowsOpen, stacked, height }) => (
+            {lanes.map(({ t, count, ownRows, rowsOpen, stacked, min, height }) => (
+              min ? (
+              <div key={t.id} className={`cseq-tl-label mseq-label mseq-label-min${t.id === activeTrack ? ' active' : ''}`}
+                style={{ height, color: t.color }}
+                title={`${t.label} — collapsed to a line; click to expand`}
+                onClick={(e) => { e.stopPropagation(); toggleLaneMin(t.id, false); }}>
+                <span className="mseq-min-name">{t.label}</span>
+              </div>
+              ) : (
               <div key={t.id}
                 className={`cseq-tl-label mseq-label${t.kind === 'keep' ? '' : ' track'}${t.id === activeTrack ? ' active' : ''}${badTracks.has(t.id) ? ' bad' : ''}`}
                 style={{ height, color: t.color }}
                 onClick={() => t.kind !== 'keep' && onActivateTrack?.(t.id)}>
                 {/* The lane's own controls keep to its first row; each further row has its delete beside it. */}
                 <div className="mseq-label-head">
-                  <Tooltip content={t.kind === 'keep' ? 'Drag to shift the lane'
-                    : `${sources[t.id]?.name ? `${sources[t.id].name} · ` : ''}click: a pick lands on this track · drag: shift it`}>
-                    <span className="mseq-label-text" onPointerDown={(e) => startLaneDrag(e, t.id)}>
-                      {t.label}
-                      {sources[t.id]?.name && <i className="mseq-label-src">{sources[t.id].name}</i>}
+                  <Tooltip content={t.kind === 'keep' ? 'The mix’s commands (locks, hits, links)'
+                    : `${sources[t.id]?.name ? `${sources[t.id].name} · ` : ''}click: a pick lands on this track`}>
+                    <span className="mseq-label-text">
+                      {trackDisplay(t, sources)}
                     </span>
                   </Tooltip>
                   {count > 1 && (
@@ -1135,6 +1198,12 @@ export function TimelineWindow({
                         onClick={(e) => { e.stopPropagation(); onAddRow(t.id, count + 1); if (!rowsOpen) toggleLaneRows(t.id, true); }}><span className="icon">add</span></button>
                     </Tooltip>
                   )}
+                  {t.kind !== 'keep' && (
+                    <Tooltip content="Collapse this lane to a thin line">
+                      <button type="button" className="mseq-min-btn" aria-label="Collapse lane" onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => { e.stopPropagation(); toggleLaneMin(t.id, true); }}><span className="icon">remove</span></button>
+                    </Tooltip>
+                  )}
                   {t.kind !== 'keep' && (sources[t.id] || !t.first) && (
                     <Tooltip content={t.first ? 'Clear this track' : 'Remove this track'}>
                       <button type="button" className="mseq-x" aria-label="Remove" onPointerDown={(e) => e.stopPropagation()}
@@ -1149,6 +1218,7 @@ export function TimelineWindow({
                   </Tooltip>
                 ))}
               </div>
+              )
             ))}
           </div>
           <div className="cseq-tl-scroll">
@@ -1162,9 +1232,14 @@ export function TimelineWindow({
                 ))}
               </div>
               {lanes.map((lane) => (
-                <div key={lane.t.id} className={`cseq-lane mseq-lane${lane.stacked ? ' rows' : ''}${!lane.collapsed && lane.rows.count > lane.count ? ' grow' : ''}${dropLane === lane.t.id ? ' drop-ok' : ''}${badTracks.has(lane.t.id) ? ' bad' : ''}`} data-lane={lane.t.id} style={{ height: lane.height }} onPointerDown={startMarquee}
+                <div key={lane.t.id} className={`cseq-lane mseq-lane${lane.min ? ' min' : ''}${lane.stacked ? ' rows' : ''}${!lane.collapsed && lane.rows.count > lane.count ? ' grow' : ''}${dropLane === lane.t.id ? ' drop-ok' : ''}${badTracks.has(lane.t.id) ? ' bad' : ''}`} data-lane={lane.t.id} style={{ height: lane.height }} onPointerDown={startMarquee}
                   onDragOver={(e) => dragOverLane(e, lane.t)} onDragLeave={() => { if (dropLane === lane.t.id) setDropLane(null); }} onDrop={(e) => dropOnLane(e, lane.t)}>
-                  {lane.laneEvents.map((ev) => pill(ev, lane))}
+                  {lane.min
+                    ? lane.laneEvents.map((ev) => (
+                        <span key={ev._id} className="mseq-min-mark"
+                          style={{ left: x(ev.start), width: `${Math.max(0.4, ((lane.endOf(ev) - ev.start) / len) * 100)}%`, background: lane.t.color }} />
+                      ))
+                    : lane.laneEvents.map((ev) => pill(ev, lane))}
                 </div>
               ))}
               {/* Each waiting link's hold: from its frame, as long as the routine it runs. The
@@ -1219,7 +1294,7 @@ export function TimelineWindow({
         {keepMenu && (
           <div className="mixer-editor mseq-keep">
             <div className="mixer-editor-title">
-              <span className="mono">Locks · hits · links</span>
+              <span className="mono">Commands</span>
               <span className="mono-small">what is added here belongs to no track: it stays when a track is cleared or picked again</span>
               <span className="sp" />
               <button type="button" className="pc-tbtn" aria-label="Close" onClick={() => setKeepMenu(null)}><span className="icon">close</span></button>
@@ -1286,45 +1361,61 @@ export function TimelineWindow({
 
           <div className="cseq-bar-sep" />
 
-          <div className="cseq-bar-group cseq-toggles">
-            {onSpeed && (
-              <Tooltip content="Playback speed of the stage (effect, sound and motion together)" placement="top">
-                <span className="mseq-speed">
-                  <input type="range" className="vol-slider pc-frame-slider" min="10" max="200" step="5"
-                    value={Math.round(speed * 100)} style={{ '--fill': `${((Math.round(speed * 100) - 10) / 190) * 100}%` }}
-                    onInput={(e) => onSpeed(+e.target.value / 100)} />
-                  <span className="mono pc-frame-num">{Math.round(speed * 100)}%</span>
-                </span>
-              </Tooltip>
-            )}
-            {onLoop && (
-              <Tooltip content="Loop: the mix restarts when it ends (off: it parks at its end)" placement="top">
-                <label className="switch cseq-switch">
-                  <input type="checkbox" checked={!!loop} onChange={(e) => onLoop(e.target.checked)} />
-                  <span className="track" />
-                  <span className="cseq-switch-label">Loop</span>
-                </label>
-              </Tooltip>
-            )}
-            <Tooltip content="Snap: a dragged block locks onto the strike line, the loop end and other blocks' edges when close" placement="top">
-              <label className="switch cseq-switch">
-                <input type="checkbox" checked={snap} onChange={(e) => toggleSnap(e.target.checked)} />
-                <span className="track" />
-                <span className="cseq-switch-label">Snap</span>
-              </label>
+          {/* Playback options tucked into a popover: speed, loop, snap, the lane snaps and randomise. */}
+          <div className="cseq-bar-group mseq-bar-settings">
+            <Tooltip content="Playback options — speed, loop, snap and randomise" placement="top">
+              <button type="button" className={`icon-btn cseq-icon${barMenu ? ' on' : ''}`} aria-label="Playback options" aria-expanded={barMenu}
+                onPointerDown={(e) => e.stopPropagation()} onClick={() => setBarMenu((v) => !v)}>
+                <span className="icon">tune</span>
+              </button>
             </Tooltip>
+            {barMenu && (
+              <div className="mseq-bar-menu" onPointerDown={(e) => e.stopPropagation()}>
+                {onSpeed && (
+                  <div className="mseq-bar-item mseq-bar-speed">
+                    <span className="mseq-bar-label">Playback speed</span>
+                    <span className="mseq-speed">
+                      <input type="range" className="vol-slider pc-frame-slider" min="10" max="200" step="5"
+                        value={Math.round(speed * 100)} style={{ '--fill': `${((Math.round(speed * 100) - 10) / 190) * 100}%` }}
+                        onInput={(e) => onSpeed(+e.target.value / 100)} />
+                      <span className="mono pc-frame-num">{Math.round(speed * 100)}%</span>
+                    </span>
+                  </div>
+                )}
+                {onLoop && (
+                  <div className="mseq-bar-item">
+                    <label className="switch cseq-switch">
+                      <input type="checkbox" checked={!!loop} onChange={(e) => onLoop(e.target.checked)} />
+                      <span className="track" />
+                      <span className="cseq-switch-label">Loop</span>
+                    </label>
+                  </div>
+                )}
+                <div className="mseq-bar-item">
+                  <label className="switch cseq-switch">
+                    <input type="checkbox" checked={snap} onChange={(e) => toggleSnap(e.target.checked)} />
+                    <span className="track" />
+                    <span className="cseq-switch-label">Snap</span>
+                  </label>
+                </div>
+                {onSnapLane && LANES.filter((l) => l.id !== 'motion').map((l) => (
+                  <button key={l.id} type="button" className="cseq-btn mseq-bar-btn"
+                    onClick={() => onSnapLane(l.id)}>
+                    <span className="icon" style={{ color: l.color }}>align_horizontal_left</span>Snap {l.label}
+                  </button>
+                ))}
+                {onRandomise && (
+                  <button type="button" className="cseq-btn mseq-bar-btn" onClick={() => { onRandomise(); setBarMenu(false); }}>
+                    <span className="icon">casino</span>Randomise
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="cseq-bar-sep" />
 
           <div className="cseq-bar-group">
-            {LANES.filter((l) => l.id !== 'motion').map((l) => (
-              <Tooltip key={l.id} content={`Snap the ${l.label.toLowerCase()} lane to the strike frame (its first generator lands on f${strike})`} placement="top">
-                <button type="button" className="icon-btn cseq-icon" aria-label={`Snap ${l.label}`} style={{ color: l.color }} onClick={() => onSnapLane(l.id)}>
-                  <span className="icon">align_horizontal_left</span>
-                </button>
-              </Tooltip>
-            ))}
             <Tooltip content="Help: how the mixer works, and its keys" placement="top">
               <button type="button" className={`icon-btn cseq-icon mseq-help-btn${helpOpen ? ' on' : ''}`} aria-label="Help" aria-expanded={helpOpen}
                 onClick={() => setHelpOpen((v) => !v)}>
@@ -1332,19 +1423,6 @@ export function TimelineWindow({
               </button>
             </Tooltip>
           </div>
-
-          {onRandomise && (
-            <>
-              <div className="cseq-bar-sep" />
-              <div className="cseq-bar-group">
-                <Tooltip content={`Randomise: a random ${KIND_LABEL[kind].toLowerCase()} motion, random effects and a random sound, then play`} placement="top">
-                  <button type="button" className="icon-btn cseq-icon" aria-label="Randomise" onClick={onRandomise}>
-                    <span className="icon">casino</span>
-                  </button>
-                </Tooltip>
-              </div>
-            </>
-          )}
 
           <span className="cseq-frame mono">
             <b>{shown}</b>
@@ -1371,6 +1449,10 @@ export function TimelineWindow({
       <div className="cseq-resize" onPointerDown={startResize('w')} onPointerMove={onResizeMove} onPointerUp={endResize} onPointerCancel={endResize} />
       <div className="mseq-resize-v" onPointerDown={startResize('h')} onPointerMove={onResizeMove} onPointerUp={endResize} onPointerCancel={endResize}
         onDoubleClick={() => setSize((s) => ({ ...s, h: null }))} />
+      {/* Bottom-right corner: width and height together (the .fx-modal-resize grip). */}
+      <div className="mseq-resize-c" onPointerDown={startResize('wh')} onPointerMove={onResizeMove} onPointerUp={endResize} onPointerCancel={endResize} />
+      {/* Docked: the bottom is pinned to the app, so the top edge sets the height. */}
+      {docked && <div className="mseq-dock-resize" onPointerDown={startResize('ht')} onPointerMove={onResizeMove} onPointerUp={endResize} onPointerCancel={endResize} />}
       {/* Portalled on its own, so none of this window's clipping or stacking holds it. */}
       <MixerHelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>,

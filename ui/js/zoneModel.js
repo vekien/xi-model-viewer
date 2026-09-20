@@ -348,6 +348,28 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
     return far;
   };
 
+  // 0x36 ZoneInteraction volumes, keyed by sourceId. A placement's `link` (record
+  // +0x34) names the volume it is bound to. An interaction "auto-runs" — moves on
+  // its own, with no server packet and no player trigger — when its kind is '@'
+  // (elevator) and it carries non-zero motion params. Player-triggered kinds
+  // (m sub-area / z zone line / _ door / f fishing / e event) never move by
+  // themselves, so only '@' is animated. General across every zone.
+  const interById = new Map();
+  for (const it of parsed.interactions ?? []) {
+    const id = String(it.sourceId || '').replace(/\0+/g, '').trim();
+    if (id && !interById.has(id)) interById.set(id, it);
+  }
+  const autoRunFor = (link) => {
+    if (!link) return null;
+    const it = interById.get(String(link).replace(/\0+/g, '').trim());
+    return (it && it.kind === '@' && Array.isArray(it.params) && it.params.some((v) => v)) ? it : null;
+  };
+  // Live-animated placements bound to an auto-running interaction (elevators).
+  // Re-baked each frame by the renderer (same path as zoneSpinners); the static
+  // pass skips them (placement.lift), so there is no frozen copy left behind.
+  /** @type {{ meshName: string, prims: object[], pos: number[], rot: number[], scale: number[], motion: object, placement: object }[]} */
+  const zoneLifts = [];
+
   // World geometry: 0x1C placements. Anything with a real placement is world
   // geometry and draws in world space, sky-ish name or not — `kind` only
   // classifies it for the objects panel.
@@ -368,9 +390,28 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
     const kind = isCollisionPlacement(p) ? 'collision'
       : isSubAreaPlacement(p) ? 'subarea' : envKindOf(resolved);
     const matrix = trsMatrix(p.pos, p.rot, p.scale);
-    const drawn = kind !== 'collision' && !isFarCopy(resolved);
+    // Elevator car bound to an auto-running '@' volume: don't bake it static — the
+    // renderer re-bakes it each frame at its animated height (see zoneLifts).
+    const auto = !kind ? autoRunFor(p.link) : null;
+    const drawn = kind !== 'collision' && !isFarCopy(resolved) && !auto;
     if (drawn) emitMesh(resolved, matrix, 'world');
-    pushPlacement(p, resolved, matrix, kind, lodResolvedFor[pi]);
+    const placement = pushPlacement(p, resolved, matrix, kind, lodResolvedFor[pi]);
+    if (auto) {
+      const prims = meshes.get(resolved);
+      if (prims?.length) {
+        placement.lift = true;
+        zoneLifts.push({
+          meshName: resolved,
+          prims,
+          pos: [p.pos[0], p.pos[1], p.pos[2]],
+          rot: p.rot || [0, 0, 0],
+          scale: p.scale || [1, 1, 1],
+          motion: liftMotionFromInteraction(auto, p.pos),
+          interactionId: String(p.link).trim(),
+          placement,
+        });
+      }
+    }
     if (!kind) {
       placedWorld.push({
         meshId: p.meshId, resolved,
@@ -627,6 +668,8 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
     zoneDraws,
     // Live-spin companions (mill on w_mill). Renderer re-bakes each frame.
     zoneSpinners,
+    // Auto-running interaction volumes (elevators). Renderer re-bakes each frame.
+    zoneLifts,
     textures: outTextures,
     animations: [],
     schedules: [],
@@ -654,7 +697,7 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
       collTris: collision?.triCount ?? 0,
     },
   };
-  model.isRenderable = zoneDraws.length > 0 || zoneSpinners.length > 0;
+  model.isRenderable = zoneDraws.length > 0 || zoneSpinners.length > 0 || zoneLifts.length > 0;
   return model;
 }
 
@@ -710,6 +753,114 @@ export function bakeSpinnerDraws(spinner, angleY = 0) {
       blend: !!prim.blend,
       noCull: true,
       discard: discardThresholdFor(spinner.meshName),
+      wind: false,
+      zBias: prim.blend ? 5 : 0,
+      count: positions.length / 3,
+      positions: new Float32Array(positions),
+      blendOffsets: new Float32Array(blendOffsets),
+      normals: new Float32Array(normals),
+      uvs: new Float32Array(uvs),
+      colors: new Uint8Array(colors),
+    });
+  }
+  return out;
+}
+
+// ── Auto-running interactions (elevators) ───────────────────────────────────
+// An '@'-kind 0x36 volume is an elevator: its OBB is the vertical travel column
+// and its two s16 params time the loop. The client moves the bound car (the
+// placement whose +0x34 link names this volume) up/pause/down/pause on its own
+// clock — no server, no player input. We reproduce that here from the DAT alone.
+
+const smoothstep = (t) => t * t * (3 - 2 * t);
+
+/**
+ * Derive an elevator's motion from its '@' record + the car's parked Y, using the
+ * exact client logic (PS2 decomp XiLiftActor::SetLift): the two s16 params ARE the
+ * two floor heights, each `param / 256 + record.Y` (world Y is DOWN). Both '@'
+ * records in a paired shaft carry the same params, so both cars share the same two
+ * floors — the reason they must line up in every phase. Each car starts at the
+ * floor it is parked on and runs to the other, so a pair parked at opposite floors
+ * is exactly antiphase. The record carries no timing (the move/wait live in the
+ * "m<from><to>" 0x07 scheduler routines); legTime/dwell here are a reasonable
+ * approximation, isolated for tuning. See the memory note ffxi-elevators-rid-at-kind.
+ */
+function liftMotionFromInteraction(it, parkedPos) {
+  const rectY = it.pos?.[1] ?? parkedPos[1];
+  const floor0 = (it.params?.[0] || 0) / 256 + rectY;
+  const floor1 = (it.params?.[1] || 0) / 256 + rectY;
+  const py = parkedPos[1];
+  const startAt0 = Math.abs(py - floor0) <= Math.abs(py - floor1);
+  const legTime = 8;                             // seconds to travel between floors (approx)
+  const dwell = 6;                               // pause at each floor (approx)
+  return { start: startAt0 ? floor0 : floor1, end: startAt0 ? floor1 : floor0, legTime, dwell };
+}
+
+/** Raw FFXI Y of an elevator car at `tSeconds`. Trapezoid: go · dwell · return · dwell. */
+function liftHeightAt(m, tSeconds) {
+  const cycle = m.legTime * 2 + m.dwell * 2;
+  let x = tSeconds % cycle;
+  if (x < 0) x += cycle;
+  let s;                                         // 0 = parked floor, 1 = far floor
+  if (x < m.legTime) s = smoothstep(x / m.legTime);
+  else if (x < m.legTime + m.dwell) s = 1;
+  else if (x < m.legTime * 2 + m.dwell) s = smoothstep(1 - (x - m.legTime - m.dwell) / m.legTime);
+  else s = 0;
+  return m.start + (m.end - m.start) * s;
+}
+
+/**
+ * Bake one elevator car at `tSeconds` into zoneDraws-shaped entries — the lift
+ * counterpart of bakeSpinnerDraws. X/Z (and rotation/scale) come from the car's
+ * Objects row so dragging it still works; Y is driven by the interaction clock.
+ */
+export function bakeLiftDraws(lift, tSeconds = 0) {
+  const prims = lift?.prims;
+  if (!prims?.length || !lift.motion) return [];
+  const src = lift.placement || lift;
+  const [px, , pz] = src.rawPos || lift.pos || [0, 0, 0];
+  const [rx, ry, rz] = src.rot || lift.rot || [0, 0, 0];
+  const sc = src.scale || lift.scale || [1, 1, 1];
+  const rawY = liftHeightAt(lift.motion, tSeconds);
+  const matrix = trsMatrix([px, rawY, pz], [rx, ry, rz], sc);
+  const mirrored = det3(matrix) < 0;
+  const order = mirrored ? [0, 2, 1] : [0, 1, 2];
+  const out = [];
+  for (const prim of prims) {
+    const texName = prim.textureName || null;
+    const positions = [];
+    const normals = [];
+    const uvs = [];
+    const colors = [];
+    const blendOffsets = [];
+    const n = prim.positions.length / 3;
+    for (let t = 0; t + 2 < n; t += 3) {
+      for (const k of order) {
+        const i = t + k;
+        const i3 = i * 3, i2 = i * 2, i4 = i * 4;
+        const [wx, wy, wz] = mulPoint(matrix, prim.positions[i3], prim.positions[i3 + 1], prim.positions[i3 + 2]);
+        const [nx, ny, nz] = mulDir(matrix, prim.normals[i3], prim.normals[i3 + 1], prim.normals[i3 + 2]);
+        const [dx, dy, dz] = toDisplay(wx, wy, wz);
+        const [dnx, dny, dnz] = toDisplay(nx, ny, nz);
+        positions.push(dx, dy, dz);
+        normals.push(dnx, dny, dnz);
+        uvs.push(prim.uvs[i2], prim.uvs[i2 + 1]);
+        colors.push(
+          clamp255(prim.colors[i4]),
+          clamp255(prim.colors[i4 + 1]),
+          clamp255(prim.colors[i4 + 2]),
+          clamp255(prim.colors[i4 + 3]),
+        );
+        blendOffsets.push(0, 0, 0);
+      }
+    }
+    if (positions.length < 9) continue;
+    out.push({
+      layer: 'world',
+      textureName: texName,
+      blend: !!prim.blend,
+      noCull: !!prim.noCull,
+      discard: discardThresholdFor(lift.meshName),
       wind: false,
       zBias: prim.blend ? 5 : 0,
       count: positions.length / 3,
@@ -797,6 +948,9 @@ export function rebuildZoneDraws(model) {
     // Same for a mesh the spinner pass turns (the windmill wheel): a static
     // copy here would sit inside the turning one, permanently out of phase.
     if (p.spinner) continue;
+    // Elevator cars are re-baked live at their animated height (see zoneLifts) —
+    // a static copy would freeze one at its parked position inside the moving one.
+    if (p.lift) continue;
     if (p.dragHidden || p.userHidden) continue;
     if (!p.mesh) continue;
     const prims = meshes.get(p.mesh);
