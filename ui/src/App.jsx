@@ -3,7 +3,7 @@ import { Button } from '@headlessui/react';
 import { backend } from '../js/backend.js';
 import { loadList, loadListOrNull, updateListsOnBoot } from '../js/lists.js';
 import { clampUiScale } from '../js/uiScale.js';
-import { gameCandidates, normRel, pathKey, relFromAbs } from '../js/gamePath.js';
+import { gameCandidates, isPosixAbs, normRel, pathKey, relFromAbs } from '../js/gamePath.js';
 import { baseMotionCompanions, battleSkirtPath, weaponSkillWaistPaths } from '../js/pclists.js';
 import { animDisplayName, groupAnimations, matchAnimRef, mergeModels, parseEntity, resolveScheduleClip } from '../js/dat.js';
 import { Renderer } from '../js/renderer.js';
@@ -3222,8 +3222,10 @@ export default function App({ launch = null }) {
     const rel = normRel(entry.path);
     // The file actually read, once read, so Data Struct and a reload describe what is on
     // the stage. A DAT Browser click passes the clicked file as `entry.abs`, which is read
-    // before any HD or pivot copy of the same ROM key.
-    let abs = entry.abs ? normRel(entry.abs) : `${settings.gamePath}\\${rel}`;
+    // before any HD or pivot copy of the same ROM key. A composed mixer DAT is already
+    // absolute (POSIX on macOS/Linux) and lives outside the game folder, so it must not
+    // be joined onto it either.
+    let abs = entry.abs ? normRel(entry.abs) : (isPosixAbs(rel) ? rel : `${settings.gamePath}\\${rel}`);
     const token = ++effectTokenRef.current;
     // Silence the outgoing effect on the click, not when the new one finishes
     // loading — reading and parsing the DAT takes long enough that the old
