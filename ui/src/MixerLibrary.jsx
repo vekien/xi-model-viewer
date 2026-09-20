@@ -110,10 +110,9 @@ export function MixerLibrary({ recipes = [], current = '', stageName = null, onO
   const groups = useMemo(() => groupRows(shown), [shown]);
   return (
     <div id="mixer-library" className="panel mixer-panel mixer-library">
-      <div className="details-header">
+      <div className="panel-head">
         <span className="icon">folder_open</span>
         <span className="details-title">Mixes</span>
-        <span className="mono-small">{recipes.length}</span>
         <span className="sp" />
         <button type="button" className="icon-btn details-close" aria-label="Close" onClick={onClose}>
           <span className="icon">close</span>

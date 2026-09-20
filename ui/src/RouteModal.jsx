@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { ResizeCorner } from './ResizeCorner.jsx';
 import { Button } from '@headlessui/react';
 import { routeFocalToFov } from '../js/dat/inspect.js';
 
@@ -46,6 +47,7 @@ export function RouteModal({ route, title = 'Route', onClose, onFocus, zIndex = 
 
   return (
     <div className="zdef-modal route-modal" ref={panelRef} style={style} onPointerDown={onFocus}>
+      <ResizeCorner containerRef={panelRef} />
       <div
         className="modal-header"
         onPointerDown={startDrag}

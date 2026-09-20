@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ResizeCorner } from './ResizeCorner.jsx';
 import { Button } from '@headlessui/react';
 import { Tooltip } from './Tooltip.jsx';
 
@@ -84,6 +85,7 @@ export function DataTableModal({
 
   return (
     <div className="zdef-modal datatable-modal" ref={panelRef} style={style} onPointerDown={onFocus}>
+      <ResizeCorner containerRef={panelRef} />
       <div
         className="modal-header"
         onPointerDown={startDrag}

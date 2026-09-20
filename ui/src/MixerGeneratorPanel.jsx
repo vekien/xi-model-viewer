@@ -349,7 +349,7 @@ function TextureTile({ tex, png, users, self, onReplace, onReset }) {
 function Shell({ label = '', sub = '', actions = null, onClose, children }) {
   return (
     <div id="mixer-generator" className="panel mixer-panel mixer-generator">
-      <div className="details-header">
+      <div className="panel-head">
         <span className="icon">bubble_chart</span>
         <span className="details-title">Generator</span>
         {label && <span className="mono-small">{label}</span>}

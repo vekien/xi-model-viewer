@@ -592,7 +592,7 @@ export function MixerPanel({
           onImport={onImport} onExport={onExport}
           onClose={() => onPanel?.('library', false)} />
       </Floating>
-      <Floating id="mixer-generator" open={!!panels.generator} width={440} defaultPos={{ right: 68, top: 60 }}>
+      <Floating id="mixer-generator" open={!!panels.generator} width={440} defaultSize={{ w: 440, h: 500 }} defaultPos={{ right: 68, top: 60 }}>
         <MixerGeneratorPanel recipe={recipe} onRecipe={onRecipe} target={genTarget} onLaneSource={onLaneSource} onSharedSource={onSharedSource}
           onPreview={onSolo && genTarget ? () => onSolo(genTarget.ref, genTarget.lane, genEvent?.dur ?? 0) : null}
           onClose={() => onPanel?.('generator', false)} />

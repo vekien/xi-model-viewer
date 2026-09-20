@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { ResizeCorner } from './ResizeCorner.jsx';
 import { createPortal } from 'react-dom';
 import { Button } from '@headlessui/react';
 import { Tooltip } from './Tooltip.jsx';
@@ -102,6 +103,7 @@ export function SkeletonModal({
 
   return createPortal(
     <div className="skel-modal" ref={panelRef} style={style} onPointerDown={onFocus}>
+      <ResizeCorner containerRef={panelRef} />
       <div
         className="modal-header"
         onPointerDown={startDrag}

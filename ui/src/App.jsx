@@ -64,6 +64,7 @@ import { MixerSlotsPanel } from './MixerSlotsPanel.jsx';
 import { Floating } from './Floating.jsx';
 import { nextZ } from './zstack.js';
 import { RightRail } from './RightRail.jsx';
+import { TreeResizer } from './TreeResizer.jsx';
 import { ANIM_BANDS_KEY, LEGACY_MIX_SUFFIX, MIX_SUFFIX, OLD_XI_SERVER_OPTION_RX, OLD_XI_SERVER_TEXT, RACE_TO_XI, abilitiesDir, baseMotionRefs, buildCatalogArgs, castRelease, chantStages, clipBlend, composeForPreview, dbConfirmOf, dropLaneEdits, emptyRecipe, entryPathForRace, eventsFromInspect, hasTrack, holdClock, holdPlan, inlineRecipeTextures, inspectSpec, isBlockingOp, isComposed, keepCopies, keepEventFromBytes, kindOf, laneForEvent, listWsSlots, loadAnimBands, loadCatalog, makeKeepEvents, mixFilesIn, mixerDir, normalizeAnimBands, parsePublishPlan, pickStages, publishStatusParts, publishRecipe, readCategories, recipeFromImport, recipeTextures, recipeTracks, revealPublishFolder, rowOfEvent, safeRecipeName, serializeRecipe, soundIdsFromInfo, stageLoops, stageTimeline, trackLabel, trackShift, updateCategories, withIds } from '../js/mixer.js';
 import { localServerErrorText, localServerProblem, normalizeLocalServer, serverCheck, writeLocalServer } from '../js/localServer.js';
 import { lanesThatCarry, lanesToSync, pngPixels, seedTouched, sourceOf, syncEdits, textureSection, textureSwaps } from '../js/mixerLive.js';
@@ -1849,6 +1850,17 @@ export default function App({ launch = null }) {
     if (!plcOpen && liveSelectionRef.current) toggleLiveSelection();
   }, [plcOpen, toggleLiveSelection]);
 
+  // Doors: whether the loaded zone has any animated doors, and the open/close state.
+  const [hasDoors, setHasDoors] = useState(false);
+  const [doorsOpen, setDoorsOpen] = useState(false);
+  const toggleDoors = useCallback(() => {
+    setDoorsOpen((prev) => {
+      const next = !prev;
+      rendererRef.current?.setDoorsOpen?.(next);
+      return next;
+    });
+  }, []);
+
   const gizmoDragRef = useRef(null); // { axis, placement, lastX, lastY, startPose }
   // Undo stack of pose snapshots taken *before* each completed gizmo move.
   const plcUndoRef = useRef([]);
@@ -2172,6 +2184,11 @@ export default function App({ launch = null }) {
   const endLoad = useCallback(() => setLoading(null), []);
 
   settingsRef.current = settings;
+
+  // Docked UI (Settings › Options): snap the chrome flush to the app edges.
+  useEffect(() => {
+    document.body.classList.toggle('docked-ui', !!settings?.dockedUi);
+  }, [settings?.dockedUi]);
 
   // --- renderer lifecycle --------------------------------------------------
 
@@ -3013,6 +3030,8 @@ export default function App({ launch = null }) {
 
       setTexWindows([]);   // close texture windows from the previous model
       setObjectGroups(null);
+      setHasDoors(false);
+      setDoorsOpen(false);
       setEffectGroups(null);
       setSoundGroups(null);
       setPlcSelected('');
@@ -4297,6 +4316,8 @@ export default function App({ launch = null }) {
         }
       }).catch(() => { setHasNavmesh(false); });
       setObjectGroups(model.objectGroups ?? []);
+      setHasDoors((model.zoneDoors?.length ?? 0) > 0);
+      setDoorsOpen(false);
       setEffectGroups(particleSystem?.listEffectGroups?.() ?? []);
       setSoundGroups(particleSystem?.listSoundGroups?.() ?? []);
       setSfxListTick((n) => n + 1);
@@ -6774,6 +6795,8 @@ export default function App({ launch = null }) {
     setCurrentSchedule('');
     setPlayingState(false);
     setObjectGroups(null);
+    setHasDoors(false);
+    setDoorsOpen(false);
     setEffectGroups(null);
     setSoundGroups(null);
     setPlcOpen(false);
@@ -12060,6 +12083,8 @@ export default function App({ launch = null }) {
         />
       )}
 
+      {explorerOpen && <TreeResizer />}
+
       {explorerOpen && leftView === 'files' && (
         <FileTree
           rootPath={settings?.gamePath ?? ''}
@@ -12376,6 +12401,9 @@ export default function App({ launch = null }) {
             showEnv={showSkybox}
             liveSelection={liveSelection}
             onToggleLiveSelection={toggleLiveSelection}
+            hasDoors={hasDoors}
+            doorsOpen={doorsOpen}
+            onToggleDoors={toggleDoors}
             isPlacementMoved={isPlacementMoved}
             isPlacementHidden={(p) => !!p?.userHidden}
             hiddenTick={plcHiddenTick}

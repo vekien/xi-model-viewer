@@ -15,6 +15,7 @@ const DEFAULT_H = 500;
 export function PlacementPanel({
   groups, selectedKey, onSelectGroup, onSelectInstance, onClose, showEnv = false,
   liveSelection = false, onToggleLiveSelection, onResetPlacement, isPlacementMoved,
+  hasDoors = false, doorsOpen = false, onToggleDoors,
   isPlacementHidden, onTogglePlacementVisible, onToggleGroupVisible, hiddenTick = 0,
   effectGroups = null, onToggleEffectVisible, onToggleEffectGroupVisible,
   onSelectEffect, onSelectEffectGroup, vfxHiddenTick = 0,
@@ -209,7 +210,7 @@ export function PlacementPanel({
       className="panel"
       style={{ height }}
     >
-      <div className="plc-header">
+      <div className="panel-head">
         <span className="icon">lists</span>
         <span className="plc-title">Objects{totalInst ? ` (${totalInst.toLocaleString()})` : ''}</span>
         {typeof onToggleLiveSelection === 'function' && tab === 'mesh' && (
@@ -224,6 +225,19 @@ export function PlacementPanel({
               onClick={onToggleLiveSelection}
             >
               <span className="icon">arrow_selector_tool</span>
+            </button>
+          </Tooltip>
+        )}
+        {hasDoors && typeof onToggleDoors === 'function' && tab === 'mesh' && (
+          <Tooltip content={doorsOpen ? 'Close all doors' : 'Open all doors'}>
+            <button
+              type="button"
+              className={`icon-btn plc-tool${doorsOpen ? ' on' : ''}`}
+              aria-pressed={doorsOpen}
+              aria-label={doorsOpen ? 'Close all doors' : 'Open all doors'}
+              onClick={onToggleDoors}
+            >
+              <span className="icon">{doorsOpen ? 'door_open' : 'door_front'}</span>
             </button>
           </Tooltip>
         )}

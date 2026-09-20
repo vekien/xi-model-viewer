@@ -17,7 +17,7 @@ export function EffectActorsPanel({
 }) {
   return (
     <div id="effect-actors" className="panel">
-      <div className="details-header">
+      <div className="panel-head">
         <span className="icon">groups</span>
         <span className="details-title">Actors</span>
         {onClose && (

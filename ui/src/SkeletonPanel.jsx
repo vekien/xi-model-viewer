@@ -81,7 +81,7 @@ export function SkeletonPanel({ pose, selectedJoint = -1, onSelectJoint, onClose
 
   return (
     <div id="skeleton" className="panel">
-      <div className="details-header">
+      <div className="panel-head">
         <span className="icon">accessibility_new</span>
         <span className="details-title">Skeleton</span>
         <span className="skel-count mono">{joints.length}</span>

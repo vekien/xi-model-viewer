@@ -364,6 +364,17 @@ export function CameraSequencer({
   // top edge then sets the height (the bottom is against the app's edge).
   const [docked, setDocked] = useState(() => readJson('camSeqDocked') === true);
   const toggleDocked = () => setDocked((v) => { writeJson('camSeqDocked', !v); return !v; });
+  // While docked, publish the strip's height so the left pane can sit above it
+  // (see body.camseq-docked #tree), and clear it when floated or closed.
+  useEffect(() => {
+    document.body.classList.toggle('camseq-docked', docked);
+    if (docked) document.documentElement.style.setProperty('--camseq-dock-h', `${heightOverride || 340}px`);
+    else document.documentElement.style.removeProperty('--camseq-dock-h');
+    return () => {
+      document.body.classList.remove('camseq-docked');
+      document.documentElement.style.removeProperty('--camseq-dock-h');
+    };
+  }, [docked, heightOverride]);
   const [name, setName] = useState('');
   const [lengthText, setLengthText] = useState(() => String(EMPTY_DOC.totalFrames));
 

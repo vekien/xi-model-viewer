@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { ResizeCorner } from './ResizeCorner.jsx';
 import { Button } from '@headlessui/react';
 import { backend } from '../js/backend.js';
 import { Tooltip } from './Tooltip.jsx';
@@ -78,6 +79,7 @@ export function HelpModal({ open, onClose, onFocus, zIndex = 5000 }) {
 
   return (
     <div className="modal help-modal" ref={panelRef} style={style} onPointerDown={onFocus}>
+      <ResizeCorner containerRef={panelRef} />
       <div
         className="modal-header"
         onPointerDown={startDrag}

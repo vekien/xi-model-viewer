@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { ResizeCorner } from './ResizeCorner.jsx';
 import { Button } from '@headlessui/react';
 import { Tooltip } from './Tooltip.jsx';
 import {
@@ -81,6 +82,7 @@ export function DatNotesModal({
 
   return (
     <div className="zdef-modal dat-notes-modal" ref={panelRef} style={style} onPointerDown={onFocus}>
+      <ResizeCorner containerRef={panelRef} />
       <div
         className="modal-header"
         onPointerDown={startDrag}
@@ -92,17 +94,12 @@ export function DatNotesModal({
         <Tooltip content={label}>
           <span className="route-count mono">{label}</span>
         </Tooltip>
+        <Button type="button" className="uimenu-btn active dat-notes-save" disabled={saving} onClick={save}>
+          {saving ? 'Saving…' : 'Save'}
+        </Button>
         <Button type="button" className="icon-btn modal-close" onClick={onClose} aria-label="Close">
           <span className="icon">close</span>
         </Button>
-      </div>
-
-      <div className="dat-notes-toolbar">
-        <div className="dat-notes-actions">
-          <Button type="button" className="uimenu-btn active" disabled={saving} onClick={save}>
-            {saving ? 'Saving…' : 'Save'}
-          </Button>
-        </div>
       </div>
 
       {err && (

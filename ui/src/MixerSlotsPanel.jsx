@@ -54,7 +54,7 @@ export function MixerSlotsPanel({ slots, pivot = false, onPivot, onRefresh, onCl
   const busy = !!slots?.loading;
   return (
     <div id="mixer-slots" className="panel">
-      <div className="details-header">
+      <div className="panel-head">
         <span className="icon">view_list</span>
         <span className="details-title">Weapon-skill slots</span>
         <Tooltip content="List these slots again" placement="top">

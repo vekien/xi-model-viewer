@@ -33,7 +33,7 @@ export function ImageSetPanel({
 
   return (
     <div id="placements" className={`panel${minimized ? ' minimized' : ''}`}>
-      <div className="plc-header">
+      <div className="panel-head">
         <span className="icon">image</span>
         <span className="plc-title">Images</span>
         <span className="plc-meta mono">{sets.length.toLocaleString()}</span>

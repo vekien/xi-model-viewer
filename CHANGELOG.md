@@ -10,6 +10,10 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-09-21
+
+[Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.6.1...v1.7.0)
+
 ### Ability Mixer
 - **Manage has three Local server switches**, kept per mix and off again after an import, rename or duplicate. **Database Update** points the local server's row named after the mix at its animation, or inserts one cloned from **Clone from** (a name or an id); a row the mix did not create is changed only after a one-off **Confirm #id 'name'** in Manage, which re-runs Check, or publishes again when a Publish stopped at it (Manage opens on it then, but not again each time the mixer view comes back). Confirm also shows for such a row that already has the animation when Client Menu Record is waiting on it: nothing on the server changes, and the record then goes at its id. **Client Menu Record** places the client's menu entry (the spell or command record and its name, **Menu name** or the mix name) at the same id, only ever over a blank retail row. **Lua Stub** writes the new row's server script into the server folder: what the spell or ability does, handed over to the donor's script, where the DAT is only how it looks. **Server id** picks a new row's id. A hint under the fields names the database and server folder xi-tools' .env points at, or links to Settings › Local Server when none is set; Check and Publish show each step in the plan, coloured by outcome, and the status bar says what happened (`xi dats build --apply-db / --menu-record / --lua-stub`, with `--clone-from`, `--server-id`, `--menu-name`, `--db-row`). An xi-tools without these options says it needs updating
 - **The publish folder is `projects\abilities\<slug>`** (was `projects\server\abilities\<slug>`), and it holds the mix it was built from, `<Name>.mix.json`. Check writes `check.<Name>.mix.json` beside it and never touches the published one. **Folder** tells published (placements.json), a Publish that stopped, and checked-but-never-published apart, and still finds the flat SQL older xi-tools left in `projects\server\abilities`
@@ -22,6 +26,12 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ### Export
 - **Animation export has two layout checkboxes**, in File › Export and File › Batch Export alike. **Every animation as its own file** writes each track in the DAT as a separate file named after it (`idl0.gltf`, `wlk0.gltf`, `bow1.gltf`, …) in a folder of the DAT's own, instead of the one `--anim` clip; with FBX the lot is baked through a single Blender run. **Race \ category \ action folders** lays the output out as `hume_male\sword\fast_blade\` — named from the character list, with the client's motion tables as the fallback — instead of the game's ROM path; anything that is not a PC motion file (a monster, an NPC) goes under `other\`. They are xi-tools' new `--split-anim` and `--categories` flags, shown in the arguments box like any other, and the command preview and the "Exports to" line follow them
+
+### Improvements to the UI
+- **A large pass over the interface.** The Ability Mixer now has Details / Timeline tabs in its title bar, dock-to-bottom and minimise buttons, a corner resize grip, lanes that collapse to a thin line, thinner blocks, a "Loading Assets" overlay while a mix composes, a compact Add Track by the lanes, and a playback-options popover (speed, loop, snap, randomise); its status shows in the app status bar and the locks/hits/links lane is now **Commands**.
+- **Consistent, resizable windows.** One shared stacking order — whichever window you click comes to the top, opened from the side menu or not — a resize corner on every modal and floating panel, a resizable left panel, the Generator opens compact and resizes, and one uniform header and padding across every panel and modal.
+- **Settings › Options › Docked UI** snaps the menu bar, the left panel and the status bars flush to the app edges.
+- Assorted spacing, alignment and colour fixes throughout.
 
 ## [1.6.1] — 2026-09-13
 

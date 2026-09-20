@@ -173,7 +173,7 @@ export function AnimationPanel({ pc, anim, onClose, title = 'Animation' }) {
 
   return (
     <div id="animbar" className="panel">
-      <div className="panel-title">
+      <div className="panel-head panel-title">
         <span className="icon">animation</span>
         {title}
         {onClose && (

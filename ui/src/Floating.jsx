@@ -9,14 +9,24 @@ import { nextZ } from './zstack.js';
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const key = (id) => `float:${id}`;
+const sizeKey = (id) => `float:${id}:size`;
 const readPos = (id) => { try { return JSON.parse(localStorage.getItem(key(id)) || 'null'); } catch { return null; } };
 const writePos = (id, pos) => { try { localStorage.setItem(key(id), JSON.stringify(pos)); } catch { /* private mode */ } };
+const readSize = (id) => { try { return JSON.parse(localStorage.getItem(sizeKey(id)) || 'null'); } catch { return null; } };
+const writeSize = (id, s) => { try { localStorage.setItem(sizeKey(id), JSON.stringify(s)); } catch { /* private mode */ } };
 
-const HEADER = '.details-header, .panel-title, .plc-header, .wx-header, .cseq-header';
+const MIN_W = 200;
+const MIN_H = 160;
+const HEADER = '.panel-head, .cseq-header';
 const CONTROL = 'button, input, select, textarea, a, [role="button"], [role="tab"], label, .combo';
 
-export function Floating({ id, open = true, width = 320, defaultPos = { right: 68, top: 60 }, children }) {
+export function Floating({ id, open = true, width = 320, defaultPos = { right: 68, top: 60 }, resizable = true, defaultSize = null, children }) {
   const [pos, setPos] = useState(() => readPos(id));
+  // A width/height the corner grip pins (persisted); until then the panel is its
+  // content size at the `width` given, or the `defaultSize` a panel opens at.
+  const [size, setSize] = useState(() => (resizable ? (readSize(id) ?? defaultSize) : null));
+  const resizeRef = useRef(null);
+  useEffect(() => { if (resizable) writeSize(id, size); }, [id, size, resizable]);
   // The shared window stack (zstack.js), not a private counter: a click here can
   // now raise the panel above the mixer, the sequencer and the modal windows.
   const [z, setZ] = useState(() => nextZ());
@@ -87,15 +97,45 @@ export function Floating({ id, open = true, width = 320, defaultPos = { right: 6
     window.addEventListener('blur', end);
   };
 
+  // Bottom-right corner grip: pins the host's width and height (the panel fills it
+  // and its body scrolls — see .float-host.resized > .panel).
+  const startResize = (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const el = hostRef.current;
+    const rect = el.getBoundingClientRect();
+    if (!pos) setPos({ x: rect.left, y: rect.top });
+    resizeRef.current = { x0: e.clientX, y0: e.clientY, w0: rect.width, h0: rect.height };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not captured */ }
+  };
+  const onResizeMove = (e) => {
+    const r = resizeRef.current;
+    if (!r) return;
+    const maxW = Math.max(MIN_W, window.innerWidth - 16);
+    const maxH = Math.max(MIN_H, window.innerHeight - 16);
+    setSize({
+      w: Math.min(maxW, Math.max(MIN_W, Math.round(r.w0 + (e.clientX - r.x0)))),
+      h: Math.min(maxH, Math.max(MIN_H, Math.round(r.h0 + (e.clientY - r.y0)))),
+    });
+  };
+  const endResize = () => { resizeRef.current = null; };
+
   if (!open) return null;
   const style = {
-    width,
+    width: size?.w ?? width,
     zIndex: z,
+    ...(size?.h ? { height: size.h } : null),
     ...(pos ? { left: pos.x, top: pos.y, right: 'auto', bottom: 'auto' } : defaultPos),
   };
   return (
-    <div className="float-host" ref={hostRef} style={style} data-float={id} onPointerDown={onPointerDown}>
+    <div className={`float-host${size?.h ? ' resized' : ''}`} ref={hostRef} style={style} data-float={id} onPointerDown={onPointerDown}>
       {children}
+      {resizable && (
+        <div className="float-resize-c" onPointerDown={startResize} onPointerMove={onResizeMove}
+          onPointerUp={endResize} onPointerCancel={endResize}
+          onDoubleClick={() => setSize(defaultSize)} />
+      )}
     </div>
   );
 }

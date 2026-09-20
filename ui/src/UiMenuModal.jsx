@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ResizeCorner } from './ResizeCorner.jsx';
 import { Button } from '@headlessui/react';
 import { backend } from '../js/backend.js';
 import { resolveWritableDat, rootKindForAbs } from '../js/gamePath.js';
@@ -282,6 +283,7 @@ export function UiMenuModal({
 
   return (
     <div className="zdef-modal uimenu-modal" ref={panelRef} style={style} onPointerDown={onFocus}>
+      <ResizeCorner containerRef={panelRef} />
       <div
         className="modal-header"
         onPointerDown={startDrag}

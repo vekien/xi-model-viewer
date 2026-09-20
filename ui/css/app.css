@@ -67,6 +67,8 @@
   width: 100%; height: 100%;
   display: block; cursor: grab;
   touch-action: none;
+  border-top: 1px solid #000;
+  box-sizing: border-box;
 }
 #canvas:active { cursor: grabbing; }
 #canvas.live-pick { cursor: crosshair; }
@@ -551,9 +553,56 @@ body:has(#img-sprites) #placements {
 
 #tree {
   top: 60px; left: 12px; bottom: 52px;
-  width: 336px;
+  width: var(--tree-w, 336px);
   user-select: none;
 }
+/* Drag handle at the left panel's right edge (see TreeResizer.jsx) — one for every
+   view, since they all render #tree at the same --tree-w width. */
+#tree-resize {
+  position: fixed; top: 60px; bottom: 52px; z-index: 29;
+  left: calc(12px + var(--tree-w, 336px) - 3px); width: 9px;
+}
+#tree-resize::after {
+  content: ''; position: absolute; top: 50%; left: 3px; width: 3px; height: 44px; margin-top: -22px;
+  border-radius: 2px; background: var(--gray-500); opacity: 0.28; cursor: ew-resize;
+}
+#tree-resize:hover { cursor: ew-resize; }
+#tree-resize:hover::after { background: var(--accent); opacity: 0.9; }
+
+/* Docked UI (Settings › Options): the menu bar, the left panel and the status
+   bars snap flush to the app edges — no floating margins or rounded outer corners,
+   just an inner border and a single inner-corner radius. */
+body.docked-ui #menubar {
+  top: 0; left: 0;
+  padding: 5px;
+  border-top: 1px solid #000;
+  border-right: 1px solid #000;
+  border-bottom: 1px solid #000;
+  border-radius: 0 0 8px 0;
+  box-shadow: none;
+}
+body.docked-ui #tree {
+  top: 36px; left: 0; bottom: 30px;
+  border-right: 1px solid #000;
+  border-radius: 0;
+  box-shadow: none;
+}
+body.docked-ui #tree-resize { top: 36px; bottom: 30px; left: calc(var(--tree-w, 336px) - 3px); }
+body.docked-ui #statusFile {
+  left: 0; bottom: 0;
+  border-top: 1px solid #000; border-right: 1px solid #000;
+  border-radius: 0 8px 0 0;
+  box-shadow: none;
+}
+body.docked-ui #status {
+  right: 0; bottom: 0;
+  border-top: 1px solid #000; border-left: 1px solid #000;
+  border-radius: 8px 0 0 0;
+  box-shadow: none;
+}
+/* When the Ability Mixer timeline is docked across the bottom, lift the left
+   catalog above it so its rows aren't hidden (height in --mixer-dock-h). */
+body.mixer-docked #tree { bottom: var(--mixer-dock-h, 52px); }
 .tree-panel { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
 
 /* Panels that are nothing but one long list. The scroll sits on an inner
@@ -1089,10 +1138,10 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
 .mixer-parts-panel {
   box-sizing: border-box;
   width: 320px;
-  padding: 12px !important;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
 }
 
 .panel-title {
@@ -1114,47 +1163,36 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
 }
 
 /* Title rows that also hold tools (weather / objects / details / skeleton) */
-#weather .wx-header,
-#placements .plc-header,
-#img-sprites .plc-header,
-#details .details-header,
-#skeleton .details-header,
-#effect-actors .details-header,
-#mixer-slots .details-header,
-.mixer-panel .details-header,
-.mixer-parts-panel .details-header {
+/* One shared header for every floating panel (WeatherPanel, DetailsPanel, the
+   Generator, the Mixes panel, …). Each panel's own header class stays for its
+   panel-specific bits; the layout is all here. Pulled flush to the panel edge
+   (cancels the 10px gutter) so the title bar is tight, matching the mixer/modals. */
+.panel-head {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 0;
-  padding: 0 !important;
-  min-height: 0 !important;
+  padding: 5px 10px 0;
+  min-height: 34px;
   flex: 0 0 auto;
+  cursor: grab;
+  user-select: none; -webkit-user-select: none;
 }
-#weather .wx-header > .icon,
-#placements .plc-header > .icon,
-#img-sprites .plc-header > .icon,
-#details .details-header > .icon,
-#skeleton .details-header > .icon,
-#effect-actors .details-header > .icon,
-#mixer-slots .details-header > .icon,
-.mixer-panel .details-header > .icon,
-.mixer-parts-panel .details-header > .icon {
+.panel-head > .icon {
   color: var(--accent);
   font-size: 18px;
   flex: 0 0 auto;
+  margin-right: 5px;
 }
 
 #weather .wx-body,
 #details .details-body,
 #skeleton .skel-body {
-  margin: 0;
-  padding: 0 !important;
+  padding: 0;
   min-height: 0;
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   overflow: auto;
 }
 #details .details-body {
@@ -1178,7 +1216,6 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
 }
 
 #details .details-part-combo {
-  margin: 0;
   padding: 0;
 }
 
@@ -1576,14 +1613,15 @@ button.cli-output-stop { position: relative; z-index: 4; }
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
+  flex-direction: column;
   padding: 10px 12px 12px;
 }
 .dat-notes-pad {
   flex: 1 1 auto;
   width: 100%;
-  min-height: 220px;
+  min-height: 0;
   box-sizing: border-box;
-  resize: vertical;
+  resize: none;
   padding: 10px 12px;
   border: 1px solid var(--ring-strong);
   border-radius: 8px;
@@ -2022,9 +2060,9 @@ body.plc-resizing { cursor: ns-resize !important; user-select: none; }
   right: 12px;
   bottom: 56px;
   z-index: 28;
-  width: 96px;
+  width: 100px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: none;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 40%),
     rgba(16, 20, 26, 0.82);
@@ -2212,7 +2250,8 @@ body:has(#details) #skeleton {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.details-close { width: 24px; height: 24px; min-height: 0; background: transparent; border: none; box-shadow: none; }
+.details-close { width: 26px; height: 26px; min-height: 0; padding: 0; display: grid; place-items: center; background: transparent; border: none; box-shadow: none; border-radius: 6px; flex: 0 0 auto; }
+.details-close .icon { font-size: 18px; }
 .details-close:hover { background: rgba(255, 255, 255, 0.1); }
 
 .details-section { padding: 0; min-width: 0; }
@@ -2417,7 +2456,7 @@ button.details-path-link.mono { font-family: var(--font-mono); font-size: 11px; 
   cursor: pointer;
 }
 .tex-zoom-pct:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
-.tex-modal-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.tex-modal-body { padding: 10px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
 .tex-checker {
   --checker-a: #34383d; --checker-b: #23262a;
   background-color: var(--checker-b);
@@ -2920,7 +2959,17 @@ button.details-path-link.mono { font-family: var(--font-mono); font-size: 11px; 
   border: 1px solid var(--ring-strong);
   border-radius: 12px;
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
+  /* Column layout so a resized height gives the body somewhere to scroll (the
+     corner grip sets width/height inline); content-height until then. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
+.modal-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+/* Bottom-right corner grip shared by every resizable modal (ResizeCorner.jsx). */
+.modal-resize-c { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; z-index: 6; }
+.modal-resize-c::after { content: ''; position: absolute; right: 3px; bottom: 3px; width: 8px; height: 8px; border-right: 2px solid var(--gray-500); border-bottom: 2px solid var(--gray-500); opacity: 0.7; }
+.modal-resize-c:hover::after { border-color: var(--accent); opacity: 1; }
 /* Backdrop-less, like the floating panels: base stacking lives here, and App
    raises it past the Data Struct windows when you click it. */
 .modal.settings-modal {
@@ -3292,7 +3341,7 @@ button.settings-tab.on .icon { color: var(--accent); }
 }
 .modal-header {
   display: flex; align-items: center; gap: 8px;
-  padding: 10px 12px;
+  padding: 5px 10px;
   /* Fades into the panel instead of ruling a line across it. */
   background: linear-gradient(180deg, rgb(57 57 57 / 54%) 0%, rgba(26, 26, 26, 0) 100%);
   cursor: grab;
@@ -3305,7 +3354,7 @@ button.settings-tab.on .icon { color: var(--accent); }
 .modal-close, .modal-tool { width: 26px; height: 26px; min-height: 0; background: transparent; border: none; box-shadow: none; }
 .modal-close:hover, .modal-tool:hover { background: rgba(255, 255, 255, 0.1); }
 
-.modal-body { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+.modal-body { padding: 10px; display: flex; flex-direction: column; gap: 10px; }
 .form-row { display: flex; flex-direction: column; gap: 6px; }
 .form-label { color: var(--muted); font-weight: 500; font-size: 12px; }
 .form-inline { display: flex; align-items: center; gap: 8px; }
@@ -3611,10 +3660,21 @@ body.eyedrop-picking { user-select: none; }
   overflow: hidden;
   box-sizing: border-box;
 }
+/* When resized taller (the corner grip / dock), the timeline track takes the extra
+   room and the transport bar stays pinned to the bottom — no dead space. It scrolls
+   vertically (its columns take their content height) if the lanes ever overflow. */
+#camseq .cseq-body { overflow: hidden; }
+#camseq .cseq-tl { flex: 1 1 auto; min-height: 0; overflow: hidden auto; align-items: flex-start; }
+#camseq .cseq-tl .cseq-tl-scroll { height: auto; min-height: 0; }
+/* Keyframe dots and the playhead are centred on their frame, so the last ones (at
+   100%) spill a few px past the track's right edge and forced a permanent scrollbar
+   even at min zoom. Clip the track's own content — the zoom scroll is on the parent
+   (.cseq-tl-scroll), so it still works. */
+#camseq .cseq-tl-track { overflow: hidden; }
 .cseq-header {
   display: flex; align-items: center; gap: 6px;
-  padding: 7px 8px 7px 12px;
-  min-height: 38px;
+  padding: 5px 10px;
+  min-height: 34px;
   cursor: grab;
   border-bottom: none;
   flex: 0 0 auto;
@@ -6723,7 +6783,7 @@ input.list-search.dbf-value:disabled { opacity: 0.4; }
 /* --- Ability Mixer ------------------------------------------------------- */
 .mixer-lane-tabs { margin: 8px 10px 0; }
 .mixer-lane-tabs .seg-tab { --lane: var(--accent); }
-.mixer-lane-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--lane); margin-right: 6px; vertical-align: 0; }
+.mixer-lane-dot { display: inline-block; width: 8px; height: 8px; border-radius: 8px; background: var(--lane); margin-right: 0; vertical-align: 0; }
 .mixer-current { display: flex; align-items: center; gap: 8px; padding: 8px 10px 4px; min-height: 30px; }
 .mixer-current-name { font-weight: 600; }
 .mixer-current .pc-tbtn { margin-left: auto; }
@@ -6918,7 +6978,7 @@ button.mgen-tex-thumb:disabled { cursor: default; }
 .mseq-resize-c:hover::after { border-color: var(--accent); opacity: 1; }
 /* Docked to the bottom of the app: full width, only the top corners rounded, and
    the edge/corner grips give way to a single top-edge grip that sets the height. */
-#mixer-seq.is-docked { border-radius: 10px 10px 0 0; }
+#mixer-seq.is-docked { border-radius: 0; }
 #mixer-seq.is-docked .cseq-resize,
 #mixer-seq.is-docked .mseq-resize-v,
 #mixer-seq.is-docked .mseq-resize-c { display: none; }
@@ -6926,9 +6986,11 @@ button.mgen-tex-thumb:disabled { cursor: default; }
 .mseq-dock-resize::after { content: ''; position: absolute; top: 2px; left: 50%; width: 32px; height: 3px; margin-left: -16px; border-radius: 2px; background: var(--gray-500); opacity: 0.5; }
 .mseq-dock-resize:hover::after { background: var(--accent); opacity: 0.9; }
 /* The Camera Sequencer docks the same way. */
-#camseq.is-docked { border-radius: 10px 10px 0 0; min-width: 0; }
+#camseq.is-docked { border-radius: 0; min-width: 0; }
 #camseq.is-docked .cseq-resize,
 #camseq.is-docked .mseq-resize-c { display: none; }
+/* The docked sequencer reserves room below the left pane, like the mixer does. */
+body.camseq-docked #tree { bottom: var(--camseq-dock-h, 52px); }
 /* Zoom now rides the bottom bar, just right of the frame readout. */
 .cseq-bar .mseq-zoom-bar { margin-left: 4px; }
 /* Only the track area scrolls: the toolbar rows above it and the transport bar
@@ -7103,12 +7165,12 @@ button.mgen-tex-thumb:disabled { cursor: default; }
   border-radius: 50%;
   color: var(--gray-300);
   background: linear-gradient(180deg, var(--gray-850), var(--gray-900));
-  border: 1px solid var(--ring);
+  border: 1px solid #000;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
   cursor: pointer;
 }
 .rail-btn .icon { font-size: 18px; }
-.rail-btn:hover { color: var(--text); border-color: var(--gray-500); }
+.rail-btn:hover { color: var(--text); }
 .rail-btn.on { color: var(--accent); border-color: var(--accent); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35), inset 0 0 0 1px var(--accent); }
 .float-host { position: fixed; width: 320px; box-sizing: border-box; }
 .float-host > .panel {
@@ -7118,14 +7180,26 @@ button.mgen-tex-thumb:disabled { cursor: default; }
   max-height: calc(100vh - 80px);
   z-index: auto !important;
   box-sizing: border-box;
+  /* No padding on the panel itself: the header (.panel-head) sits flush at the top,
+     just like the mixer and modals; the content below gives itself a 10px gutter
+     with a margin — no negative-margin tricks. */
+  padding: 0;
+  display: flex; flex-direction: column; gap: 0;
 }
-.float-host .details-header, .float-host .panel-title, .float-host .plc-header, .float-host .wx-header { cursor: grab; }
-/* The panel's 12px frame around its content is grab area too; the content keeps its own cursors. */
+/* Everything under the header (search, list, body, editor…) is inset a uniform
+   10px from the panel edges; the last one also clears the bottom. */
+.float-host > .panel > :not(.panel-head):not(.float-resize-c) { margin: 8px 10px 0; }
+.float-host > .panel > :not(.panel-head):not(.float-resize-c):last-child { margin-bottom: 10px; }
+/* Corner-resized: the panel fills the pinned host height and its body scrolls. */
+.float-host.resized > .panel { height: 100% !important; max-height: none; }
+.float-resize-c { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; z-index: 5; }
+.float-resize-c::after { content: ''; position: absolute; right: 3px; bottom: 3px; width: 8px; height: 8px; border-right: 2px solid var(--gray-500); border-bottom: 2px solid var(--gray-500); opacity: 0.7; }
+.float-resize-c:hover::after { border-color: var(--accent); opacity: 1; }
+/* The panel frame is grab area too; the content keeps its own cursors, the header grabs. */
 .float-host > .panel { cursor: grab; }
 .float-host > .panel > * { cursor: auto; }
-.float-host.dragging .details-header, .float-host.dragging .panel-title { cursor: grabbing; }
-/* A drag must not sweep the header text into a selection. */
-.float-host .details-header, .float-host .panel-title, .float-host .plc-header, .float-host .wx-header { user-select: none; -webkit-user-select: none; }
+.float-host .panel-head { cursor: grab; }
+.float-host.dragging .panel-head { cursor: grabbing; }
 .float-host.dragging, .float-host.dragging * { user-select: none !important; -webkit-user-select: none !important; }
 .float-host .mixer-parts-panel { max-height: calc(100vh - 80px); }
 /* Weather panel audio rows: the toggle and a label; the sliders live in the nav's Volume popover. */

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ResizeCorner } from './ResizeCorner.jsx';
 import { Button } from '@headlessui/react';
 import { Combo } from './Combo.jsx';
 import { NpcList } from './NpcList.jsx';
@@ -123,6 +124,7 @@ export function ActorEditorModal({
 
   return (
     <div className={`zdef-modal datatable-modal actor-modal actor-editor-modal${kind === 'light' ? ' is-fit' : ''}`} ref={panelRef} style={style} onPointerDown={onFocus}>
+      <ResizeCorner containerRef={panelRef} />
       <div
         className="modal-header"
         onPointerDown={startDrag}

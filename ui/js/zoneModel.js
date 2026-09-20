@@ -370,6 +370,20 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
   /** @type {{ meshName: string, prims: object[], pos: number[], rot: number[], scale: number[], motion: object, placement: object }[]} */
   const zoneLifts = [];
 
+  // Doors: placements whose `link` names a RID that has an open/close routine.
+  // A door "leaf" swings/slides per its op; the renderer plays them on the
+  // open/close toggle (placement.door → static pass skips them). Collected raw
+  // first, then grouped by RID and zipped with the routine's ops (one per leaf).
+  const ridKey = (link) => String(link ?? '').replace(/\0+/g, '').trim();
+  const doorAnims = parsed.doorAnims instanceof Map ? parsed.doorAnims : new Map();
+  const doorAnimFor = (link) => {
+    const a = link ? doorAnims.get(ridKey(link)) : null;
+    return (a && (a.open?.length || a.clos?.length)) ? a : null;
+  };
+  const doorLeavesRaw = [];   // { placement, prims, meshName, pos, rot, scale, rid }
+  /** @type {{ meshName: string, prims: object[], pos: number[], rot: number[], scale: number[], op: object, placement: object, rid: string }[]} */
+  const zoneDoors = [];
+
   // World geometry: 0x1C placements. Anything with a real placement is world
   // geometry and draws in world space, sky-ish name or not — `kind` only
   // classifies it for the objects panel.
@@ -393,7 +407,10 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
     // Elevator car bound to an auto-running '@' volume: don't bake it static — the
     // renderer re-bakes it each frame at its animated height (see zoneLifts).
     const auto = !kind ? autoRunFor(p.link) : null;
-    const drawn = kind !== 'collision' && !isFarCopy(resolved) && !auto;
+    // Door leaf bound to a '_' volume with an open/close routine: driven by the
+    // doors toggle, so it is baked live (at the closed pose by default), not static.
+    const doorAnim = (!kind && !auto) ? doorAnimFor(p.link) : null;
+    const drawn = kind !== 'collision' && !isFarCopy(resolved) && !auto && !doorAnim;
     if (drawn) emitMesh(resolved, matrix, 'world');
     const placement = pushPlacement(p, resolved, matrix, kind, lodResolvedFor[pi]);
     if (auto) {
@@ -411,12 +428,51 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
           placement,
         });
       }
+    } else if (doorAnim) {
+      const prims = meshes.get(resolved);
+      if (prims?.length) {
+        placement.door = true;
+        doorLeavesRaw.push({
+          placement, prims, meshName: resolved,
+          pos: [p.pos[0], p.pos[1], p.pos[2]],
+          rot: p.rot || [0, 0, 0],
+          scale: p.scale || [1, 1, 1],
+          rid: ridKey(p.link),
+        });
+      }
     }
     if (!kind) {
       placedWorld.push({
         meshId: p.meshId, resolved,
         pos: p.pos, rot: p.rot || [0, 0, 0], scale: p.scale || [1, 1, 1],
         matrix,
+      });
+    }
+  }
+
+  // Group door leaves by RID and give each leaf its own op from the open routine
+  // (one op per part, in DAT order). A door with fewer ops than leaves reuses the
+  // last op; the routine's frame duration sets the swing time.
+  {
+    const byRid = new Map();
+    for (const lf of doorLeavesRaw) {
+      let arr = byRid.get(lf.rid);
+      if (!arr) { arr = []; byRid.set(lf.rid, arr); }
+      arr.push(lf);
+    }
+    for (const [rid, leaves] of byRid) {
+      const ops = doorAnims.get(rid)?.open ?? [];
+      leaves.sort((a, b) => (a.placement.index ?? 0) - (b.placement.index ?? 0));
+      const zeroOp = { kind: 'rot', vec: [0, 0, 0], dur: 70 };
+      leaves.forEach((lf, i) => {
+        // Static was already skipped for this leaf, so it MUST end up in zoneDoors
+        // (a zero op keeps it visible at rest when the routine has no op for it).
+        const op = ops[i] || ops[ops.length - 1] || zeroOp;
+        zoneDoors.push({
+          meshName: lf.meshName, prims: lf.prims,
+          pos: lf.pos, rot: lf.rot, scale: lf.scale,
+          op, durFrames: op.dur || 70, placement: lf.placement, rid,
+        });
       });
     }
   }
@@ -670,6 +726,8 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
     zoneSpinners,
     // Auto-running interaction volumes (elevators). Renderer re-bakes each frame.
     zoneLifts,
+    // Door leaves (grouped by RID); renderer swings/slides them on the open toggle.
+    zoneDoors,
     textures: outTextures,
     animations: [],
     schedules: [],
@@ -697,7 +755,7 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
       collTris: collision?.triCount ?? 0,
     },
   };
-  model.isRenderable = zoneDraws.length > 0 || zoneSpinners.length > 0 || zoneLifts.length > 0;
+  model.isRenderable = zoneDraws.length > 0 || zoneSpinners.length > 0 || zoneLifts.length > 0 || zoneDoors.length > 0;
   return model;
 }
 
@@ -874,6 +932,69 @@ export function bakeLiftDraws(lift, tSeconds = 0) {
   return out;
 }
 
+/** Bake a mesh's prims through a matrix into zoneDraws-shaped entries (shared by
+ *  the spinner/lift/door live passes). */
+function bakeMeshDraws(prims, matrix, meshName) {
+  const mirrored = det3(matrix) < 0;
+  const order = mirrored ? [0, 2, 1] : [0, 1, 2];
+  const out = [];
+  for (const prim of prims) {
+    const positions = []; const normals = []; const uvs = []; const colors = [];
+    const n = prim.positions.length / 3;
+    for (let t = 0; t + 2 < n; t += 3) {
+      for (const k of order) {
+        const i = t + k; const i3 = i * 3, i2 = i * 2, i4 = i * 4;
+        const [wx, wy, wz] = mulPoint(matrix, prim.positions[i3], prim.positions[i3 + 1], prim.positions[i3 + 2]);
+        const [nx, ny, nz] = mulDir(matrix, prim.normals[i3], prim.normals[i3 + 1], prim.normals[i3 + 2]);
+        const [dx, dy, dz] = toDisplay(wx, wy, wz);
+        const [dnx, dny, dnz] = toDisplay(nx, ny, nz);
+        positions.push(dx, dy, dz);
+        normals.push(dnx, dny, dnz);
+        uvs.push(prim.uvs[i2], prim.uvs[i2 + 1]);
+        colors.push(clamp255(prim.colors[i4]), clamp255(prim.colors[i4 + 1]), clamp255(prim.colors[i4 + 2]), clamp255(prim.colors[i4 + 3]));
+      }
+    }
+    if (positions.length < 9) continue;
+    const count = positions.length / 3;
+    out.push({
+      layer: 'world', textureName: prim.textureName || null,
+      blend: !!prim.blend, noCull: !!prim.noCull, discard: discardThresholdFor(meshName),
+      wind: false, zBias: prim.blend ? 5 : 0, count,
+      positions: new Float32Array(positions),
+      blendOffsets: new Float32Array(count * 3),
+      normals: new Float32Array(normals),
+      uvs: new Float32Array(uvs),
+      colors: new Uint8Array(colors),
+    });
+  }
+  return out;
+}
+
+/**
+ * Bake one door leaf at `open` (0 = shut … 1 = fully open). A `rot` op swings the
+ * leaf about its hinge (the mesh origin) — add the op's euler, scaled by `open`,
+ * to the placement rotation. A `trans` op slides it along the op vector in the
+ * leaf's own frame. Client: XiDoorActor SetDoorAngle / SetDoorSlide + MakeDoorMatrix.
+ */
+export function bakeDoorDraws(door, open = 0) {
+  const prims = door?.prims;
+  if (!prims?.length || !door.op) return [];
+  const src = door.placement || door;
+  const [px, py, pz] = src.rawPos || door.pos || [0, 0, 0];
+  const [rx, ry, rz] = src.rot || door.rot || [0, 0, 0];
+  const sc = src.scale || door.scale || [1, 1, 1];
+  const v = door.op.vec || [0, 0, 0];
+  let matrix;
+  if (door.op.kind === 'trans') {
+    const R = trsMatrix([0, 0, 0], [rx, ry, rz], [1, 1, 1]);
+    const [ox, oy, oz] = mulDir(R, v[0] * open, v[1] * open, v[2] * open);
+    matrix = trsMatrix([px + ox, py + oy, pz + oz], [rx, ry, rz], sc);
+  } else {
+    matrix = trsMatrix([px, py, pz], [rx + v[0] * open, ry + v[1] * open, rz + v[2] * open], sc);
+  }
+  return bakeMeshDraws(prims, matrix, door.meshName);
+}
+
 /** Strip leveleditor `game/` prefix → path relative to the install root. */
 export function zoneDatRelPath(zonePath) {
   return String(zonePath || '')
@@ -951,6 +1072,8 @@ export function rebuildZoneDraws(model) {
     // Elevator cars are re-baked live at their animated height (see zoneLifts) —
     // a static copy would freeze one at its parked position inside the moving one.
     if (p.lift) continue;
+    // Door leaves are baked live at the current open amount (see zoneDoors).
+    if (p.door) continue;
     if (p.dragHidden || p.userHidden) continue;
     if (!p.mesh) continue;
     const prims = meshes.get(p.mesh);

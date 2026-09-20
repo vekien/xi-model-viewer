@@ -8,7 +8,7 @@ import { ParticleDrawer } from './particleDrawer.js';
 import { Vec3, Mat4 } from './particle/math.js';
 import { AttachType } from './particle/types.js';
 import { buildSolidGizmoMeshes, gizmoSize } from './zoneGizmo.js';
-import { bakeSpinnerDraws, bakeLiftDraws } from './zoneModel.js';
+import { bakeSpinnerDraws, bakeLiftDraws, bakeDoorDraws } from './zoneModel.js';
 
 // References 49-51 stand for the eight-point ring (13..20) around an actor.
 const RING_REF_START = 13;
@@ -1102,6 +1102,10 @@ export class Renderer {
     this.zoneSpinnerBatches = [];   // live-spin companions (mill) + auto-run lifts
     this.zoneSpinnerAngle = 0;
     this.zoneLiftClock = 0;         // seconds, drives auto-running interactions (elevators)
+    this.zoneDoorBatches = [];      // door leaves, re-baked only when doorOpen changes
+    this.doorOpen = 0;              // current open amount 0..1
+    this.doorTarget = 0;           // toggle target 0 (shut) / 1 (open)
+    this.doorAnimSec = 70 / 60;     // swing time (default; overridden per zone)
     this.effectLayerFrames = 0;
     this.zoneDisableCull = false;   // debug: ignore the per-submesh cull flag
     // Coplanar water/overlay submeshes: retail-style LEQUAL lets equal-depth blend
@@ -1665,8 +1669,15 @@ export class Renderer {
       if (b.vao) gl.deleteVertexArray(b.vao);
     }
     this.zoneSpinnerBatches = [];
+    for (const b of this.zoneDoorBatches) {
+      gl.deleteBuffer(b.vbo);
+      if (b.vao) gl.deleteVertexArray(b.vao);
+    }
+    this.zoneDoorBatches = [];
     this.zoneSpinnerAngle = 0;
     this.zoneLiftClock = 0;
+    this.doorOpen = 0;
+    this.doorTarget = 0;
     this.effectLayerFrames = 0;
     this.particleDrawer?.disposeMeshes();
     this.particleSystem = null;
@@ -1728,6 +1739,9 @@ export class Renderer {
         if (batch) this.zoneBatches.push(batch);
       }
       this._rebuildZoneSpinners();
+      const doorDur = Math.max(...(model.zoneDoors ?? []).map((d) => d.durFrames || 70), 70);
+      this.doorAnimSec = doorDur / 60;
+      this._rebuildZoneDoors();
     }
 
     // Equipment occlusion (xim): a piece is dropped when another equipped mesh
@@ -3100,6 +3114,14 @@ export class Renderer {
       this._rebuildZoneSpinners();
     }
 
+    // Doors ease toward the toggle target; only re-baked while actually moving.
+    if (this.model?.kind === 'zone' && this.model.zoneDoors?.length && this.doorOpen !== this.doorTarget) {
+      const step = dtSeconds / Math.max(0.05, this.doorAnimSec);
+      if (this.doorTarget > this.doorOpen) this.doorOpen = Math.min(this.doorTarget, this.doorOpen + step);
+      else this.doorOpen = Math.max(this.doorTarget, this.doorOpen - step);
+      this._rebuildZoneDoors();
+    }
+
     this._updateEnvironment(dtSeconds);
     this._advanceActors(dtSeconds);
 
@@ -3221,6 +3243,7 @@ export class Renderer {
       if (this.showSkybox) this._drawSky(viewProj, eye);
       this._drawZone(viewProj, eye, fogFar);
       this._drawZoneSpinners(viewProj, eye, fogFar);
+      this._drawZoneDoors(viewProj, eye, fogFar);
       this._drawActors(viewProj, eye, fogFar);
       this._drawZoneMoveProxy(viewProj, eye, fogFar);
       this._drawParticles();
@@ -4565,8 +4588,8 @@ export class Renderer {
         gl.uniformMatrix4fv(u.lightViewProj, false, cascade.lvp);
         gl.uniform1i(u.texture, 0);
         let curWind = null, curCutout = null, curTex = null;
-        const zoneCasters = this.zoneSpinnerBatches.length
-          ? this.zoneBatches.concat(this.zoneSpinnerBatches)
+        const zoneCasters = (this.zoneSpinnerBatches.length || this.zoneDoorBatches.length)
+          ? this.zoneBatches.concat(this.zoneSpinnerBatches, this.zoneDoorBatches)
           : this.zoneBatches;
         for (const batch of zoneCasters) {
           // Water and soft-edge overlays are blended surfaces — casting from
@@ -4813,6 +4836,40 @@ export class Renderer {
     this.zoneBatches = this.zoneSpinnerBatches;
     this._drawZone(viewProj, eye, fogFar);
     this.zoneBatches = saved;
+  }
+
+  /** Re-bake the door leaves at the current open amount. Called at load and while
+   *  the open toggle is animating (not every frame). */
+  _rebuildZoneDoors() {
+    const gl = this.gl;
+    for (const b of this.zoneDoorBatches) {
+      gl.deleteBuffer(b.vbo);
+      if (b.vao) gl.deleteVertexArray(b.vao);
+    }
+    this.zoneDoorBatches = [];
+    const doors = this.model?.zoneDoors;
+    if (!doors?.length) return;
+    for (const d of doors) {
+      const pl = d.placement;
+      if (pl && (pl.userHidden || pl.dragHidden)) continue;
+      for (const draw of bakeDoorDraws(d, this.doorOpen)) {
+        const batch = this.buildZoneBatch(draw);
+        if (batch) this.zoneDoorBatches.push(batch);
+      }
+    }
+  }
+
+  _drawZoneDoors(viewProj, eye, fogFar) {
+    if (!this.zoneDoorBatches.length) return;
+    const saved = this.zoneBatches;
+    this.zoneBatches = this.zoneDoorBatches;
+    this._drawZone(viewProj, eye, fogFar);
+    this.zoneBatches = saved;
+  }
+
+  /** Open (true) or close (false) all doors — the toggle eases there over doorAnimSec. */
+  setDoorsOpen(open) {
+    this.doorTarget = open ? 1 : 0;
   }
 
   _drawZone(viewProj, eye, fogFar) {
@@ -5242,6 +5299,7 @@ export class Renderer {
       if (batch) this.zoneBatches.push(batch);
     }
     this._rebuildZoneSpinners();
+    this._rebuildZoneDoors();
   }
 
   /** Temporary geometry for the placement being dragged. */
@@ -5412,9 +5470,11 @@ export class Renderer {
     freeBatches(this.batches);
     freeBatches(this.zoneBatches);
     freeBatches(this.zoneSpinnerBatches);
+    freeBatches(this.zoneDoorBatches);
     this.batches = [];
     this.zoneBatches = [];
     this.zoneSpinnerBatches = [];
+    this.zoneDoorBatches = [];
 
     // Lazily-built overlay meshes — all { vao, vbo }.
     for (const key of [

@@ -89,7 +89,7 @@ export function WeatherPanel({
 
   return (
     <div id="weather" ref={rootRef} className={`panel${objectsOpen ? ' with-objects' : ''}`}>
-      <div className="wx-header">
+      <div className="panel-head wx-header">
         <span className="icon">landscape</span>
         <span className="wx-title">{heading}</span>
         <span className="sp" />

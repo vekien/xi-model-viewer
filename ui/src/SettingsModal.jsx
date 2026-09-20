@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ResizeCorner } from './ResizeCorner.jsx';
 import { Button, Checkbox, Field, Label } from '@headlessui/react';
 import { backend } from '../js/backend.js';
 import { clampUiScale, sliderToUiScale, uiScaleToSlider } from '../js/uiScale.js';
@@ -676,6 +677,7 @@ export function SettingsModal({
 
   return (
     <div className="modal settings-modal" ref={panelRef} style={style} onPointerDown={onFocus}>
+      <ResizeCorner containerRef={panelRef} />
       <div
         className="modal-header"
         onPointerDown={startDrag}
@@ -872,6 +874,21 @@ export function SettingsModal({
             <section className="settings-panel">
               <div className="settings-panel-title">Options</div>
               <div className="settings-panel-body">
+                <Tooltip content="Snap the menu bar, the left panel and the status bars flush to the app edges — no floating margins or rounded corners.">
+                  <div className="form-row">
+                    <Field className="check-field">
+                      <Checkbox
+                        checked={!!draft.dockedUi}
+                        onChange={(v) => setDraft({ ...draft, dockedUi: v })}
+                        className="checkbox"
+                      >
+                        <span className="icon check-icon">check</span>
+                      </Checkbox>
+                      <Label className="check-label">Docked UI</Label>
+                    </Field>
+                  </div>
+                </Tooltip>
+
                 <div className="form-row">
                   <Field className="check-field">
                     <Checkbox

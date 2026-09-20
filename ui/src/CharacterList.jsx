@@ -739,14 +739,18 @@ export function useCharacter({ enabled, onLoad, onError, onIsolationChange, stor
     // or first entry, show the race skeleton.
     const isGearSwap = lastRace.current === race;
     let displayPath = r.base;
+    let slotChanged = false;
     if (isGearSwap && prevSelRef.current) {
       for (const s of SLOTS) {
         if (sel[s.key] !== prevSelRef.current[s.key]) {
           const item = slots[s.key]?.find((it) => it.id === sel[s.key]);
-          if (item?.paths?.[0]) displayPath = item.paths[0];
+          if (item?.paths?.[0]) { displayPath = item.paths[0]; slotChanged = true; }
         }
       }
     }
+    // A picked action (animation) is the most recent DAT load, so it leads the
+    // status bar — unless the user just swapped a gear slot, where that DAT wins.
+    if (act && !slotChanged) displayPath = motionPaths[0] ?? focusPaths[0] ?? displayPath;
     prevSelRef.current = { ...sel };
 
     partsRef.current = parts;

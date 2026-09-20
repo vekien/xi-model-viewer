@@ -408,6 +408,18 @@ export function TimelineWindow({
   // top edge then resizes the height (the bottom is against the app's edge).
   const [docked, setDocked] = useState(() => readJson('mixerSeqDocked') === true);
   const toggleDocked = () => setDocked((v) => { writeJson('mixerSeqDocked', !v); return !v; });
+  // While docked, publish the strip's height so the app can reserve room below the
+  // left pane (see body.mixer-docked #tree); cleared when floated or closed.
+  useEffect(() => {
+    const on = docked && open && !collapsed;
+    document.body.classList.toggle('mixer-docked', on);
+    if (on) document.documentElement.style.setProperty('--mixer-dock-h', `${size.h || 340}px`);
+    else document.documentElement.style.removeProperty('--mixer-dock-h');
+    return () => {
+      document.body.classList.remove('mixer-docked');
+      document.documentElement.style.removeProperty('--mixer-dock-h');
+    };
+  }, [docked, open, collapsed, size.h]);
   // A Publish that needs a Confirm shows its row in Manage, which is on the Details
   // tab — jump there when the tick moves, not on mount: the panel remounts whenever
   // the mixer view comes back, and the tick App kept from an old Publish must not.

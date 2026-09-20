@@ -572,6 +572,72 @@ function parseZoneInteractions(bytes, dv, section) {
   return out;
 }
 
+// ── door open/close routines (0x07 under wt_b/door/<rid>/) ───────────────────
+// A door's open/close animation is a 0x07 EffectRoutine named "open"/"clos" in a
+// per-door directory `wt_b/door/<rid>/`. Each 0x0D ModelRotation / 0x0C
+// ModelTranslation op moves one door leaf (part). We read the (rx,ry,rz) and the
+// frame duration; the client applies them per part via SetDoorAngle/SetDoorSlide +
+// MakeDoorMatrix (PS2 decomp XiDoorActor). See docs/zone/doors.md (xi-tools).
+function parseDoorRoutine(bytes, dv, section) {
+  const ds = section.dataStart;
+  const bodyEnd = section.start + section.size;
+  const sec2 = dv.getInt32(ds + 0x14, true);
+  let p = ds + (sec2 - 16);
+  const ops = [];
+  for (let g = 0; g < 64 && p + 8 <= bodyEnd && p >= ds; g++) {
+    const op = bytes[p];
+    const n = (bytes[p + 1] | (bytes[p + 2] << 8)) & 0x1f;
+    const entryLen = Math.max(1, n) * 4;
+    if (op === 0x00) break;
+    if ((op === 0x0d || op === 0x0c) && p + 20 <= bodyEnd) {
+      const dur = (bytes[p + 6] | (bytes[p + 7] << 8)) || 1;
+      ops.push({
+        kind: op === 0x0d ? 'rot' : 'trans',
+        vec: [dv.getFloat32(p + 8, true), dv.getFloat32(p + 12, true), dv.getFloat32(p + 16, true)],
+        dur,
+      });
+    }
+    p += entryLen;
+  }
+  return ops;
+}
+
+/**
+ * Map of door RID id -> { open:[op], clos:[op] }, one op per leaf. Walks the DAT
+ * directory tree (0x01 push / 0x00 pop) to find `door/<rid>/open|clos` 0x07
+ * sections. Self-contained walk (min-0x10 section size) so it does not depend on
+ * how the caller split sections.
+ */
+function parseDoorRoutines(bytes, dv) {
+  const out = new Map();
+  const stack = [];
+  let pos = 0;
+  const len = bytes.length;
+  while (pos + 16 <= len) {
+    const start = pos;
+    let ok = true;
+    for (let i = 0; i < 4; i++) { const b = bytes[start + i]; if (b !== 0 && (b < 0x20 || b > 0x7e)) { ok = false; break; } }
+    if (!ok) break;
+    const meta = u32at(dv, start + 4);
+    const type = meta & 0x7f;
+    let size = ((meta >>> 7) & 0xfffff) * 0x10;
+    if (size < 0x10) size = 0x10;
+    if (start + size > len) break;
+    let id = '';
+    for (let i = 0; i < 4; i++) { const c = bytes[start + i]; if (c) id += String.fromCharCode(c); }
+    if (type === 0x01) stack.push(id);
+    else if (type === 0x00) stack.pop();
+    else if (type === 0x07 && (id === 'open' || id === 'clos') && stack[stack.length - 2] === 'door') {
+      const rid = stack[stack.length - 1];
+      let e = out.get(rid);
+      if (!e) { e = { open: [], clos: [] }; out.set(rid, e); }
+      try { const ops = parseDoorRoutine(bytes, dv, { dataStart: start + 0x10, start, size }); if (id === 'open') e.open = ops; else e.clos = ops; } catch (_e) { /* skip */ }
+    }
+    pos = start + size;
+  }
+  return out;
+}
+
 // ── 0x1C collision triangle soup ("MZB", the player-collision mesh) ──────────
 // Decodes the collision geometry embedded in the (already-decrypted) 0x1C
 // section: walk the mesh/transform pair-groups -> world-space triangles. Mirrors
@@ -1073,8 +1139,12 @@ export function parseZone(datBuffer, keyTables) {
     }
   }
 
+  // Door open/close animations, keyed by RID id (the placement's 0x34 link).
+  let doorAnims = new Map();
+  try { doorAnims = parseDoorRoutines(bytes, dv); } catch (_e) { /* no doors */ }
+
   return {
     meshes, meshNames, placements, textures, meshIdToName, meshSections,
-    collision, interactions, subAreas, weatherSky,
+    collision, interactions, subAreas, weatherSky, doorAnims,
   };
 }

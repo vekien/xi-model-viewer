@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ResizeCorner } from './ResizeCorner.jsx';
 import { Button } from '@headlessui/react';
 import { Tooltip } from './Tooltip.jsx';
 import {
@@ -117,6 +118,7 @@ export function UiElementGroupModal({
 
   return (
     <div className="zdef-modal uieg-modal" ref={panelRef} style={style} onPointerDown={onFocus}>
+      <ResizeCorner containerRef={panelRef} />
       <div
         className="modal-header"
         onPointerDown={startDrag}

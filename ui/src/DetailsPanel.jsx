@@ -23,7 +23,7 @@ export function DetailsPanel({ info, animClip, animId, schedule, onClose, onOpen
 
   return (
     <div id="details" className="panel">
-      <div className="details-header">
+      <div className="panel-head">
         <span className="icon">info</span>
         <span className="details-title">Details</span>
         <Button className="icon-btn details-close" onClick={onClose}>

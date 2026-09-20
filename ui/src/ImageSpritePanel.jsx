@@ -64,7 +64,7 @@ export function ImageSpritePanel({
 
   return (
     <div id="img-sprites" className={`panel${minimized ? ' minimized' : ''}`}>
-      <div className="plc-header">
+      <div className="panel-head">
         <span className="icon">grid_view</span>
         <span className="plc-title">Sprites</span>
         <span className="plc-meta mono">{rows.length.toLocaleString()}

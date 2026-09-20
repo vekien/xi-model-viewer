@@ -52,7 +52,7 @@ export function ScenesPanel({
   if (view !== 'actors' || !current) {
     return (
       <div id="scenes" className="panel">
-        <div className="plc-header">
+        <div className="panel-head">
           <span className="icon">theaters</span>
           <span className="plc-title">Scenes</span>
           <span className="plc-spacer" />
@@ -133,7 +133,7 @@ export function ScenesPanel({
 
   return (
     <div id="scenes" className="panel">
-      <div className="plc-header">
+      <div className="panel-head">
         <Tooltip content="Back to the scene list" placement="bottom">
           <button type="button" className="icon-btn plc-tool scene-back" aria-label="Back to scenes" onClick={onBack}>
             <span className="icon">arrow_back</span>

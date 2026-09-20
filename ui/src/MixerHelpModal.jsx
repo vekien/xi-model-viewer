@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { ResizeCorner } from './ResizeCorner.jsx';
+import { nextZ } from './zstack.js';
 import { createPortal } from 'react-dom';
 import { Button } from '@headlessui/react';
 import { KEEP_LANE, LANE_BY_ID } from '../js/mixer.js';
@@ -46,8 +48,12 @@ function Section({ icon, title, children }) {
  * It sits above the mixer's windows and the Data Struct windows, below the app's
  * own modals (5000), and the mixer's keys keep working while it is open.
  */
-export function MixerHelpModal({ open, onClose, zIndex = 4000 }) {
+export function MixerHelpModal({ open, onClose }) {
   const [pos, setPos] = useState(null);
+  // Its own slot on the shared window stack, so a click raises it above the
+  // timeline (which sits at 10000+); opening pulls it to the front too.
+  const [z, setZ] = useState(() => nextZ());
+  useEffect(() => { if (open) setZ(nextZ()); }, [open]);
   const panelRef = useRef(null);
   const dragState = useRef(null);
   const closeRef = useRef(onClose);
@@ -100,14 +106,15 @@ export function MixerHelpModal({ open, onClose, zIndex = 4000 }) {
   const endDrag = () => { dragState.current = null; };
 
   const style = pos
-    ? { left: pos.x, top: pos.y, transform: 'none', zIndex }
-    : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex };
+    ? { left: pos.x, top: pos.y, transform: 'none', zIndex: z }
+    : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: z };
 
   // A key pressed in here stays here: Space on the × closes the window rather
   // than playing the mix, and Delete never reaches the pills behind it.
   return createPortal(
     <div className="modal mixer-help-modal" ref={panelRef} style={style} role="dialog" aria-label="Ability Mixer help"
-      onKeyDown={(e) => e.stopPropagation()}>
+      onPointerDownCapture={() => setZ(nextZ())} onKeyDown={(e) => e.stopPropagation()}>
+      <ResizeCorner containerRef={panelRef} />
       <div
         className="modal-header"
         onPointerDown={startDrag}

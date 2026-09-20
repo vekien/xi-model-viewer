@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ResizeCorner } from './ResizeCorner.jsx';
 import { Button } from '@headlessui/react';
 import { decodeTextureRGBA } from '../js/renderer.js';
 import { Tooltip } from './Tooltip.jsx';
@@ -165,6 +166,7 @@ export function TextureModal({ tex, onClose, onFocus, zIndex = 210, initialPos =
 
   return (
     <div className="tex-modal" ref={panelRef} style={style} onPointerDown={onFocus}>
+      <ResizeCorner containerRef={panelRef} />
       <div
         className="modal-header"
         onPointerDown={startHeaderDrag}
