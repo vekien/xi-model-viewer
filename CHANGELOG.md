@@ -15,23 +15,24 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 [Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.6.1...v1.7.0)
 
 ### Ability Mixer
-- **Manage has three Local server switches**, kept per mix and off again after an import, rename or duplicate. **Database Update** points the local server's row named after the mix at its animation, or inserts one cloned from **Clone from** (a name or an id); a row the mix did not create is changed only after a one-off **Confirm #id 'name'** in Manage, which re-runs Check, or publishes again when a Publish stopped at it (Manage opens on it then, but not again each time the mixer view comes back). Confirm also shows for such a row that already has the animation when Client Menu Record is waiting on it: nothing on the server changes, and the record then goes at its id. **Client Menu Record** places the client's menu entry (the spell or command record and its name, **Menu name** or the mix name) at the same id, only ever over a blank retail row. **Lua Stub** writes the new row's server script into the server folder: what the spell or ability does, handed over to the donor's script, where the DAT is only how it looks. **Server id** picks a new row's id. A hint under the fields names the database and server folder xi-tools' .env points at, or links to Settings › Local Server when none is set; Check and Publish show each step in the plan, coloured by outcome, and the status bar says what happened (`xi dats build --apply-db / --menu-record / --lua-stub`, with `--clone-from`, `--server-id`, `--menu-name`, `--db-row`). An xi-tools without these options says it needs updating
-- **The publish folder is `projects\abilities\<slug>`** (was `projects\server\abilities\<slug>`), and it holds the mix it was built from, `<Name>.mix.json`. Check writes `check.<Name>.mix.json` beside it and never touches the published one. **Folder** tells published (placements.json), a Publish that stopped, and checked-but-never-published apart, and still finds the flat SQL older xi-tools left in `projects\server\abilities`
-- **Mix files are `<Name>.mix.json`.** Saved mixes, Export, and the scratch copy Play mix composes from use the new name; a `<Name>.recipe.json` still lists, opens, renames, duplicates, exports and deletes, and its next Save replaces it with a `.mix.json`. Import takes either
-- The Check button no longer hands its click event to the check as publish options
+- Manage: three Local server switches — **Database Update**, **Client Menu Record**, **Lua Stub** — kept per mix
+  - Database Update points or inserts the mix's animation row; rows the mix didn't create need a one-off Confirm
+  - Client Menu Record writes the menu entry at the same id, only over a blank retail row
+  - Lua Stub writes the server script
+- Publish folder is `projects\abilities\<slug>` (was `projects\server\abilities\<slug>`)
+- Mix files are `<Name>.mix.json`; `.recipe.json` still opens, and Save converts it
 
 ### Settings
-- **A Local Server tab.** The LandSandBoat server folder (`XI_SERVER_DIR`, with Browse) and the database (host, port, user, password with show / hide, database) are read from and saved to xi-tools' own `.env` — only the lines that changed; every other line and comment stays. Nothing is kept by the viewer or sent with other xi runs, and xi-tools never reads the server's `settings/network.lua`. **Test connection** tries what is typed, before Save, and changes nothing
-- **Weapon skills**: whether the server can carry custom weapon-skill animations (264–527), and why it can't until patched. **Get the C++ patch** writes the patch, the SQL and a README into xi-tools' `projects\patches\ws_animation_16bit` and opens that folder — it never touches the server checkout or the database; **Show the code** shows the patch and the SQL to copy
+- **Local Server** tab: LandSandBoat folder and database credentials, saved to xi-tools' `.env`
+- **Weapon skills**: C++ patch for custom WS animations (264–527), written to `projects\patches\ws_animation_16bit`
 
 ### Export
-- **Animation export has two layout checkboxes**, in File › Export and File › Batch Export alike. **Every animation as its own file** writes each track in the DAT as a separate file named after it (`idl0.gltf`, `wlk0.gltf`, `bow1.gltf`, …) in a folder of the DAT's own, instead of the one `--anim` clip; with FBX the lot is baked through a single Blender run. **Race \ category \ action folders** lays the output out as `hume_male\sword\fast_blade\` — named from the character list, with the client's motion tables as the fallback — instead of the game's ROM path; anything that is not a PC motion file (a monster, an NPC) goes under `other\`. They are xi-tools' new `--split-anim` and `--categories` flags, shown in the arguments box like any other, and the command preview and the "Exports to" line follow them
+- Animation export: **Every animation as its own file** (`--split-anim`) and **Race \ category \ action folders** (`--categories`)
 
-### Improvements to the UI
-- **A large pass over the interface.** The Ability Mixer now has Details / Timeline tabs in its title bar, dock-to-bottom and minimise buttons, a corner resize grip, lanes that collapse to a thin line, thinner blocks, a "Loading Assets" overlay while a mix composes, a compact Add Track by the lanes, and a playback-options popover (speed, loop, snap, randomise); its status shows in the app status bar and the locks/hits/links lane is now **Commands**.
-- **Consistent, resizable windows.** One shared stacking order — whichever window you click comes to the top, opened from the side menu or not — a resize corner on every modal and floating panel, a resizable left panel, the Generator opens compact and resizes, and one uniform header and padding across every panel and modal.
-- **Settings › Options › Docked UI** snaps the menu bar, the left panel and the status bars flush to the app edges.
-- Assorted spacing, alignment and colour fixes throughout.
+### UI
+- Ability Mixer: Details / Timeline tabs, dock and minimise, resize grip, collapse lanes, playback-options popover; locks/hits/links lane renamed **Commands**
+- Shared window stacking, resize corners on every panel, resizable left panel
+- Settings › Options › **Docked UI** snaps the menu bar, left panel and status bars to the edges
 
 ## [1.6.1] — 2026-09-13
 
@@ -40,98 +41,83 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 Hotfix for the 10 September 2026 retail update.
 
 ### Database
-- **Item tables from the 10 September 2026 retail update decode.** That update grew every item record from `0xC00` to `0x1400` bytes and widened the header, so a patched client's item tables came up empty. The record stride is now detected per file and the header offsets follow it, so a legacy install and a current retail one show the same rows; the icon and hex view read the block at the right stride, including for JSON baked by an older `xi mv database` (legacy by construction) and by the current one (which records the stride)
-- The new item table `ROM/387/14` / `ROM/387/13` (ids 30720–31743, added by the same update) is registered but kept out of the Database tree until it holds a real item — every slot is a placeholder today, and a legacy install has no such file. The DAT browser still recognises the two files
+- Item tables decode after the 10 Sep 2026 update (record stride `0xC00` → `0x1400`)
+- New item table `ROM/387/14` / `ROM/387/13` (ids 30720–31743) registered, hidden until it holds a real item
 
 ### DAT Browser
-- **Item tables are recognised.** A file the Database registry names is badged Items / Armor / Weapons and opens as an item table with its format in the label; any other file laid out as item records (either stride, `0xFF`-terminated) is badged Item table too instead of Unknown DAT
-- **String tables are badged Strings**: the d_msg tables, the `XISTRING` menu-string pools under `ROM/97`, and the monster ability name tables `ROM/27/79–80` (which share the zone dialog format and used to read as Dialog). The emote command table and the two small lookup tables at file ids 96–98 (`ROM/327/122`, `ROM/384/118–119`) are badged Data
+- Item tables recognised and badged Items / Armor / Weapons
+- String tables badged Strings; emote and lookup tables badged Data
+- File picker titled "Open a DAT file" (was "Select the xi executable")
 
 ### Lists
-- Synced from xi-tools: the **Colibri Scythe** (main-hand model 969, added by the same update) for all seven races
-
-### DAT Browser
-- **The file picker says what it opens.** The Browse button and File > Open DAT shared a native picker still titled "Select the xi executable" from when it did pick the xi executable, which read as the app demanding xi.exe. It is titled "Open a DAT file" now, and only one picker can be open at a time — a second request while one is up gets a cancel instead of a stacked dialog
+- Colibri Scythe (main-hand model 969) for all seven races
 
 ## [1.6.0] — 2026-09-12
 
 [Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.5.0...v1.6.0)
 
 ### Zones
-- **Region Culling is gone.** It drew only the objects the zone’s own visibility set lists for the region the camera stands in — the client’s occlusion, applied to a free camera. The region was resolved from the orbit target, which in fly mode is wherever the initial fit left it and never moves, so any zone whose centre sat inside one region’s box was cut down to that region from every camera position: Qufim Island lost 1,315 of its 1,756 objects and Beadeaux was one floating chunk. A viewer wants the whole zone, so the View item, the setting and the 0x1C visibility-set decode behind it are removed rather than repaired
-- **NPCs and monsters are framed on the pose you see.** Reset Camera and F measured the model in its rest pose and aimed at the rest-pose hips, which is fine for a standing character and wrong for a monster whose idle is nowhere near rest — the Sea Monk’s idle lifts its body two units above its rest box, so the camera aimed below it and the model left through the top of the frame. The frame is now measured at frame 0 of the clip on screen, and a model without a race skeleton is framed on its box centre rather than on whatever its rig calls joint 1
+- **Region Culling** removed — it hid most of the zone from a free camera
+- NPCs and monsters framed on the pose on screen, not rest pose
 
 ### DAT Browser
-- **A DAT with a skeleton opens as a model.** 23 model DATs that also carry zone placements — the Sunbreeze and Harvest Festival NPCs, Lair Reive, `ROM/146/71` — were classified as zones and opened as an empty stage
-- **Badges follow the downloaded lists**, not the copy baked into the build, and a DAT listed as an NPC is badged NPC even when an effects row names it — an NPC’s own VFX routines live in its model DAT, so some 400 effects rows point at NPC variants and `ROM/9/5` (an Orc) read as an Effect
-- **Raw hex view.** The Structure panel has a toggle at the right of its title bar that swaps the section tree for the file as a hex editor shows it — offset, sixteen bytes, ASCII — over the whole DAT, windowed so a 9 MB zone file scrolls without mapping its half a million rows
+- A DAT with a skeleton opens as a model (Sunbreeze / Harvest Festival NPCs were empty zones)
+- Badges follow downloaded lists; NPCs no longer mis-badged as Effects
+- **Raw hex view** in the Structure panel
 
 ### Settings
-- **DAT Lists › "Local lists only — don’t update at startup".** The startup check is content-addressed and the published copy always wins, so a list edited in the lists folder to check it before publishing was overwritten a second into every launch. The box skips the check and reads the folder as-is; "Check for list updates" still syncs when pressed, and the folder path and an open-folder button sit beside it
+- DAT Lists › **Local lists only — don't update at startup**
 
 ### Lists
-- The baked lists are synced from xi-tools: the Rabbit row that pointed at an Elvaan Bishop (`ROM/3/108`, a typo for `ROM/4/108`) and the "Phanauet Channel - 1" map that was an NPC model are gone, along with 170 effect rows that could never play — four-byte stubs, empty shells, zone files, and the four 2009 add-on categories whose effect index had been resolved as an absolute file id
+- Synced from xi-tools: Rabbit DAT typo, Phanauet Channel map, 170 unplayable effect rows
 
 ## [1.5.0] — 2026-09-11
 
 [Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.4.0...v1.5.0)
 
 ### First run
-- **A setup wizard greets a fresh install.** With no FFXI folder set, the app used to open straight into Settings behind an error banner. It now walks through four steps — the FFXI folder, an optional HD texture pack, XI Tools for exporting, and a final check — and only the first is required; the rest can be skipped and set later in Settings. The folder is checked as you type, the background installs of xi-tools and the DAT lists wait until the wizard is done so the two never write to the same place at once, and when it closes a pointer shows where the Assets menu is
-- Settings and About are floating windows now, like the other panels: no dimmed backdrop, so a click on the viewport moves the camera instead of closing them. × and Esc still close them. The game path in Settings is also checked live while you type, rather than only when you press Save
+- Setup wizard for a fresh install: FFXI folder (required), optional HD pack and XI Tools
+- Settings and About are floating windows; game path checked live as you type
 
 ### Models
-- **Effect-only NPCs render.** Home Points, telepoints, portals, lightbeams, vortexes and every elemental used to open as an empty stage — the viewer read the skeleton, the mesh and the idle clip, drew all three, and there was nothing to see. The mesh in those DATs is a decoy: one triangle about 3 mm across, painted with a 2×1 black texture, on a skeleton named `toum` (*toumei*, transparent). It is there so the client's actor system has something to place, click and pose. The whole visible object is `0x05` generators drawing `0x1F` ParticleMesh geometry, which nothing here parsed. It does now, and the 104 models built that way are marked **(Effect)** in the NPC list
-- **Effect layers composite additively**, which is what makes an aura an aura. FFXI authors a glow shell with a vertex colour ramping from white to black and relies on the generator's blend mode to make the black end vanish; a generator that declares no `0x1E` BlendFunc falls through to `Src_One_Add`. Drawn opaque — as any straightforward port of the mesh path would — the same geometry reads as a solid dark shell wrapped around the model. Layers that *do* declare a blend mode still get it: a Home Point's crystal is alpha-blended and the five shells around it are additive
-- **Effect layers move.** They turn and their textures scroll, on the same 60 Hz clock the effect engine runs at. None of that is in the DAT's animation clip — a Home Point's `idl0` is 99 frames of identity transforms posing an invisible triangle, which is why the Animation panel showed a clip that visibly did nothing. The motion is on each generator: a static placement rotation, a spin rate in radians per frame, and a per-frame UV scroll. A Home Point's crystal turns one way at ~54°/s (a full turn every 6.7 seconds) while its two ground rings turn the other way at ~12°/s, and every layer streams its texture. The spin is taken about the generator's own position rather than the model origin, so a layer placed off-centre rotates instead of orbiting
-- **The crossed planes inside the crystal are both there now.** Two generators can differ in nothing but their placement rotation — a Home Point's are one mesh at 30° and 150° — so keying the layer dedupe on mesh, position and scale silently drew one and dropped the other. Rotation is baked in and part of the key
-- Generator parsing walks the four opcode streams properly instead of byte-searching for a two-byte tag. The tag search was reading a scale that happened to match inside a float payload; the streams give the placement rotation, spin rate, UV scroll and blend mode from the opcodes that actually carry them
-- Only the layers the object shows **at rest** are drawn. An ambient entity splits its generators between an idle routine and a triggered one, and the `genFlags` autorun bit separates them exactly — every generator in a Home Point's `aper` routine sets it, none in the `bind` activation routine does. `0x21` sprite cards stay out too: each is the billboard for one emitted particle, so a static copy at the origin is a flat square through the middle of the model
+- **Effect-only NPCs render** — Home Points, telepoints, portals, elementals; 104 models marked **(Effect)**
+  - Additive compositing, spin, and UV scroll
+  - Generator opcodes parsed properly; only rest-state layers drawn
 
 ### Effects
-- **One effect plays, not every effect at once.** A `0x07` routine's command list is a program, not a list: `0x69`/`0x6A` bracket a block, `0x64`/`0x67` are an if/else over operands `0x6B` pushes, and `0x3D`/`0x3E` bracket a set the engine picks exactly ONE of at random. All three were walked straight through, so every branch ran together. Picking Dual Wield reached the shared damage dispatcher, whose `atpr` tests the weapon type against 0…23 in one if/else chain and whose `crtl` picks between two criticals — and fired all of it: **149 generators on a single swing**, a ball of every hit spark in the game, over `vatk` playing all seven attack grunts on top of each other. It is 13 generators and one grunt now, and the same fix takes the mob attack DATs from 153 to 13
-- The conditions read combat state the server sends — which weapon type landed, how hard, whether it critted — and a viewer with no target has none of it, so an undecidable condition takes the first branch: showing an effect beats showing nothing. That choice is then held: the chains are switches, so binding the register to the case taken leaves every later case in the chain honestly false, and one hit effect plays instead of twenty-four. A random-child set rolls once when the DAT is read, which is why an attack is sometimes silent — three of `vatk`'s seven options are the no-op the game uses to keep a swing quiet
-- Skipped branches no longer bank their delays, so taking case 1 of a 24-case chain stops inheriting the other 23 cases' waits
-- **A battle stance no longer plays a damage routine.** A weapon skill keeps its VFX under `main`, and every one of the 1,869 PC actions that has a `main` plays generators through it — so the "first routine with content" fallback only ever fired for the 430 that don't, which are motion packs. Theirs are event-keyed exactly like an NPC's: Dual Wield ships `out0`, `in 0`, `atk0`, `cnt0`, `atl0`, `atr0` … — the schedules the server picks between when a swing actually lands. The fallback grabbed one regardless, so standing in a stance played an attack-left hit burst over an idle character no matter which Motion was selected. 154 actions did this, including all 71 Battle stances. An overlay on the character now plays `main` or nothing, the same rule the NPC path already used; the Effects view keeps the full fallback chain
+- One effect plays, not every branch at once (if/else and random-child sets)
+- Battle stances no longer play a damage overlay
 
 ### Characters
-- **The motion you left playing is still there when you come back.** Opening the DAT Browser and clicking back onto Characters re-picked the motion as if the action had just been chosen, so a wave emote returned as `em00` — the first routine in the Emote pack — with the panel's own pick quietly discarded, until the next gear swap restored it out of nowhere. Returning to the view is not a pick: the clip or schedule that was on screen leads, and only falls back to the action's own routine when this action hasn't got it. Choosing an action still opens on that action
+- The motion you left playing is still there when you return to Characters
 
 ### Settings
-- **The Database Manager is a Settings tab now.** It was its own small window for what amounts to a folder, a status line and two buttons — it sits beside DAT Lists as **Settings › DAT Database**. It also says, in one line, what it is actually for: the Database page reads every table out of the game files until these are built, and building them once makes it open at once. The status is a plain sentence — *126 tables ready in English and Japanese, built 03/09/2026* — and the button reads Build or Rebuild to match. `File › Database Manager…` is gone
+- Database Manager is now **Settings › DAT Database**
 
 ## [1.4.0] — 2026-09-09
 
 [Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.3.0...v1.4.0)
 
 ### Export
-- **File › Export now has a Full Pose tab** for a character, beside Mesh and Animation. Mesh exports one DAT at a time — a character is nine of them, and the tab exports the lot as a single rigged GLB or FBX: race body, face, every armour slot, and the weapons. It appears only when a composed character is loaded, since a single DAT has nothing to assemble
-- **The pieces the game hides are actually removed.** FFXI gear is authored to overlap — the body keeps its bare wrists, its shins and a full head of hair, and the client drops whichever of those the worn set covers. Merging the DATs by hand leaves all of it sealed inside the armour, where it inflates the mesh, drags along textures nothing samples, and pokes straight through the moment anything is posed. The export runs the same occlusion test the client does, so a robed, full-helmed character comes out ~25% lighter and one texture shorter
-- **Weapons land in the hands.** A weapon is skinned to its own grip joint, which at bind sits at the skeleton root — exported as plain geometry, the sword lies on the floor. The main and off hands are re-parented onto the hand joints the way the client draws them. A stowed ranged weapon is left out entirely, as the game leaves it out; pick a ranged action and it is drawn into the bow hand instead
-- The pose matches what is on screen, upper body included. FFXI splits a clip by body region across the companion motion packs — `idl0` in the race DAT is the legs, `idl1` in the pack is the arms — so those go along too and every layer is merged. Without them a stowed shield ends up at the character's feet instead of on the back
-- **It exports the frame you are looking at.** The tab opens on whatever the viewport is playing, and its frame slider reads the same number the Animation panel does — so scrub to the pose you want, open Export, and that is what comes out. Contents switches between that single frame and **the whole animation**, which embeds every frame so the export plays in a DCC; with FBX the motion is baked in
-- That works for a weapon skill as readily as an idle, because what gets exported is the pose itself rather than a clip name. A schedule lays several clips on a timeline, blends each back out to an underlaid idle, merges the waist pack and puts the weapons in the hands — it has no single clip name, and asking xi to reproduce it from one would have lost the lot. The evaluated joints are written beside the model as `<name>.pose.json` and handed over, so what lands in the DCC is what was on screen, to the last decimal place. The file stays behind as a record of the exact pose
-- The generated command sits in a small scrollable box rather than a wall of wrapped text — the game paths alone ran to a dozen lines
-- Runs through the new `xi gear pose` in xi-tools, so the same export is available from the command line
+- File › Export: **Full Pose** tab — whole composed character as one rigged GLB/FBX
+  - Client occlusion applied (hidden body parts removed)
+  - Weapons in the hands; pose matches the viewport, upper body included
+  - Current frame or whole animation, via `xi gear pose`
 
 ### Characters
-- **The dagger weapon skills swing an actual dagger.** Wasp Sting, Viper Bite, Gust Slash, Cyclone and Dancing Edge all played out with the blade still on the hip, which looked like a missing weapon and was in fact the opposite — too much respect for the clip. Every PC upper-body clip keys all fourteen weapon mounts, and those five packs key the *off*-hand dagger mount onto its hand and park the main-hand one on the hip; honouring those keys left the main weapon stowed through the whole routine. The hand re-parent now wins outright whenever the character is engaged, the way the client applies it. The battle and attack packs are unaffected — they key the mount onto the hand themselves, so both roads led to the same spot
-- At rest the weapon stays sheathed. Idle, stand and the locomotion clips keep the grip joint on its real parent and let the clip's own keys carry it on the hip, so a sheathed weapon is still sheathed — the same rule that decides which idle underlays a stance now decides whether the weapons are drawn
+- Dagger weapon skills swing the dagger (hand re-parent wins when engaged)
+- Weapons stay sheathed at rest
 
 ### Camera
-- **Characters are framed on the body, not the feet.** The fit measured out from the DAT origin, which on a race skeleton sits on the floor between the feet — so a fresh load, and every switch of the Assets view, left the character hanging in the top half of the viewport with an empty floor under them. It now frames the hips, read in the rest pose so that gear and whatever clip is playing cannot drift it; two loads of the same character land identically
-- **F re-centres, Shift + F re-frames.** F on a character puts them back in the middle at the distance you are already at, which is what you want after orbiting away from them — it no longer throws away the zoom you set. Shift + F, and View › Reset Camera, still do the full fit. Both are listed in Help › Controls
+- Characters framed on the hips, not the feet
+- **F** re-centres (keeps zoom); **Shift + F** re-frames
 
 ### Console
-- The xi console now says how it is going at a glance: a blue band sweeps under the header while a command runs, then settles to solid green if it finished or red if it failed. It replaces the auto-close countdown bar rather than sitting next to it — when auto-close is on, that same green or red bar is what drains away as the dismissal timer, so one strip carries both. The sweep is dropped for anyone who has asked for reduced motion; the colour still tells the story
+- Progress band: blue while a command runs, green or red when it finishes
 
 ### Linux
-- **There are Linux packages now** — a `.deb` and an AppImage, on the same release as the Windows .exe. Releasing is still one dispatch of one workflow: it builds all three from the same commit, verifies the Linux ones, and publishes a single release carrying them and a `SHA256SUMS` over the lot, so a version cannot end up half-released. A **dry run** tickbox does everything except create the release, for rehearsing a version bump. Both embed the frontend, the baked lists and the viewport backgrounds exactly as the .exe does, so there is still nothing to install beside them. The .deb is the small one (~20 MB) because it leaves webkit2gtk and gtk3 to the distro, which covers Ubuntu 22.04 and Mint 21 onwards; the AppImage carries that stack itself, which is what lets it run on Arch and Manjaro and what makes it ~95 MB
-- Built on Ubuntu 22.04 against glibc 2.35, and the build now fails if that floor ever creeps upwards. glibc only promises compatibility forwards, so a package built on 24.04 does not merely warn on 22.04 or Mint 21 — it refuses to start, on a machine nobody building it is sitting at
-- The build does not stop at "it compiled". Every run installs each package the way a user would and launches it on a virtual display, in a container for Ubuntu 22.04, Ubuntu 24.04, Mint 21 and Mint 22, and uploads a screenshot of each. The .deb goes in through `apt`, so its declared dependencies have to genuinely resolve rather than being papered over by `dpkg -i`. The check waits for the app to create its data directory and then grades the screenshot, rather than settling for the process still being alive: the directory is written by an IPC command the React app calls on mount, and the screenshot has to have something in it, because JS runs quite happily behind a black screen
-- Manjaro gets the check that a container can honestly answer. The AppImage is unpacked and every library it and its bundled WebKit need is verified against what Arch supplies, which is what actually breaks an AppImage there. It is not launched: a container has no DRI device, WebKit cannot bring up EGL without one, and the window opens regardless — exactly the false pass the launch check refuses to give
-- The packaged app carries a proper menu entry and icons at the sizes a Linux desktop actually asks for, rather than one 256px image for every slot
-- Audio is the one thing that does not come across. The vgmstream baked into the .exe is a win32 build, so `.bgw`/`.spw` playback on Linux looks for a `vgmstream-cli` on `PATH` instead — everything else works without one
+- `.deb` and AppImage on the same release as the Windows .exe
+- Built on Ubuntu 22.04 (glibc 2.35); `.bgw`/`.spw` audio needs `vgmstream-cli` on PATH
 
 ## [1.3.0] — 2026-09-08
 
