@@ -150,8 +150,8 @@ export function serializeRecipe(recipe, { layout = false } = {}) {
       }
       if (Array.isArray(rest.blend)) out.blend = rest.blend.map(frames);
       if (rest.loops != null) out.loops = frames(rest.loops);
-      // The keep lane packs itself, so its events carry no row.
-      if (layout && kind !== 'keep' && rowOfEvent({ row }) != null) out.row = row;
+      // A pill's row is layout, kept in the working copy so a drag holds; compose ignores it.
+      if (layout && rowOfEvent({ row }) != null) out.row = row;
       return out;
     });
   // Everything else the recipe holds goes out as it came in and where it sat
@@ -172,7 +172,8 @@ export function serializeRecipe(recipe, { layout = false } = {}) {
     if (list.length) out[key] = list; else delete out[key];
   }
   // Texture replacements go as data: URIs only: xi resolves a path against the recipe
-  // file's own folder, and compose and publish read a copy of it under _work.
+  // file's own folder, and compose and Play mix read a copy of it under _work, Check
+  // and Publish one in the mix's publish folder — none of them beside a PNG.
   const textures = recipeTextures(recipe);
   if (textures.length) out.textures = textures; else delete out.textures;
   return JSON.stringify(out, null, 2);
@@ -197,7 +198,7 @@ const pickKeys = (obj, keys) => Object.fromEntries(Object.entries(obj).filter(([
  * Read a mix from the text of a .json file someone handed over. Pure: nothing is
  * written, so a file that is refused changes nothing.
  *
- *   stem   the file's name without `.recipe.json` / `.json`, used when the recipe names itself badly
+ *   stem   the file's name without `.mix.json` / `.recipe.json` / `.json`, used when the recipe names itself badly
  *   taken  the mix names already saved; a clash gets `_2`, `_3`… and nothing is overwritten
  *          (compared without case, as the file system does)
  *
@@ -1967,14 +1968,55 @@ export async function updateCategories(xiPath, edit) {
   return out;
 }
 
+// ── Mix files ───────────────────────────────────────────────────────────────────
+//
+// A saved mix is `<Name>.mix.json` in the mixer folder. Before that it was
+// `<Name>.recipe.json`, and those are still listed, opened, renamed, duplicated,
+// exported and deleted; Save writes the `.mix.json` and only then removes the old
+// file of that mix. Where both exist for one name the `.mix.json` is the mix.
+
+/** A saved mix's file suffix. */
+export const MIX_SUFFIX = '.mix.json';
+/** What a saved mix was called before (still read everywhere a mix is read). */
+export const LEGACY_MIX_SUFFIX = '.recipe.json';
+
+/** `LOVE.mix.json` → { name: 'LOVE', legacy: false }; `LOVE.recipe.json` → legacy; anything else null. */
+export function mixFileName(file) {
+  const m = /^(.+?)(\.mix\.json|\.recipe\.json)$/i.exec(String(file ?? ''));
+  if (!m || !m[1]) return null;
+  return { name: m[1], legacy: m[2].toLowerCase() === LEGACY_MIX_SUFFIX };
+}
+
 /**
- * Where compose and publish read the mix from: a scratch copy under `_work`,
- * not the mixer folder itself. The saved list is that folder's `*.recipe.json`
+ * The saved mixes in a folder listing (file names), A–Z: one entry per mix name,
+ * compared without case as the disk does. `file` is the one to read — the
+ * `.mix.json` when both exist — and `legacyFile` the `.recipe.json` it shadows (null
+ * when there is none), which Save, rename and delete clear away with it.
+ */
+export function mixFilesIn(files) {
+  const byKey = new Map();
+  for (const file of files ?? []) {
+    const f = mixFileName(file);
+    if (!f) continue;
+    const key = f.name.toLowerCase();
+    const cur = byKey.get(key) ?? { name: f.name, file: null, legacyFile: null };
+    if (f.legacy) cur.legacyFile = file;
+    else { cur.file = file; cur.name = f.name; }
+    byKey.set(key, cur);
+  }
+  return [...byKey.values()]
+    .map((m) => (m.file ? m : { name: m.name, file: m.legacyFile, legacyFile: null }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Where compose and Play mix read the mix from: a scratch copy under `_work`,
+ * not the mixer folder itself. The saved list is that folder's `*.mix.json`
  * files, so writing the working copy beside them made every preview — a
  * Randomise, a pick — look saved. Save is the only thing that writes there.
  */
 function workRecipePath(xiPath, name) {
-  return `${mixerDir(xiPath)}\\_work\\${name}.recipe.json`;
+  return `${mixerDir(xiPath)}\\_work\\${name}${MIX_SUFFIX}`;
 }
 
 export function composedDatName(recipe, xiRace) {
@@ -1999,6 +2041,43 @@ export async function composeForPreview(recipe, xiRace, xiPath, env, onLine, kin
 }
 
 /**
+ * The mix a real Publish hands `dats prepare`:
+ * <xi-tools>\projects\abilities\<slug>\<Name>.mix.json, in the folder that publish fills,
+ * so the folder always holds the mix its DATs were built from.
+ */
+export function publishRecipePath(xiPath, name) {
+  return `${publishFolder(xiPath, name)}\\${name}${MIX_SUFFIX}`;
+}
+
+/**
+ * The mix a Check (a dry run) hands `dats prepare`: check.<Name>.mix.json beside the
+ * published one, which a Check never touches. The first Check makes the folder.
+ */
+export function checkRecipePath(xiPath, name) {
+  return `${publishFolder(xiPath, name)}\\check.${name}${MIX_SUFFIX}`;
+}
+
+/**
+ * The build options for Manage's three server switches, in the order xi-tools
+ * documents them (xi dats build --help). Only a switch that is on sends its
+ * fields: Clone from feeds all three, Server id the row and its menu record,
+ * Menu name the menu record, and the one-off confirmation (--db-row) only
+ * Database Update. Credentials never go on the command line: xi reads them
+ * from its own .env (Settings › Local Server).
+ */
+export function serverBuildArgs({ db = false, menu = false, lua = false, cloneFrom = null, menuName = null, serverId = null, dbRow = null } = {}) {
+  const args = [];
+  if (db) args.push('--apply-db');
+  if (db && dbRow != null) args.push('--db-row', String(dbRow));
+  if ((db || menu || lua) && cloneFrom) args.push('--clone-from', String(cloneFrom));
+  if ((db || menu) && serverId != null) args.push('--server-id', String(serverId));
+  if (menu) args.push('--menu-record');
+  if (menu && menuName) args.push('--menu-name', String(menuName));
+  if (lua) args.push('--lua-stub');
+  return args;
+}
+
+/**
  * Publish through `xi dats`: the recipe becomes an `ability` action in
  * projects/<name>.json (`dats prepare … --type ability --replace`, which keeps
  * a slot an earlier build took), then `dats build <name>` — with --dry-run for
@@ -2006,10 +2085,14 @@ export async function composeForPreview(recipe, xiRace, xiPath, env, onLine, kin
  * --pivot to build into the pivot folder (FFXI_PIVOT_DIR) instead of the game
  * folder. Same manifest the wizard and the CLI use, so the ability is rebuilt,
  * listed and undone with the rest of the project. `animationFrom` is where an
- * automatic number starts (the first free one at or above it).
+ * automatic number starts (the first free one at or above it). `db`, `menu` and
+ * `lua` are Manage's server switches (serverBuildArgs), on Check and Publish alike.
+ * The mix handed to prepare is written into the mix's publish folder: <Name>.mix.json
+ * on a Publish, check.<Name>.mix.json on a Check.
  */
-export async function publishRecipe(recipe, { dryRun, animation = null, animationFrom = null, kind = null, subdir = null, force = false, pivot = false }, xiPath, env, onLine) {
-  const recipePath = workRecipePath(xiPath, recipe.name);
+export async function publishRecipe(recipe, { dryRun, animation = null, animationFrom = null, kind = null, subdir = null, force = false, pivot = false,
+  db = false, menu = false, lua = false, cloneFrom = null, menuName = null, serverId = null, dbRow = null }, xiPath, env, onLine) {
+  const recipePath = dryRun ? checkRecipePath(xiPath, recipe.name) : publishRecipePath(xiPath, recipe.name);
   await backend.writeTextFile(recipePath, serializeRecipe(recipe));
   const lines = [];
   const say = (line) => { lines.push(line); onLine?.(line); };
@@ -2028,8 +2111,107 @@ export async function publishRecipe(recipe, { dryRun, animation = null, animatio
   if (dryRun) build.push('--dry-run');
   if (force) build.push('--force');
   if (pivot) build.push('--pivot');
+  build.push(...serverBuildArgs({ db, menu, lua, cloneFrom, menuName, serverId, dbRow }));
   const ok = await run(build);
   return { ok, text: lines.join('\n') };
+}
+
+/** Where `xi dats build` leaves each ability's publish folder, under the xi-tools folder
+ *  (xi runs there, and the build writes it relative to where it runs). */
+const ABILITIES_REL = 'projects\\abilities';
+/** Where xi-tools 1.9 and earlier left an ability's server SQL, flat (no publish folders). */
+const LEGACY_SQL_REL = 'projects\\server\\abilities';
+
+/** <xi-tools>\projects\abilities. */
+export function abilitiesDir(xiPath) {
+  return `${String(xiPath).replace(/[\\/]+$/, '')}\\${ABILITIES_REL}`;
+}
+
+/** <xi-tools>\projects\server\abilities: the old home of the flat SQL. */
+const legacySqlDir = (xiPath) => `${String(xiPath).replace(/[\\/]+$/, '')}\\${LEGACY_SQL_REL}`;
+
+/**
+ * A mix's publish folder relative to xi-tools: projects\abilities\<slug>. A real
+ * build leaves there what packaging needs — the server SQL, a copy of every DAT it
+ * placed at that DAT's ROM path, and placements.json — beside the mix it was built
+ * from (<Name>.mix.json), the one a Check last ran (check.<Name>.mix.json) and, when
+ * Database Update ran, what it ran (<slug>_<n>.applied.sql). `<slug>` is the action's
+ * own (`ability.<slug>`, the one publishRecipe builds), so it follows xi_dats._slug.
+ */
+export function publishFolderRel(name) {
+  return `${ABILITIES_REL}\\${slug(name)}`;
+}
+
+/** A mix's publish folder: <xi-tools>\projects\abilities\<slug>. */
+export function publishFolder(xiPath, name) {
+  return `${String(xiPath).replace(/[\\/]+$/, '')}\\${publishFolderRel(name)}`;
+}
+
+/** A folder's entries, or null when it is not there. */
+async function entriesOrNull(dir) {
+  try {
+    return await backend.listDir(dir);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What a publish folder's files say about the mix, and the one to select: placements.json
+ * (published), else the server SQL <slug>_<n>.sql, else <Name>.mix.json (a Publish that
+ * stopped before it placed anything), else check.<Name>.mix.json (checked, never
+ * published), else nothing. Names compare without case, as the disk does.
+ * Returns `{ pick, state }`, state being published | unfinished | checked | empty.
+ */
+export function publishFolderPick(files, name) {
+  const names = [...(files ?? [])].sort();
+  const lc = (n) => String(n).toLowerCase();
+  const sql = new RegExp(`^${slug(name)}_\\d+\\.sql$`, 'i');
+  const record = names.find((n) => lc(n) === 'placements.json');
+  if (record) return { pick: record, state: 'published' };
+  const mix = names.find((n) => lc(n) === lc(`${name}${MIX_SUFFIX}`));
+  const own = names.find((n) => sql.test(n)) ?? mix;
+  if (own) return { pick: own, state: 'unfinished' };
+  const check = names.find((n) => lc(n) === lc(`check.${name}${MIX_SUFFIX}`));
+  if (check) return { pick: check, state: 'checked' };
+  return { pick: null, state: 'empty' };
+}
+
+/**
+ * Manage › Folder: a mix's publish folder in the file manager. The shell's one
+ * primitive shows a path selected in its parent, so this selects a file inside the
+ * folder (publishFolderPick) and the window opens on the folder itself. "Published"
+ * means placements.json is there: a Check makes the folder too (its
+ * check.<Name>.mix.json), and a Publish that stopped leaves just its mix.
+ * A mix with no folder yet opens its flat SQL in projects\server\abilities when
+ * xi-tools 1.9 or earlier left one there, else projects\abilities.
+ * Returns `{ published, state, dir, pick, flatSql }` — `state` as publishFolderPick,
+ * or `none` without a folder; `dir` is the folder that opened, null when not even
+ * the abilities folder exists yet.
+ */
+export async function revealPublishFolder(xiPath, name) {
+  const own = publishFolder(xiPath, name);
+  const ownEntries = await entriesOrNull(own);
+  if (ownEntries) {
+    const { pick, state } = publishFolderPick(ownEntries.filter((e) => !e.isDir).map((e) => e.name), name);
+    // An empty folder has nothing to select: selecting the folder opens its parent on it.
+    await backend.revealPath(pick ? `${own}\\${pick}` : own);
+    return { published: state === 'published', state, dir: pick ? own : abilitiesDir(xiPath), pick, flatSql: null };
+  }
+  const legacy = legacySqlDir(xiPath);
+  const flat = new RegExp(`^${slug(name)}_\\d+\\.sql$`, 'i');
+  const flatSql = (await entriesOrNull(legacy))?.filter((e) => !e.isDir).map((e) => e.name).sort().find((n) => flat.test(n)) ?? null;
+  if (flatSql) {
+    await backend.revealPath(`${legacy}\\${flatSql}`);
+    return { published: false, state: 'none', dir: legacy, pick: flatSql, flatSql };
+  }
+  const dir = abilitiesDir(xiPath);
+  const entries = await entriesOrNull(dir);
+  if (!entries) return { published: false, state: 'none', dir: null, pick: null, flatSql: null };
+  const first = entries.map((e) => e.name).sort()[0];
+  await backend.revealPath(first ? `${dir}\\${first}` : dir);
+  // An empty abilities folder has nothing to select: selecting the folder opens its parent on it.
+  return { published: false, state: 'none', dir: first ? dir : dir.replace(/\\[^\\]+$/, ''), pick: null, flatSql: null };
 }
 
 /**
@@ -2048,12 +2230,16 @@ export async function listWsSlots({ pivot = false } = {}, xiPath, env) {
  * and animation number it settled on, and one row per DAT — file id, race,
  * role (body / companion_a / companion_b for a weapon skill), the ROM10 path
  * it goes to, and what the file id points at today ("occupied by": a retail
- * placeholder for a free extended slot, or another skill's DAT).
+ * placeholder for a free extended slot, or another skill's DAT). `db`, `menu` and
+ * `lua` are the server steps' lines (parseStepLine), null when that step did not run.
  */
 export function parsePublishPlan(text) {
-  const out = { kind: null, animation: null, files: [], server: null, errors: [], warnings: [] };
+  const out = { kind: null, animation: null, files: [], server: null, errors: [], warnings: [], db: null, menu: null, lua: null };
   for (const raw of String(text ?? '').split(/\r?\n/)) {
     const line = raw.trim();
+    // The server steps (Manage's three switches): `db: …`, `menu: …`, `lua: …`.
+    const step = parseStepLine(line);
+    if (step) { out[step.step] = step.value; continue; }
     let m = line.match(/\(ability\):\s+(ja|spell|ws) animation (\d+)/);
     if (m) { out.kind = m[1]; out.animation = Number(m[2]); continue; }
     // "(occupied by X)" is a real collision; "(retail placeholder X, free)" is
@@ -2080,6 +2266,146 @@ export function parsePublishPlan(text) {
   }
   return out;
 }
+
+// ── Server step lines (dats build --apply-db / --menu-record / --lua-stub) ───────
+//
+// Each ability block of a build ends with one line per step that ran, indented
+// like its `server:` line:
+//   db: [would ]update spell_list #144 'fire' animation 144 -> 1100 (xidb@127.0.0.1:3306)
+//   db: needs-confirm spell_list #144 'fire' animation 144 -> 1100 — this mix did not create…
+//   menu: place job ability 511 'Tiger\'s Fury' at command 1023 like job ability 35 …
+//   lua: write scripts/actions/spells/black/love.lua (calls black/fire #144 at run time)
+//   db: skip|refused|error — <reason, all the rest>
+// A name inside '…' has `\` and `'` escaped; the reason separator is " — " (U+2014).
+
+const STEP_RX = /^(db|menu|lua):\s+(?:(would)\s+)?(update|insert|unchanged|needs-confirm|place|write|rewrite|kept|skip|refused|error)\b\s*(.*)$/;
+/** A quoted name on a step line; `\'` and `\\` are its escapes. */
+export const QNAME = String.raw`'((?:[^'\\]|\\.)*)'`;
+/** A quoted name's text as it reads. */
+export const unquote = (s) => (s == null ? null : s.replace(/\\(.)/g, '$1'));
+const DB_ROW_RX = new RegExp(String.raw`^(\w+) #(\d+) ` + QNAME);   // table, id, name
+const DB_FROMTO_RX = /animation (\d+) -> (\d+)/;
+const DB_TO_RX = /animation (\d+)/;
+const DB_LIKE_RX = new RegExp(String.raw`like #(\d+) ` + QNAME);
+const DB_SERVER_RX = /\(([^()\s]+@[^()\s]+)\)\s*$/;
+const MENU_RX = new RegExp(String.raw`(spell|job ability|weapon skill) (\d+) ` + QNAME);
+const LUA_PATH_RX = /(scripts\/actions\/\S+\.lua)/;
+const WHOLE_REASON = new Set(['skip', 'refused', 'error']);
+const num = (v) => (v == null ? null : Number(v));
+
+/** The reason on a step line: all the rest for skip / refused / error, else what follows the first " — ". */
+function stepReason(op, rest) {
+  if (WHOLE_REASON.has(op)) return rest.replace(/^—\s*/, '') || null;
+  const i = rest.indexOf(' — ');
+  return i >= 0 ? rest.slice(i + 3) : null;
+}
+
+/** One trimmed build line → `{ step: 'db'|'menu'|'lua', value }`, or null when it is no step line. */
+export function parseStepLine(line) {
+  const m = STEP_RX.exec(String(line ?? '').trim());
+  if (!m) return null;
+  const [, step, would, op, rest] = m;
+  const reason = stepReason(op, rest);
+  const base = { op, would: !!would, text: rest, reason };
+  // A skip / refused / error line is its reason: a name quoted in it is never the row.
+  const whole = WHOLE_REASON.has(op);
+  if (step === 'db') {
+    const row = whole ? null : DB_ROW_RX.exec(rest);
+    const ft = whole ? null : DB_FROMTO_RX.exec(rest);
+    const to = whole || ft ? null : DB_TO_RX.exec(rest);
+    const like = whole ? null : DB_LIKE_RX.exec(rest);
+    const server = whole ? null : DB_SERVER_RX.exec(rest);
+    return { step, value: {
+      ...base,
+      table: row?.[1] ?? null, id: num(row?.[2]), name: unquote(row?.[3] ?? null),
+      from: num(ft?.[1]), to: num(ft?.[2] ?? to?.[1]),
+      like: num(like?.[1]), likeName: unquote(like?.[2] ?? null),
+      server: server?.[1] ?? null,
+    } };
+  }
+  if (step === 'menu') {
+    const mm = whole ? null : MENU_RX.exec(rest);
+    return { step, value: {
+      ...base,
+      kind: mm?.[1] ?? null, id: num(mm?.[2]), name: unquote(mm?.[3] ?? null),
+      provisional: !whole && / · provisional\b/.test(rest),
+    } };
+  }
+  const p = whole ? null : LUA_PATH_RX.exec(rest);
+  return { step, value: { ...base, path: p?.[1] ?? null } };
+}
+
+/** A step's text as it reads: each quoted name unescaped, anything else (a Windows path in a reason) as it is. */
+export function showStepText(text) {
+  return String(text ?? '').replace(new RegExp(QNAME, 'g'), (_, n) => `'${unquote(n)}'`);
+}
+
+/** A step op's colour: ok | warn | err. */
+export function stepTone(op) {
+  if (op === 'refused' || op === 'error') return 'err';
+  if (op === 'needs-confirm' || op === 'skip' || op === 'kept') return 'warn';
+  return 'ok';
+}
+
+/**
+ * The row Manage's Confirm is for, from a plan's steps: `{ id, name, unchanged }`, or null.
+ * - `db: needs-confirm`: a row this mix didn't make would change (`unchanged: false`).
+ * - `db: unchanged` on such a row while the menu step skipped with `row #<id> was not made by
+ *   this mix`: the row already has the animation, so nothing on the server changes, but its
+ *   menu record only goes at its id once the row is this mix's (`unchanged: true`).
+ */
+export function dbConfirmOf(plan) {
+  const db = plan?.db;
+  if (!db || !Number.isInteger(db.id)) return null;
+  if (db.op === 'needs-confirm') return { id: db.id, name: db.name ?? null, unchanged: false };
+  const menu = plan.menu;
+  if (db.op === 'unchanged' && menu?.op === 'skip') {
+    const m = /^row #(\d+) was not made by this mix$/.exec(String(menu.reason ?? '').trim());
+    if (m && Number(m[1]) === db.id) return { id: db.id, name: db.name ?? null, unchanged: true };
+  }
+  return null;
+}
+
+/**
+ * The status-bar words for a plan's server steps, one part each (joined with ' · '
+ * after the base text). A Check's plan says `would`; a Publish's what it did.
+ */
+export function publishStatusParts(plan) {
+  const parts = [];
+  const db = plan?.db;
+  if (db) {
+    const row = `${db.table ?? '?'} #${db.id ?? '?'}`;
+    if (db.op === 'update' || db.op === 'insert') {
+      parts.push(db.would ? `database: would ${db.op} ${row}` : `database: ${{ update: 'updated', insert: 'inserted' }[db.op]} ${row} — restart the map server`);
+    } else if (db.op === 'unchanged') {
+      parts.push(`database: unchanged ${row}`);
+    } else if (db.op === 'needs-confirm') {
+      parts.push(`database not updated — #${db.id ?? '?'} '${db.name ?? '?'}' wasn't made by this mix: Manage › Confirm`);
+    } else {
+      parts.push(`database not updated: ${showStepText(db.reason ?? db.op)}`);
+    }
+  }
+  const menu = plan?.menu;
+  if (menu) {
+    if (menu.op === 'place') parts.push(`menu: ${menu.would ? 'would place ' : ''}${menu.kind ?? '?'} ${menu.id ?? '?'}${menu.provisional ? ' (provisional)' : ''}`);
+    else if (menu.op === 'unchanged') parts.push(`menu: unchanged ${menu.kind ?? '?'} ${menu.id ?? '?'}`);
+    else if (dbConfirmOf(plan)?.unchanged) parts.push(`menu not placed — #${db.id} '${db.name ?? '?'}' wasn't made by this mix: Manage › Confirm`);
+    else parts.push(`menu not placed: ${showStepText(menu.reason ?? menu.op)}`);
+  }
+  const lua = plan?.lua;
+  if (lua) {
+    if (lua.op === 'write' || lua.op === 'rewrite') parts.push(`lua: ${lua.would ? `would ${lua.op} ` : ''}${lua.path ?? '?'}`);
+    else if (lua.op === 'unchanged') parts.push(`lua: unchanged ${lua.path ?? ''}`.trimEnd());
+    // kept: the stub is there, edited by hand, and was left as it is.
+    else if (lua.op === 'kept') parts.push(`lua: kept ${lua.path ?? '?'}${lua.reason ? ` — ${showStepText(lua.reason)}` : ''}`);
+    else parts.push(`no Lua stub: ${showStepText(lua.reason ?? lua.op)}`);
+  }
+  return parts;
+}
+
+/** The build refused a server option this xi-tools does not have yet. */
+export const OLD_XI_SERVER_OPTION_RX = /No such option:?\s+['"]?--(apply-db|db-row|clone-from|menu-record|menu-name|lua-stub|server-id)\b/;
+export const OLD_XI_SERVER_TEXT = 'This xi-tools is too old for Database Update / Client Menu Record / Lua Stub — update it in Settings › XI Tools.';
 
 /** xi_dats._slug: lowercase, runs of anything but a-z0-9 → `_`. */
 const slug = (v) => String(v).replace(/\\/g, '/').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'action';

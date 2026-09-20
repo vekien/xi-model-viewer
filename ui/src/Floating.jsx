@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { nextZ } from './zstack.js';
 
 // A right-rail panel as a floating window. The host is fixed, the panel inside it
 // is forced in-flow (app.css: .float-host > .panel), and the panel's own header —
@@ -14,14 +15,23 @@ const writePos = (id, pos) => { try { localStorage.setItem(key(id), JSON.stringi
 const HEADER = '.details-header, .panel-title, .plc-header, .wx-header, .cseq-header';
 const CONTROL = 'button, input, select, textarea, a, [role="button"], [role="tab"], label, .combo';
 
-let topZ = 25;
-
 export function Floating({ id, open = true, width = 320, defaultPos = { right: 68, top: 60 }, children }) {
   const [pos, setPos] = useState(() => readPos(id));
-  const [z, setZ] = useState(() => ++topZ);
+  // The shared window stack (zstack.js), not a private counter: a click here can
+  // now raise the panel above the mixer, the sequencer and the modal windows.
+  const [z, setZ] = useState(() => nextZ());
   const hostRef = useRef(null);
   const drag = useRef(null);
   useEffect(() => { if (pos) writePos(id, pos); }, [id, pos]);
+
+  // Opened from the side rail (open goes false → true): come to the front, above
+  // the mixer, the sequencer and any panel already up. On first mount, and for an
+  // always-open panel, wasOpen already matches, so nothing is raised for free.
+  const wasOpen = useRef(open);
+  useEffect(() => {
+    if (open && !wasOpen.current) setZ(nextZ());
+    wasOpen.current = open;
+  }, [open]);
 
   // Keep a remembered spot reachable after a resolution change.
   useEffect(() => {
@@ -38,7 +48,7 @@ export function Floating({ id, open = true, width = 320, defaultPos = { right: 6
   // capture on the host: the canvas and the modals capture and swallow pointer
   // events of their own, and a stolen capture left a drag dead after one step.
   const onPointerDown = (e) => {
-    setZ(++topZ);
+    setZ(nextZ());
     if (e.button !== 0) return;
     const el = hostRef.current;
     // The grab area is the header (between its controls) and the panel's own

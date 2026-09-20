@@ -1120,6 +1120,7 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
 #details .details-header,
 #skeleton .details-header,
 #effect-actors .details-header,
+#mixer-slots .details-header,
 .mixer-panel .details-header,
 .mixer-parts-panel .details-header {
   display: flex;
@@ -1136,6 +1137,7 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
 #details .details-header > .icon,
 #skeleton .details-header > .icon,
 #effect-actors .details-header > .icon,
+#mixer-slots .details-header > .icon,
 .mixer-panel .details-header > .icon,
 .mixer-parts-panel .details-header > .icon {
   color: var(--accent);
@@ -3739,7 +3741,16 @@ body.eyedrop-picking { user-select: none; }
 }
 .cseq-actor-x { width: 22px; height: 22px; min-height: 22px; flex: 0 0 auto; }
 .cseq-actor-x .icon { font-size: 14px; }
-.cseq-tl-spacer { height: 22px; flex: 0 0 auto; }
+.cseq-tl-spacer { height: 22px; flex: 0 0 auto; display: flex; align-items: center; padding: 0 4px; }
+/* The mini Add Track in the label column's top cell: a thin twin of the toolbar's,
+   opening the same three track types, sat right by the lanes. */
+.combo-input.mseq-add-track-mini {
+  width: auto; min-height: 0; height: 18px;
+  padding: 0 3px 0 7px; gap: 1px;
+  font: 700 9px/1 var(--font-ui); letter-spacing: 0.04em; text-transform: uppercase;
+  border-radius: 5px; color: var(--gray-200);
+}
+.combo-input.mseq-add-track-mini .combo-chevron { font-size: 13px; width: 13px; height: 13px; }
 .cseq-tl-label {
   height: 25px; flex: 0 0 auto;
   display: flex; align-items: center;
@@ -6889,11 +6900,29 @@ button.mgen-tex-thumb:disabled { cursor: default; }
   display: flex; flex-direction: column;
   overflow: hidden;
   box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
 }
+/* Dragging or clicking the window chrome (title bar, tabs, labels) no longer
+   selects its text; the mix's own fields stay selectable so you can edit them. */
+#mixer-seq input, #mixer-seq textarea { user-select: text; -webkit-user-select: text; }
+/* Minimised: only the title bar shows. The body and the resize grips are hidden,
+   and the window shrinks to the header (the JS drops any remembered height). */
+#mixer-seq.is-collapsed .cseq-body,
+#mixer-seq.is-collapsed .cseq-resize,
+#mixer-seq.is-collapsed .mseq-resize-v { display: none; }
+/* Zoom now rides the bottom bar, just right of the frame readout. */
+.cseq-bar .mseq-zoom-bar { margin-left: 4px; }
 /* Only the track area scrolls: the toolbar rows above it and the transport bar
    below stay put, and the window's height still fits the content up to its cap. */
 #mixer-seq .cseq-body { overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
 #mixer-seq .mseq-tl { flex: 1 1 auto; min-height: 0; overflow: hidden auto; }
+/* The Details / Timeline tab strip sits flush at the top of the body (the body's
+   own padding and gap space it); keep the segmented control's compact width. */
+.mseq-tabs { margin: 0; }
+/* The Details tab (Publish/Manage settings + the mix's Type, name and buttons)
+   is the tab that fills and scrolls, the way the track does on the Timeline tab. */
+#mixer-seq .mseq-tab-body { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 9px; }
 /* The horizontal scroller inside it must be as tall as the track, not the
    window: sized to the window it clipped the lower lanes while the label
    column beside it ran to the end, so the two scrolled apart. */
@@ -7113,15 +7142,34 @@ button.mgen-tex-thumb:disabled { cursor: default; }
 .mseq-manage .mixer-field { width: auto; }
 .mseq-manage .mseq-manage-force,
 .mseq-manage .mseq-manage-pivot { height: 26px; }
-/* Overwrite and pivot: a line each under the fields, as a form's options read. */
-.mseq-manage-opts { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+/* Overwrite and pivot: one line under the fields, side by side. */
+.mseq-manage-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 22px; }
+/* Local server: its three switches on a line of their own, led by a label in the fields' style,
+   then Clone from / Server id / Menu name, the server they go to, and what a switch needs. */
+.mseq-manage-server { margin-top: 4px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.mseq-manage-server .cseq-switch { height: 26px; }
+.mseq-manage-group { font: 500 10px/1.2 var(--font-ui); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-right: -8px; }
+.mseq-server-fields .mseq-field-wide { min-width: 190px; }
+.mseq-server-fields input.mixer-num { font-family: var(--font-ui); }
+.mseq-server-hint { overflow-wrap: anywhere; }
+/* A link inside a Manage note: Settings › Local Server. */
+.mseq-link { background: none; border: none; box-shadow: none; min-height: 0; height: auto; padding: 0; font: inherit; color: var(--accent); cursor: pointer; }
+.mseq-link:hover { background: none; text-decoration: underline; }
+/* The server steps of a Check or Publish, coloured by what happened (mixer.js stepTone). */
+.mseq-plan-step { color: var(--text); overflow-wrap: anywhere; }
+.mseq-plan-step b { font-family: var(--font-ui); font-weight: 600; margin-right: 4px; }
+.mseq-plan-step.ok b { color: #6dca96; }
+.mseq-plan-step.warn { color: #ffd078; }
+.mseq-plan-step.err { color: #f0a8a2; }
+.mseq-plan-confirm { display: flex; }
+.mseq-plan-confirm .cseq-btn { height: 26px; min-height: 26px; }
 
 /* The mixer's Help window (MixerHelpModal): the About window's floating frame and
    boxes (.modal, .help-*), a guide in two balanced columns that scrolls under a
    header that stays put. The (?) that opens it shows it is open. */
 .mseq-help-btn.on { color: var(--accent); }
 .modal.mixer-help-modal {
-  width: min(820px, calc(100vw - 40px));
+  width: min(1120px, calc(100vw - 40px));
   max-height: calc(100vh - 40px);
   display: flex; flex-direction: column;
   overflow: hidden;
@@ -7131,8 +7179,8 @@ button.mgen-tex-thumb:disabled { cursor: default; }
 .mhelp-body::-webkit-scrollbar { width: 6px; }
 .mhelp-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); border-radius: 3px; }
 .mhelp-lead { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--gray-300); }
-/* Cards flow down one column and on into the next; a narrow window gets one column. */
-.mhelp-cols { column-width: 330px; column-count: 2; column-gap: 12px; }
+/* Cards flow down one column and on into the next; a narrow window drops to fewer columns. */
+.mhelp-cols { column-width: 320px; column-count: 3; column-gap: 12px; }
 .mhelp-cols > .mhelp-section { break-inside: avoid; margin-bottom: 12px; }
 .mhelp-title { display: flex; align-items: center; gap: 6px; }
 .mhelp-title .icon { font-size: 15px; }
@@ -7169,6 +7217,13 @@ kbd.mhelp-kbd { display: inline-block; padding: 0 5px; font-size: 11px; line-hei
 .mseq-slots-table tr.is-picked td { background: rgba(109, 202, 150, 0.12); }
 .mseq-slots-table td b { font-weight: 600; }
 .mseq-slots-next { margin-left: 6px; padding: 0 5px; border-radius: 3px; font: 500 9.5px/14px var(--font-ui); text-transform: uppercase; letter-spacing: 0.05em; color: #6dca96; border: 1px solid rgba(109, 202, 150, 0.4); }
+/* The weapon-skill slots window (a Floating host): header, game/pivot toggle, then a table
+   that fills the rest and scrolls. Overrides the inline table's fixed max-height. */
+#mixer-slots { width: 100%; max-height: min(70vh, 620px); display: flex; flex-direction: column; }
+#mixer-slots .mseq-slots-seg { flex: 0 0 auto; margin: 8px 0 0; }
+#mixer-slots .mseq-slots-body { flex: 1 1 auto; min-height: 0; display: flex; }
+#mixer-slots .mseq-slots { flex: 1 1 auto; min-height: 0; margin-top: 4px; }
+#mixer-slots .mseq-slots-scroll { flex: 1 1 auto; max-height: none; }
 /* Locks · hits · links: the lane label's warning badge (the rows badge in amber) and its
    + lit while the strip under the track is open; the strip's pickers, as Manage's. */
 .mseq-keep-warn { display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto; min-height: 0; padding: 1px 5px; font: 600 9px/1 var(--font-ui); color: #ffd078; background: rgba(255, 208, 120, 0.1); border: 1px solid rgba(255, 208, 120, 0.45); border-radius: 8px; box-shadow: none; cursor: pointer; }
@@ -7203,3 +7258,47 @@ kbd.mhelp-kbd { display: inline-block; padding: 0 5px; font-size: 11px; line-hei
 .band-num { display: flex; flex-direction: column; gap: 2px; font-size: 10.5px; color: var(--muted); }
 .band-num input { width: 88px; }
 .band-row .band-range { font: 500 11px/1 var(--font-mono); color: var(--muted); padding-bottom: 8px; }
+/* Settings › Local Server: the folder and the database side by side, Weapon skills under both. */
+.settings-server .settings-span { grid-column: 1 / -1; }
+.settings-server .form-row > input[type='text'] { width: 100%; box-sizing: border-box; }
+.settings-server button[disabled] { opacity: 0.45; cursor: default; }
+.settings-server input:disabled { opacity: 0.55; }
+/* Verdicts here are sentences with paths in them: wrap rather than clip. */
+.settings-server .xi-status-msg { white-space: normal; overflow-wrap: anywhere; }
+.settings-server .settings-path-status { margin-top: 0; }
+/* Host | Port and User | Password share a line. */
+.local-server-pair { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 10px; }
+.local-server-pair.even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.local-server-pair input[type='text'] { width: 100%; box-sizing: border-box; }
+/* The password field wears the theme's text-input look (theme.css styles type=text only), with its show / hide beside it. */
+.local-server-pw input { flex: 1 1 auto; min-width: 0; }
+.settings-server input[type='password'] {
+  font: 400 12px/1.4 var(--font-mono);
+  color: var(--text);
+  background: linear-gradient(180deg, var(--gray-900), var(--gray-850));
+  border: 1px solid #000;
+  border-radius: 7px;
+  min-height: 30px;
+  padding: 5px 9px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+  outline: none;
+}
+.local-server-pw .icon-btn { flex: 0 0 auto; }
+/* Weapon skills: what Get the C++ patch printed, and Show the code's patch + SQL (read-only). */
+.ws-widen-lines { max-height: 160px; }
+.ws-widen-code-wrap { display: flex; flex-direction: column; gap: 6px; }
+.ws-widen-code-note { flex: 1 1 auto; min-width: 0; }
+.ws-widen-code {
+  margin: 0;
+  max-height: 280px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--ring);
+  color: var(--gray-200);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre;
+  user-select: text;
+}

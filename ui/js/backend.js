@@ -356,7 +356,7 @@ export const backend = {
    * Native "save as" dialog (Tauri only). Returns the chosen path or null; it
    * writes nothing — hand the path to `writeTextFile` / `writeFile`.
    * `initial` is the folder to start in, `opts` = `{ title, exts, fileName }` —
-   * e.g. `{ title: 'Export mix', exts: ['json'], fileName: 'fire.recipe.json' }`.
+   * e.g. `{ title: 'Export mix', exts: ['json'], fileName: 'fire.mix.json' }`.
    */
   async saveFileDialog(initial, opts) {
     return pickOnce('save_file', initial, opts);

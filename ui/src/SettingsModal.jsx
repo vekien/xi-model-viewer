@@ -6,6 +6,11 @@ import { GAME_CHECK, checkGamePath } from '../js/gameCheck.js';
 import { formatProgressDetail } from '../js/toolsBoot.js';
 import { loadNotes, notesFilePath, revealNotesFile } from '../js/notes.js';
 import { ANIM_BANDS_DEFAULT, STOCK_ANIM_RANGE, animBandRange } from '../js/mixer.js';
+import {
+  LOCAL_SERVER_DEFAULT, WS_WHY, connectionLine, localServerChanges, localServerEnv, localServerErrorText,
+  readLocalServer, sameServerDir, serverCheck, serverFolderLine, wsCodeText, wsInstallReveal, wsInstallSummary,
+  wsRevealTarget, wsStateLine, wsWiden,
+} from '../js/localServer.js';
 import { Combo } from './Combo.jsx';
 import { Tooltip } from './Tooltip.jsx';
 
@@ -43,8 +48,11 @@ const TOOLS_MODE_ITEMS = [
  * Cancel, × and Esc are the ways out.
  *
  * Tabs: General (paths + options) · XI Tools (install / update / local path) ·
- * DAT Lists (the name lists that ship with the build) · DAT Database (the
- * prebuilt tables the Database page reads).
+ * DAT Lists (the name lists that ship with the build) · Local Server (the
+ * LandSandBoat checkout and its database, for the Ability Mixer's Manage ›
+ * Database Update / Client Menu Record / Lua Stub and the weapon-skill C++ patch;
+ * read from and saved to xi-tools' own .env, nothing kept here) · DAT Database
+ * (the prebuilt tables the Database page reads).
  *
  * `initialTab` is how the rest of the app sends someone straight to the tab
  * that fixes their problem — Export with no xi-tools opens on 'xitools'.
@@ -79,6 +87,19 @@ export function SettingsModal({
   const [listsBusy, setListsBusy] = useState(false);
   const [listsMsg, setListsMsg] = useState('');
   const [listsErr, setListsErr] = useState('');
+  // Local Server: xi-tools' .env as the tab read it (srvBase), the fields as edited (srv),
+  // and the xi runs the tab makes. Nothing of it is kept by the app: Save writes the
+  // changed fields into that .env (App.saveSettings, localServer.js writeLocalServer).
+  const [srvLoad, setSrvLoad] = useState(null);   // null | { busy, forPath } | { error, forPath } | { path, exists, forPath }
+  const [srv, setSrv] = useState(LOCAL_SERVER_DEFAULT);
+  const [srvBase, setSrvBase] = useState(LOCAL_SERVER_DEFAULT);
+  const [srvShowPw, setSrvShowPw] = useState(false);
+  const [srvCheck, setSrvCheck] = useState(null); // null | { busy, db } | { error, tested } | xi.server-check.v1 + { tested }
+  const [wsRun, setWsRun] = useState(null);       // null | { busy } | { error } | xi.server-ws-widen.v1 + { revealError }
+  const [wsCode, setWsCode] = useState(null);     // null | { busy } | { error } | the --print result
+  const [srvCopied, setSrvCopied] = useState(''); // which Copy last worked: 'code' | 'build'
+  const srvReadSeq = useRef(0);
+  const srvCheckSeq = useRef(0);
   const panelRef = useRef(null);
   const dragState = useRef(null);
   const setupGen = useRef(0);
@@ -263,6 +284,17 @@ export function SettingsModal({
     setListsBusy(false);
     setListsMsg('');
     setListsErr('');
+    // Local Server re-reads xi-tools' .env every time Settings opens on it.
+    srvReadSeq.current += 1;
+    srvCheckSeq.current += 1;
+    setSrvLoad(null);
+    setSrv(LOCAL_SERVER_DEFAULT);
+    setSrvBase(LOCAL_SERVER_DEFAULT);
+    setSrvShowPw(false);
+    setSrvCheck(null);
+    setWsRun(null);
+    setWsCode(null);
+    setSrvCopied('');
     refreshLists();
     loadNotes()
       .then(() => setNotesPath(notesFilePath() || ''))
@@ -319,6 +351,45 @@ export function SettingsModal({
       .catch(() => { if (alive) { setDbManifest(null); setDbState('none'); } });
     return () => { alive = false; };
   }, [open, tab, db?.dir, db?.refreshTick, db?.updating]);
+
+  /**
+   * Local Server: `xi server check --json` with these field values as env vars for that
+   * one run (non-blank only; they beat xi-tools' .env, which xi reads for the rest).
+   * `db` false makes no connection — what the tab runs on its own when it opens, for
+   * the folder and weapon-skill lines; Test connection is the one that connects.
+   */
+  const runSrvCheck = useCallback(async (xiPath, values, dbToo) => {
+    const seq = ++srvCheckSeq.current;
+    setSrvCheck({ busy: true, db: dbToo });
+    try {
+      const res = await serverCheck(xiPath, localServerEnv(values), { db: dbToo, binary: true });
+      if (seq === srvCheckSeq.current) setSrvCheck({ ...res, tested: dbToo });
+    } catch (e) {
+      if (seq === srvCheckSeq.current) setSrvCheck({ error: localServerErrorText(e), tested: dbToo });
+    }
+  }, []);
+
+  // Local Server: read xi-tools' .env when the tab is first shown in this session (and
+  // again if the xi-tools folder changes before anything was edited here), then check
+  // the folder and weapon skills without connecting to anything.
+  const srvXiPath = (draft?.xiPath || tools?.toolsDir || '').trim();
+  const srvDirty = Object.keys(localServerChanges(srv, srvBase)).length > 0;
+  useEffect(() => {
+    if (!open || tab !== 'server' || !srvXiPath) return;
+    if (srvLoad?.forPath === srvXiPath) return;
+    if (srvLoad?.forPath && srvDirty) return;   // edits made: keep them
+    const seq = ++srvReadSeq.current;
+    setSrvLoad({ busy: true, forPath: srvXiPath });
+    readLocalServer(srvXiPath).then((r) => {
+      if (seq !== srvReadSeq.current) return;
+      setSrv(r.values);
+      setSrvBase(r.values);
+      setSrvLoad({ path: r.path, exists: r.exists, forPath: srvXiPath });
+      runSrvCheck(srvXiPath, r.values, false);
+    }).catch((e) => {
+      if (seq === srvReadSeq.current) setSrvLoad({ error: String(e?.message ?? e), forPath: srvXiPath });
+    });
+  }, [open, tab, srvXiPath, srvLoad, srvDirty, runSrvCheck]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -396,6 +467,81 @@ export function SettingsModal({
     const r = animBandRange(kind, bandsDraft);
     return r ? `${r[0]}–${r[1]}` : '—';
   };
+
+  // Local Server: the fields, as read from xi-tools' .env and edited here.
+  const srvReady = !!srvLoad?.path && srvLoad.forPath === srvXiPath;
+  const setSrvField = (patch) => setSrv((s) => ({ ...s, ...patch }));
+  const browseServerDir = async () => {
+    const picked = await backend.pickFolder(srv.dir || null);
+    if (picked) setSrvField({ dir: picked });
+  };
+  // A field cleared here is left out of a test run, so the run still sees xi-tools' .env
+  // value for it until Save removes that line.
+  const srvClearedNames = Object.keys(srv).filter((k) => !String(srv[k]).trim() && String(srvBase[k] ?? '').trim());
+  const testConnection = () => { if (srvXiPath && srvReady) runSrvCheck(srvXiPath, srv, true); };
+  /** Get the C++ patch: xi writes the patch, the SQL and a README into its own folder; Explorer opens on the patch. */
+  const getWsPatch = async () => {
+    if (!srvXiPath || !srvReady) return;
+    setWsRun({ busy: true });
+    try {
+      const res = await wsWiden(srvXiPath, localServerEnv(srv));
+      const target = wsRevealTarget(res);
+      let revealError = null;
+      if (target) {
+        try { await backend.revealPath(target); } catch (e) { revealError = String(e?.message ?? e); }
+      }
+      setWsRun({ ...res, revealError });
+    } catch (e) {
+      setWsRun({ error: localServerErrorText(e) });
+    }
+  };
+  /** Apply to server: place the patch in modules\catseyexi, widen xi_map's source in place and the DB
+   *  column (ws-widen --install --apply-db), then open the patch's folder and re-check. */
+  const installWs = async () => {
+    if (!srvXiPath || !srvReady) return;
+    setWsRun({ busy: true, install: true });
+    try {
+      const res = await wsWiden(srvXiPath, localServerEnv(srv), { install: true });
+      const target = wsInstallReveal(res);
+      let revealError = null;
+      if (target) {
+        try { await backend.revealPath(target); } catch (e) { revealError = String(e?.message ?? e); }
+      }
+      setWsRun({ ...res, install: true, revealError });
+      runSrvCheck(srvXiPath, srv, srvCheck?.tested ?? false);   // refresh the state line
+    } catch (e) {
+      setWsRun({ error: localServerErrorText(e), install: true });
+    }
+  };
+  /** Show the code: the patch and the SQL, read-only (ws-widen --print writes nothing). A second click hides it. */
+  const toggleWsCode = async () => {
+    if (wsCode && !wsCode.busy) { setWsCode(null); return; }
+    if (!srvXiPath || !srvReady) return;
+    setWsCode({ busy: true });
+    try {
+      setWsCode(await wsWiden(srvXiPath, localServerEnv(srv), { print: true }));
+    } catch (e) {
+      setWsCode({ error: localServerErrorText(e) });
+    }
+  };
+  const copyText = (text, which) => {
+    navigator.clipboard?.writeText(text).then(() => setSrvCopied(which), () => setSrvCopied(''));
+  };
+  const srvChecked = srvCheck && !srvCheck.busy && !srvCheck.error ? srvCheck : null;
+  // The folder line is about the folder that check ran with, so it goes once the field changes.
+  // xi reports it as Python's Path spells it (\ for /, no trailing separator), so the two
+  // are compared as folders, not as text.
+  const folderLine = srv.dir.trim() && sameServerDir(srvChecked?.serverDir, srv.dir)
+    ? serverFolderLine(srvChecked) : null;
+  const connLine = srvCheck?.tested
+    ? (srvCheck.error ? { tone: 'err', text: srvCheck.error } : connectionLine(srvCheck))
+    : null;
+  // A failed Test connection already says why under Database; the weapon-skill line only
+  // repeats a failure of the tab's own (no-connection) check.
+  const wsLine = srvCheck?.busy ? null
+    : srvCheck?.error ? (srvCheck.tested ? null : { tone: 'err', text: srvCheck.error })
+      : wsStateLine(srvChecked?.weaponSkills);
+  const wsCodeShown = wsCode && !wsCode.busy && !wsCode.error ? wsCodeText(wsCode) : '';
 
   const doInstallOrUpdate = async () => {
     setToolsBusy(true);
@@ -573,6 +719,16 @@ export function SettingsModal({
         >
           <span className="icon">database</span>
           DAT Lists
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className={`settings-tab${tab === 'server' ? ' on' : ''}`}
+          aria-selected={tab === 'server'}
+          onClick={() => setTab('server')}
+        >
+          <span className="icon">dns</span>
+          Local Server
         </button>
         {db && (
           <button
@@ -1265,6 +1421,190 @@ export function SettingsModal({
           </div>
         )}
 
+        {tab === 'server' && (
+          <div className="settings-cols settings-server">
+            {!srvXiPath && (
+              <div className="form-error settings-local-err settings-span" role="alert">
+                <span className="icon">info</span>
+                <span>Set up xi-tools first (the XI Tools tab): these settings are kept in its .env.</span>
+              </div>
+            )}
+            {srvLoad?.error && (
+              <div className="form-error settings-local-err settings-span" role="alert">
+                <span className="icon">error</span>
+                <span>{`Couldn't read xi-tools' .env: ${srvLoad.error}`}</span>
+              </div>
+            )}
+
+            <section className="settings-panel">
+              <div className="settings-panel-title">Server folder</div>
+              <div className="settings-panel-body">
+                <div className="form-row">
+                  <label className="form-label" htmlFor="local-server-dir">LandSandBoat checkout</label>
+                  <div className="form-inline">
+                    <input
+                      id="local-server-dir"
+                      type="text"
+                      value={srv.dir}
+                      spellCheck={false}
+                      autoComplete="off"
+                      placeholder={srvLoad?.busy ? 'Reading…' : 'not set'}
+                      disabled={!srvReady}
+                      onChange={(e) => setSrvField({ dir: e.target.value })}
+                    />
+                    <Button disabled={!srvReady} onClick={browseServerDir}>
+                      <span className="icon">folder_open</span>
+                      Browse
+                    </Button>
+                  </div>
+                  {folderLine && <StatusLine className="settings-path-status" tone={folderLine.tone} text={folderLine.text} />}
+                  <div className="form-hint">
+                    <span className="mono">XI_SERVER_DIR</span> — your LandSandBoat server checkout, the folder
+                    holding <span className="mono">scripts</span> and <span className="mono">src</span>. The Ability
+                    Mixer&rsquo;s Lua Stub writes a new spell, ability or weapon skill&rsquo;s script into
+                    its <span className="mono">scripts\actions</span>; Weapon skills below reads its C++.
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="settings-panel">
+              <div className="settings-panel-title">Database</div>
+              <div className="settings-panel-body">
+                <div className="local-server-pair">
+                  <div className="form-row">
+                    <label className="form-label" htmlFor="local-server-host">Host</label>
+                    <input id="local-server-host" type="text" value={srv.host} spellCheck={false} autoComplete="off"
+                      placeholder="not set" disabled={!srvReady} onChange={(e) => setSrvField({ host: e.target.value })} />
+                  </div>
+                  <div className="form-row">
+                    <label className="form-label" htmlFor="local-server-port">Port</label>
+                    <input id="local-server-port" type="text" inputMode="numeric" value={srv.port} spellCheck={false} autoComplete="off"
+                      placeholder="not set" disabled={!srvReady} onChange={(e) => setSrvField({ port: e.target.value.replace(/[^0-9]/g, '') })} />
+                  </div>
+                </div>
+                <div className="local-server-pair even">
+                  <div className="form-row">
+                    <label className="form-label" htmlFor="local-server-user">User</label>
+                    <input id="local-server-user" type="text" value={srv.user} spellCheck={false} autoComplete="off"
+                      placeholder="not set" disabled={!srvReady} onChange={(e) => setSrvField({ user: e.target.value })} />
+                  </div>
+                  <div className="form-row">
+                    <label className="form-label" htmlFor="local-server-password">Password</label>
+                    <div className="form-inline local-server-pw">
+                      <input id="local-server-password" type={srvShowPw ? 'text' : 'password'} value={srv.password}
+                        spellCheck={false} autoComplete="off" placeholder="not set" disabled={!srvReady}
+                        onChange={(e) => setSrvField({ password: e.target.value })} />
+                      <Tooltip content={srvShowPw ? 'Hide the password' : 'Show the password'}>
+                        <Button className="icon-btn" aria-label={srvShowPw ? 'Hide the password' : 'Show the password'}
+                          onClick={() => setSrvShowPw((v) => !v)}>
+                          <span className="icon">{srvShowPw ? 'visibility_off' : 'visibility'}</span>
+                        </Button>
+                      </Tooltip>
+                    </div>
+                  </div>
+                </div>
+                <div className="form-row">
+                  <label className="form-label" htmlFor="local-server-db">Database</label>
+                  <input id="local-server-db" type="text" value={srv.database} spellCheck={false} autoComplete="off"
+                    placeholder="not set" disabled={!srvReady} onChange={(e) => setSrvField({ database: e.target.value })} />
+                </div>
+                <div className="form-inline tools-actions">
+                  <Tooltip content="Connect with what is typed here, before Save (xi server check --json): read-only, nothing is changed">
+                    <Button className="active" disabled={!srvReady || !!srvCheck?.busy} onClick={testConnection}>
+                      <span className={`icon${srvCheck?.busy && srvCheck.db ? ' spin' : ''}`}>{srvCheck?.busy && srvCheck.db ? 'progress_activity' : 'lan'}</span>
+                      Test connection
+                    </Button>
+                  </Tooltip>
+                </div>
+                {srvCheck?.busy && srvCheck.db && <StatusLine busy text="Connecting…" />}
+                {connLine && !srvCheck?.busy && (
+                  <StatusLine className="settings-path-status" tone={connLine.tone}
+                    text={srvClearedNames.length
+                      ? `${connLine.text} (cleared fields were tested with xi-tools' .env values until you Save)`
+                      : connLine.text} />
+                )}
+                <div className="form-hint">
+                  Saved to xi-tools&rsquo; .env (<span className="mono">{srvLoad?.path ?? (srvXiPath ? `${srvXiPath}\\.env` : '<xi-tools>\\.env')}</span>).
+                  xi-tools never reads the server&rsquo;s settings/network.lua. Stored unencrypted on this PC.
+                </div>
+              </div>
+            </section>
+
+            <section className="settings-panel settings-span">
+              <div className="settings-panel-title">Weapon skills</div>
+              <div className="settings-panel-body">
+                {/* Buttons first. Apply to server does the whole local job; the rest are read-only. */}
+                <div className="form-inline tools-actions">
+                  <Tooltip content="Place the patch in modules\catseyexi, widen xi_map's source and the database column. Then rebuild xi_map and restart it.">
+                    <Button className="active" disabled={!srvReady || !!wsRun?.busy} onClick={installWs}>
+                      <span className={`icon${wsRun?.busy && wsRun.install ? ' spin' : ''}`}>{wsRun?.busy && wsRun.install ? 'progress_activity' : 'bolt'}</span>
+                      Apply to server
+                    </Button>
+                  </Tooltip>
+                  <Tooltip content="Just write the patch, SQL and README into xi-tools and open the folder — change nothing on the server.">
+                    <Button disabled={!srvReady || !!wsRun?.busy} onClick={getWsPatch}>
+                      <span className={`icon${wsRun?.busy && !wsRun.install ? ' spin' : ''}`}>{wsRun?.busy && !wsRun.install ? 'progress_activity' : 'download'}</span>
+                      Get the patch
+                    </Button>
+                  </Tooltip>
+                  <Button disabled={!srvReady || !!wsCode?.busy} onClick={toggleWsCode}>
+                    <span className="icon">code</span>
+                    {wsCode && !wsCode.busy ? 'Hide the code' : 'Show the code'}
+                  </Button>
+                </div>
+                {srvCheck?.busy && !srvCheck.db && <StatusLine busy text="Checking…" />}
+                {wsLine && (
+                  <StatusLine className="settings-path-status" tone={wsLine.tone}
+                    text={wsLine.command ? `${wsLine.text} ${wsLine.command}` : wsLine.text}>
+                    {wsLine.command && (
+                      <div className="xi-status-actions">
+                        <Button className="xi-action" onClick={() => copyText(wsLine.command, 'build')}>
+                          <span className="icon">content_copy</span>
+                          {srvCopied === 'build' ? 'Copied' : 'Copy'}
+                        </Button>
+                      </div>
+                    )}
+                  </StatusLine>
+                )}
+                <div className="form-hint">{WS_WHY}</div>
+                {wsRun && !wsRun.busy && (() => {
+                  const summ = wsRun.install
+                    ? wsInstallSummary(wsRun)
+                    : { tone: wsRun.error || !wsRun.ok ? 'err' : 'ok',
+                        text: wsRun.error || (!wsRun.ok ? 'No patch from this folder — see below.'
+                          : `${wsRun.patch?.action === 'already' ? 'Already there' : 'Written'} · ${wsRun.outDir ?? ''}`) };
+                  return (
+                    <>
+                      <StatusLine className="settings-path-status" tone={summ.tone} text={summ.text} />
+                      {wsRun.lines?.length > 0 && <pre className="xi-status-detail mono ws-widen-lines">{wsRun.lines.join('\n')}</pre>}
+                      {wsRun.revealError && <div className="form-hint">{`Couldn't open the folder: ${wsRun.revealError}`}</div>}
+                    </>
+                  );
+                })()}
+                {wsCode?.busy && <StatusLine busy text="Reading…" />}
+                {wsCode?.error && <StatusLine className="settings-path-status" tone="err" text={wsCode.error} />}
+                {wsCodeShown && (
+                  <div className="ws-widen-code-wrap">
+                    <div className="form-inline">
+                      <span className="form-hint ws-widen-code-note">
+                        {wsCode.patch?.text
+                          ? 'The patch (stock to 16-bit), then the SQL. Nothing was written.'
+                          : 'Set the Server folder to see the exact patch. These are the four lines it changes, then the SQL.'}
+                      </span>
+                      <Button onClick={() => copyText(wsCodeShown, 'code')}>
+                        <span className="icon">content_copy</span>
+                        {srvCopied === 'code' ? 'Copied' : 'Copy'}
+                      </Button>
+                    </div>
+                    <pre className="ws-widen-code mono">{wsCodeShown}</pre>
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+        )}
+
         {tab === 'database' && db && (
           <div className="settings-db">
             <section className="settings-panel">
@@ -1335,11 +1675,28 @@ export function SettingsModal({
           ...draft,
           // Prefer the active tools dir when the field is empty
           xiPath: (draft.xiPath || tools?.toolsDir || '').trim(),
+          // Local Server: only when a field changed; App.saveSettings checks it and writes the
+          // changed keys into xi-tools' .env. It never becomes part of the app's settings.
+          ...(srvDirty && srvLoad?.path ? { localServer: { values: srv, base: srvBase } } : {}),
         })}
         >
           Save
         </Button>
       </div>
+    </div>
+  );
+}
+
+const TONE_ICON = { ok: 'check_circle', warn: 'warning', err: 'error', neutral: 'info' };
+
+/** One verdict line in the house badge (.xi-status): ok / warn / err / neutral, or busy with a spinner. */
+function StatusLine({ tone = 'neutral', text, busy = false, className = '', children = null }) {
+  const cls = busy ? ' busy' : (tone && tone !== 'neutral' ? ` ${tone}` : '');
+  return (
+    <div className={`xi-status${cls}${className ? ` ${className}` : ''}`}>
+      <span className={`icon${busy ? ' spin' : ''}`}>{busy ? 'progress_activity' : (TONE_ICON[tone] ?? 'info')}</span>
+      <span className="xi-status-msg">{text}</span>
+      {children}
     </div>
   );
 }

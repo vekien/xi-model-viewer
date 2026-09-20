@@ -340,6 +340,8 @@ export function CameraSequencer({
   /** Actor editor › Add to Camera Sequence request: { id, nonce }; acked with onAddActorDone. */
   addActor = null,
   onAddActorDone,
+  // Global window stacking: zIndex the app hands it, and a click anywhere raises it.
+  zIndex = 28, onFocus = null,
 }) {
   // The panel unmounts when it is closed, so the working document is kept in
   // storage rather than in component state alone: closing it to reach a control
@@ -1328,6 +1330,7 @@ export function CameraSequencer({
   const tlHeight = TL_BASE_H + extraH;
   const style = {
     width,
+    zIndex,
     height: extraH ? Math.min(PANEL_H + extraH, Math.max(window.innerHeight - 70, PANEL_H)) : PANEL_H,
     ...(pos ? { left: pos.x, top: pos.y, right: 'auto' } : null),
   };
@@ -1490,7 +1493,7 @@ export function CameraSequencer({
   };
 
   return (
-    <div id="camseq" className="panel" ref={panelRef} style={style}>
+    <div id="camseq" className="panel" ref={panelRef} style={style} onPointerDownCapture={onFocus ?? undefined}>
       <div
         className="cseq-header"
         onPointerDown={startDrag}

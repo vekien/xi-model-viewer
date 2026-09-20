@@ -4,13 +4,17 @@ import { Tooltip } from './Tooltip.jsx';
 import { Combo } from './Combo.jsx';
 import { CategoryInput } from './CategoryInput.jsx';
 import { MixerHelpModal } from './MixerHelpModal.jsx';
-import { KEEP_LANE, KEEP_PRESETS, LANES, LANE_BY_ID, MAX_ROW, STOCK_ANIM_RANGE, animBandRange, assignRows, clipBlend, hasTrack, isChantPill, isGeneratorOp, isLinkOp, keepDoes, keepLabel, kindOf, opName, pillEnd, recipeLength, retailKeepSet, rowOfEvent, settleRows, stageOf, trackLabel } from '../js/mixer.js';
+import { KEEP_LANE, KEEP_PRESETS, LANES, LANE_BY_ID, MAX_ROW, STOCK_ANIM_RANGE, animBandRange, assignRows, clipBlend, dbConfirmOf, hasTrack, isChantPill, isGeneratorOp, isLinkOp, keepDoes, keepLabel, kindOf, opName, pillEnd, publishFolderRel, recipeLength, retailKeepSet, rowOfEvent, settleRows, showStepText, stageOf, stepTone, trackLabel } from '../js/mixer.js';
+import { LOCAL_SERVER_TOO_OLD, describeServer } from '../js/localServer.js';
 
 /** Drag type prefix shared with MixerList; the lane kind follows it. */
 export const DRAG_TYPE = 'application/x-mixer-entry+';
 
 const MIX_TYPES = [{ id: 'ws', label: 'WS' }, { id: 'ja', label: 'Ability' }, { id: 'spell', label: 'Spell' }];
 const KIND_LABEL = { ws: 'Weapon Skill', ja: 'Job Ability', spell: 'Spell' };
+// The donor an insert clones when the server has no row with the mix's name (xi_db_apply
+// DEFAULT_DONOR). Shown so the user knows what a new spell/ability/WS starts life as.
+const DEFAULT_DONOR_LABEL = { spell: 'Cure', ja: 'Berserk', ws: 'Fast Blade' };
 /** A job ability or spell references base motion (`ja:`/`spell:`); anything else — a
  *  weapon skill, an emote, a race's own motion — is baked per race and is WS only. */
 const motionOkForKind = (spec, kind) => kind === 'ws' || /^(ja|spell):\d+/.test(String(spec ?? ''));
@@ -62,19 +66,6 @@ function rulerTicks(totalFrames, fps, zoom = 1) {
 const soundIdOf = (ev) => ev.sound ?? null;
 const isSoundEvent = (ev) => ev.kind === 'sound' || ev.from === 'sound';
 
-/** The keep lane's packing: overlapping blocks go into sub-rows, first fit, in start order. */
-function stackRows(evs, endOf) {
-  const rows = [];      // last end per row
-  const rowOf = new Map();
-  for (const ev of [...evs].sort((a, b) => a.start - b.start)) {
-    let r = rows.findIndex((end) => end <= ev.start);
-    if (r < 0) { r = rows.length; rows.push(0); }
-    rows[r] = endOf(ev);
-    rowOf.set(ev._id, r);
-  }
-  return { rowOf, count: Math.max(1, rows.length) };
-}
-
 /** Peak envelope as one path of vertical bars, one per bin, drawn in a bins×20 box. */
 function wavePath(peaks) {
   let d = '';
@@ -106,51 +97,6 @@ function holdTip(h) {
   return `${what} holds this routine ${h.ticks} ticks (${(h.ticks / FPS).toFixed(2)} s), until ${h.ref} has run.${release} Everything after it, on every track, plays ${h.ticks} ticks later in game than its frame here${more}; the stage plays it so, and the red cursor waits on f${h.at} meanwhile.`;
 }
 
-/**
- * Manage › Slots: the weapon-skill numbers Publish can hand out and what holds each
- * (`xi ability slots`). `#` is the number's place in its bank — 0–255 across the plugin
- * band. The row marked "next" is the one an automatic number would take from `from`;
- * a click on a free row asks for that number outright.
- */
-function SlotTable({ slots, from = '', animation = '', onPick }) {
-  if (slots.loading) return <div className="mono-small mseq-slots-note">Reading the weapon-skill slots…</div>;
-  if (slots.error) return <pre className="mono-small mseq-plan-err">{slots.error}</pre>;
-  const rows = slots.slots ?? [];
-  const start = from === '' || from == null ? 0 : Number(from);
-  const next = animation === '' || animation == null ? rows.find((r) => r.free && r.animation >= start)?.animation : null;
-  const free = rows.filter((r) => r.free).length;
-  return (
-    <div className="mseq-slots">
-      <div className="mono-small mseq-slots-note">
-        Weapon-skill slots in the {slots.target === 'pivot' ? 'pivot' : 'game'} folder: <b>{free}</b> free of {rows.length}
-        {slots.band ? <> · plugin band {slots.band[0]}–{slots.band[1]}</> : <> · custom band off</>}
-      </div>
-      <div className="mseq-slots-scroll">
-        <table className="mseq-plan mseq-slots-table">
-          <thead><tr><th>#</th><th>animation</th><th>bank</th><th>file id</th><th>holds</th></tr></thead>
-          <tbody>
-            {rows.map((r) => {
-              const picked = String(r.animation) === String(animation);
-              return (
-                <tr key={r.animation} className={`${r.free ? 'is-free' : 'is-taken'}${picked ? ' is-picked' : ''}`}
-                  onClick={r.free ? () => onPick?.(r.animation) : undefined}>
-                  <td className="dim">{r.index}</td>
-                  <td><b>{r.animation}</b>{r.animation === next && <span className="mseq-slots-next">next</span>}{picked && <span className="mseq-slots-next">chosen</span>}</td>
-                  <td className="dim">{r.plugin ? 'plugin band' : 'any client'}</td>
-                  <td className="dim">{r.file_id}</td>
-                  <td className={r.free ? 'dim' : 'warn'}>
-                    {r.free ? 'free' : `${r.owner ? `${r.owner} — ` : ''}${r.dats.slice(0, 2).join(', ')}${r.dats.length > 2 ? ' …' : ''} (${r.races.length >= 8 ? 'every race' : r.races.join(', ')})`}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
 export function TimelineWindow({
   open, onClose,
   recipeName, note, failed, error, onDismissError,
@@ -167,7 +113,12 @@ export function TimelineWindow({
   name = '', onName, onNew, onSave, saved = [], onDelete,
   category = '', onCategory, categories = [], onLoad, loadOpen = false,
   publishPlan = null, onPublish, busy = false,
-  publishCfg = null, onPublishCfg, onCheckPublish, slots = null, onListSlots,
+  publishCfg = null, onPublishCfg, onCheckPublish, onOpenSlots, slotsOpen = false, onOpenPublishFolder,
+  // Manage's server switches: the local server as `xi server check --no-db --no-binary` saw it
+  // (null | { loading } | { error } | xi.server-check.v1), Settings › Local Server, a Confirm
+  // of a row this mix did not make (id, and whether it came from a Publish), and a counter
+  // that opens Manage when it moves (a Publish that needs that Confirm).
+  serverInfo = null, onOpenLocalServer = null, onConfirmDbRow = null, manageOpenTick = 0,
   kind = 'ws', onKind, onRandomise, canPublish = false, baseMotionSpecs = null, animBands = null,
   onDropEntry,
   // Locks · hits · links: add a preset at a frame, copy a track source's own, and
@@ -175,6 +126,8 @@ export function TimelineWindow({
   // mix (mixer.js holdMarks).
   keepWarns = [], onAddKeep = null, onCopyKeep = null, holds = [],
   editor = null,
+  // Global window stacking: zIndex the app hands it, and a click anywhere raises it.
+  zIndex = 28, onFocus = null,
 }) {
   // ── Window: position, size, drag, resize (the sequencer's pattern) ──────────
   const [pos, setPos] = useState(() => readJson(POS_KEY));
@@ -353,9 +306,9 @@ export function TimelineWindow({
       : (e.dur || 0)));
     // A track's pills keep the row they hold. One with no row yet (an older mix, a
     // fresh pick, a paste) is fitted around them, and so are the shared routines'
-    // ghosts, which never get a row of their own. The keep lane is bookkeeping and
-    // packs itself every time.
-    const rows = keep ? stackRows(own, endOf) : assignRows(laneEvents, endOf);
+    // ghosts, which never get a row of their own. The keep lane packs the same way,
+    // and holds a row a drag gives one of its locks, hits or links.
+    const rows = assignRows(laneEvents, endOf);
     // Rows the label's + holds open count as well.
     const count = rowHold?.get(t.id) ?? Math.max(rows.count, keep ? 0 : Math.min(MAX_ROW + 1, extraRows?.[t.id] ?? 0));
     // The rows the mix itself spans: its own pills (as drawn) and the + hold. A row
@@ -392,7 +345,7 @@ export function TimelineWindow({
   // (startDragBlock files it as drawn).
   const soundKnown = (e) => (soundIdOf(e) == null ? (isLinkOp(e.op) || e.op === 0x1e) : peaks.has(soundIdOf(e)));
   const looseRows = (ready) => lanes.flatMap((lane) => {
-    if (lane.t.kind === 'keep' || !ready(lane)) return [];
+    if (!ready(lane)) return [];
     return lane.own.filter((e) => rowOfEvent(e) == null && lane.rows.rowOf.get(e._id) <= MAX_ROW)
       .map((e) => ({ id: e._id, row: lane.rows.rowOf.get(e._id) }));
   });
@@ -414,7 +367,23 @@ export function TimelineWindow({
   const [dropLane, setDropLane] = useState(null);
   // A pill dragged onto another lane: that lane lights up; below the last lane
   // of its kind, the last lane shows a bar — the drop makes a new track there.
-  const [manageOpen, setManageOpen] = useState(false);
+  // The window's two tabs: Details (the mix's Type, name and the Publish/Manage
+  // settings) and Timeline (the track and its transport). Persisted, defaulting to
+  // the Timeline — the working surface. The old Manage panel lives on Details now.
+  const [tab, setTab] = useState(() => (readJson('mixerSeqTab') === 'details' ? 'details' : 'timeline'));
+  const switchTab = (t) => { setTab(t); writeJson('mixerSeqTab', t); };
+  // Minimise: collapse everything but the header bar. Persisted, like the tab.
+  const [collapsed, setCollapsed] = useState(() => readJson('mixerSeqCollapsed') === true);
+  const toggleCollapsed = () => setCollapsed((v) => { writeJson('mixerSeqCollapsed', !v); return !v; });
+  // A Publish that needs a Confirm shows its row in Manage, which is on the Details
+  // tab — jump there when the tick moves, not on mount: the panel remounts whenever
+  // the mixer view comes back, and the tick App kept from an old Publish must not.
+  const seenManageTick = useRef(manageOpenTick);
+  useEffect(() => {
+    if (manageOpenTick === seenManageTick.current) return;
+    seenManageTick.current = manageOpenTick;
+    if (manageOpenTick) switchTab('details');
+  }, [manageOpenTick]);
   // The Help window (the bar's ?) goes with the timeline: closing the timeline closes it.
   const [helpOpen, setHelpOpen] = useState(false);
   useEffect(() => { if (!open) setHelpOpen(false); }, [open]);
@@ -498,12 +467,12 @@ export function TimelineWindow({
     const inGroup = selectedIds.has(ev._id);
     const ids = inGroup ? selectedIds : new Set([ev._id]);
     if (!inGroup) onSelect(ev._id, 'only');
-    // Each dragged pill's row, where its lane shows its rows: a collapsed lane, and
-    // the keep lane, drag in time only.
+    // Each dragged pill's row, where its lane shows its rows: a collapsed lane drags
+    // in time only (its rows are hidden on one line).
     const laneOf = new Map(lanes.flatMap((lane) => lane.own.map((x) => [x._id, lane])));
     const starts = events.filter((x) => ids.has(x._id)).map((x) => {
       const lane = laneOf.get(x._id);
-      const rowed = !!lane && lane.t.kind !== 'keep' && !lane.collapsed;
+      const rowed = !!lane && !lane.collapsed;
       return { id: x._id, start0: x.start, row0: rowed ? (lane.rows.rowOf.get(x._id) ?? 0) : null, rows: lane?.count ?? 1, lane: lane?.t.id };
     });
     // The group moves between rows as one: up until its top pill is in the first
@@ -583,7 +552,7 @@ export function TimelineWindow({
     const at = new Map(d.last.map((m) => [m.id, m]));
     const settled = new Map();
     for (const lane of lanes) {
-      if (lane.t.kind === 'keep' || !lane.own.some((x) => at.has(x._id))) continue;
+      if (!lane.own.some((x) => at.has(x._id))) continue;
       const now = lane.own.map((x) => ({ ...x, start: at.get(x._id)?.start ?? x.start, row: at.get(x._id)?.row ?? lane.rows.rowOf.get(x._id) ?? 0 }));
       for (const [id, row] of settleRows(now, new Set(at.keys()), lane.endOf)) settled.set(id, row);
     }
@@ -778,25 +747,28 @@ export function TimelineWindow({
   const playing = transport === 'playing';
   const style = {
     width: size.w,
-    ...(size.h ? { height: size.h } : null),
+    zIndex,
+    ...(size.h && !collapsed ? { height: size.h } : null),
     ...(pos ? { left: pos.x, top: pos.y, right: 'auto', bottom: 'auto' } : null),
   };
 
   if (!open) return null;
   return createPortal(
-    <div id="mixer-seq" className="panel" ref={panelRef} style={style}>
+    <div id="mixer-seq" className={`panel${collapsed ? ' is-collapsed' : ''}`} ref={panelRef} style={style} onPointerDownCapture={onFocus ?? undefined}>
       <div className="cseq-header" ref={headerRef} onPointerDown={startDrag}>
         <span className="icon">timeline</span>
-        <span className="cseq-title">Ability Mixer</span>
+        <div className="settings-tabs mseq-tabs" role="tablist">
+          <button type="button" role="tab" aria-selected={tab === 'details'}
+            className={`settings-tab${tab === 'details' ? ' on' : ''}`} onClick={() => switchTab('details')}>
+            <span className="icon">tune</span>Details
+          </button>
+          <button type="button" role="tab" aria-selected={tab === 'timeline'}
+            className={`settings-tab${tab === 'timeline' ? ' on' : ''}`} onClick={() => switchTab('timeline')}>
+            <span className="icon">timeline</span>Timeline
+          </button>
+        </div>
+        <span className="sp" />
         <span className="mono mseq-name">{recipeName}</span>
-        <span className={`mseq-note${failed ? ' is-failed' : ''}`}>{failed ? error?.title : note}</span>
-        {onPublishCfg && (
-          <Tooltip content="Manage: how this mix publishes — animation slot, ROM10 folder, game or pivot folder — and a check of where its DATs would land. What it publishes as is the Type." placement="bottom">
-            <button type="button" className={`cseq-btn mseq-manage-btn${manageOpen ? ' on' : ''}`} onClick={() => setManageOpen((v) => !v)}>
-              <span className="icon">tune</span>Manage
-            </button>
-          </Tooltip>
-        )}
         {onPublish && (
           <Tooltip content={publishCfg?.pivot
             ? 'Publish: build this mix into the pivot folder (FFXI_PIVOT_DIR) now (xi dats build --pivot) — the console shows it as it runs'
@@ -806,6 +778,11 @@ export function TimelineWindow({
             </button>
           </Tooltip>
         )}
+        <Tooltip content={collapsed ? 'Expand the mixer' : 'Minimise to the title bar'} placement="bottom">
+          <button type="button" className="icon-btn cseq-close cseq-min" onClick={toggleCollapsed} aria-label={collapsed ? 'Expand' : 'Minimise'} aria-expanded={!collapsed}>
+            <span className="icon">{collapsed ? 'expand_more' : 'expand_less'}</span>
+          </button>
+        </Tooltip>
         <button type="button" className="icon-btn cseq-close" onClick={onClose} aria-label="Close">
           <span className="icon">close</span>
         </button>
@@ -822,17 +799,65 @@ export function TimelineWindow({
           </div>
         )}
 
-        {manageOpen && publishCfg && (
+        {tab === 'details' && (
+          <div className="mseq-tab-body mseq-details">
+          <div className="cseq-row cseq-settings mseq-toolbar mseq-toolbar-details">
+            {/* The mix Type: what it publishes as. Every Type lists every motion; on Ability /
+                Spell the base casts lead the list and any other motion is baked (experimental). */}
+            <Tooltip content="Type: what this mix publishes as. A weapon skill is built per race and takes any motion. A job ability or spell is one DAT for every race: the casts at the top of the Motion list always work, and any other motion is baked from one race's copy, which is experimental." placement="top">
+              <div className="cseq-load mseq-type">
+                <Combo value={kind} items={MIX_TYPES} onChange={(k) => k && onKind?.(k)} />
+              </div>
+            </Tooltip>
+            <div className="cseq-bar-sep" />
+            <Tooltip content="Start a new empty mix" placement="top">
+              <button type="button" className="cseq-btn" onClick={onNew}>New</button>
+            </Tooltip>
+            <input
+              type="text"
+              className="cseq-text mseq-mix-name"
+              placeholder="Mix name"
+              value={name}
+              spellCheck={false}
+              onChange={(e) => onName?.(e.target.value.replace(/[^A-Za-z0-9_-]/g, '_'))}
+            />
+            {/* Where the Mixes panel files it; the categories already in use drop down as you type. */}
+            <CategoryInput className="cseq-text mseq-mix-cat" value={category} onChange={onCategory} options={categories} placeholder="Category" />
+            <Tooltip content={saved.some((r) => r.name === name.trim()) ? 'Save over the mix with this name (Ctrl+S)' : 'Save under this name (Ctrl+S)'} placement="top">
+              <button type="button" className="cseq-btn" disabled={!name.trim() || busy} onClick={onSave}>Save</button>
+            </Tooltip>
+            {/* Load opens the Mixes panel — every saved mix by category — rather than one long list of names. */}
+            <button type="button" className={`cseq-btn mseq-load-btn${loadOpen ? ' on' : ''}`} onClick={onLoad}>Load</button>
+            <Tooltip content="Delete the saved mix with this name" placement="top">
+              <button
+                type="button"
+                className="icon-btn cseq-icon cseq-del"
+                aria-label="Delete saved mix"
+                disabled={!saved.some((r) => r.name === name.trim())}
+                onClick={() => onDelete?.(name.trim())}
+              >
+                <span className="icon">delete</span>
+              </button>
+            </Tooltip>
+          </div>
+          {publishCfg && (
           <div className="mixer-editor mseq-manage">
             <div className="mixer-editor-title">
               <span className="mono">Publish · {recipeName}</span>
               <span className="sp" />
-              <Tooltip content={canPublish ? 'Check: a dry run with these choices — the slot it takes and where every DAT lands, nothing written' : 'Pick a motion, effect or sound first'} placement="top">
-                <button type="button" className="cseq-btn" disabled={!canPublish || !onCheckPublish} onClick={onCheckPublish}>Check</button>
+              <Tooltip content={canPublish ? 'Check: a dry run with these choices — the slot it takes, where every DAT lands and what the Local server switches would do. No DAT or server change is written; the mix it checked is kept as check.<Name>.mix.json in the publish folder.' : 'Pick a motion, effect or sound first'} placement="top">
+                <button type="button" className="cseq-btn" disabled={!canPublish || !onCheckPublish} onClick={() => onCheckPublish()}>Check</button>
               </Tooltip>
-              {onListSlots && (
-                <Tooltip content={`Slots: every weapon-skill number in the ${publishCfg.pivot ? 'pivot' : 'game'} folder — 264–271, then the plugin band 0–255 — and what holds each. Click a free one to take it.`} placement="top">
-                  <button type="button" className={`cseq-btn${slots ? ' on' : ''}`} disabled={busy || !!slots?.loading} onClick={() => onListSlots(!slots)}>Slots</button>
+              {onOpenSlots && (
+                <Tooltip content="Slots: every weapon-skill number in the game or pivot folder — 264–271, then the plugin band 0–255 — and what holds each, in its own window. Click a free one to take it." placement="top">
+                  <button type="button" className={`cseq-btn${slotsOpen ? ' on' : ''}`} disabled={busy} onClick={() => onOpenSlots()}>Slots</button>
+                </Tooltip>
+              )}
+              {onOpenPublishFolder && (
+                <Tooltip content={`Folder: open this mix’s publish folder — the mix it published, the server SQL, what ran against the database, and a copy of every DAT it placed (${publishFolderRel(recipeName)})`} placement="top">
+                  <button type="button" className="cseq-btn" onClick={onOpenPublishFolder}>
+                    <span className="icon">folder_open</span>Folder
+                  </button>
                 </Tooltip>
               )}
             </div>
@@ -857,7 +882,7 @@ export function TimelineWindow({
                   value={publishCfg.subdir ?? ''} onChange={(e) => onPublishCfg({ subdir: e.target.value.replace(/[^0-9]/g, '') })} />
               </label>
             </div>
-            {/* The two switches take a line each under the fields. */}
+            {/* Overwrite and pivot: one line under the fields (the server switches have their own, below). */}
             <div className="mseq-manage-opts">
               <Tooltip content="Take the animation slot even when its file ids already point at another DAT (xi dats build --force)" placement="top">
                 <label className="switch cseq-switch mseq-manage-force">
@@ -893,15 +918,132 @@ export function TimelineWindow({
             {kind === 'spell' && (
               <div className="mono-small mseq-band-note">The chant is the server’s, not this mix’s: it plays one of eight by the spell’s group (spell_list.group) while the spell is cast, and this DAT runs when the cast finishes.</div>
             )}
-            {slots && (
-              <SlotTable slots={slots} from={publishCfg.from} animation={publishCfg.animation}
-                onPick={(n) => onPublishCfg({ kind: 'ws', animation: String(n) })} />
-            )}
+            {/* Local server: what the build does on the server once the DATs are placed
+                (xi dats build --apply-db / --menu-record / --lua-stub), on Check and Publish
+                alike. Per mix, like everything here; off after an import, rename or duplicate. */}
+            <div className="mseq-manage-opts mseq-manage-server">
+              <span className="mseq-manage-group">Local server</span>
+              <Tooltip content="Database Update: once the DATs are placed, point the local server’s row named after this mix at its animation, or, if there is none, insert one cloned from a default donor (spell → Cure, ability → Berserk, weapon skill → Fast Blade) so it plays and works until a dev sets its real stats. A row this mix didn’t create is only changed after you confirm it once. Server: Settings › Local Server. Restart the map server afterwards. (xi dats build --apply-db)" placement="top">
+                <label className="switch cseq-switch">
+                  <input type="checkbox" checked={!!publishCfg.db} onChange={(e) => onPublishCfg({ db: e.target.checked })} />
+                  <span className="track" />
+                  <span className="cseq-switch-label">Database Update</span>
+                </label>
+              </Tooltip>
+              <Tooltip content="Client Menu Record: place the game’s menu entry (the spell or command record and its name) at the same id as the server row, so players can use it from the menu. Only a blank retail row is used, never a named one. Use Pivot Folder when your client runs PIVOT. Restart the game afterwards. (--menu-record)" placement="top">
+                <label className="switch cseq-switch">
+                  <input type="checkbox" checked={!!publishCfg.menu} onChange={(e) => onPublishCfg({ menu: e.target.checked })} />
+                  <span className="track" />
+                  <span className="cseq-switch-label">Client Menu Record</span>
+                </label>
+              </Tooltip>
+              <Tooltip content="Lua Stub: write the server script for a new spell, ability or weapon skill into the server folder (Settings › Local Server). The script is what it does in game — damage, cost, effect — taken from the default donor’s script (Cure / Berserk / Fast Blade); this mix’s DAT is only how it looks. Only for a row this mix created; a stub you’ve edited is never overwritten. (--lua-stub)" placement="top">
+                <label className="switch cseq-switch">
+                  <input type="checkbox" checked={!!publishCfg.lua} onChange={(e) => onPublishCfg({ lua: e.target.checked })} />
+                  <span className="track" />
+                  <span className="cseq-switch-label">Lua Stub</span>
+                </label>
+              </Tooltip>
+            </div>
+            {(publishCfg.db || publishCfg.menu || publishCfg.lua) && (() => {
+              const { db, menu, lua } = publishCfg;
+              const settingsLink = onOpenLocalServer
+                ? <button type="button" className="mseq-link" onClick={() => onOpenLocalServer()}>Settings › Local Server</button>
+                : 'Settings › Local Server';
+              const info = serverInfo && !serverInfo.loading && !serverInfo.error ? serverInfo : null;
+              let hint;
+              if (!serverInfo || serverInfo.loading) hint = <>Checking the local server…</>;
+              else if (serverInfo.error) {
+                hint = serverInfo.error === LOCAL_SERVER_TOO_OLD || /No such command/.test(serverInfo.error)
+                  ? <>{LOCAL_SERVER_TOO_OLD}</>
+                  : <>Couldn’t check the local server: {serverInfo.error} · {settingsLink}</>;
+              } else if (!describeServer(info)) hint = <>No database configured — {settingsLink}</>;
+              else {
+                hint = (
+                  <>
+                    → {describeServer(info)}
+                    {lua && !info.serverDirValid && <> · Lua Stub needs the Server folder — {settingsLink}</>}
+                  </>
+                );
+              }
+              const wsState = info?.weaponSkills?.source?.state;
+              return (
+                <>
+                  <div className="mixer-fields mseq-server-fields">
+                    {(db || menu) && (
+                      <label className="mixer-field">
+                        <span>server id</span>
+                        <Tooltip content="The server id for a new row, and for its menu record. Blank: the highest id that is blank in the client and free on the server; one typed here must be one of those. A row this mix already made keeps its id. (--server-id)" placement="top">
+                          <input type="text" inputMode="numeric" className="cseq-text mixer-num" placeholder="auto" spellCheck={false} autoComplete="off"
+                            value={publishCfg.serverId ?? ''} onChange={(e) => onPublishCfg({ serverId: e.target.value.replace(/[^0-9]/g, '') })} />
+                        </Tooltip>
+                      </label>
+                    )}
+                    {menu && (
+                      <label className="mixer-field mseq-field-wide">
+                        <span>menu name</span>
+                        <Tooltip content="What the menu shows (EN and JP). Blank: the mix name. Up to 39 characters for an ability or weapon skill, 99 for a spell. Apostrophes are fine; line breaks are not. (--menu-name)" placement="top">
+                          <input type="text" className="cseq-text mixer-num" placeholder={String(recipeName ?? '').replace(/_/g, ' ')} spellCheck={false} autoComplete="off"
+                            value={publishCfg.menuName ?? ''} onChange={(e) => onPublishCfg({ menuName: e.target.value })} />
+                        </Tooltip>
+                      </label>
+                    )}
+                  </div>
+                  <div className="mono-small mseq-band-note mseq-server-hint">{hint}</div>
+                  {db && (
+                    <div className="mono-small mseq-band-note">
+                      Updates the server row named after this mix. If there is none, it inserts one cloned from <b>{DEFAULT_DONOR_LABEL[kind]}</b> so it plays and works — a dev edits its real stats afterwards.
+                    </div>
+                  )}
+                  {kind === 'ws' && db && info && wsState !== 'widened' && (
+                    <div className="mono-small mseq-band-note">Weapon-skill animations above 255 need the C++ patch first ({settingsLink} › Weapon skills: apply it, run the SQL, rebuild xi_map); until then Publish leaves the database alone for them.</div>
+                  )}
+                  {kind === 'ws' && menu && !db && (
+                    <div className="mono-small mseq-band-note">A weapon-skill menu record needs Database Update (a weapon_skills row at the same id).</div>
+                  )}
+                  {lua && !db && (
+                    <div className="mono-small mseq-band-note">Lua Stub writes a script only for a row this mix created — turn on Database Update.</div>
+                  )}
+                  {kind === 'ja' && db && (
+                    <div className="mono-small mseq-band-note">A newly inserted job ability goes live for {DEFAULT_DONOR_LABEL.ja}’s job and level, and shares its recast timer, until a dev edits it.</div>
+                  )}
+                </>
+              );
+            })()}
             {publishPlan && (
               <div className="mseq-plan-wrap">
                 {publishPlan.animation != null && (
                   <div className="mono-small">{publishPlan.kind} animation <b>{publishPlan.animation}</b> · {publishPlan.files.length} DAT{publishPlan.files.length === 1 ? '' : 's'}{publishPlan.server ? ` · server: ${publishPlan.server}` : ''}</div>
                 )}
+                {/* The server steps, coloured by what happened: ok, a warning (needs-confirm, skip,
+                    kept), or refused / error. Quoted names read unescaped. */}
+                {[['db', 'Database'], ['menu', 'Menu'], ['lua', 'Lua']].map(([k, label]) => {
+                  const step = publishPlan[k];
+                  if (!step) return null;
+                  return (
+                    <div key={k} className={`mono-small mseq-plan-step ${stepTone(step.op)}`}>
+                      <b>{label}</b> {step.would ? 'would ' : ''}{step.op} {showStepText(step.text)}
+                    </div>
+                  );
+                })}
+                {onConfirmDbRow && dbConfirmOf(publishPlan) && (() => {
+                  // A row this mix didn't make: one that would change (needs-confirm), or one
+                  // that already has the animation while its menu record waits on it.
+                  const { id, name, unchanged } = dbConfirmOf(publishPlan);
+                  const after = publishPlan.fromPublish;
+                  const why = unchanged
+                    ? `This row wasn’t made by this mix, but it already has this animation — nothing on the server changes. Confirming makes '${name ?? '?'}' this mix’s row, so its menu record can go at #${id}. Asked once.`
+                    : `This row wasn’t made by this mix — confirming changes it for every caster of '${name ?? '?'}' after the map server restarts. Asked once: later publishes update it without asking.`;
+                  return (
+                    <div className="mseq-plan-confirm">
+                      <Tooltip content={`${why}${after ? ' This publishes again straight away.' : ' This runs Check again.'}`} placement="top">
+                        <button type="button" className="cseq-btn" disabled={busy} onClick={() => onConfirmDbRow(id, !!after)}>
+                          {after ? `Confirm #${id} '${name ?? '?'}' and publish` : `Confirm #${id} '${name ?? '?'}'`}
+                        </button>
+                      </Tooltip>
+                    </div>
+                  );
+                })()}
                 {publishPlan.warnings?.length > 0 && (
                   <pre className="mono-small mseq-plan-warn">{publishPlan.warnings.join('\n')}</pre>
                 )}
@@ -924,66 +1066,12 @@ export function TimelineWindow({
               </div>
             )}
           </div>
+          )}
+          </div>
         )}
 
-        {/* Above the track, the sequencer's settings row: add a track, then the
-            saved-mix row exactly as the Camera Sequencer has it, zoom on the right */}
-        <div className="cseq-row cseq-settings mseq-toolbar">
-          {/* The mix Type: what it publishes as. Every Type lists every motion; on Ability /
-              Spell the base casts lead the list and any other motion is baked (experimental). */}
-          <Tooltip content="Type: what this mix publishes as. A weapon skill is built per race and takes any motion. A job ability or spell is one DAT for every race: the casts at the top of the Motion list always work, and any other motion is baked from one race's copy, which is experimental." placement="top">
-            <div className="cseq-load mseq-type">
-              <Combo value={kind} items={MIX_TYPES} onChange={(k) => k && onKind?.(k)} />
-            </div>
-          </Tooltip>
-          <div className="cseq-load mseq-add-track">
-            <Combo value="" items={LANES.map((l) => ({ id: l.id, label: l.label, color: l.color }))} placeholder="Add Track"
-              onChange={(k) => k && onAddTrack?.(k)} />
-          </div>
-          <div className="cseq-bar-sep" />
-          <Tooltip content="Start a new empty mix" placement="top">
-            <button type="button" className="cseq-btn" onClick={onNew}>New</button>
-          </Tooltip>
-          <input
-            type="text"
-            className="cseq-text mseq-mix-name"
-            placeholder="Mix name"
-            value={name}
-            spellCheck={false}
-            onChange={(e) => onName?.(e.target.value.replace(/[^A-Za-z0-9_-]/g, '_'))}
-          />
-          {/* Where the Mixes panel files it; the categories already in use drop down as you type. */}
-          <CategoryInput className="cseq-text mseq-mix-cat" value={category} onChange={onCategory} options={categories} placeholder="Category" />
-          <Tooltip content={saved.some((r) => r.name === name.trim()) ? 'Save over the mix with this name (Ctrl+S)' : 'Save under this name (Ctrl+S)'} placement="top">
-            <button type="button" className="cseq-btn" disabled={!name.trim() || busy} onClick={onSave}>Save</button>
-          </Tooltip>
-          {/* Load opens the Mixes panel — every saved mix by category — rather than one long list of names. */}
-          <button type="button" className={`cseq-btn mseq-load-btn${loadOpen ? ' on' : ''}`} onClick={onLoad}>Load</button>
-          <Tooltip content="Delete the saved mix with this name" placement="top">
-            <button
-              type="button"
-              className="icon-btn cseq-icon cseq-del"
-              aria-label="Delete saved mix"
-              disabled={!saved.some((r) => r.name === name.trim())}
-              onClick={() => onDelete?.(name.trim())}
-            >
-              <span className="icon">delete</span>
-            </button>
-          </Tooltip>
-          <div className="cseq-bar-group cseq-zoom">
-            <Tooltip content="Zoom out" placement="top">
-              <button type="button" className="icon-btn cseq-icon" aria-label="Zoom out" disabled={zoom <= MIN_ZOOM} onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z / 2))}>
-                <span className="icon">zoom_out</span>
-              </button>
-            </Tooltip>
-            <Tooltip content="Zoom in" placement="top">
-              <button type="button" className="icon-btn cseq-icon" aria-label="Zoom in" disabled={zoom >= MAX_ZOOM} onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z * 2))}>
-                <span className="icon">zoom_in</span>
-              </button>
-            </Tooltip>
-          </div>
-        </div>
-
+        {tab === 'timeline' && (
+          <>
         {/* The inset track: labels on the left, the scrolling ruler and lanes on the right */}
         {bakedTracks.size > 0 && (
           <div className="mseq-motion-warn">
@@ -993,7 +1081,12 @@ export function TimelineWindow({
         )}
         <div className="cseq-tl mseq-tl" style={{ height: trackH + 8 }} ref={rootRef} onPointerMove={onPointerMove} onPointerUp={endPointer} onPointerCancel={endPointer}>
           <div className="cseq-tl-labels">
-            <div className="cseq-tl-spacer" />
+            <div className="cseq-tl-spacer">
+              {/* A compact twin of the toolbar's Add Track, right by the lanes. */}
+              <Combo className="mseq-add-track-mini" value=""
+                items={LANES.map((l) => ({ id: l.id, label: l.label, color: l.color }))}
+                placeholder="Add Track" onChange={(k) => k && onAddTrack?.(k)} />
+            </div>
             {lanes.map(({ t, count, ownRows, rowsOpen, stacked, height }) => (
               <div key={t.id}
                 className={`cseq-tl-label mseq-label${t.kind === 'keep' ? '' : ' track'}${t.id === activeTrack ? ' active' : ''}${badTracks.has(t.id) ? ' bad' : ''}`}
@@ -1257,9 +1350,22 @@ export function TimelineWindow({
             <b>{shown}</b>
             <span className="cseq-frame-dim"> / {len}</span>
             <span className="cseq-frame-s">{(shown / FPS).toFixed(2)}s</span>
-            {viewerRace && <span className="cseq-frame-dim mseq-race"> · {viewerRace}</span>}
           </span>
+          <div className="cseq-bar-group cseq-zoom mseq-zoom-bar">
+            <Tooltip content="Zoom out" placement="top">
+              <button type="button" className="icon-btn cseq-icon" aria-label="Zoom out" disabled={zoom <= MIN_ZOOM} onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z / 2))}>
+                <span className="icon">zoom_out</span>
+              </button>
+            </Tooltip>
+            <Tooltip content="Zoom in" placement="top">
+              <button type="button" className="icon-btn cseq-icon" aria-label="Zoom in" disabled={zoom >= MAX_ZOOM} onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z * 2))}>
+                <span className="icon">zoom_in</span>
+              </button>
+            </Tooltip>
+          </div>
         </div>
+          </>
+        )}
       </div>
 
       <div className="cseq-resize" onPointerDown={startResize('w')} onPointerMove={onResizeMove} onPointerUp={endResize} onPointerCancel={endResize} />

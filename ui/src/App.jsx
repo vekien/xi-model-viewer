@@ -60,9 +60,12 @@ import { ZoneDefModal } from './ZoneDefModal.jsx';
 import { ParticlePreviewModal } from './ParticlePreviewModal.jsx';
 import { MixerList } from './MixerList.jsx';
 import { MixerPanel } from './MixerPanel.jsx';
+import { MixerSlotsPanel } from './MixerSlotsPanel.jsx';
 import { Floating } from './Floating.jsx';
+import { nextZ } from './zstack.js';
 import { RightRail } from './RightRail.jsx';
-import { ANIM_BANDS_KEY, RACE_TO_XI, baseMotionRefs, buildCatalogArgs, castRelease, chantStages, clipBlend, composeForPreview, dropLaneEdits, emptyRecipe, entryPathForRace, eventsFromInspect, hasTrack, holdClock, holdPlan, inlineRecipeTextures, inspectSpec, isBlockingOp, isComposed, keepCopies, keepEventFromBytes, kindOf, laneForEvent, listWsSlots, loadAnimBands, loadCatalog, makeKeepEvents, mixerDir, normalizeAnimBands, parsePublishPlan, pickStages, publishRecipe, readCategories, recipeFromImport, recipeTextures, recipeTracks, rowOfEvent, safeRecipeName, serializeRecipe, soundIdsFromInfo, stageLoops, stageTimeline, trackLabel, trackShift, updateCategories, withIds } from '../js/mixer.js';
+import { ANIM_BANDS_KEY, LEGACY_MIX_SUFFIX, MIX_SUFFIX, OLD_XI_SERVER_OPTION_RX, OLD_XI_SERVER_TEXT, RACE_TO_XI, abilitiesDir, baseMotionRefs, buildCatalogArgs, castRelease, chantStages, clipBlend, composeForPreview, dbConfirmOf, dropLaneEdits, emptyRecipe, entryPathForRace, eventsFromInspect, hasTrack, holdClock, holdPlan, inlineRecipeTextures, inspectSpec, isBlockingOp, isComposed, keepCopies, keepEventFromBytes, kindOf, laneForEvent, listWsSlots, loadAnimBands, loadCatalog, makeKeepEvents, mixFilesIn, mixerDir, normalizeAnimBands, parsePublishPlan, pickStages, publishStatusParts, publishRecipe, readCategories, recipeFromImport, recipeTextures, recipeTracks, revealPublishFolder, rowOfEvent, safeRecipeName, serializeRecipe, soundIdsFromInfo, stageLoops, stageTimeline, trackLabel, trackShift, updateCategories, withIds } from '../js/mixer.js';
+import { localServerErrorText, localServerProblem, normalizeLocalServer, serverCheck, writeLocalServer } from '../js/localServer.js';
 import { lanesThatCarry, lanesToSync, pngPixels, seedTouched, sourceOf, syncEdits, textureSection, textureSwaps } from '../js/mixerLive.js';
 import { ZoneMeshPreviewModal } from './ZoneMeshPreviewModal.jsx';
 import { armGeneratorPreview } from '../js/particlePreview.js';
@@ -167,10 +170,17 @@ const MIXER_RAIL = [
   { id: 'library', icon: 'folder_open', label: 'Mixes' },
   { id: 'generator', icon: 'bubble_chart', label: 'Generator' },
   { id: 'actors', icon: 'groups', label: 'Actors' },
+  { id: 'slots', icon: 'view_list', label: 'Weapon-skill slots' },
 ];
 const ORBIT_VIEWS = new Set(['files', 'npc', 'pc', 'creation']);
 /** Publish choices for a mix (the Timeline's Manage panel); see setMixerPublishCfg. */
-const PUBLISH_CFG_DEFAULT = { kind: 'auto', animation: '', from: '', subdir: 20, force: false, pivot: false };
+const PUBLISH_CFG_DEFAULT = {
+  kind: 'auto', animation: '', from: '', subdir: 20, force: false, pivot: false,
+  // The local server switches and their fields (xi dats build --apply-db / --menu-record /
+  // --lua-stub, --clone-from, --menu-name, --server-id), and a one-off confirmation of a
+  // row this mix did not make (--db-row), cleared once a build has bound that row.
+  db: false, menu: false, lua: false, cloneFrom: '', menuName: '', serverId: '', dbRow: null,
+};
 const MIXER_FILE_DIR_KEY = 'mixerFileDir';   // localStorage: the folder the last mix was exported to or imported from
 const publishCfgKey = (name) => `mixerPublish:${name}`;   // localStorage, one per mix name
 const loadPublishCfg = (name) => {
@@ -182,7 +192,7 @@ const loadPublishCfg = (name) => {
  * with one: an import (its target.kind), or a rename or duplicate (the kind the
  * mix had — not its slot number, which stays with the name that published it).
  * Every caller names a mix new to that name, so nothing a deleted or renamed mix
- * left under it (a slot, force) carries over.
+ * left under it (a slot, force, the server switches and Clone from) carries over.
  */
 const storePublishKind = (name, kind) => {
   const cfg = { ...PUBLISH_CFG_DEFAULT, ...(['ja', 'spell', 'ws'].includes(kind) ? { kind } : {}) };
@@ -1343,12 +1353,14 @@ export default function App({ launch = null }) {
   const [cliOutput, setCliOutput] = useState(null); // { title, text } bottom-left console
   const [datNotesOpen, setDatNotesOpen] = useState(false);
   const [datNotesTick, setDatNotesTick] = useState(0); // refresh has-note badge
-  // Global stacking: click/focus any floating modal → highest z (cross-type).
-  const modalZCounterRef = useRef(10000);
+  // Global stacking: opening or clicking any window — a floating panel, the mixer,
+  // the sequencer, or a modal window — pulls it to the highest z, cross-type. The
+  // counter is shared with the floating panels (zstack.js), so the two no longer
+  // sit on separate scales that kept the panels stuck under the mixer/sequencer.
   const [modalZByKey, setModalZByKey] = useState({}); // key -> zIndex
   const raiseModal = useCallback((key) => {
     if (!key) return;
-    const z = ++modalZCounterRef.current;
+    const z = nextZ();
     setModalZByKey((prev) => (prev[key] === z ? prev : { ...prev, [key]: z }));
   }, []);
   const modalZ = useCallback(
@@ -1754,6 +1766,14 @@ export default function App({ launch = null }) {
   const [actorEditId, setActorEditId] = useState(null);
   const actorEditIdRef = useRef(null);
   actorEditIdRef.current = actorEditId;
+  // Now that the floating panels share the window stack (see raiseModal / zstack.js),
+  // a discretely-opened window has to claim the top on open, or it would appear
+  // behind a panel that was clicked earlier. The modal windows already raise on
+  // open; these four (the two dialogs, the sequencer, the actor editor) did not.
+  useEffect(() => { if (settingsOpen) raiseModal('settings'); }, [settingsOpen, raiseModal]);
+  useEffect(() => { if (helpOpen) raiseModal('about'); }, [helpOpen, raiseModal]);
+  useEffect(() => { if (sequencerOpen) raiseModal('camseq'); }, [sequencerOpen, raiseModal]);
+  useEffect(() => { if (actorEditId != null) raiseModal('actor'); }, [actorEditId, raiseModal]);
   const actorSeqRef = useRef(1);
   const actorLoadGenRef = useRef(new Map());
   // Actors live selection (panel header toggle): click an actor in the
@@ -4363,6 +4383,10 @@ export default function App({ launch = null }) {
     forceCamResetOnViewRef.current = false;   // a pending view-switch fit would override keepCamera
     Promise.resolve(loadNpcEntry({ ...entry, keepCamera: true })).then(rearmEffectOnActor);
   }, [loadNpcEntry, rearmEffectOnActor]);
+  // Re-arm the composed mix on the actor after a race or gear change reloads the
+  // character (assigned once mixerPlay exists). Like an action change, that reload is
+  // async and would otherwise leave the old mix wiped until the user scrubs the timeline.
+  const mixerRearmRef = useRef(null);
   const loadEffectPc = useCallback((entry) => {
     setEffectActorTab('pc');
     effectActorTabRef.current = 'pc';
@@ -4377,6 +4401,9 @@ export default function App({ launch = null }) {
       const resolve = mixerReloadWaitRef.current;
       mixerReloadWaitRef.current = null;
       resolve?.();
+      // A user-driven reload (race or gear change), not one mixerPlayRecipe already awaits
+      // (it holds the resolver): re-compose the mix on stage for the new character.
+      if (!resolve) mixerRearmRef.current?.();
     });
   }, [loadNpcEntry, rearmEffectOnActor]);
   const pc = useCharacter({
@@ -6799,6 +6826,8 @@ export default function App({ launch = null }) {
   const [mixerLaneInfo, setMixerLaneInfo] = useState({});
   const mixerTracks = useMemo(() => recipeTracks(mixerRecipe, mixerExtraTracks), [mixerRecipe, mixerExtraTracks]);
   const [mixerBusy, setMixerBusy] = useState(false);
+  const mixerBusyRef = useRef(mixerBusy);
+  mixerBusyRef.current = mixerBusy;
   const [mixerNote, setMixerNote] = useState('');
   // The other views' rail: one glyph per panel the view shows, toggling the flag
   // that already gates that panel.
@@ -6827,7 +6856,7 @@ export default function App({ launch = null }) {
   // The mixer view's right rail: one glyph per panel, the Animation panel first.
   // Which are open is remembered; a panel's own close glyph reports back here.
   const [mixerPanels, setMixerPanels] = useState(() => {
-    const d = { actors: false, timeline: true, library: false, generator: false };
+    const d = { actors: false, timeline: true, library: false, generator: false, slots: false };
     try { return { ...d, ...JSON.parse(localStorage.getItem('mixerPanels') || '{}') }; } catch { return d; }
   });
   const setMixerPanel = useCallback((id, v) => setMixerPanels((m) => {
@@ -6835,6 +6864,12 @@ export default function App({ launch = null }) {
     try { localStorage.setItem('mixerPanels', JSON.stringify(next)); } catch { /* quota */ }
     return next;
   }), []);
+  const mixerPanelsRef = useRef(mixerPanels);
+  mixerPanelsRef.current = mixerPanels;
+  // The Ability Mixer timeline is the one rail window that is not a Floating host
+  // (it rides the modal stack). Raise it when its rail glyph opens it, so it too
+  // comes to the front from the side menu, like the panels do (Floating.jsx).
+  useEffect(() => { if (mixerPanels.timeline) raiseModal('mixer'); }, [mixerPanels.timeline, raiseModal]);
   const [mixerError, setMixerError] = useState(null); // { title, text } — xi's message, shown in the timeline dock
   const [mixerRecipes, setMixerRecipes] = useState([]);
   const [mixerStageName, setMixerStageName] = useState(null);   // recipe composed on the stage
@@ -7294,10 +7329,10 @@ export default function App({ launch = null }) {
     if (!ctx) return;
     const dir = mixerDir(ctx.xiPath);
     const [files, categories] = await Promise.all([backend.listFiles(dir), readCategories(ctx.xiPath)]);
-    const names = files.filter((n) => n.endsWith('.recipe.json')).map((n) => n.replace(/\.recipe\.json$/, ''));
-    const rows = await Promise.all(names.map(async (name) => {
+    // <Name>.mix.json, and the <Name>.recipe.json of before (the .mix.json wins for a name that has both).
+    const rows = await Promise.all(mixFilesIn(files).map(async ({ name, file }) => {
       let sources = {};
-      try { sources = JSON.parse(await backend.readTextFile(`${dir}\\${name}.recipe.json`) || '{}').sources ?? {}; } catch { /* unreadable: listed by name only */ }
+      try { sources = JSON.parse(await backend.readTextFile(`${dir}\\${file}`) || '{}').sources ?? {}; } catch { /* unreadable: listed by name only */ }
       return { name, sources, category: categories[name] ?? '' };
     }));
     rows.sort((a, b) => a.name.localeCompare(b.name));
@@ -7503,6 +7538,13 @@ export default function App({ launch = null }) {
   }, [xiCtx, pc.race, loadEffect, mixerCatalog, mixerSyncAction, mixerLaneSource]);
 
   const mixerPlay = useCallback(() => mixerPlayRecipe(mixerRecipeRef.current), [mixerPlayRecipe]);
+  // Re-play the mix on stage when the character reloads for a race or gear change, so the
+  // preview follows the actor without the user scrubbing to wake it. Only when a mix is
+  // composed on stage (mixerComposeRef; not a list preview or an empty stage) and idle.
+  mixerRearmRef.current = () => {
+    if (leftViewRef.current !== 'mixer' || mixerBusyRef.current || !mixerComposeRef.current) return;
+    mixerPlay();
+  };
 
   /** Take a catalog entry for the current lane: its lane events replace the lane's,
    *  and the stage plays the mix so far. */
@@ -8011,7 +8053,19 @@ export default function App({ launch = null }) {
     setStatusText('Mixer reset');
   }, [stopEffect, actorIdleClip]);
 
-  const recipePath = useCallback((name) => `${mixerDir(xiCtx()?.xiPath ?? '')}\\${name}.recipe.json`, [xiCtx]);
+  // A saved mix is <Name>.mix.json in the mixer folder; one saved before that is still
+  // <Name>.recipe.json until the next Save (mixer.js mixFilesIn).
+  const recipePath = useCallback((name) => `${mixerDir(xiCtx()?.xiPath ?? '')}\\${name}${MIX_SUFFIX}`, [xiCtx]);
+  const legacyRecipePath = useCallback((name) => `${mixerDir(xiCtx()?.xiPath ?? '')}\\${name}${LEGACY_MIX_SUFFIX}`, [xiCtx]);
+  /** The file a saved mix reads from — its .mix.json, else its .recipe.json — as `{ path, legacy }`. */
+  const mixFileOf = useCallback(async (name) => {
+    const dir = mixerDir(xiCtx()?.xiPath ?? '');
+    const key = String(name).toLowerCase();
+    const m = mixFilesIn(await backend.listFiles(dir)).find((x) => x.name.toLowerCase() === key);
+    return m
+      ? { path: `${dir}\\${m.file}`, legacy: m.file.toLowerCase().endsWith(LEGACY_MIX_SUFFIX) }
+      : { path: `${dir}\\${name}${MIX_SUFFIX}`, legacy: false };
+  }, [xiCtx]);
 
   /** Save under `name` (the file follows the recipe name); a new name leaves the old file alone. */
   const mixerSaveAs = useCallback(async (name) => {
@@ -8024,20 +8078,24 @@ export default function App({ launch = null }) {
     const path = recipePath(safe);
     // The saved file also carries the timeline's layout (each pill's row).
     await backend.writeTextFile(path, serializeRecipe(recipe, { layout: true }));
+    // Written as <Name>.mix.json: the same mix's <Name>.recipe.json from before goes now that
+    // its replacement is on disk (a rename, in effect). Left behind it would only be shadowed.
+    try { await backend.deleteFile(legacyRecipePath(safe)); } catch { /* locked: the .mix.json still wins */ }
     await updateCategories(ctx.xiPath, (m) => { m[safe] = recipe.category ?? ''; });
     setStatusText(`Saved ${path}`);
     refreshMixerRecipes();
-  }, [xiCtx, recipePath, refreshMixerRecipes]);
+  }, [xiCtx, recipePath, legacyRecipePath, refreshMixerRecipes]);
 
   const mixerDelete = useCallback(async (name) => {
     await backend.deleteFile(recipePath(name));
+    await backend.deleteFile(legacyRecipePath(name));
     // Its publish settings go too: a later mix under this name must not inherit its slot or force.
     try { localStorage.removeItem(publishCfgKey(name)); } catch { /* private mode */ }
     const ctx = xiCtx();
     if (ctx) await updateCategories(ctx.xiPath, (m) => { delete m[name]; });
     setStatusText(`Deleted recipe ${name}`);
     refreshMixerRecipes();
-  }, [xiCtx, recipePath, refreshMixerRecipes]);
+  }, [xiCtx, recipePath, legacyRecipePath, refreshMixerRecipes]);
 
   /** Rename a saved mix — its file and its entry in the category index; returns the name it ends up with. */
   const mixerRename = useCallback(async (from, to) => {
@@ -8048,25 +8106,29 @@ export default function App({ launch = null }) {
     // The disk ignores case: a case-only rename is the same file; any other name on disk is another mix.
     const caseOnly = safe.toLowerCase() === from.toLowerCase();
     if (!caseOnly) {
-      const taken = (await backend.listFiles(mixerDir(ctx.xiPath)))
-        .filter((n) => /\.recipe\.json$/i.test(n)).map((n) => n.replace(/\.recipe\.json$/i, '').toLowerCase());
+      const taken = mixFilesIn(await backend.listFiles(mixerDir(ctx.xiPath))).map((m) => m.name.toLowerCase());
       if (taken.includes(safe.toLowerCase())) { setStatusText(`Not renamed: ${safe} is already a mix`); return from; }
     }
-    const text = await backend.readTextFile(recipePath(from));
+    // It reads from its .mix.json, or the .recipe.json of before; the renamed mix is a .mix.json.
+    const src = await mixFileOf(from);
+    const text = await backend.readTextFile(src.path);
     if (text == null) { setStatusText(`Could not read recipe ${from}`); return from; }
     let r;
     try { r = JSON.parse(text); } catch { setStatusText(`Recipe ${from} is not valid JSON`); return from; }
     const out = JSON.stringify({ ...r, name: safe }, null, 2);
-    if (caseOnly) {
+    const dest = recipePath(safe);
+    if (caseOnly && !src.legacy) {
       // Same file: writing would keep the old spelling and the delete after it would remove the mix.
       // Delete first so the new spelling is created, and put the old file back if the write fails.
-      await backend.deleteFile(recipePath(from));
-      try { await backend.writeTextFile(recipePath(safe), out); }
-      catch (e) { await backend.writeTextFile(recipePath(from), text); setStatusText(`Rename failed: ${e?.message ?? e}`); return from; }
+      await backend.deleteFile(src.path);
+      try { await backend.writeTextFile(dest, out); }
+      catch (e) { await backend.writeTextFile(src.path, text); setStatusText(`Rename failed: ${e?.message ?? e}`); return from; }
     } else {
-      await backend.writeTextFile(recipePath(safe), out);
-      await backend.deleteFile(recipePath(from));
+      await backend.writeTextFile(dest, out);
+      await backend.deleteFile(src.path);
     }
+    // A .recipe.json the old name's .mix.json shadowed goes with it, or it would come back under the old name.
+    try { await backend.deleteFile(legacyRecipePath(from)); } catch { /* locked: left as it is */ }
     await updateCategories(ctx.xiPath, (m) => { if (m[from] != null) m[safe] = m[from]; delete m[from]; });
     storePublishKind(safe, loadPublishCfg(from).kind);
     if (mixerRecipeRef.current.name === from) {
@@ -8078,18 +8140,17 @@ export default function App({ launch = null }) {
     setStatusText(`Renamed ${from} → ${safe}`);
     refreshMixerRecipes();
     return safe;
-  }, [xiCtx, recipePath, refreshMixerRecipes]);
+  }, [xiCtx, recipePath, legacyRecipePath, mixFileOf, refreshMixerRecipes]);
 
   const mixerDuplicate = useCallback(async (name) => {
     const ctx = xiCtx();
     if (!ctx) return;
-    const text = await backend.readTextFile(recipePath(name));
+    const text = await backend.readTextFile((await mixFileOf(name)).path);
     if (text == null) { setStatusText(`Could not read recipe ${name}`); return; }
     let r;
     try { r = JSON.parse(text); } catch { setStatusText(`Recipe ${name} is not valid JSON`); return; }
     // The names on disk right now, compared without case as the disk does: a copy never lands on another mix.
-    const taken = new Set((await backend.listFiles(mixerDir(ctx.xiPath)))
-      .filter((n) => /\.recipe\.json$/i.test(n)).map((n) => n.replace(/\.recipe\.json$/i, '').toLowerCase()));
+    const taken = new Set(mixFilesIn(await backend.listFiles(mixerDir(ctx.xiPath))).map((m) => m.name.toLowerCase()));
     let copy = `${name}_copy`;
     for (let i = 2; taken.has(copy.toLowerCase()); i++) copy = `${name}_copy${i}`;
     await backend.writeTextFile(recipePath(copy), JSON.stringify({ ...r, name: copy }, null, 2));
@@ -8097,7 +8158,7 @@ export default function App({ launch = null }) {
     storePublishKind(copy, loadPublishCfg(name).kind);
     setStatusText(`Duplicated ${name} → ${copy}`);
     refreshMixerRecipes();
-  }, [xiCtx, recipePath, refreshMixerRecipes]);
+  }, [xiCtx, recipePath, mixFileOf, refreshMixerRecipes]);
 
   /**
    * Export: the mix's saved file to wherever the save dialog says, with the Type
@@ -8107,7 +8168,7 @@ export default function App({ launch = null }) {
    */
   const mixerExport = useCallback(async (name) => {
     let bytes;
-    try { bytes = await backend.readFile(recipePath(name)); } catch { setStatusText(`Could not read recipe ${name}`); return; }
+    try { bytes = await backend.readFile((await mixFileOf(name)).path); } catch { setStatusText(`Could not read recipe ${name}`); return; }
     // Manage › Type lives beside the file (localStorage, per name); set by hand it
     // travels as `target.kind`, so an import seeds the same Type (mixerImport).
     // Auto leaves the file alone: its target.kind, if any, is what auto publishes with.
@@ -8119,7 +8180,7 @@ export default function App({ launch = null }) {
         bytes = new TextEncoder().encode(JSON.stringify({ ...r, target: { ...t, kind } }, null, 2));
       } catch { /* not JSON: export the file as it is */ }
     }
-    const fileName = `${name}.recipe.json`;
+    const fileName = `${name}${MIX_SUFFIX}`;
     if (!window.__TAURI__) {
       // Browser dev mode has no save dialog: the file goes to the browser's downloads.
       backend.downloadFile(fileName, bytes);
@@ -8138,12 +8199,13 @@ export default function App({ launch = null }) {
     }
     try { localStorage.setItem(MIXER_FILE_DIR_KEY, dest.replace(/[\\/][^\\/]*$/, '')); } catch { /* quota */ }
     setStatusText(`Exported ${name} → ${dest}`);
-  }, [recipePath]);
+  }, [mixFileOf]);
 
   const mixerOpen = useCallback(async (name) => {
     const ctx = xiCtx();
     if (!ctx) return;
-    const text = await backend.readTextFile(`${mixerDir(ctx.xiPath)}\\${name}.recipe.json`);
+    // <Name>.mix.json, else the <Name>.recipe.json it was saved as before.
+    const text = await backend.readTextFile((await mixFileOf(name)).path);
     if (!text) { setStatusText(`Could not read recipe ${name}`); return; }
     try {
       // A texture given as a PNG beside the recipe (xi-tools' CLI form) comes in as its
@@ -8210,7 +8272,7 @@ export default function App({ launch = null }) {
     } catch (e) {
       setStatusText(`Recipe ${name} is not valid JSON: ${e?.message ?? e}`);
     }
-  }, [xiCtx, mixerCatalog, mixerInfoFor, stopEffect, ensureGlobalEffects]);
+  }, [xiCtx, mixFileOf, mixerCatalog, mixerInfoFor, stopEffect, ensureGlobalEffects]);
 
   /** File a saved mix under `category` (blank: none); the open mix follows when it is that one. */
   const mixerSetCategory = useCallback(async (name, category) => {
@@ -8243,11 +8305,32 @@ export default function App({ launch = null }) {
    *   subdir     the ROM10 folder the DATs are written into
    *   force      take the slot even when its file ids point at another DAT
    *   pivot      build into the pivot folder (FFXI_PIVOT_DIR) instead of the game folder
+   *   db         Database Update: point (or clone) the local server's row (--apply-db)
+   *   menu       Client Menu Record: the client's menu entry at the row's id (--menu-record)
+   *   lua        Lua Stub: the new row's server script (--lua-stub)
+   *   cloneFrom  the donor, a name or an id (--clone-from); menuName (--menu-name); serverId (--server-id)
+   *   dbRow      the id of a row this mix did not make, confirmed once (--db-row); null once bound
    */
   const [mixerPublishCfg, setMixerPublishCfgState] = useState(() => loadPublishCfg(mixerRecipe.name));
-  const [mixerPublishPlan, setMixerPublishPlan] = useState(null);   // parsePublishPlan of the last Check
-  // Manage › Slots: null (closed) | { loading } | { error } | the `xi ability slots` report
+  // parsePublishPlan of the last Check, or of a Publish whose server steps have something to say
+  // (`fromPublish`: its Confirm publishes again rather than re-running Check).
+  const [mixerPublishPlan, setMixerPublishPlan] = useState(null);
+  // The weapon-skill slots window: null (not listed) | { loading } | { error } | the
+  // `xi ability slots` report; mixerSlotsPivot is the folder it lists (its own game/pivot
+  // toggle, seeded from the mix's Use Pivot Folder). The window opens from Manage › Slots,
+  // the mixer's right rail, or Assets › Database.
   const [mixerSlots, setMixerSlots] = useState(null);
+  const [mixerSlotsPivot, setMixerSlotsPivot] = useState(false);
+  const mixerSlotsPivotRef = useRef(mixerSlotsPivot);
+  mixerSlotsPivotRef.current = mixerSlotsPivot;
+  // Manage's server hint: null (not asked) | { loading } | { error } | `xi server check --json
+  // --no-db --no-binary` (no connection). Asked once a server switch is on; a Settings save that
+  // changes xi-tools' .env clears it so the next look asks again.
+  const [mixerServerInfo, setMixerServerInfo] = useState(null);
+  const mixerServerSeq = useRef(0);
+  const clearMixerServerInfo = useCallback(() => { mixerServerSeq.current += 1; setMixerServerInfo(null); }, []);
+  // Moves to open Manage (where Confirm is) after a Publish that needs a confirmation.
+  const [mixerManageTick, setMixerManageTick] = useState(0);
   useEffect(() => { setMixerPublishCfgState(loadPublishCfg(mixerRecipe.name)); setMixerPublishPlan(null); }, [mixerRecipe.name]);
   const setMixerPublishCfg = useCallback((patch) => {
     setMixerPublishCfgState((c) => {
@@ -8256,8 +8339,21 @@ export default function App({ launch = null }) {
       return next;
     });
     setMixerPublishPlan(null);   // a check is for one set of choices
-    if ('pivot' in patch) setMixerSlots(null);   // the listing is of one folder's tables
   }, []);
+  // Manage's server hint: the database and server folder xi-tools' .env points at, read
+  // (no connection, no PDB probe) once a server switch is on in the mixer.
+  const mixerServerWanted = leftView === 'mixer' && !!(mixerPublishCfg.db || mixerPublishCfg.menu || mixerPublishCfg.lua);
+  useEffect(() => {
+    if (!mixerServerWanted || mixerServerInfo != null) return;
+    const st = settingsRef.current;
+    const xiPath = (st?.xiPath || '').trim();
+    if (!xiPath) { setMixerServerInfo({ error: 'Set the xi-tools folder in Settings first.' }); return; }
+    const seq = ++mixerServerSeq.current;
+    setMixerServerInfo({ loading: true });
+    serverCheck(xiPath, xiEnvFromSpec(st), { db: false, binary: false })
+      .then((res) => { if (seq === mixerServerSeq.current) setMixerServerInfo(res); })
+      .catch((e) => { if (seq === mixerServerSeq.current) setMixerServerInfo({ error: localServerErrorText(e) }); });
+  }, [mixerServerWanted, mixerServerInfo]);
 
   /**
    * Import: a mix handed over as a .json file becomes a saved mix here. The file
@@ -8287,9 +8383,9 @@ export default function App({ launch = null }) {
       if (!file) return;
     }
     // The names on disk right now, not the panel's last listing: nothing saved is written over.
-    const taken = (await backend.listFiles(mixerDir(ctx.xiPath)))
-      .filter((n) => /\.recipe\.json$/i.test(n)).map((n) => n.replace(/\.recipe\.json$/i, ''));
-    const res = recipeFromImport(file.text, { stem: file.name.replace(/(\.recipe)?\.json$/i, ''), taken });
+    const taken = mixFilesIn(await backend.listFiles(mixerDir(ctx.xiPath))).map((m) => m.name);
+    // A mix file of either name (Name.mix.json, or Name.recipe.json from before) or any .json.
+    const res = recipeFromImport(file.text, { stem: file.name.replace(/(\.mix|\.recipe)?\.json$/i, ''), taken });
     if (res.error) { setStatusText(`Not imported: ${file.name} ${res.error}`); return; }
     const dest = recipePath(res.name);
     try {
@@ -8376,55 +8472,132 @@ export default function App({ launch = null }) {
     subdir: Number.isFinite(Number(cfg.subdir)) && String(cfg.subdir) !== '' ? Number(cfg.subdir) : null,
     force: !!cfg.force,
     pivot: !!cfg.pivot,
+    // The server switches and their fields (mixer.js serverBuildArgs decides which reach the build).
+    db: !!cfg.db,
+    menu: !!cfg.menu,
+    lua: !!cfg.lua,
+    cloneFrom: String(cfg.cloneFrom ?? '').trim() || null,
+    menuName: String(cfg.menuName ?? '').replace(/[\x00-\x1f\x7f\p{Zl}\p{Zp}]/gu, '').trim() || null,
+    serverId: /^\d+$/.test(String(cfg.serverId ?? '').trim()) ? Number(String(cfg.serverId).trim()) : null,
+    dbRow: Number.isInteger(cfg.dbRow) ? cfg.dbRow : null,
   });
+  // Check and Publish take an optional patch over the saved choices (a Confirm runs with its
+  // dbRow straight away); a click event handed over by a button is not one.
+  const publishPatch = (patch) => (patch && typeof patch === 'object' && !('nativeEvent' in patch) && !('target' in patch) ? patch : null);
   /** Manage › Check: a dry run with the current choices, shown as a table in the panel. */
-  const mixerCheckPublish = useCallback(async () => {
+  const mixerCheckPublish = useCallback(async (patch = null) => {
     const ctx = xiCtx();
     if (!ctx) return;
+    const cfg = { ...mixerPublishCfg, ...(publishPatch(patch) || {}) };
     const recipe = mixerRecipeRef.current;
     setMixerBusy(true);
     try {
-      const res = await publishRecipe(recipe, { dryRun: true, ...publishOpts(mixerPublishCfg) }, ctx.xiPath, ctx.env);
+      const res = await publishRecipe(recipe, { dryRun: true, ...publishOpts(cfg) }, ctx.xiPath, ctx.env);
       const plan = parsePublishPlan(res.text);
       setMixerPublishPlan({ ...plan, ok: res.ok, text: res.text });
-      setStatusText(res.ok ? `${recipe.name}: ${plan.kind ?? '?'} animation ${plan.animation ?? '?'} · ${plan.files.length} DAT(s)` : 'Check failed — see the Manage panel.');
+      const base = `${recipe.name}: ${plan.kind ?? '?'} animation ${plan.animation ?? '?'} · ${plan.files.length} DAT(s)`;
+      setStatusText(OLD_XI_SERVER_OPTION_RX.test(res.text) ? OLD_XI_SERVER_TEXT
+        : res.ok ? [base, ...publishStatusParts(plan)].join(' · ') : 'Check failed — see the Manage panel.');
     } finally {
       setMixerBusy(false);
     }
   }, [xiCtx, mixerPublishCfg]);
-  /** Manage › Slots: every weapon-skill number in the game or pivot folder and what holds it. */
-  const mixerListSlots = useCallback(async (open = true) => {
-    if (!open) { setMixerSlots(null); return; }
+  /** List the weapon-skill slots in one folder (`xi ability slots`) into the window. */
+  const refreshSlots = useCallback(async (pivot) => {
+    setMixerSlotsPivot(!!pivot);
     const ctx = xiCtx();
-    if (!ctx) return;
+    if (!ctx) { setMixerSlots({ error: 'Set the xi-tools folder in Settings › XI Tools first.' }); return; }
     setMixerSlots({ loading: true });
     try {
-      setMixerSlots(await listWsSlots({ pivot: !!mixerPublishCfg.pivot }, ctx.xiPath, ctx.env));
+      setMixerSlots(await listWsSlots({ pivot: !!pivot }, ctx.xiPath, ctx.env));
     } catch (e) {
       setMixerSlots({ error: String(e?.message ?? e) });
     }
-  }, [xiCtx, mixerPublishCfg.pivot]);
-  /** Publish: the real build, straight away, its output streaming into the console as it runs. */
-  const mixerPublish = useCallback(async () => {
+  }, [xiCtx]);
+  /** Open the slots window (Manage, the rail or Assets › Database) and list if it is empty. */
+  const openMixerSlots = useCallback(() => {
+    setMixerPanel('slots', true);
+    if (!mixerSlots || mixerSlots.error) refreshSlots(!!mixerPublishCfg.pivot);
+  }, [setMixerPanel, mixerSlots, refreshSlots, mixerPublishCfg.pivot]);
+  // The rail (and Assets › Database) can turn the window on without listing; fill it once.
+  useEffect(() => {
+    if (mixerPanels.slots && mixerSlots == null) refreshSlots(!!mixerPublishCfg.pivot);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mixerPanels.slots]);
+  /** Manage › Folder: the mix's publish folder (projects\abilities\<slug>) in Explorer. */
+  const mixerOpenPublishFolder = useCallback(async () => {
     const ctx = xiCtx();
     if (!ctx) return;
+    const name = mixerRecipeRef.current?.name ?? '';
+    try {
+      const { published, state, dir, pick, flatSql } = await revealPublishFolder(ctx.xiPath, name);
+      if (published) setStatusText(`Opened ${dir}`);
+      else if (!dir) setStatusText(`${name} has not been published yet — ${abilitiesDir(ctx.xiPath)} appears with the first Check or Publish.`);
+      else if (flatSql) setStatusText(`${name} has no publish folder yet — opened ${dir} on ${flatSql}, from an earlier publish; Publish again to make the folder.`);
+      else if (state === 'checked') setStatusText(`${name} is checked but not published yet — opened ${dir} on ${pick}, the mix the last Check ran; Publish fills the folder.`);
+      else if (state === 'unfinished') setStatusText(`${name} is not published yet — its folder holds only what the last Publish wrote before it stopped (${pick}); Publish again.`);
+      else {
+        const home = abilitiesDir(ctx.xiPath);
+        setStatusText(`${name} has not been published yet — opened ${dir}; Publish makes its folder ${dir === home ? 'there' : `in ${home}`}.`);
+      }
+    } catch (e) {
+      setStatusText(`Could not open the publish folder: ${e?.message ?? e}`);
+    }
+  }, [xiCtx]);
+  /** Publish: the real build, straight away, its output streaming into the console as it runs. */
+  const mixerPublish = useCallback(async (patch = null) => {
+    const ctx = xiCtx();
+    if (!ctx) return;
+    const cfg = { ...mixerPublishCfg, ...(publishPatch(patch) || {}) };
     const recipe = mixerRecipeRef.current;
-    const title = `xi dats build ${recipe.name}${mixerPublishCfg.pivot ? ' --pivot' : ''}`;
+    const title = `xi dats build ${recipe.name}${cfg.pivot ? ' --pivot' : ''}${cfg.db ? ' --apply-db' : ''}${cfg.menu ? ' --menu-record' : ''}${cfg.lua ? ' --lua-stub' : ''}`;
     const lines = [];
     setCliOutput({ title, text: 'starting…' });
     setMixerBusy(true);
     try {
-      const res = await publishRecipe(recipe, { dryRun: false, ...publishOpts(mixerPublishCfg) }, ctx.xiPath, ctx.env,
+      const res = await publishRecipe(recipe, { dryRun: false, ...publishOpts(cfg) }, ctx.xiPath, ctx.env,
         (line) => { lines.push(line); setCliOutput({ title, text: lines.join('\n') }); });
       setCliOutput({ title: `${title} · ${res.ok ? 'done' : 'failed'}`, text: res.text });
-      setStatusText(res.ok ? `Published ${recipe.name} — restart the client to see it` : 'Publish failed — see the console.');
-      setMixerPublishPlan(null);
-      setMixerSlots(null);   // what it listed has just changed
+      const plan = parsePublishPlan(res.text);
+      // A confirmed row is bound once a real build updated it (or found it as it should be):
+      // result.db holds it from now on. Anything else — needs-confirm again, a skip, the
+      // server unreachable — keeps the confirmation for the next Publish. First, because
+      // this clears the plan, which is set again just below.
+      if (cfg.dbRow != null && plan.db && !plan.db.would && (plan.db.op === 'update' || plan.db.op === 'unchanged')) {
+        setMixerPublishCfg({ dbRow: null });
+      }
+      // The server steps stay on Manage's plan (with Confirm, when a row needs it).
+      setMixerPublishPlan(plan.db || plan.menu || plan.lua ? { ...plan, ok: res.ok, text: res.text, fromPublish: true } : null);
+      // Confirm is there both for a row that would change and for an unchanged row this mix
+      // didn't make whose menu record waits on it (dbConfirmOf).
+      if (dbConfirmOf(plan)) setMixerManageTick((t) => t + 1);
+      const base = `Published ${recipe.name} — restart the client to see it`;
+      setStatusText(OLD_XI_SERVER_OPTION_RX.test(res.text) ? OLD_XI_SERVER_TEXT
+        : res.ok ? [base, ...publishStatusParts(plan)].join(' · ') : 'Publish failed — see the console.');
+      // A publish changed which slots are taken; re-list if the window is open, else clear.
+      if (mixerPanelsRef.current?.slots) refreshSlots(mixerSlotsPivotRef.current); else setMixerSlots(null);
       refreshMixerRecipes();
     } finally {
       setMixerBusy(false);
     }
-  }, [xiCtx, refreshMixerRecipes, mixerPublishCfg]);
+  }, [xiCtx, refreshMixerRecipes, mixerPublishCfg, setMixerPublishCfg]);
+  /**
+   * Manage › Confirm: the row the build found by name, which this mix did not make, is
+   * this mix's to change. Kept as `dbRow` (--db-row) until a build binds it, and run at
+   * once: Check again, or — after a Publish that stopped at it — Publish again.
+   */
+  const mixerConfirmDbRow = useCallback((id, fromPublish) => {
+    if (!Number.isInteger(id)) return;
+    setMixerPublishCfg({ dbRow: id });
+    if (fromPublish) mixerPublish({ dbRow: id });
+    else mixerCheckPublish({ dbRow: id });
+  }, [setMixerPublishCfg, mixerPublish, mixerCheckPublish]);
+  /** A link in Manage's server hint: Settings on its Local Server tab. */
+  const openLocalServerSettings = useCallback(() => {
+    showSettingsError('');
+    setSettingsTab('server');
+    setSettingsOpen(true);
+  }, [showSettingsError]);
 
   // One view on screen at a time, each arriving clean. Without this a model
   // keeps rendering (and animating) behind the Images page, music plays on under
@@ -10073,7 +10246,10 @@ export default function App({ launch = null }) {
     if (rendererRef.current) rendererRef.current.showSoundMarkers = on;
   }, []);
 
-  const saveSettings = async (draft) => {
+  const saveSettings = async (fullDraft) => {
+    // Settings › Local Server rides along only when one of its fields changed, and never
+    // becomes part of the app's settings: it is written into xi-tools' .env below.
+    const { localServer: localServerSave, ...draft } = fullDraft;
     const gamePath = draft.gamePath.trim();
     const hdPath = (draft.hdPath || '').trim();
     const pivotPath = (draft.pivotPath || '').trim();
@@ -10116,6 +10292,32 @@ export default function App({ launch = null }) {
         await backend.listDir(navmeshPath);
       } catch {
         showSettingsError(`Navmesh folder not found:\n${navmeshPath}`, 'navmeshpath');
+        return;
+      }
+    }
+    // Settings › Local Server: checked like the paths above, then merged into xi-tools' own
+    // .env (only the fields that changed; every other line kept) before anything else is
+    // saved, so a refusal leaves the rest unsaved too.
+    if (localServerSave) {
+      const values = normalizeLocalServer(localServerSave.values);
+      const problem = localServerProblem(values);
+      if (problem) { showSettingsError(problem, 'server'); return; }
+      if (!xiPath) {
+        showSettingsError('Local Server: set up xi-tools first (the XI Tools tab) — these settings are saved in its .env.', 'server');
+        return;
+      }
+      if (values.dir) {
+        try {
+          await backend.listDir(values.dir);
+        } catch {
+          showSettingsError(`Local Server: server folder not found:\n${values.dir}`, 'server');
+          return;
+        }
+      }
+      try {
+        await writeLocalServer(xiPath, values, localServerSave.base);
+      } catch (e) {
+        showSettingsError(`Local Server: couldn't save xi-tools' .env — ${e?.message ?? e}`, 'server');
         return;
       }
     }
@@ -10178,6 +10380,8 @@ export default function App({ launch = null }) {
     };
     setSettings(next);
     settingsRef.current = next;
+    // The xi-tools folder or its .env may have changed: Manage's server hint asks again.
+    clearMixerServerInfo();
     showSettingsError('');
     setSettingsOpen(false);
 
@@ -11793,6 +11997,8 @@ export default function App({ launch = null }) {
       {sequencerOpen && (
         <CameraSequencer
           onClose={() => setSequencerOpen(false)}
+          zIndex={modalZ('camseq', 28)}
+          onFocus={() => raiseModal('camseq')}
           rendererRef={rendererRef}
           tickRef={camSeqTick}
           weathers={weatherList}
@@ -11877,6 +12083,12 @@ export default function App({ launch = null }) {
           onSelectTable={setDbTable}
           lang={dbLang}
           counts={dbCounts}
+          onOpenSlots={() => {
+            setLeftView('mixer');
+            setExplorerOpen(true);
+            setMixerPanel('timeline', true);
+            openMixerSlots();
+          }}
         />
       )}
       {explorerOpen && leftView === 'npc' && (
@@ -12110,7 +12322,8 @@ export default function App({ launch = null }) {
         <ActorEditorModal
           actor={editingActor}
           pc={actorPc}
-          zIndex={2150}
+          zIndex={modalZ('actor', 2150)}
+          onFocus={() => raiseModal('actor')}
           onClose={() => setActorEditId(null)}
           currentSet={currentScene}
           sceneDirty={sceneDirty}
@@ -12245,6 +12458,9 @@ export default function App({ launch = null }) {
         <>
           <RightRail items={MIXER_RAIL} open={mixerPanels} onToggle={setMixerPanel} />
           <MixerPanel
+            mixerZ={modalZ('mixer', 28)}
+            onMixerFocus={() => raiseModal('mixer')}
+            onStatus={setStatusText}
             recipe={mixerRecipe}
             onRecipe={mixerEdit}
             onAssignRows={mixerAssignRows}
@@ -12267,8 +12483,13 @@ export default function App({ launch = null }) {
             onPublishCfg={setMixerPublishCfg}
             publishPlan={mixerPublishPlan}
             onCheckPublish={mixerCheckPublish}
-            slots={mixerSlots}
-            onListSlots={mixerListSlots}
+            onOpenSlots={openMixerSlots}
+            slotsOpen={!!mixerPanels.slots}
+            onOpenPublishFolder={mixerOpenPublishFolder}
+            serverInfo={mixerServerInfo}
+            onOpenLocalServer={openLocalServerSettings}
+            onConfirmDbRow={mixerConfirmDbRow}
+            manageOpenTick={mixerManageTick}
             onSaveAs={mixerSaveAs}
             onDelete={mixerDelete}
             onRename={mixerRename}
@@ -12320,6 +12541,18 @@ export default function App({ launch = null }) {
               selectedPath={selectedDat}
               onSelectNpc={loadEffectNpc}
               onClose={() => setMixerPanel('actors', false)}
+            />
+          </Floating>
+          <Floating id="mixer-slots" open={!!mixerPanels.slots} width={560} defaultPos={{ right: 68, top: 90 }}>
+            <MixerSlotsPanel
+              slots={mixerSlots}
+              pivot={mixerSlotsPivot}
+              onPivot={(p) => refreshSlots(p)}
+              onRefresh={(p) => refreshSlots(p)}
+              from={mixerPublishCfg.from}
+              animation={mixKind === 'ws' ? mixerPublishCfg.animation : ''}
+              onPick={(n) => setMixerPublishCfg({ kind: 'ws', animation: String(n) })}
+              onClose={() => setMixerPanel('slots', false)}
             />
           </Floating>
         </>

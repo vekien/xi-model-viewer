@@ -276,7 +276,8 @@ function KeepEditor({ ev, onPatch, onRemove, targets }) {
 export function MixerPanel({
   recipe, onRecipe, onAssignRows, extraRows = null, onHoldRows, lane, laneInfo, laneEntry,
   transport, onPlay, onStop, onPublish, publishPlan = null, publishCfg = null, onPublishCfg, onCheckPublish,
-  slots = null, onListSlots,
+  onOpenSlots, slotsOpen = false, onOpenPublishFolder,
+  serverInfo = null, onOpenLocalServer = null, onConfirmDbRow = null, manageOpenTick = 0,
   onSaveAs, onOpen, onReset, recipes, busy, note, error = null, onDismissError,
   onDelete, onRename, onDuplicate, onImport, onExport, onSetCategory, onShuffle, stageName,
   onPause, onResume, onSeek, getPlayhead, mixLoaded, mixDirty,
@@ -288,6 +289,8 @@ export function MixerPanel({
   // Locks · hits · links: what a link can name (App's mixerLinkTargets, read at render
   // time: the same object while nothing it reads changes) and a track source's own copied in.
   linkTargets = null, onCopyKeep = null,
+  mixerZ = 28, onMixerFocus = null,
+  onStatus = null,
 }) {
   // Selection is a set: a marquee or ctrl-click builds a group that drags,
   // duplicates and deletes as one. The editor below shows a lone selection.
@@ -514,6 +517,12 @@ export function MixerPanel({
   // A failed compose or pick outranks every other note until the next attempt.
   const failed = !busy && !!error;
   const statusNote = busy ? 'working…' : (mixLoaded && mixDirty ? 'edited · Play mix to hear the change' : (events.length ? note : 'pick a motion, effect or sound on the left to start'));
+  // The timeline no longer carries its own note; feed it to the app's status bar
+  // (bottom-right) while the mixer is up, and clear it when the mixer view leaves.
+  useEffect(() => {
+    onStatus?.(statusNote);
+    return () => onStatus?.(null);
+  }, [statusNote, onStatus]);
 
   // The window's Play/Pause is the sequencer's round glyph; its meaning is the
   // Animation panel's: compose and play, pause, resume, or play again.
@@ -537,6 +546,7 @@ export function MixerPanel({
   const stageLen = mixLoaded && getPlayhead ? getPlayhead().length : 0;
   const timeline = (
     <TimelineWindow open={!!panels.timeline} onClose={() => onPanel?.('timeline', false)}
+      zIndex={mixerZ} onFocus={onMixerFocus}
       recipeName={recipe.name} note={statusNote} failed={failed} error={error} onDismissError={onDismissError}
       events={events} selectedIds={selectedIds} onSelect={select} onMoveMany={moveMany} onShiftLane={shift}
       onAssignRows={onAssignRows} extraRows={extraRows} onAddRow={onHoldRows} onDeleteRow={removeRow}
@@ -558,7 +568,8 @@ export function MixerPanel({
       onLoad={() => onPanel?.('library')} loadOpen={!!panels.library}
       publishPlan={publishPlan} onPublish={onPublish} busy={busy}
       publishCfg={publishCfg} onPublishCfg={onPublishCfg} onCheckPublish={onCheckPublish}
-      slots={slots} onListSlots={onListSlots}
+      onOpenSlots={onOpenSlots} slotsOpen={slotsOpen} onOpenPublishFolder={onOpenPublishFolder}
+      serverInfo={serverInfo} onOpenLocalServer={onOpenLocalServer} onConfirmDbRow={onConfirmDbRow} manageOpenTick={manageOpenTick}
       kind={kind} onKind={onKind} baseMotionSpecs={baseMotionSpecs} animBands={animBands} onRandomise={onShuffle ? () => onShuffle(kind) : null}
       canPublish={!busy && events.length > 0}
       onDropEntry={onDropEntry}

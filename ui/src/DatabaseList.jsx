@@ -7,9 +7,9 @@ import { Tooltip } from './Tooltip.jsx';
  * DAT, Quests/Missions per region, and the d_msg name tables). Clicking a
  * table opens it in DatabaseViewer.
  */
-export function DatabaseList({ selectedKey, onSelectTable, lang = 'en', counts }) {
+export function DatabaseList({ selectedKey, onSelectTable, lang = 'en', counts, onOpenSlots }) {
   const [query, setQuery] = useState('');
-  const [openGroups, setOpenGroups] = useState(() => new Set(['items']));
+  const [openGroups, setOpenGroups] = useState(() => new Set(['items', 'mixer']));
 
   const q = query.trim().toLowerCase();
   const groups = useMemo(() => DB_TREE.map((g) => ({
@@ -29,6 +29,10 @@ export function DatabaseList({ selectedKey, onSelectTable, lang = 'en', counts }
 
   const total = DB_TREE.reduce((n, g) => n + g.tables.length, 0);
   const shown = groups.reduce((n, g) => n + g.tables.length, 0);
+  // The Ability Mixer group is not a record table — its rows open mixer tools directly.
+  const mixerRows = [{ key: 'slots', label: 'Slots', icon: 'view_list', onOpen: onOpenSlots }]
+    .filter((r) => r.onOpen && (!q || `ability mixer ${r.label}`.toLowerCase().includes(q)));
+  const mixerOpen = !!q || openGroups.has('mixer');
 
   return (
     <div id="tree" className="panel list-panel">
@@ -43,7 +47,30 @@ export function DatabaseList({ selectedKey, onSelectTable, lang = 'en', counts }
         />
       </div>
       <div className="list-scroll">
-        {shown === 0 && <div className="side-note">No tables match “{query}”.</div>}
+        {shown === 0 && mixerRows.length === 0 && <div className="side-note">No tables match “{query}”.</div>}
+        {mixerRows.length > 0 && (
+          <div className={`node${mixerOpen ? ' open' : ''}`}>
+            <div className="row" onClick={() => toggle('mixer')}>
+              <span className="caret icon">chevron_right</span>
+              <span className="kind icon">timeline</span>
+              <span>Ability Mixer</span>
+              <span className="badge">{mixerRows.length}</span>
+            </div>
+            {mixerOpen && (
+              <div className="children">
+                {mixerRows.map((r) => (
+                  <div key={r.key} className="node db-table-row">
+                    <div className="row" onClick={() => r.onOpen?.()}>
+                      <span className="caret icon" />
+                      <span className="kind icon">{r.icon}</span>
+                      <span className="db-name">{r.label}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {groups.map((g) => {
           const open = !!q || openGroups.has(g.key);
           return (

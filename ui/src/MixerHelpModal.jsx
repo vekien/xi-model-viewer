@@ -41,7 +41,7 @@ function Section({ icon, title, children }) {
 /**
  * The Ability Mixer's help: what the timeline window's (?) opens. The About
  * window's floating frame — backdrop-less, dragged by its header, × and Esc
- * close it — over a guide in two columns that scrolls on its own.
+ * close it — over a guide in three columns that scrolls on its own.
  *
  * It sits above the mixer's windows and the Data Struct windows, below the app's
  * own modals (5000), and the mixer's keys keep working while it is open.
@@ -123,92 +123,77 @@ export function MixerHelpModal({ open, onClose, zIndex = 4000 }) {
 
       <div className="modal-body mhelp-body">
         <p className="mhelp-lead">
-          A mix is a timeline of pills: motion, effects and sound picked from the game’s DATs, and the
-          locks, hits and links that make it land in game. Play composes exactly what the timeline shows.
+          A mix is a timeline of pills — motion, effects and sound from the game’s DATs, plus the locks,
+          hits and links that make it land in game. Play shows exactly what the timeline holds.
         </p>
 
         <div className="mhelp-cols">
-          <Section icon="play_circle" title="Playing and scrubbing">
-            <li><b>Play</b> composes the mix for the race on the stage and plays it. Until the next edit it pauses and resumes without composing again; <b>Stop</b> rewinds.</li>
-            <li><K>Space</K> plays or pauses; pressed twice quickly, it stops and rewinds.</li>
-            <li>Drag the <b>red cursor</b>, or the ruler, to scrub. The readout at the bottom right is the frame, the length and the time (60 frames a second), and the race on the stage.</li>
-            <li><b>Speed</b> plays the stage slower or faster: effect, sound and motion together. <b>Loop</b> restarts the mix when it ends; off, it parks at its end.</li>
-            <li>The dashed <b>loop</b> marker is where the mix restarts: after the last motion, effect or sound until you drag it. Double-click it to go back to auto. Sounds after it ring on past the restart, as in game.</li>
-            <li>The <b>strike line</b> marks the first blow: the first flinch or weapon swing, else the first hit.</li>
-            <li>The zoom buttons at the end of the toolbar widen the track up to 8×; it then scrolls sideways.</li>
+          <Section icon="play_circle" title="Play &amp; scrub">
+            <li><b>Play</b> plays the mix, <b>Stop</b> rewinds. <K>Space</K> = play/pause, twice = stop.</li>
+            <li>Drag the <b>red cursor</b> or ruler to scrub. <b>Speed</b> slows the stage; <b>Loop</b> repeats.</li>
+            <li>Dashed <b>loop</b> mark = where it restarts (double-click for auto). <b>Strike line</b> = the first blow.</li>
+            <li>Zoom buttons widen the track up to 8×.</li>
           </Section>
 
-          <Section icon="view_timeline" title="Pills and rows">
-            <li>Drag a pill along to move it in time; the other pills stay where they are. <b>Snap</b> locks it onto the strike line, the loop end, frame 0 and other pills’ edges when it comes close.</li>
-            <li>Drag a pill up or down to put it in another row of its track; below the last row makes a new one. A pill dropped onto another goes to the next row down with room for it.</li>
-            <li>A pill never changes track: its clips, generators and sounds are read from that track’s source.</li>
-            <li>The <b>+</b> by a track’s name adds an empty row. Point at the label for each row’s <b>−</b>: it deletes that row, its pills join the row above and the rows below move up.</li>
-            <li>The fold button by a label, with the row count, puts the track on one line; folded, its pills drag in time only. <Lane id="keep" /> starts folded.</li>
-            <li>A looping clip’s repeats are drawn faint, joined to its pill by a line, and nothing is placed on top of them. Its label says ×2, ×3… or ×∞.</li>
-            <li>A clip’s blend in and out are the ramps at its ends. On the Motion and Effects tracks a solid pill starts a generator and an outlined one is anything else (a clip, a dampen, a link…). A sound pill shows its waveform, and the pills on <Lane id="keep" /> are solid grey. A pencil means this mix edits that generator, or replaces a texture it draws.</li>
-            <li>Faint pills with a link mark are what a linked shared routine plays from ROM/0/0.DAT. A mix does not carry them: mute or move the link to change them.</li>
+          <Section icon="view_timeline" title="Pills &amp; rows">
+            <li>Drag a pill to move it; <b>Snap</b> catches the strike line, loop end and nearby pills.</li>
+            <li>Drag up/down for another row. A track’s <b>+</b> adds a row, a row’s <b>−</b> removes it.</li>
+            <li>A pill keeps its track. Looping repeats are faint (×2, ×3, ×∞).</li>
+            <li>Fold (the count by a label) puts a track on one line. <Lane id="keep" /> starts folded.</li>
           </Section>
 
-          <Section icon="ads_click" title="Selecting and editing">
-            <li>Click a pill to select it; its fields open under the track: start frame, duration and row, and for a clip its blend in, blend out and loops (0 = ∞). A lock, hit or link has fields of its own.</li>
-            <li>Drag on empty space to select a group. <K>Ctrl</K>-click puts a pill in or out of the selection, and <K>Ctrl</K>-drag adds a group; <K>Shift</K> works the same. <K>Ctrl + A</K> selects every pill.</li>
-            <li><K>Ctrl + D</K> duplicates the selection right after itself; <K>Delete</K> removes it.</li>
-            <li><K>M</K> mutes the selection: it stays on the timeline, left out of the mix, until <K>M</K> again. <b>Disable</b> in a pill’s fields does the same.</li>
-            <li><K>Ctrl + C</K> copies the selection; <K>Ctrl + V</K> pastes it at the red cursor, on the same tracks. Before the mix has played, or with the cursor at frame 0, it lands right after the copied pills. A copy can go into another mix too.</li>
-            <li>Click a sound pill, or its speaker, to hear it. <b>Preview</b> in an effects pill’s fields plays just that generator, once.</li>
+          <Section icon="ads_click" title="Select &amp; edit">
+            <li>Click a pill to open its fields (start, duration, row, blend, loops).</li>
+            <li>Drag empty space to box-select; <K>Ctrl</K>-click toggles one; <K>Ctrl + A</K> = all.</li>
+            <li><K>Ctrl + D</K> duplicate · <K>Delete</K> remove · <K>M</K> mute · <K>Ctrl + C</K>/<K>V</K> copy/paste.</li>
+            <li>Click a sound pill to hear it; <b>Preview</b> plays one generator.</li>
           </Section>
 
           <Section icon="layers" title="Tracks">
-            <li>A mix has <Lane id="motion" />, <Lane id="vfx" /> and <Lane id="sound" /> tracks, then <Lane id="keep" />. <b>Add Track</b> in the toolbar adds another of a kind.</li>
-            <li>Click a track’s label to make it the active track: a pick from the list lands there. In the list a click previews a row, its <b>+</b> adds it to the active track, and a row can be dragged onto any track of its kind.</li>
-            <li>A track’s label names its source, the DAT its pick came from. Its <b>×</b> clears the first track of a kind and removes any other.</li>
-            <li>Drag a track’s label to shift the whole track in time.</li>
-            <li>The align buttons in the bar shift the first Effects or Sound track so its first generator lands on the strike line.</li>
-            <li>The dice picks a random motion for the Type, random effects and a random sound, then plays.</li>
+            <li><Lane id="motion" /> <Lane id="vfx" /> <Lane id="sound" />, then <Lane id="keep" />. <b>Add Track</b> adds another.</li>
+            <li>Click a label to make it active; picks land there. Drag a label to shift the track in time.</li>
+            <li>A label names its DAT source; <b>×</b> clears it. The dice randomises the mix.</li>
           </Section>
 
-          <Section icon="auto_awesome" title="Casts and stages">
-            <li>On a job ability or spell the casts lead the Motion list. A cast comes as a pill per stage, in order: Start, Middle, End, each a clip of its own to move, loop or delete. Picking one sets the Type to match.</li>
-            <li>A spell’s cast comes without its chant. The server plays the chant while the spell is cast (one of eight, by the spell’s group, spell_list.group), and the spell’s DAT runs once the cast finishes. A chant pill on a spell chants a second time and holds everything after it back.</li>
-            <li>Open a spell’s row for the retail release instead: one waiting link, <code>3C sh··</code>, that plays the caster’s own release from its race’s files. The casting circle stops, the release burst and motion play, then 60 ticks of locks.</li>
-            <li>A waiting link (<code>0x3B</code>, <code>0x3C</code>) holds the rest of the mix until the routine it runs ends. The shaded band after it, <b>holds N</b>, shows how long: the stage plays everything after it that much later, and the red cursor waits on the link’s frame meanwhile.</li>
-            <li><b>holds ?</b> means the length is not known yet: a cast release needs a character on the stage, and ROM/0/0.DAT read (Play mix reads it).</li>
+          <Section icon="auto_awesome" title="Casts &amp; stages">
+            <li>Casts lead the Motion list: a pill per <b>Start · Middle · End</b>. Picking one sets the Type.</li>
+            <li>A spell’s cast has no chant — the server chants by group; the DAT runs when the cast ends.</li>
+            <li>Open a spell’s row for the <b>retail release</b> link instead.</li>
+            <li>A waiting link (<code>0x3B/3C</code>) holds the mix until its routine ends; <b>holds N</b> shows how long.</li>
           </Section>
 
           <Section icon="lock" title="Locks · hits · links">
-            <li>The last lane is what makes a mix land in game rather than what it shows. Its <b>+</b> adds a lock, hit or link at the red cursor (at the strike line before the mix has played), or copies a track source’s own locks and hits, which a pick leaves behind. What is added here belongs to no track: it stays when a track is cleared or picked again.</li>
-            <li><b>Hit</b>: show the result now. The damage or heal number and its battle-log line appear here. Retail links the shared <code>mdam</code> after the last swing or flinch; with no hit the number still shows, but only when the routine ends.</li>
-            <li><b>Added effect</b> (<code>proc</code>) plays the caster’s added-effect animation when the result has one, about 20 ticks after the hit in retail.</li>
-            <li><b>Flinch</b> plays the target’s damage motion, as hard as the server says the hit was (this server sends none for spells); <b>Knockback</b> slides it back: at mode 0 by the server’s knockback, which this server sends for few actions; at any other mode by its own distance.</li>
-            <li><b>Locks</b> hold part of an actor until they run out or the routine ends: the target’s status (it cannot fall or disengage before its number shows), every target’s (area), the caster’s, control (the player cannot act), magic, and turning. Retail ends the target and control locks at about the hit.</li>
-            <li><b>Links</b> run another routine, from this mix’s DAT, the shared ROM/0/0.DAT or the caster’s race files. A link runs alongside; a waiting link holds the mix until its routine ends. Retail links <code>eis1</code> / <code>ei11</code> (the activation flash), <code>hwmg</code> (weapons away), <code>hwso</code> (instrument out), <code>stnm</code> (stop the charge circle) and <code>sh··</code> (the cast release).</li>
-            <li><b>Add retail set</b> adds what retail has and the mix lacks. For a weapon skill or job ability: the target held to the hit, magic and control held 90 ticks (to the hit when that is later), the hit at the strike line and the added effect 20 ticks after it. For a spell: the cast release at frame 0, the target held to the hit, and the hit near the end.</li>
-            <li>The <b>warning badge</b> counts what is off: no hit, a hit before the blow lands, a target lock that ends before the hit, a link the game cannot find. Click it for the list, and a warning to select its pills.</li>
+            <li>The last lane makes a mix land in game. Its <b>+</b> adds a lock, hit or link (or copies a source’s).</li>
+            <li><b>Hit</b> shows the damage/heal number. <b>Flinch</b> / <b>Knockback</b> move the target.</li>
+            <li><b>Locks</b> hold the target, caster, control, magic or turning until the routine ends.</li>
+            <li><b>Links</b> run another routine (this DAT, ROM/0/0, or the caster’s race).</li>
+            <li><b>Add retail set</b> fills in what retail has. The <b>badge</b> counts what’s off.</li>
           </Section>
 
-          <Section icon="bubble_chart" title="Generators and textures">
-            <li>Select an effects pill and press <b>Edit generator</b>: the Generator window shows every field of that generator by group (timing, spawn, position, rotation, colour, texture, curves and more). An edit belongs to this mix: the stage shows it, and Publish writes it into the mix’s DAT.</li>
-            <li>An edited field has its own undo; <b>Revert all</b> puts the generator and its curves back as the source DAT holds them. The play button plays just this generator, once, with its edits.</li>
-            <li><b>Curves</b> show their keys to edit when the track’s DAT holds the curve (a shared one of ROM/0/0.DAT cannot be edited). A curve is shared: every generator that names it plays the edited keys.</li>
-            <li><b>Hue shift</b> turns every colour of the generator round the colour wheel: its colour fields, and its red, green and blue curves when their keys line up. A texture, and a mesh’s own vertex colours, keep their hue.</li>
-            <li>Under <b>Texture &amp; mesh</b>, <b>Replace…</b> puts a PNG in a texture’s place, <b>Save PNG</b> saves the source’s texture to edit and pick back, and its undo goes back to the source’s. Every generator that draws the texture shows the replacement.</li>
-            <li>Play mix and Publish put a replacement into the DAT as DXT3, each side a power of two from 4 to 256. A sprite sheet’s frames are cut from set places in the image, so a replacement must keep the original’s frame layout.</li>
-            <li>A shared routine’s generators (the faint pills) are not carried by a mix, so they cannot be edited.</li>
+          <Section icon="bubble_chart" title="Generators &amp; textures">
+            <li>Effects pill → <b>Edit generator</b>: timing, spawn, colour, curves and more. Edits ship in the DAT.</li>
+            <li>Every field has undo; <b>Revert all</b> restores the source. <b>Hue shift</b> rotates every colour.</li>
+            <li><b>Replace…</b> swaps a texture for a PNG (DXT3, 4–256 px); <b>Save PNG</b> exports it.</li>
+            <li>Shared-routine generators (faint pills) can’t be edited.</li>
           </Section>
 
           <Section icon="publish" title="Publishing">
-            <li>The <b>Type</b> in the toolbar decides what the mix publishes as: WS, Ability or Spell. A weapon skill is built per race and takes any motion. A job ability or spell is one DAT for every race: the casts at the top of the Motion list always work, and any other motion is baked from one race’s copy, which is experimental (the strip above the track says so).</li>
-            <li>The Type also decides which set <b>Add retail set</b> lays, and on a weapon skill the stage stands in its battle stance.</li>
-            <li><b>Publish</b> builds the mix into the game folder now (<code>xi dats build</code>), or the pivot folder, and the console shows it as it runs. Restart the client to see it.</li>
-            <li><b>Manage</b> holds the rest, kept for each mix name: <b>animation</b> is the slot number (blank: automatic), <b>start at</b> is where an automatic number starts looking, and <b>ROM10 folder</b> is where the DATs are written.</li>
-            <li><b>Overwrite a taken slot</b> takes the slot even when its file ids already point at another DAT. <b>Use Pivot Folder</b> builds into the pivot folder (FFXI_PIVOT_DIR) instead of the game folder.</li>
-            <li><b>Check</b> is a dry run with these choices: the slot it takes and where every DAT lands, nothing written. <b>Slots</b> lists every weapon-skill number and what holds it; click a free one to take it.</li>
-            <li>The note under the fields gives the numbers the Type can take on any client, then the band the client plugin (cexislots) adds; <b>Settings › XI Tools › Custom animation bands</b> turns it on.</li>
+            <li><b>Type</b> = WS, Ability or Spell. <b>Publish</b> builds into the game (or pivot) folder; restart the client.</li>
+            <li><b>Manage</b>: <b>animation</b> slot (blank = auto), <b>start at</b>, <b>ROM10 folder</b>. <b>Check</b> = dry run; <b>Slots</b> lists WS numbers.</li>
+            <li>Each Publish fills <code>projects\abilities\&lt;slug&gt;</code> (mix, SQL, DAT copies, placements). <b>Folder</b> opens it.</li>
+            <li><b>Overwrite a taken slot</b> reuses a taken slot; <b>Use Pivot Folder</b> builds into the pivot folder.</li>
+          </Section>
+
+          <Section icon="dns" title="Local server switches">
+            <li>Three per-mix switches for the server in <b>Settings › Local Server</b> (run on Check and Publish).</li>
+            <li><b>Database Update</b> points the server row at the animation, or, when there’s none, inserts one cloned from a default donor (Cure / Berserk / Fast Blade) so it works until a dev edits it. Confirm a row this mix didn’t make.</li>
+            <li><b>Client Menu Record</b> adds the menu entry at the same id, so players can pick it.</li>
+            <li><b>Lua Stub</b> writes the server script (what it <i>does</i>), copied from the default donor. The DAT is only how it <i>looks</i>.</li>
           </Section>
 
           <Section icon="save" title="Saving mixes">
-            <li><b>New</b> starts an empty mix. Name it, file it under a category if you like, and <b>Save</b> (<K>Ctrl + S</K>): over the saved mix of that name when there is one.</li>
-            <li><b>Load</b> opens the Mixes panel: every saved mix by category, to open, rename, file, duplicate, delete, export or import. The bin in the toolbar deletes the saved mix with this name.</li>
+            <li><b>New</b> starts empty; <b>Save</b> (<K>Ctrl + S</K>) writes <code>&lt;Name&gt;.mix.json</code>.</li>
+            <li><b>Load</b> opens the Mixes panel: open, rename, file, duplicate, delete, import/export.</li>
           </Section>
 
           <section className="help-controls-group mhelp-section">
@@ -219,7 +204,6 @@ export function MixerHelpModal({ open, onClose, zIndex = 4000 }) {
                 <span className="help-action">{action}</span>
               </div>
             ))}
-            <div className="mhelp-note">While you type in a field the keys are the field’s; Ctrl + S still saves.</div>
           </section>
         </div>
       </div>
