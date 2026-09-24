@@ -96,7 +96,7 @@ function jobOutDir(folder, rel, catalog, args) {
 /** Zone flags common enough to tick rather than hunt for in the args picker. */
 const ZONE_CHECKS = [
   { label: 'Contents', flags: ['--no-sky', '--no-vfx', '--no-subareas'] },
-  { label: 'Output', flags: ['--objects', '--opaque', '--collision', '--json'] },
+  { label: 'Output', flags: ['--objects', '--sub-areas', '--opaque', '--collision', '--json'] },
 ];
 
 /** Each box is its flag's chip in the args box, so ticking one adds or removes it there. */

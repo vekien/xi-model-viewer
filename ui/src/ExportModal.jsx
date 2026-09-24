@@ -337,6 +337,8 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
   const animId = tokenValue(args, '--anim');
   // Zone export as one file per mesh rather than the combined zone.
   const perObject = kindId === 'zone' && args.some((t) => tokenFlag(t) === '--objects');
+  // …or the zone plus one <stem>_<id> file per sub-area.
+  const subAreaFiles = kindId === 'zone' && args.some((t) => tokenFlag(t) === '--sub-areas');
   // Full Pose exports either the single frame on screen or the whole clip.
   const allFrames = args.some((t) => t.trim() === '--all-frames');
   const setAllFrames = (on) => setArgList(on
@@ -550,7 +552,9 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
 
           <div className="export-outrow">
             <span className="icon">{isXi ? kind.icon : 'audio_file'}</span>
-            <span>Exports to <strong>{perObject ? `one .${outExt} per object` : `${outStem}.${outExt}`}</strong></span>
+            <span>Exports to <strong>{perObject ? `one .${outExt} per object`
+              : subAreaFiles ? `${outStem}.${outExt} + ${outStem}_<id>.${outExt} per sub-area`
+                : `${outStem}.${outExt}`}</strong></span>
           </div>
 
           {needsXi && (
@@ -618,6 +622,25 @@ export function ExportModal({ open, spec, onClose, onStatus, onCliLog, onDone })
                     Writes every mesh as its own .{outExt} straight into the export folder, in
                     local space at the origin, instead of one combined zone file. Adds --objects.
                     {format === 'fbx' && ' With FBX, Blender runs once per object, so a full zone takes a while.'}
+                  </div>
+                </div>
+              )}
+
+              {kindId === 'zone' && (
+                <div className="form-row">
+                  <Field className="check-field">
+                    <Checkbox checked={subAreaFiles} className="checkbox"
+                      onChange={(v) => setArgList(v
+                        ? addToken(catalog, args, '--sub-areas')
+                        : removeFlag(args, '--sub-areas'))}>
+                      <span className="icon check-icon">check</span>
+                    </Checkbox>
+                    <Label className="check-label">Sub-areas as files</Label>
+                  </Field>
+                  <div className="form-hint">
+                    Also writes each sub-area from its own DAT as {outStem}_&lt;id&gt;.{outExt} beside the
+                    zone: one per shop interior in the towns, one per island platform in Ru’Aun Gardens.
+                    The zone file leaves out the stand-ins they replace. Adds --sub-areas.
                   </div>
                 </div>
               )}

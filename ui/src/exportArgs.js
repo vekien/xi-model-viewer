@@ -222,9 +222,18 @@ const ZONE_ARGS = [
   },
   {
     flag: '--no-subareas', kind: 'flag', quick: 4, group: 'Contents',
-    label: 'Omit sub-areas',
-    hint: 'Drop placements tagged with a sub-area id: shop and inn interiors, and in Ru’Aun a '
-      + 'second low-detail copy of the sky. Included by default.',
+    label: 'Omit sub-area stand-ins',
+    hint: 'Drop the low-detail stand-ins a zone draws for each sub-area until you enter it: the '
+      + 'closed shop room in the towns, Ru’Aun Gardens’ island platforms. Kept by default. '
+      + 'Sub-areas as files already leaves out the ones it exports.',
+  },
+  {
+    flag: '--sub-areas', kind: 'flag', group: 'Layout', conflicts: ['--objects'],
+    label: 'Sub-areas as files',
+    hint: 'Also export each sub-area from its own DAT as <zone>_<id> beside the zone file: Lower '
+      + 'Jeuno (41) gives 41 plus 41_454 … 41_466, one per shop interior; Ru’Aun Gardens one per '
+      + 'island platform, at full detail. The zone file leaves out the stand-ins they replace, so '
+      + 'the files line up. Geometry only.',
   },
   {
     flag: '--with-collision-proxies', kind: 'flag', group: 'Contents',
@@ -239,7 +248,7 @@ const ZONE_ARGS = [
       + 'the cheap copy ends up inside the detailed one.',
   },
   {
-    flag: '--objects', kind: 'flag', group: 'Layout',
+    flag: '--objects', kind: 'flag', group: 'Layout', conflicts: ['--sub-areas'],
     label: 'Per-object files',
     hint: 'Write each mesh as its own .glb straight into the output folder (local space, at the '
       + 'origin) instead of one combined zone file.',

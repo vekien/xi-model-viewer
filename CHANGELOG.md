@@ -8,6 +8,20 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ---
 
+## [1.9.0] — 2026-09-24
+
+[Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.8.0...v1.9.0)
+
+### Zones
+- Sub-areas load from their own DATs. Ru'Aun Gardens' island platforms (the entrance dome, god islands, towers, the standing-stone isles) were drawn as the low-detail stand-ins the game shows from a distance; every platform now draws at full detail, and Escha - Ru'Aun likewise. Town shop and building interiors load the same way
+- **Graphics › Sub-areas** switches between full detail (on, the default) and the stand-ins the game draws while you are outside a sub-area
+- Placements that only stand in for a richer copy from far away are found from the zone's culling tables instead of by name. Also catches Ru'Aun's `*_n` pillar stand-ins and Eastern Adoulin's `low*` walls and aqueducts, which z-fought with the detailed ones, and stops hiding ROM4/0/42's `m_wall01`
+- Details lists the sub-area DATs, and Data Struct can open each one; the ZoneDef table's last column is now **Stands in for**
+
+### Export
+- Zone export: **Sub-areas as files** (`--sub-areas`, needs xi-tools 1.12.0) writes each sub-area as `<zone>_<id>` beside the zone file, e.g. Lower Jeuno `41` plus `41_454` … `41_466`; the zone file leaves out the stand-ins they replace. Also a tick box in Batch Export
+- **Omit sub-area stand-ins** (`--no-subareas`) says what it actually drops
+
 ## [1.8.0] — 2026-09-24
 
 [Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.7.0...v1.8.0)
