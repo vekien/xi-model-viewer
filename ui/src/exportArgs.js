@@ -259,6 +259,14 @@ const ZONE_ARGS = [
       + 'right-side-up and lit. Pair with Weld UV seams for connected terrain.',
   },
   {
+    flag: '--unreal', kind: 'flag', quick: 9, group: 'Layout', conflicts: ['--right-handed', '--opaque'],
+    label: 'Unreal preset',
+    hint: 'One flag for Unreal Engine: right-handed, opaque materials, FBX, and raw vertex colours '
+      + '(written linear) for the zone material to apply FFXI’s ×2. Also drops hidden duplicate '
+      + 'triangles the game never shows. Use with Omit skybox and Omit VFX, then follow '
+      + 'xi-tools/unreal-engine for the import settings, materials and setup script.',
+  },
+  {
     flag: '--no-weld', kind: 'flag', group: 'Geometry', conflicts: ['--weld'],
     label: "Don't weld vertices",
     hint: 'Keep the original per-triangle vertices instead of welding coincident corners into a '
@@ -290,6 +298,24 @@ const ZONE_ARGS = [
       + 'aggressive merging.',
   },
   {
+    flag: '--alpha-split-mesh', kind: 'flag', group: 'Geometry',
+    label: 'Alpha split mesh (test)',
+    hint: 'Write two FBX files: the opaque base and the blended ground overlays split off and '
+      + 'lifted, so they stop z-fighting. Its auto-smooth draws shading creases across terrain; for '
+      + 'Unreal, the Unreal preset plus the xi-tools/unreal-engine materials is the better route.',
+  },
+  {
+    flag: '--decal-offset', kind: 'value', group: 'Geometry', defaultHint: '0.00001',
+    label: 'Decal lift',
+    hint: 'How far Alpha split mesh lifts each overlay off its surface, in FFXI units (~metres). '
+      + 'Raise it if overlays far from the zone centre still z-fight.',
+  },
+  {
+    flag: '--decal-smooth-angle', kind: 'value', group: 'Geometry', defaultHint: '45',
+    label: 'Decal smoothing angle',
+    hint: 'Auto-smooth angle in degrees for Alpha split mesh (45–60 is typical).',
+  },
+  {
     flag: '--collision', kind: 'flag', quick: 5, group: 'Extras',
     label: 'Collision mesh',
     hint: 'Also dump the player-collision MZB to <stem>.collision.obj, in the same frame as the '
@@ -308,6 +334,18 @@ const ZONE_ARGS = [
     hint: 'Write non-blend materials as OPAQUE instead of MASK. Many zone textures carry junk alpha '
       + 'the client ignores, which under MASK clips whole floors and walls into a checkerboard in '
       + 'Blender. Real alpha-blend submeshes stay BLEND and foliage stays MASK.',
+  },
+  {
+    flag: '--vertex-color', kind: 'value', group: 'Textures', defaultHint: 'baked',
+    label: 'Vertex colour mode',
+    values: [
+      { value: 'baked', label: 'default — ×2 folded in, for viewers without shaders' },
+      { value: 'raw', label: 'DAT colours + vertex alpha, for engines (Unreal preset)' },
+    ],
+    hint: 'Where FFXI’s baked-lighting ×2 lives. baked folds it into the colours and clamps, so '
+      + 'Blender or a glTF viewer shows the in-game look. raw keeps the untouched colours for an '
+      + 'engine material to multiply — otherwise bright tiles clamp to white once the engine '
+      + 'lights them.',
   },
   {
     flag: '--base', kind: 'flag', group: 'Source',

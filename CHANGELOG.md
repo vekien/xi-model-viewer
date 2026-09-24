@@ -8,7 +8,16 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ---
 
-## [Unreleased]
+## [1.8.0] — 2026-09-24
+
+[Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.7.0...v1.8.0)
+
+### Props
+- Mog House furniture and other stand-alone prop DATs open as models, framed from the front, instead of an empty scene
+
+### Export
+- Zone export knows the new xi-tools flags: **Unreal preset** (`--unreal`, with a checkbox; it replaces Right-handed and Opaque, which it includes), **Vertex colour mode** (`--vertex-color`), and **Alpha split mesh** with its decal lift and smoothing angle
+- For Unreal, export with `--unreal --no-sky --no-vfx` and follow xi-tools' `unreal-engine/` folder for import settings, materials and the setup script
 
 ### Zones
 - Castle Zvahl Baileys: the flat 40×40 walls across the corridors (`b_00`, `b_01` in [S]) start hidden. They are culling stand-ins the game only draws from certain spots; the Objects eye brings them back
