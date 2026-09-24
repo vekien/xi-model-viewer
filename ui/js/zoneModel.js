@@ -8,7 +8,7 @@
 // ADJACENT draws sharing identical state+texture are merged, so batching never
 // reorders anything — FFXI relies on the authored order for overlay layering.
 
-import { resolveMeshName, resolveTexture, isSkyName, isWaterName, isEnvName, isCollisionPlacement, isSubAreaPlacement } from './zone.js';
+import { resolveMeshName, resolveTexture, isSkyName, isWaterName, isEnvName, isCollisionPlacement, isSubAreaStandIn } from './zone.js';
 
 /** Column-major TRS = T · Rz·Ry·Rx · S (xim / xi rotateZYX). */
 function trsMatrix(pos, rot, scale) {
@@ -124,14 +124,213 @@ function transformBoundsDisplay(local, matrix) {
   return { min: [minX, minY, minZ], max: [maxX, maxY, maxZ] };
 }
 
+// ── far copies ──────────────────────────────────────────────────────────────
+// Some zones place two versions of one object on the same spot: the detailed
+// one and a cheap stand-in for viewing it from across the map — Ru'Aun's
+// `bri_wl_00_h` (930 v) and `m_bri_wl_00i` (279 v), `pip_b1` and `pip_b1_n`,
+// Eastern Adoulin's `aqueduct02_2` and `lowduct01`. The client never draws both:
+// no culling table lists them together (readCullingTables in zone.js), so which
+// one shows depends on the floor the camera stands on. The viewer draws every
+// object at once, so the pair would z-fight; it keeps the detailed one.
+//
+// Recognised from that data alone, not from names: a placement is a far copy
+// when another placement with a richer mesh fills the same box (IoU ≥ 0.5) and
+// the two share no culling table. The IoU keeps a small detailed piece that
+// happens to sit inside a big stand-in (Ru'Aun's stairs inside `m_osid_fl_b_c`)
+// from counting as that stand-in's twin. Zones with no culling tables have no
+// far copies. Across all retail zones this takes Ru'Aun's and Escha Ru'Aun's
+// bridge and pillar stand-ins, Eastern Adoulin's `low*` walls, aqueducts and
+// altar, Kamihr Drifts' `ka_la_en*_low`, and one cutout each in Pashhow [S]
+// (`_or_w48_h`) and Reisenjima (`_bah3_m`). The name-based rule it replaces
+// also hid ROM4/0/42's `m_wall01`, a wall panel with no twin at all.
+const FAR_MIN_IOU = 0.5;
+const FAR_GRID = 64;
+
+// Box volume / overlap padded by half a unit per axis, so flat meshes (a floor,
+// a wall) still have a volume to compare.
+const paddedVolume = (b) => (b.max[0] - b.min[0] + 0.5) * (b.max[1] - b.min[1] + 0.5) * (b.max[2] - b.min[2] + 0.5);
+function paddedOverlap(a, b) {
+  let v = 1;
+  for (let k = 0; k < 3; k++) {
+    const lo = Math.max(a.min[k], b.min[k]) - 0.25;
+    const hi = Math.min(a.max[k], b.max[k]) + 0.25;
+    if (hi <= lo) return 0;
+    v *= hi - lo;
+  }
+  return v;
+}
+
 /**
- * @param {{ meshes: Map, meshNames?: Set<string>, placements: any[], hasZoneDef?: boolean, textures: Map, collision?: any }} parsed
+ * @param {({ mesh: string, verts: number, bounds: {min:number[],max:number[]}, cullIds: number[] } | null)[]} items
+ *   one per placement of ONE DAT (culling-table ordinals are per DAT); null = not a candidate
+ * @returns {Set<number>} indices of the far copies
+ */
+function findFarCopies(items) {
+  const far = new Set();
+  const cand = [];
+  items.forEach((it, i) => { if (it?.cullIds?.length && it.bounds) cand.push(i); });
+  if (cand.length < 2) return far;
+  const eachCell = (b, fn) => {
+    for (let gx = Math.floor(b.min[0] / FAR_GRID); gx <= Math.floor(b.max[0] / FAR_GRID); gx++) {
+      for (let gz = Math.floor(b.min[2] / FAR_GRID); gz <= Math.floor(b.max[2] / FAR_GRID); gz++) {
+        if (fn(`${gx},${gz}`)) return;
+      }
+    }
+  };
+  const grid = new Map();
+  for (const i of cand) {
+    eachCell(items[i].bounds, (k) => {
+      let c = grid.get(k);
+      if (!c) { c = []; grid.set(k, c); }
+      c.push(i);
+    });
+  }
+  // Richest first, so a twin's own verdict is in before anything poorer asks:
+  // only a twin that stays drawn makes a far copy. Eastern Adoulin's altar is
+  // `a2_alt01` + `a2_alt01b` near and `lowalt01` far; `a2_alt01b` is poorer
+  // than `lowalt01`, but `lowalt01` is the far copy, so `a2_alt01b` stays.
+  cand.sort((x, y) => items[y].verts - items[x].verts || x - y);
+  for (const i of cand) {
+    const a = items[i];
+    const own = new Set(a.cullIds);
+    const seen = new Set();
+    eachCell(a.bounds, (k) => {
+      for (const j of grid.get(k)) {
+        if (j === i || seen.has(j)) continue;
+        seen.add(j);
+        const b = items[j];
+        if (b.mesh === a.mesh || b.verts <= a.verts || far.has(j)) continue;
+        if (b.cullIds.some((t) => own.has(t))) continue;
+        const iv = paddedOverlap(a.bounds, b.bounds);
+        if (iv / (paddedVolume(a.bounds) + paddedVolume(b.bounds) - iv) < FAR_MIN_IOU) continue;
+        far.add(i);
+        return true;
+      }
+      return false;
+    });
+  }
+  return far;
+}
+
+// ── sub-areas ───────────────────────────────────────────────────────────────
+const normName = (s) => s.replace(/ /g, '').replace(/_/g, '').toLowerCase();
+function exactTexture(name, textures) {
+  if (textures.has(name)) return name;
+  const n = normName(name);
+  for (const key of textures.keys()) if (normName(key) === n) return key;
+  return null;
+}
+function sameArray(a, b) {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+const sameImage = (a, b) => a.width === b.width && a.height === b.height && sameArray(a.rgba, b.rgba);
+const samePrims = (a, b) => a.length === b.length && a.every((p, i) => {
+  const q = b[i];
+  return p.textureName === q.textureName && p.blend === q.blend && p.noCull === q.noCull
+    && sameArray(p.positions, q.positions) && sameArray(p.uvs, q.uvs) && sameArray(p.colors, q.colors);
+});
+
+/**
+ * Fold sub-area DATs into a parsed zone, ready for zoneToModel.
+ *
+ * A sub-area's DAT is a mini-zone in the parent's world space: its own 0x2E
+ * meshes and 0x1C placements, and a few textures of its own — the rest it
+ * borrows from the parent (Ru'Aun's islands mostly use the zone's `tu_*`
+ * atlases). Its placements resolve against its own meshes only, the way xim
+ * resolves each area in its own directory, and its textures against its own
+ * first, then the parent's.
+ *
+ * Names are shared between areas when the content is too, and suffixed
+ * `@<id>` when it is not: every Ru'Aun sub-area ships `model   tu_w04c`, in two
+ * different versions, and a few carry their own cut of a shared foliage mesh
+ * (`_tu_w01_h`, `_tu_w12_h`).
+ *
+ * @param {object} parsed  parseZone() of the main zone
+ * @param {{ id: number, rel: string, parsed: object }[]} parts  the sub-area DATs that loaded
+ * @returns {object} `parsed` with `meshes`/`textures` merged, the main zone's own
+ *   meshes kept as `mainMeshes`, and `subAreaParts: [{ id, rel, placements }]`
+ */
+export function mergeSubAreas(parsed, parts) {
+  if (!parts?.length) return parsed;
+  const meshes = new Map(parsed.meshes);
+  const textures = new Map(parsed.textures);
+  // Every key a name has been stored under so far, so an area whose copy
+  // matches an earlier area's `@<id>` variant shares that one.
+  const variantsOf = (map, all) => (name) => {
+    let keys = all.get(name);
+    if (!keys) { keys = map.has(name) ? [name] : []; all.set(name, keys); }
+    return keys;
+  };
+  const textureVariants = variantsOf(textures, new Map());
+  const meshVariants = variantsOf(meshes, new Map());
+  const store = (map, keys, name, id, value, same) => {
+    const hit = keys.find((k) => same(map.get(k), value));
+    if (hit) return hit;
+    const key = keys.length ? `${name}@${id}` : name;
+    map.set(key, value);
+    keys.push(key);
+    return key;
+  };
+  const subAreaParts = [];
+  for (const { id, rel, parsed: sub } of parts) {
+    const adoptTexture = (own) => store(textures, textureVariants(own), own, id,
+      sub.textures.get(own), (a, b) => a === b || sameImage(a, b));
+    const texKeys = new Map();
+    const textureFor = (name) => {
+      if (!name) return name;
+      let key = texKeys.get(name);
+      if (key !== undefined) return key;
+      const ownExact = exactTexture(name, sub.textures);
+      const mainExact = ownExact ? null : exactTexture(name, parsed.textures);
+      if (ownExact) key = adoptTexture(ownExact);
+      else if (mainExact) key = mainExact;
+      else {
+        const ownLoose = resolveTexture(name, sub.textures);
+        key = ownLoose ? adoptTexture(ownLoose) : (resolveTexture(name, parsed.textures) || name);
+      }
+      texKeys.set(name, key);
+      return key;
+    };
+    const meshKeys = new Map();
+    const meshFor = (name) => {
+      let key = meshKeys.get(name);
+      if (key) return key;
+      const prims = sub.meshes.get(name).map((prim) => ({ ...prim, textureName: textureFor(prim.textureName) }));
+      key = store(meshes, meshVariants(name), name, id, prims, samePrims);
+      meshKeys.set(name, key);
+      return key;
+    };
+    const placements = [];
+    for (const p of sub.placements) {
+      const resolved = resolveMeshName(p.meshId, sub.meshes, sub.meshNames);
+      if (!resolved) continue;
+      const mesh = meshFor(resolved);
+      // Graphics › Enable LOD: the variant this placement actually names.
+      const lodMesh = p.meshId !== resolved && sub.meshes.has(p.meshId) ? meshFor(p.meshId) : mesh;
+      placements.push({ p, mesh, lodMesh });
+    }
+    subAreaParts.push({ id, rel, placements });
+  }
+  return { ...parsed, meshes, textures, mainMeshes: parsed.meshes, subAreaParts };
+}
+
+/**
+ * @param {{ meshes: Map, meshNames?: Set<string>, placements: any[], hasZoneDef?: boolean, textures: Map, collision?: any, mainMeshes?: Map, subAreaParts?: any[] }} parsed
  * @param {string} sourceName
- * @param {{ includeSky?: boolean }} [opts]  includeSky kept for compat; sky/water
- *   always baked into a separate `env` layer and toggled in the renderer.
+ * @param {{ subAreas?: boolean }} [opts]  subAreas: draw each loaded sub-area's
+ *   geometry in place of its stand-ins (default on); see setZoneSubAreas.
  */
 export function zoneToModel(parsed, sourceName = '', opts = {}) {
   const { meshes, meshNames, placements, textures: texMap, collision: rawCollision } = parsed;
+  // Main-zone placements resolve against the main DAT's meshes only; `meshes`
+  // also holds the sub-area meshes mergeSubAreas folded in.
+  const mainMeshes = parsed.mainMeshes ?? meshes;
+  const subAreaParts = Array.isArray(parsed.subAreaParts) ? parsed.subAreaParts : [];
+  const showSubAreas = opts.subAreas !== false;
+  const loadedSubAreas = new Set(subAreaParts.map((s) => s.id));
   // No placement table (0x1C) at all: Mog House furniture, event props. Their
   // meshes are not orphans of a layout, they ARE the model, so they draw at the
   // origin as world geometry (visible, and in the camera fit) instead of on the
@@ -241,7 +440,7 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
     if (bb.max[2] > bmaxZ) bmaxZ = bb.max[2];
   };
 
-  const pushPlacement = (p, resolved, matrix, kind = null, lodResolved = null) => {
+  const pushPlacement = (p, resolved, matrix, kind = null, lodResolved = null, extra = null) => {
     const c = (nameCounts.get(p.meshId) || 0) + 1;
     nameCounts.set(p.meshId, c);
     const name = c === 1 ? p.meshId : `${p.meshId}.${String(c).padStart(3, '0')}`;
@@ -278,13 +477,12 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
       scale: p.scale || [1, 1, 1],
       bounds,
       kind, // null | 'sky' | 'water' | 'unplaced' | 'collision' | 'subarea'
-      subAreaId: p.subAreaId ?? null,
-      // Collision proxies never render in game, so they start hidden behind the
-      // Objects-list eye. Sub-area sets do render — inside their volume — so
-      // they start visible and are gated by region culling like world geometry.
-      // The exception is a far copy of geometry the base zone already places —
-      // see isFarCopy. Portal caps likewise (isPortalCap).
-      userHidden: kind === 'collision' || isFarCopy(resolved) || isPortalCap(resolved),
+      // Main-zone placements that stand in for a sub-area carry its id here
+      // (see isSubAreaStandIn); 'subarea' rows carry the id of the DAT they came from.
+      subAreaLink: p.subAreaLink ?? null,
+      subAreaId: null,
+      userHidden: false,
+      ...extra,
     };
     zonePlacements.push(placement);
     return placement;
@@ -293,7 +491,7 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
   // Resolve every placement once — the fuzzy pass is not cheap and both the
   // far-copy scan below and the emit loop need the answer.
   const resolvedFor = placements.map((p) => (
-    isSanePlacement(p) ? resolveMeshName(p.meshId, meshes, meshNames) : null
+    isSanePlacement(p) ? resolveMeshName(p.meshId, mainMeshes, meshNames) : null
   ));
 
   // The same resolution with Graphics › Enable LOD on: keep the detail variant
@@ -305,24 +503,9 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
   const lodResolvedFor = resolvedFor.map((r, i) => {
     const id = placements[i]?.meshId;
     if (!r || r === id) return r;
-    return meshes.has(id) ? id : r;
+    return mainMeshes.has(id) ? id : r;
   });
 
-  // Far copies: `m_`/`lnd_`-prefixed stand-ins for geometry the zone already
-  // places at full detail. Ru'Aun Gardens carries `m_osid_fl_b_d` (405 v) over
-  // `osid_fl_b_d_h` (2379 v) and `m_bri_wl_00i` (279 v) inside `bri_wl_00i_h`
-  // (930 v) — the client shows one or the other by region, so drawing both
-  // stacks the cheap copy on the detailed one.
-  //
-  // The prefix alone is not enough to go on: `m_` also names ordinary props —
-  // Mog House furniture (`m_bed_02`, `m_dsk_06`), Bastok's `m_pot`, Ro'Maeve's
-  // `m_pol01_h` pillars — and hiding those would gut those zones. So require a
-  // twin: the same stem, no far prefix, actually placed in this zone, and the
-  // richer mesh. The detail suffix is stripped when matching, but only ever on
-  // a far-prefixed candidate — `bri_fl_00_m` and `bri_fl_00_h` are both real
-  // placements of their own and neither is a stand-in for the other.
-  const FAR_PREFIX = /^(m_|lnd_)/;
-  const detailStem = (n) => n.replace(/_(h|m|n|l)$/, '');
   const vertsOf = new Map();
   const meshVerts = (name) => {
     if (vertsOf.has(name)) return vertsOf.get(name);
@@ -331,34 +514,18 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
     vertsOf.set(name, n);
     return n;
   };
-  const plainByStem = new Map();
-  placements.forEach((p, i) => {
-    const m = resolvedFor[i];
-    if (!m || FAR_PREFIX.test(m) || isCollisionPlacement(p)) return;
-    const stem = detailStem(m);
-    let set = plainByStem.get(stem);
-    if (!set) { set = new Set(); plainByStem.set(stem, set); }
-    set.add(m);
-  });
-  const farCopyCache = new Map();
-  const isFarCopy = (mesh) => {
-    if (!FAR_PREFIX.test(mesh)) return false;
-    const cached = farCopyCache.get(mesh);
-    if (cached !== undefined) return cached;
-    const stem = detailStem(mesh.replace(FAR_PREFIX, ''));
-    const own = meshVerts(mesh);
-    let far = false;
-    for (const [plainStem, names] of plainByStem) {
-      // Exact stem, or the full-detail version split into parts beneath it:
-      // `m_osid_cen_a` is one mesh standing in for `osid_cen_a_lf_h` plus
-      // `osid_cen_a_rt_h`. The `_` boundary keeps `m_pot` off `pot*`.
-      if (plainStem !== stem && !plainStem.startsWith(`${stem}_`)) continue;
-      for (const t of names) if (meshVerts(t) > own) { far = true; break; }
-      if (far) break;
-    }
-    farCopyCache.set(mesh, far);
-    return far;
-  };
+  // One DAT's placements → the far copies among them (see findFarCopies).
+  const farCopiesOf = (list, meshOf) => findFarCopies(list.map((p, i) => {
+    const mesh = meshOf(i);
+    const local = mesh && !isCollisionPlacement(p) ? localBounds.get(mesh) : null;
+    return local ? {
+      mesh,
+      verts: meshVerts(mesh),
+      bounds: transformBoundsDisplay(local, trsMatrix(p.pos, p.rot || [0, 0, 0], p.scale || [1, 1, 1])),
+      cullIds: p.cullIds,
+    } : null;
+  }));
+  const mainFar = farCopiesOf(placements, (i) => resolvedFor[i]);
 
   // Portal caps: flat stand-in walls that exist only for the client's culling
   // tables (readCullingTables in zone.js). Castle Zvahl Baileys places `b_00`
@@ -385,7 +552,7 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
     if (!s) { s = { n: 0, tables: 0, ok: true }; capStats.set(m, s); }
     s.n++;
     s.tables += p.cullTables / p.cullTableCount;
-    if (p.cullLink || !p.cullTables || p.link || isCollisionPlacement(p) || isSubAreaPlacement(p)) s.ok = false;
+    if (p.cullLink || !p.cullTables || p.link || isCollisionPlacement(p) || isSubAreaStandIn(p)) s.ok = false;
   });
   const capCache = new Map();
   const isPortalCap = (mesh) => {
@@ -455,12 +622,8 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
     placedMeshes.add(resolved);
     // Aliases (section id / short tail) count as placed too.
     placedMeshes.add(p.meshId);
-    // Collision-only proxies (draw distance 1.0) never render in game. Sub-area
-    // sets do, inside their own volume — shop interiors in the towns, in Ru'Aun
-    // a whole low-poly copy of the sky — so they bake like world geometry and
-    // region culling decides when they are on screen.
-    const kind = isCollisionPlacement(p) ? 'collision'
-      : isSubAreaPlacement(p) ? 'subarea' : envKindOf(resolved);
+    // Collision-only proxies (draw distance 1.0) never render in game.
+    const kind = isCollisionPlacement(p) ? 'collision' : envKindOf(resolved);
     const matrix = trsMatrix(p.pos, p.rot, p.scale);
     // Elevator car bound to an auto-running '@' volume: don't bake it static — the
     // renderer re-bakes it each frame at its animated height (see zoneLifts).
@@ -468,9 +631,17 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
     // Door leaf bound to a '_' volume with an open/close routine: driven by the
     // doors toggle, so it is baked live (at the closed pose by default), not static.
     const doorAnim = (!kind && !auto) ? doorAnimFor(p.link) : null;
-    const drawn = kind !== 'collision' && !isFarCopy(resolved) && !isPortalCap(resolved) && !auto && !doorAnim;
-    if (drawn) emitMesh(resolved, matrix, 'world');
-    const placement = pushPlacement(p, resolved, matrix, kind, lodResolvedFor[pi]);
+    // A stand-in for a sub-area whose DAT loaded gives way to it (setZoneSubAreas).
+    const standIn = loadedSubAreas.has(p.subAreaLink) ? p.subAreaLink : null;
+    const farCopy = mainFar.has(pi);
+    // Collision proxies, far copies and portal caps start hidden behind the
+    // Objects-list eye, which can bring any of them back.
+    const placement = pushPlacement(p, resolved, matrix, kind, lodResolvedFor[pi], {
+      standIn,
+      farCopy,
+      userHidden: kind === 'collision' || farCopy || isPortalCap(resolved) || (standIn != null && showSubAreas),
+    });
+    if (!placement.userHidden && !auto && !doorAnim) emitMesh(resolved, matrix, 'world');
     if (auto) {
       const prims = meshes.get(resolved);
       if (prims?.length) {
@@ -506,6 +677,29 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
         matrix,
       });
     }
+  }
+
+  // Sub-area geometry (mergeSubAreas), each DAT after the base zone in its own
+  // placement order, the way xim draws the areas one after another. Static only:
+  // the lifts, doors and effects of an area are the main zone's.
+  for (const part of subAreaParts) {
+    const list = part.placements.map((e) => e.p);
+    const far = farCopiesOf(list, (i) => part.placements[i].mesh);
+    part.placements.forEach(({ p, mesh, lodMesh }, i) => {
+      if (!isSanePlacement(p)) { skippedWild++; return; }
+      placedMeshes.add(mesh);
+      const kind = isCollisionPlacement(p) ? 'collision' : 'subarea';
+      const matrix = trsMatrix(p.pos, p.rot, p.scale);
+      const farCopy = far.has(i);
+      const placement = pushPlacement(p, mesh, matrix, kind, lodMesh, {
+        subAreaId: part.id,
+        subAreaLink: null,
+        source: part.rel,
+        farCopy,
+        userHidden: kind === 'collision' || farCopy || !showSubAreas,
+      });
+      if (!placement.userHidden) emitMesh(mesh, matrix, 'world');
+    });
   }
 
   // Group door leaves by RID and give each leaf its own op from the open routine
@@ -799,6 +993,10 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
     zoneLifts,
     // Door leaves (grouped by RID); renderer swings/slides them on the open toggle.
     zoneDoors,
+    // Sub-area DATs folded in (mergeSubAreas) and whether their geometry is
+    // drawn in place of the stand-ins (setZoneSubAreas).
+    subAreas: subAreaParts.map((s) => ({ id: s.id, rel: s.rel })),
+    subAreasShown: showSubAreas,
     textures: outTextures,
     animations: [],
     schedules: [],
@@ -815,7 +1013,9 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
       unplacedCompanions,
       unplacedOrphans,
       propMeshes,
-      envCount: zonePlacements.filter((p) => p.kind).length,
+      envCount: zonePlacements.filter((p) => p.kind && p.kind !== 'subarea').length,
+      subAreaCount: subAreaParts.length,
+      subAreaPlacements: zonePlacements.filter((p) => p.kind === 'subarea').length,
       placementTotal: placements.length,
       skippedWild,
       skippedMissing,
@@ -1211,6 +1411,26 @@ export function setZoneLodMode(model, on) {
     changed++;
   }
   return changed ? rebuildZoneDraws(model) : null;
+}
+
+/**
+ * Graphics › Sub-areas. On draws every loaded sub-area's own geometry and hides
+ * the stand-ins it replaces — each island platform in Ru'Aun Gardens at full
+ * detail, each shop interior in the towns. Off is what the client shows while
+ * the camera is in none of them. Far copies and collision stay hidden either
+ * way. Resets the Objects-list eyes of the rows it touches. Returns whether
+ * anything changed; the caller re-emits (rebuildZoneDraws + reloadZoneBatches).
+ */
+export function setZoneSubAreas(model, on) {
+  if (!model?.zonePlacements || !model.subAreas?.length) return false;
+  const show = !!on;
+  if (model.subAreasShown === show) return false;
+  model.subAreasShown = show;
+  for (const p of model.zonePlacements) {
+    if (p.standIn != null) p.userHidden = show || !!p.farCopy;
+    else if (p.subAreaId != null && p.kind === 'subarea') p.userHidden = !show || !!p.farCopy;
+  }
+  return true;
 }
 
 /** GPU-ready draws for a single placement (move-proxy while dragging). */

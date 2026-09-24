@@ -37,6 +37,7 @@ export function GraphicsPanel({
   renderDistance = RENDER_DIST_DEFAULT, onRenderDistance,
   effectDistanceScale = FX_DIST_DEFAULT, onEffectDistanceScale,
   zoneLod = false, onZoneLod,
+  zoneSubAreas = true, onZoneSubAreas,
 }) {
   const dist = Math.round(shadowDistance);
   const distPct = ((dist - SHADOW_MIN) / (SHADOW_MAX - SHADOW_MIN)) * 100;
@@ -145,6 +146,22 @@ export function GraphicsPanel({
                 type="checkbox"
                 checked={!!zoneLod}
                 onChange={(e) => onZoneLod?.(e.target.checked)}
+              />
+              <span className="track" />
+            </label>
+          </Tooltip>
+        </div>
+      </div>
+
+      <div className="gfx-line">
+        <span className="gfx-lab">Sub-areas</span>
+        <div className="gfx-ctrl gfx-ctrl-end">
+          <Tooltip content="Draw every sub-area from its own DAT: each island platform in Ru'Aun Gardens at full detail, each shop interior in the towns. Off shows the low-detail stand-ins the game draws while you are outside them.">
+            <label className="switch cseq-switch">
+              <input
+                type="checkbox"
+                checked={!!zoneSubAreas}
+                onChange={(e) => onZoneSubAreas?.(e.target.checked)}
               />
               <span className="track" />
             </label>

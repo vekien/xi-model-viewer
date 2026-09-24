@@ -55,7 +55,7 @@ import { LightGizmo, DEFAULT_LIGHT_DIR } from './LightGizmo.jsx';
 
 import { CameraSequencer } from './CameraSequencer.jsx';
 import { parseFloorTexture } from '../js/dat.js';
-import { decodeTextureSection, extractKeyTables, parseZone, parseDatTextures, parseZoneDefAt, parseZoneMeshAt } from '../js/zone.js';
+import { decodeTextureSection, extractKeyTables, parseZone, parseDatTextures, parseZoneDefAt, parseZoneMeshAt, subAreaFileId } from '../js/zone.js';
 import { ZoneDefModal } from './ZoneDefModal.jsx';
 import { ParticlePreviewModal } from './ParticlePreviewModal.jsx';
 import { MixerList } from './MixerList.jsx';
@@ -74,7 +74,7 @@ import { checkForUpdate, checkForUpdateManual, dismissUpdate } from '../js/updat
 import {
   zoneDatRelPath, zoneToModel, rebuildZoneDraws, buildPlacementDraws, translatePlacementDisplay,
   clonePlacementPose, applyPlacementPose, posesEqual,
-  yieldPlacementsToEffects, setZoneLodMode,
+  yieldPlacementsToEffects, setZoneLodMode, mergeSubAreas, setZoneSubAreas,
 } from '../js/zoneModel.js';
 import { pickZoneAt, pickZoneGroundAt, pickActorAt } from '../js/zonePick.js';
 import { loadDatTypeLists, makeDatTypeLookup } from '../js/dattypes.js';
@@ -1550,6 +1550,11 @@ export default function App({ launch = null }) {
   const [zoneLod, setZoneLodState] = useState(() => localStorage.getItem('zoneLod') === '1');
   const zoneLodRef = useRef(zoneLod);
   zoneLodRef.current = zoneLod;
+  // Graphics › Sub-areas — draw each sub-area's own DAT (Ru'Aun's island
+  // platforms, town interiors) in place of the stand-ins the base zone carries.
+  const [zoneSubAreas, setZoneSubAreasState] = useState(() => localStorage.getItem('zoneSubAreas') !== '0');
+  const zoneSubAreasRef = useRef(zoneSubAreas);
+  zoneSubAreasRef.current = zoneSubAreas;
   const [showNavmesh, setShowNavmesh] = useState(false);
   // Sky, clouds and weather shells are on unless the user turned them off —
   // a zone without its weather isn't what the zone looks like.
@@ -4118,7 +4123,7 @@ export default function App({ launch = null }) {
         ? parsed.placements.map((p, i) => ({
           index: p.index ?? i,
           meshId: p.meshId || '',
-          subAreaId: p.subAreaId ?? null,
+          subAreaLink: p.subAreaLink ?? null,
           pos: p.pos || [0, 0, 0],
           rot: p.rot || [0, 0, 0],
           scale: p.scale || [1, 1, 1],
@@ -4158,10 +4163,35 @@ export default function App({ launch = null }) {
         // sun/moon generators read the camera as they're constructed.
       } catch (e) { console.warn('particle system init failed', e); }
       if (!stillCurrent()) { releaseOverlay(); return; }
+      // Sub-areas: each 'm' volume's geometry lives in a DAT of its own (see
+      // mergeSubAreas). Always read, so Graphics › Sub-areas flips without a
+      // reload; one that won't resolve or read leaves its stand-ins drawn.
+      let subAreaParts = [];
+      if (parsed.subAreas?.length) {
+        stepLoad('Loading sub-areas…');
+        try {
+          const { byFid } = await loadMergedTables(settings, dataTablesRef);
+          const loaded = await Promise.all(parsed.subAreas.map(async ({ id }) => {
+            const subRel = byFid.get(subAreaFileId(id));
+            if (!subRel) return null;
+            try {
+              const { data } = await backend.readPrefer(gameCandidates(subRel, settings));
+              return { id, rel: subRel, parsed: parseZone(data, keyTables) };
+            } catch (e) {
+              console.warn(`sub-area ${id} (${subRel}) failed`, e);
+              return null;
+            }
+          }));
+          subAreaParts = loaded.filter(Boolean).sort((a, b) => a.id - b.id);
+        } catch (e) { console.warn('sub-areas unavailable', e); }
+        if (!stillCurrent()) { releaseOverlay(); return; }
+      }
       stepLoad('Baking placements…');
       await yieldToPaint();
       if (!stillCurrent()) { releaseOverlay(); return; }
-      const model = zoneToModel(parsed, displayName);
+      const model = zoneToModel(mergeSubAreas(parsed, subAreaParts), displayName, {
+        subAreas: zoneSubAreasRef.current,
+      });
       // Built at highest detail; drop to the placed variants when LOD is on.
       if (zoneLodRef.current) setZoneLodMode(model, true);
       if (!model.isRenderable) {
@@ -4254,6 +4284,16 @@ export default function App({ launch = null }) {
             fileId: d.fileId,
             rel: d.rel,
           }));
+        for (const s of model.subAreas ?? []) {
+          const fileId = subAreaFileId(s.id);
+          src.push({
+            id: `subarea-${s.id}`,
+            label: `Sub-area ${s.id} — ${s.rel} (#${fileId})`,
+            path: `${gp}\\${normRel(s.rel)}`,
+            fileId,
+            rel: s.rel,
+          });
+        }
         setDataSources(src);
       } catch {
         setDataSources([{ id: 'zone', label: rel, path: resolvedAbs }]);
@@ -4359,6 +4399,8 @@ export default function App({ launch = null }) {
           skippedWild: zs.skippedWild ?? 0,
           skippedMissing: zs.skippedMissing ?? 0,
           envCount: zs.envCount ?? 0,
+          subAreaCount: zs.subAreaCount ?? 0,
+          subAreaPlacements: zs.subAreaPlacements ?? 0,
           collTris: zs.collTris ?? 0,
         },
       });
@@ -6289,7 +6331,7 @@ export default function App({ launch = null }) {
       .map((p, i) => ({
         index: Number.isFinite(p.index) && p.index >= 0 ? p.index : i,
         meshId: p.meshId || p.mesh || p.name || '',
-        subAreaId: p.subAreaId ?? null,
+        subAreaLink: p.subAreaLink ?? null,
         pos: p.rawPos || p.pos || [0, 0, 0],
         rot: p.rot || [0, 0, 0],
         scale: p.scale || [1, 1, 1],
@@ -6641,7 +6683,7 @@ export default function App({ launch = null }) {
         zonePlacementsRef.current = placements.map((p, i) => ({
           index: p.index ?? i,
           meshId: p.meshId || '',
-          subAreaId: p.subAreaId ?? null,
+          subAreaLink: p.subAreaLink ?? null,
           pos: p.pos || [0, 0, 0],
           rot: p.rot || [0, 0, 0],
           scale: p.scale || [1, 1, 1],
@@ -10222,6 +10264,14 @@ export default function App({ launch = null }) {
     if (setZoneLodMode(model, next)) renderer.reloadZoneBatches(model);
   }, []);
 
+  /** Graphics › Sub-areas — swaps stand-ins and sub-area geometry in place, no zone reload. */
+  const setZoneSubAreasMode = useCallback((on) => {
+    const next = !!on;
+    setZoneSubAreasState(next);
+    try { localStorage.setItem('zoneSubAreas', next ? '1' : '0'); } catch { /* quota */ }
+    if (setZoneSubAreas(modelRef.current, next)) rebuildAfterVisibility();
+  }, [rebuildAfterVisibility]);
+
   const setEffectDistanceScale = useCallback((v) => {
     const s = Math.min(20, Math.max(1, Math.round(Number(v) || 1)));
     setEffectDistanceScaleState(s);
@@ -11987,6 +12037,8 @@ export default function App({ launch = null }) {
         onEffectDistanceScale={setEffectDistanceScale}
         zoneLod={zoneLod}
         onZoneLod={setZoneLod}
+        zoneSubAreas={zoneSubAreas}
+        onZoneSubAreas={setZoneSubAreasMode}
         sequencerOpen={sequencerOpen}
         bgColor={settings?.bgColor ?? DEFAULT_BG}
         onBgColor={setBg}

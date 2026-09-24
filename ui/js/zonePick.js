@@ -186,8 +186,8 @@ export function pickZonePlacement(placements, origin, dir, meshes = null) {
   const hits = [];
 
   for (const p of placements) {
-    // Pick whatever is actually on screen. Sub-area sets draw like world
-    // geometry (Ru'Aun's islands are mostly sub-area), unplaced and collision
+    // Pick whatever is actually on screen. Sub-area rows draw like world
+    // geometry (every Ru'Aun island platform is one), unplaced and collision
     // rows draw once their Objects-list eye is on, and all three were
     // unselectable while this skipped every kind. Sky and water stay out: the
     // sky rows are particle-system geometry with no zone batch at all, and the

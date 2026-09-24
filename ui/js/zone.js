@@ -408,15 +408,23 @@ const COLLISION_DRAW_DIST = 1;
 /** True when a 0x1C placement is a collision-only proxy the game never draws. */
 export const isCollisionPlacement = (p) => p?.drawDist === COLLISION_DRAW_DIST;
 
-// A placement tagged with a sub-area id (+0x50) is part of that sub-area's set,
-// drawn only while the player stands in the matching 0x36 'm' volume — shop and
-// inn interiors in the towns (`r_shop`, `wi_s_room`), and in Ru'Aun Gardens a
-// whole second copy of the sky: 592 low-poly islands (`m_osid_*`, `lnd_*`, built
-// on the `tu_l01`/`tu_l02` low-res atlases, ~1/6 the vertices of the `*_h`
-// originals they sit on top of). Drawing them in the base zone stacks the cheap
-// copy on the detailed one — the z-fighting across Ru'Aun's platforms.
-/** True when a 0x1C placement belongs to a sub-area rather than the base zone. */
-export const isSubAreaPlacement = (p) => p?.subAreaId != null;
+// A placement with a sub-area link (+0x50) is a STAND-IN for that sub-area: the
+// closed shop front in the towns (`r_shop`, `wi_s_room`), and in Ru'Aun Gardens
+// the low-poly version of every island platform (`lnd_sta_*`, `m_osid_*`,
+// `com_wrp_*_n`, on the `tu_l01`/`tu_l02` low-res atlases). The real geometry is
+// a separate DAT (subAreaFileId). The client draws the stand-in until the camera
+// enters the sub-area's 'm' volume, then skips it and draws that DAT instead
+// (xim ZoneDrawer: "Defer to the 'real' object in the sub-area").
+/** True when a 0x1C placement stands in for a sub-area's own geometry. */
+export const isSubAreaStandIn = (p) => p?.subAreaLink != null;
+
+/**
+ * Sub-area id (0x36 'm' param, 0x1C +0x50) → global file id of the DAT holding
+ * that sub-area's geometry. FFXiMain.dll 0x10177850: ids from 0x258 up are in
+ * the high file-table range (+0x144F7), the rest +0x64. xim switches at 0x271
+ * instead; no zone has an id in between, [Escha - Ru'Aun]'s start at 0x271.
+ */
+export const subAreaFileId = (id) => (id >= 0x258 ? id + 0x144F7 : id + 0x64);
 
 function zoneDefObjectStride(bytes, dv, ds, nodeCount) {
   const mode = (u32at(dv, ds) >>> 24) & 0xFF;
@@ -464,12 +472,12 @@ function parseZoneDef(bytes, dv, section, table1) {
       meshId,
       link,       // 0x36 interaction sourceId this placement is bound to (or null)
       index: i,   // stable DAT object index — lets edits target the EXACT instance of a shared mesh name
-      // Sub-area id at +0x50 in the modern 0x64 record; absent on 0x54 proto.
+      // Sub-area link at +0x50 in the modern 0x64 record; absent on 0x54 proto.
       // Same id space as the 0x36 'm' trigger volumes — verified equal set on
       // every zone that has any (Ru'Aun 524–539, Lower Jeuno 454–466, …).
-      // A tagged placement belongs to that sub-area's model set, so the base
-      // zone must not draw it. See isSubAreaPlacement.
-      subAreaId: stride >= OBJ_STRIDE_MODERN ? (dv.getUint32(b + 0x50, true) || null) : null,
+      // A linked placement is the stand-in the sub-area's own DAT replaces.
+      // See isSubAreaStandIn.
+      subAreaLink: stride >= OBJ_STRIDE_MODERN ? (dv.getUint32(b + 0x50, true) || null) : null,
       // Draw distance at +0x40 (0 = no limit). 1.0 is the authoring sentinel for
       // "collision only, never rendered" — see COLLISION_DRAW_DIST.
       drawDist: stride >= OBJ_STRIDE_MODERN ? dv.getFloat32(b + 0x40, true) : null,
@@ -484,7 +492,8 @@ function parseZoneDef(bytes, dv, section, table1) {
   const cull = stride >= OBJ_STRIDE_MODERN ? readCullingTables(dv, ds, sectionEnd) : null;
   if (cull) {
     for (const p of placements) {
-      p.cullTables = cull.membership.get(p.index) || 0;
+      p.cullIds = cull.membership.get(p.index) || [];
+      p.cullTables = p.cullIds.length;
       p.cullTableCount = cull.count;
     }
   }
@@ -495,8 +504,10 @@ function parseZoneDef(bytes, dv, section, table1) {
 // length and that many object indices. The client picks ONE table from the
 // collision floor under the camera and draws only the objects listed in it (a
 // PVS); a floor with no table draws everything. The viewer draws every object,
-// so this is read only to recognise objects that exist for the PVS alone (see
-// isPortalCap in zoneModel.js). Returns { count, membership: index -> #tables }.
+// so this is read only to recognise objects that exist for the PVS alone: far
+// copies no table lists beside their detailed twin (findFarCopies) and portal
+// caps (isPortalCap), both in zoneModel.js.
+// Returns { count, membership: index -> [table ordinals] }.
 function readCullingTables(dv, ds, sectionEnd) {
   const off = u32at(dv, ds + 0x14);
   if (!off || ds + off + 4 > sectionEnd) return null;
@@ -511,7 +522,8 @@ function readCullingTables(dv, ds, sectionEnd) {
     if (p + n * 4 > sectionEnd) return null;
     for (let k = 0; k < n; k++, p += 4) {
       const i = u32at(dv, p);
-      membership.set(i, (membership.get(i) || 0) + 1);
+      const list = membership.get(i);
+      if (list) { if (list[list.length - 1] !== t) list.push(t); } else membership.set(i, [t]);
     }
   }
   return { count, membership };

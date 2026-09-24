@@ -20,7 +20,7 @@ export function ZoneDefModal({
     const q = query.trim().toLowerCase();
     if (!q) return list;
     return list.filter((p) => {
-      const hay = `${p.index} ${p.meshId || ''} ${p.subAreaId ?? ''}`.toLowerCase();
+      const hay = `${p.index} ${p.meshId || ''} ${p.subAreaLink ?? ''}`.toLowerCase();
       return hay.includes(q);
     });
   }, [placements, query]);
@@ -100,7 +100,7 @@ export function ZoneDefModal({
               <th className="mono">Position</th>
               <th className="mono">Rotation</th>
               <th className="mono">Scale</th>
-              <th className="mono">Sub-area</th>
+              <th className="mono">Stands in for</th>
             </tr>
           </thead>
           <tbody>
@@ -128,7 +128,7 @@ export function ZoneDefModal({
                   {fmt3(p.scale?.[0])}, {fmt3(p.scale?.[1])}, {fmt3(p.scale?.[2])}
                 </td>
                 <td className="mono">
-                  {p.subAreaId != null ? p.subAreaId : '—'}
+                  {p.subAreaLink != null ? p.subAreaLink : '—'}
                 </td>
               </tr>
             ))}

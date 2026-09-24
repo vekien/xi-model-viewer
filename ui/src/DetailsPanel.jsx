@@ -71,6 +71,12 @@ export function DetailsPanel({ info, animClip, animId, schedule, onClose, onOpen
               <Row label="Object types" value={fmtNum(info.zone.objectTypes)} />
               {info.zone.meshCount != null && <Row label="Meshes" value={fmtNum(info.zone.meshCount)} />}
               {info.zone.envCount > 0 && <Row label="Sky / water" value={fmtNum(info.zone.envCount)} />}
+              {info.zone.subAreaCount > 0 && (
+                <Row
+                  label="Sub-areas"
+                  value={`${fmtNum(info.zone.subAreaCount)} DATs · ${fmtNum(info.zone.subAreaPlacements)} placements`}
+                />
+              )}
             </>
           ) : (
             shown.joints != null && <Row label="Joints" value={shown.joints} />

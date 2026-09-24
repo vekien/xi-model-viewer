@@ -103,6 +103,7 @@ export function MenuBar({
   renderDistance = 5000, onRenderDistance,
   effectDistanceScale = 1, onEffectDistanceScale,
   zoneLod = false, onZoneLod,
+  zoneSubAreas = true, onZoneSubAreas,
 }) {
   // The sequencer window's open state shows as its Tools check.
   const checks = { ...checksProp, sequencer: sequencerOpen };
@@ -401,6 +402,8 @@ export function MenuBar({
               onEffectDistanceScale={onEffectDistanceScale}
               zoneLod={zoneLod}
               onZoneLod={onZoneLod}
+              zoneSubAreas={zoneSubAreas}
+              onZoneSubAreas={onZoneSubAreas}
             />
           </div>,
           document.body,
