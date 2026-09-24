@@ -1100,9 +1100,11 @@ export function parseZone(datBuffer, keyTables) {
     if (primVertCount(next) > primVertCount(prev)) meshes.set(key, next);
   };
   const stack = [];
+  const genDirs = new Set();   // directory paths that hold 0x05 effect generators
   for (const s of sections) {
     if (s.typeCode === 0x01) { stack.push(s.id); continue; }
     if (s.typeCode === 0x00) { stack.pop(); continue; }
+    if (s.typeCode === 0x05) { genDirs.add(stack.join('/')); continue; }
     if (s.typeCode !== 0x2E) continue;
     decryptZoneMesh(bytes, dv, s.dataStart, table1, table2);
     const { meshName, prims } = parseZoneMeshSection(bytes, dv, s);
@@ -1144,6 +1146,11 @@ export function parseZone(datBuffer, keyTables) {
       if (tail) { keepRicher(tail, prims); meshNames.add(tail); }
     }
   }
+  // A mesh filed in a sub-folder beside effect generators is theirs to draw (an
+  // aquarium's fish under m_ob/effe), not part of the body of a stand-alone prop.
+  for (const ms of meshSections) {
+    ms.effectResource = ms.path.includes('/') && genDirs.has(ms.path);
+  }
   for (const [id, prims] of fourccAliases) {
     if (meshNames.has(id)) continue;
     keepRicher(id, prims);
@@ -1151,7 +1158,11 @@ export function parseZone(datBuffer, keyTables) {
 
   let placements = [];
   let collision = null;
+  // Whether the DAT has a placement table at all. Mog House furniture and other
+  // stand-alone props carry an MMB and no 0x1C: their meshes are the whole model.
+  let hasZoneDef = false;
   for (const s of sections) if (s.typeCode === 0x1C) {
+    hasZoneDef = true;
     const all = parseZoneDef(bytes, dv, s, table1);  // decrypts the 0x1C in place
     // Filter placements hidden by xi's delete mechanism (moved to y ≈ -100000).
     // Without this, hidden "deleted" duplicates load as real placements, occupy a
@@ -1193,7 +1204,7 @@ export function parseZone(datBuffer, keyTables) {
   try { doorAnims = parseDoorRoutines(bytes, dv); } catch (_e) { /* no doors */ }
 
   return {
-    meshes, meshNames, placements, textures, meshIdToName, meshSections,
+    meshes, meshNames, placements, hasZoneDef, textures, meshIdToName, meshSections,
     collision, interactions, subAreas, weatherSky, doorAnims,
   };
 }

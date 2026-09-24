@@ -1708,7 +1708,9 @@ export class Renderer {
 
     if (!model || !model.isRenderable) return;
 
-    this.camera.setRangeFor(model.kind === 'zone' ? 'zone' : 'entity');
+    // A stand-alone prop (Mog House furniture) is a zone model a unit or two
+    // across: entity range, so the near plane and zoom floor suit its size.
+    this.camera.setRangeFor(model.kind === 'zone' && !model.isProp ? 'zone' : 'entity');
 
     if (model.skeleton.joints.length > MAX_JOINTS)
       console.warn(`skeleton has ${model.skeleton.joints.length} joints (max ${MAX_JOINTS})`);
@@ -2443,7 +2445,12 @@ export class Renderer {
     const aspect = canvas?.clientWidth > 0 && canvas?.clientHeight > 0
       ? canvas.clientWidth / canvas.clientHeight
       : undefined;
-    this.camera.fit(min, max, aspect ? { aspect } : undefined);
+    const fitOpts = aspect ? { aspect } : {};
+    // Mog House furniture is authored facing -Z: a lantern's carved face, the
+    // books on a shelf, a clock's dial. The default yaw looks at its back, so
+    // a prop is framed from the other side.
+    if (this.model.isProp) fitOpts.yaw = 0.6 + Math.PI;
+    this.camera.fit(min, max, fitOpts);
     // Model extents for the shadow cascade — the full model, weapons included,
     // so a raised blade still casts. The floor is not involved — it is fixed
     // at Y = 0.

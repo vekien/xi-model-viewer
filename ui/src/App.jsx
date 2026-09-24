@@ -1279,6 +1279,12 @@ export default function App({ launch = null }) {
   // file browser) stay in fly/WASD — same as Assets > Zones.
   useEffect(() => {
     if (browserKind === 'zone') {
+      // A stand-alone prop (Mog House furniture) opens through the zone path
+      // but is one small object: orbit it like a model.
+      if (modelRef.current?.isProp) {
+        if (wasdRef.current) setWasd(false);
+        return;
+      }
       if (settingsRef.current?.autoWasdZones !== false) setWasd(true);
       return;
     }
@@ -2306,7 +2312,7 @@ export default function App({ launch = null }) {
       if (wasdRef.current) {
         // Speed still shows live in the camera-settings readout; no status-bar spam.
         renderer.camera.adjustFlySpeed(e.deltaY < 0 ? 1 : -1);
-      } else if (renderer.model?.kind === 'zone') {
+      } else if (renderer.model?.kind === 'zone' && !renderer.model.isProp) {
         // Anchored at the cursor: zooming dives toward what you point at. A
         // zone is a place you navigate, and the thing you want a closer look at
         // is wherever you are pointing.
@@ -4185,12 +4191,16 @@ export default function App({ launch = null }) {
 
       // Camera: HD reload keeps the live pose; re-open restores the last pose
       // for this zone; first visit fits + optional auto-WASD.
-      const saved = keepCamera ? (cameraSnap || null) : readZoneCamera(key);
+      // A stand-alone prop (Mog House furniture: meshes, no placement table) is
+      // framed fresh in orbit every time, the way a model is.
+      const isProp = !!model.isProp;
+      const saved = keepCamera ? (cameraSnap || null) : (isProp ? null : readZoneCamera(key));
+      if (isProp && wasdRef.current) setWasd(false);
       renderer.setModel(model, !!saved);
       // Zones default to fly/WASD (incl. pre-production MZB zones from the file
       // browser). A saved orbit pose still restores the eye, but we keep fly
       // unless the user turned Auto-WASD off in Settings.
-      const wantFly = settingsRef.current?.autoWasdZones !== false;
+      const wantFly = !isProp && settingsRef.current?.autoWasdZones !== false;
       if (saved) {
         const mode = wantFly ? 'fly' : (saved.mode === 'orbit' ? 'orbit' : 'fly');
         wasdRef.current = mode === 'fly';
@@ -5138,7 +5148,7 @@ export default function App({ launch = null }) {
           // Restoring a zone on launch puts you back in a walkable world, so
           // give the fly controls back — loadZone only auto-enables them for a
           // zone it has no saved camera for, which never happens on a reload.
-          if (settingsRef.current?.autoWasdZones !== false) setWasd(true);
+          if (!modelRef.current?.isProp && settingsRef.current?.autoWasdZones !== false) setWasd(true);
           return;
         }
 
@@ -10051,7 +10061,7 @@ export default function App({ launch = null }) {
         setSelectedDat(lower);
         setBrowserKind('zone');
         setDataDoc(null);
-        if (settingsRef.current?.autoWasdZones !== false) setWasd(true);
+        if (!modelRef.current?.isProp && settingsRef.current?.autoWasdZones !== false) setWasd(true);
         return;
       }
 

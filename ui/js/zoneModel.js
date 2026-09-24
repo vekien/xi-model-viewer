@@ -125,13 +125,25 @@ function transformBoundsDisplay(local, matrix) {
 }
 
 /**
- * @param {{ meshes: Map, meshNames?: Set<string>, placements: any[], textures: Map, collision?: any }} parsed
+ * @param {{ meshes: Map, meshNames?: Set<string>, placements: any[], hasZoneDef?: boolean, textures: Map, collision?: any }} parsed
  * @param {string} sourceName
  * @param {{ includeSky?: boolean }} [opts]  includeSky kept for compat; sky/water
  *   always baked into a separate `env` layer and toggled in the renderer.
  */
 export function zoneToModel(parsed, sourceName = '', opts = {}) {
   const { meshes, meshNames, placements, textures: texMap, collision: rawCollision } = parsed;
+  // No placement table (0x1C) at all: Mog House furniture, event props. Their
+  // meshes are not orphans of a layout, they ARE the model, so they draw at the
+  // origin as world geometry (visible, and in the camera fit) instead of on the
+  // hidden `unplaced` layer, which left the scene empty. Strict `false` keeps
+  // the zone behaviour for any caller that does not report the flag.
+  const standalone = parsed.hasZoneDef === false;
+  // Meshes an effect draws (see parseZone) stay on the unplaced layer even then.
+  const effectPrims = new Set(
+    (Array.isArray(parsed.meshSections) ? parsed.meshSections : [])
+      .filter((s) => s.effectResource)
+      .map((s) => s.prims),
+  );
 
   // Precompute local bounds per mesh (for placement focus + zone camera fit).
   const localBounds = new Map();
@@ -587,6 +599,7 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
 
   let unplacedCompanions = 0;
   let unplacedOrphans = 0;
+  let propMeshes = 0;
   /** @type {{ meshName: string, prims: object[], pos: number[], rot: number[], scale: number[], spinY: number }[]} */
   const zoneSpinners = [];
   // meshes Map stores aliases (section id / name tail) → same prims array.
@@ -659,6 +672,18 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
         unplacedCompanions++;
       }
       placedMeshes.add(meshName);
+      continue;
+    }
+
+    if (standalone && !effectPrims.has(prims)) {
+      emitMesh(meshName, IDENTITY, 'world');
+      pushPlacement(
+        { meshId: meshName, index: -1, pos: [0, 0, 0], rot: [0, 0, 0], scale: [1, 1, 1] },
+        meshName,
+        IDENTITY,
+        null,
+      );
+      propMeshes++;
       continue;
     }
 
@@ -789,6 +814,7 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
       placementCount: zonePlacements.filter((p) => !p.kind || p.kind === 'unplaced').length,
       unplacedCompanions,
       unplacedOrphans,
+      propMeshes,
       envCount: zonePlacements.filter((p) => p.kind).length,
       placementTotal: placements.length,
       skippedWild,
@@ -802,6 +828,9 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
     },
   };
   model.isRenderable = zoneDraws.length > 0 || zoneSpinners.length > 0 || zoneLifts.length > 0 || zoneDoors.length > 0;
+  // One small object, looked at rather than walked through: the App orbits and
+  // frames it like a model, and the camera takes entity range.
+  model.isProp = standalone && propMeshes > 0;
   return model;
 }
 
