@@ -473,12 +473,48 @@ function parseZoneDef(bytes, dv, section, table1) {
       // Draw distance at +0x40 (0 = no limit). 1.0 is the authoring sentinel for
       // "collision only, never rendered" — see COLLISION_DRAW_DIST.
       drawDist: stride >= OBJ_STRIDE_MODERN ? dv.getFloat32(b + 0x40, true) : null,
+      // Culling-table link at +0x48: the visibility set used while the camera
+      // stands on this object (0 = none). See readCullingTables.
+      cullLink: stride >= OBJ_STRIDE_MODERN ? u32at(dv, b + 0x48) : 0,
       pos: [dv.getFloat32(b + 0x10, true), dv.getFloat32(b + 0x14, true), dv.getFloat32(b + 0x18, true)],
       rot: [dv.getFloat32(b + 0x1C, true), dv.getFloat32(b + 0x20, true), dv.getFloat32(b + 0x24, true)],
       scale: [dv.getFloat32(b + 0x28, true), dv.getFloat32(b + 0x2C, true), dv.getFloat32(b + 0x30, true)],
     });
   }
+  const cull = stride >= OBJ_STRIDE_MODERN ? readCullingTables(dv, ds, sectionEnd) : null;
+  if (cull) {
+    for (const p of placements) {
+      p.cullTables = cull.membership.get(p.index) || 0;
+      p.cullTableCount = cull.count;
+    }
+  }
   return placements;
+}
+
+// Culling tables (header +0x14, ds-relative): `count` u32, then per table a u32
+// length and that many object indices. The client picks ONE table from the
+// collision floor under the camera and draws only the objects listed in it (a
+// PVS); a floor with no table draws everything. The viewer draws every object,
+// so this is read only to recognise objects that exist for the PVS alone (see
+// isPortalCap in zoneModel.js). Returns { count, membership: index -> #tables }.
+function readCullingTables(dv, ds, sectionEnd) {
+  const off = u32at(dv, ds + 0x14);
+  if (!off || ds + off + 4 > sectionEnd) return null;
+  const count = u32at(dv, ds + off);
+  if (!count || count > 0xFFFF) return null;
+  const membership = new Map();
+  let p = ds + off + 4;
+  for (let t = 0; t < count; t++) {
+    if (p + 4 > sectionEnd) return null;
+    const n = u32at(dv, p);
+    p += 4;
+    if (p + n * 4 > sectionEnd) return null;
+    for (let k = 0; k < n; k++, p += 4) {
+      const i = u32at(dv, p);
+      membership.set(i, (membership.get(i) || 0) + 1);
+    }
+  }
+  return { count, membership };
 }
 
 /**
@@ -973,12 +1009,25 @@ export function resolveMeshName(meshId, meshes, meshNames = null, { lod = false 
   return null;
 }
 
+// A texture name is two 8-char fields, a namespace and a local name
+// (`kiri    kem1`). See the local-name step in resolveTexture.
+const textureLocalName = (name) => (name.length > 8 ? name.slice(8, 16).trim() : '');
+
 export function resolveTexture(name, textures) {
   if (!name) return null;
   if (textures.has(name)) return name;            // exact
   const n = norm(name);
   for (const key of textures.keys()) if (norm(key) === n) return key;   // exact, normalized
   for (const key of textures.keys()) { const k = norm(key); if (n.includes(k) || k.includes(n)) return key; } // loose fallback
+  // Same local name, any namespace: the client's own fallback (xim
+  // DirectoryResource.getTextureResourceByNameAs). Gwora's `kem1` sprite asks
+  // for `cloud   kem1` and the DAT ships `kiri    kem1`. Without this it drew
+  // untextured, a flat purple card the size of the room. Last, so nothing
+  // resolved above changes: across all zones this only fills 7 sprite/particle
+  // references that found nothing (Giddeus, Yuhtunga, Morimar, Silver Sea
+  // Remnants too).
+  const local = textureLocalName(name);
+  if (local) for (const key of textures.keys()) if (textureLocalName(key) === local) return key;
   return null;
 }
 

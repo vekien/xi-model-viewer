@@ -10,6 +10,10 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ## [Unreleased]
 
+### Zones
+- Castle Zvahl Baileys: the flat 40×40 walls across the corridors (`b_00`, `b_01` in [S]) start hidden. They are culling stand-ins the game only draws from certain spots; the Objects eye brings them back
+- Effect textures fall back to the local name the way the client does, so Gwora - Throne Room's `kem1` fog draws as fog instead of huge purple cards (also Giddeus, Yuhtunga Jungle, Morimar Basalt Fields, Silver Sea Remnants)
+
 ## [1.7.0] — 2026-09-21
 
 [Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.6.1...v1.7.0)

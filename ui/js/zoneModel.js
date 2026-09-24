@@ -271,8 +271,8 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
       // Objects-list eye. Sub-area sets do render — inside their volume — so
       // they start visible and are gated by region culling like world geometry.
       // The exception is a far copy of geometry the base zone already places —
-      // see isFarCopy.
-      userHidden: kind === 'collision' || isFarCopy(resolved),
+      // see isFarCopy. Portal caps likewise (isPortalCap).
+      userHidden: kind === 'collision' || isFarCopy(resolved) || isPortalCap(resolved),
     };
     zonePlacements.push(placement);
     return placement;
@@ -348,6 +348,52 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
     return far;
   };
 
+  // Portal caps: flat stand-in walls that exist only for the client's culling
+  // tables (readCullingTables in zone.js). Castle Zvahl Baileys places `b_00`
+  // (its [S] copy `b_01`) 38 times: one double-sided 40x40 quad in the floor
+  // texture, stood on the boundaries of the zone's 40-unit grid. Each one is in
+  // a handful of the 96 tables, the ones for camera spots whose table drops the
+  // cell behind it, so in game it closes off the view where the castle stops
+  // being drawn. The viewer draws every object at once, so they all stand
+  // across the corridors as blank walls.
+  //
+  // Not by name. A cap has no culling table of its own (+0x48 is 0: nothing
+  // stands on it). It is listed in some tables but few of them. It is one
+  // vertical double-sided plane. Across all 619 retail zone DATs that matches
+  // those two meshes and nothing else. Loosening it to 8 units / 30% of tables
+  // starts taking real walls (Ra'Kaznar's `me1_cen_a05`), and dropping "in at
+  // least one table" takes Mine Shaft #2716's `gb_kabe01`.
+  const CAP_MIN_SIZE = 20;
+  const CAP_MAX_SHARE = 0.15;
+  const capStats = new Map(); // mesh -> { n, tables, ok }
+  placements.forEach((p, i) => {
+    const m = resolvedFor[i];
+    if (!m || !p.cullTableCount) return;
+    let s = capStats.get(m);
+    if (!s) { s = { n: 0, tables: 0, ok: true }; capStats.set(m, s); }
+    s.n++;
+    s.tables += p.cullTables / p.cullTableCount;
+    if (p.cullLink || !p.cullTables || p.link || isCollisionPlacement(p) || isSubAreaPlacement(p)) s.ok = false;
+  });
+  const capCache = new Map();
+  const isPortalCap = (mesh) => {
+    const cached = capCache.get(mesh);
+    if (cached !== undefined) return cached;
+    const s = capStats.get(mesh);
+    const b = localBounds.get(mesh);
+    let cap = !!(s?.ok && b && s.tables / s.n < CAP_MAX_SHARE
+      && meshes.get(mesh)?.every((prim) => prim.noCull));
+    if (cap) {
+      // Zero thickness across a horizontal axis (a wall, not a floor or water
+      // sheet), and large in both others.
+      const [ex, ey, ez] = [0, 1, 2].map((k) => b.max[k] - b.min[k]);
+      cap = ey >= CAP_MIN_SIZE
+        && ((ex < 0.01 && ez >= CAP_MIN_SIZE) || (ez < 0.01 && ex >= CAP_MIN_SIZE));
+    }
+    capCache.set(mesh, cap);
+    return cap;
+  };
+
   // 0x36 ZoneInteraction volumes, keyed by sourceId. A placement's `link` (record
   // +0x34) names the volume it is bound to. An interaction "auto-runs" — moves on
   // its own, with no server packet and no player trigger — when its kind is '@'
@@ -410,7 +456,7 @@ export function zoneToModel(parsed, sourceName = '', opts = {}) {
     // Door leaf bound to a '_' volume with an open/close routine: driven by the
     // doors toggle, so it is baked live (at the closed pose by default), not static.
     const doorAnim = (!kind && !auto) ? doorAnimFor(p.link) : null;
-    const drawn = kind !== 'collision' && !isFarCopy(resolved) && !auto && !doorAnim;
+    const drawn = kind !== 'collision' && !isFarCopy(resolved) && !isPortalCap(resolved) && !auto && !doorAnim;
     if (drawn) emitMesh(resolved, matrix, 'world');
     const placement = pushPlacement(p, resolved, matrix, kind, lodResolvedFor[pi]);
     if (auto) {
