@@ -25,6 +25,14 @@
  *    and when marker === 1, 0x18 meta bytes and a NUL-terminated cp932 string.
  *    A sub-string whose marker !== 1 is a number (quest id, key-item id, …).
  *
+ *  - The spell and ability records of ROM/118/114.DAT (a `menu` container:
+ *    a 0x20-byte header, then sections — 4-char tag, u32 (length in 16-byte
+ *    units << 7 | resource type), 8 zero bytes, payload). `mgc_` holds the
+ *    0x64-byte spell records, `comm` the 0x30-byte command records; each
+ *    record is rotated on its own (MP cost, cast and recast, job levels, TP,
+ *    range …). One file for every client language; names and help come from
+ *    the language's d_msg tables.
+ *
  * `xi mv database` (xi-tools, src/xi/mv/xi_database.py) writes the same rows
  * out as JSON so the viewer can skip the 20 MB DAT reads; keep the two in
  * step when a layout changes. Nothing here touches the DOM.
@@ -118,9 +126,16 @@ export const ITEM_TABLES = [
 
 /** d_msg tables. `subs` names the sub-strings when the layout is known. */
 const QUEST_SUBS = ['id', 'name', 'description'];
-const HELP_SUBS = ['name', 'help'];
+// The help tables hold one sub-string, the text, in both clients.
+const HELP_SUBS = ['help'];
 
-const dm = (key, label, en, jp, subs) => ({ key, label, subs, parts: [{ en, jp }] });
+/** `subsJp` where the Japanese table's sub-strings differ from the English one's. */
+const dm = (key, label, en, jp, subs, subsJp) => ({ key, label, subs, subsJp, parts: [{ en, jp }] });
+
+/** The sub-string names of a d_msg table in one language. */
+export function subNamesFor(table, lang = 'en') {
+  return (lang === 'jp' && table?.subsJp) || table?.subs || [];
+}
 
 export const DMSG_GROUPS = [
   {
@@ -160,7 +175,8 @@ export const DMSG_GROUPS = [
   {
     key: 'strings', label: 'Names & Text', icon: 'text_snippet',
     tables: [
-      dm('keyitems', 'Key Items', 'ROM/175/35.DAT', 'ROM/175/34.DAT', ['id', 'category', 'unk2', 'unk3', 'name', 'plural', 'description']),
+      dm('keyitems', 'Key Items', 'ROM/175/35.DAT', 'ROM/175/34.DAT', ['id', 'category', 'unk2', 'unk3', 'name', 'plural', 'description'],
+        ['id', 'name', 'description']),
       dm('titles', 'Titles', 'ROM/180/78.DAT', 'ROM/180/77.DAT', ['name']),
       dm('jobs', 'Jobs', 'ROM/165/86.DAT', 'ROM/165/86.DAT', ['name']),
       dm('spells', 'Spell Names', 'ROM/181/73.DAT', 'ROM/181/69.DAT', ['name']),
@@ -168,7 +184,7 @@ export const DMSG_GROUPS = [
       dm('abilities', 'Ability Names', 'ROM/181/72.DAT', 'ROM/181/68.DAT', ['name']),
       dm('abilityHelp', 'Ability Help', 'ROM/181/74.DAT', 'ROM/181/70.DAT', HELP_SUBS),
       dm('bluHelp', 'Blue Magic Help', 'ROM/166/116.DAT', 'ROM/166/115.DAT', HELP_SUBS),
-      dm('status', 'Status Names', 'ROM/180/102.DAT', 'ROM/180/101.DAT', ['name', 'adjective']),
+      dm('status', 'Status Names', 'ROM/180/102.DAT', 'ROM/180/101.DAT', ['name', 'adjective'], ['name']),
       dm('mounts', 'Mounts', 'ROM/351/84.DAT', 'ROM/351/82.DAT', ['name', 'keyItem']),
       dm('mountHelp', 'Mount Help', 'ROM/351/85.DAT', 'ROM/351/83.DAT', HELP_SUBS),
       dm('monsterFamilies', 'Monster Families', 'ROM/188/38.DAT', 'ROM/188/37.DAT', ['name', 'plural']),
@@ -188,11 +204,31 @@ export const DMSG_GROUPS = [
   },
 ];
 
-/** Tree shown in the explorer: Items then the d_msg groups. `hidden` tables stay out of it. */
+/**
+ * The spell and ability records of ROM/118/114.DAT. `names` / `help` are the
+ * d_msg tables (keys above) the rows take their names and help text from.
+ */
+export const MENU_DAT = 'ROM/118/114.DAT';
+export const MENU_TABLES = [
+  {
+    key: 'spellData', label: 'Spell Data', menuKind: 'spell', tag: 'mgc_', stride: 0x64,
+    names: 'spells', help: 'spellHelp', parts: [{ en: MENU_DAT, jp: MENU_DAT }],
+  },
+  {
+    key: 'abilityData', label: 'Ability Data', menuKind: 'command', tag: 'comm', stride: 0x30,
+    names: 'abilities', help: 'abilityHelp', parts: [{ en: MENU_DAT, jp: MENU_DAT }],
+  },
+];
+
+/** Tree shown in the explorer: Items, Spells & Abilities, then the d_msg groups. `hidden` tables stay out of it. */
 export const DB_TREE = [
   {
     key: 'items', label: 'Items', icon: 'inventory_2',
     tables: ITEM_TABLES.filter((t) => !t.hidden).map((t) => ({ ...t, kind: 'items' })),
+  },
+  {
+    key: 'magic', label: 'Spells & Abilities', icon: 'auto_awesome',
+    tables: MENU_TABLES.map((t) => ({ ...t, kind: 'menu' })),
   },
   ...DMSG_GROUPS.map((g) => ({ ...g, tables: g.tables.map((t) => ({ ...t, kind: 'dmsg' })) })),
 ];
@@ -909,8 +945,8 @@ function dmsgSubs(blk) {
 }
 
 /** Name the sub-strings of a d_msg row from the table registry. */
-export function hydrateDmsgRow(row, table) {
-  const subNames = table?.subs || [];
+export function hydrateDmsgRow(row, table, lang = 'en') {
+  const subNames = subNamesFor(table, lang);
   row.fields = {};
   (row.subs || []).forEach((s, k) => { row.fields[subNames[k] ?? `sub${k}`] = s; });
   const firstText = (row.subs || []).find((s) => typeof s === 'string' && s.trim());
@@ -922,7 +958,7 @@ export function hydrateDmsgRow(row, table) {
  * Parse a d_msg table (fixed or variable stride) into rows of sub-strings.
  * Returns null when the buffer is not a d_msg file.
  */
-export function parseDmsgTable(buffer, table = null) {
+export function parseDmsgTable(buffer, table = null, lang = 'en') {
   const bytes = new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
   if (bytes.length < 0x40) return null;
   if (String.fromCharCode(...bytes.subarray(0, 5)) !== 'd_msg') return null;
@@ -963,19 +999,170 @@ export function parseDmsgTable(buffer, table = null) {
       push(i, body.subarray(s, s + len), tableOffset + s);
     }
   }
-  for (const r of rows) hydrateDmsgRow(r, table);
+  for (const r of rows) hydrateDmsgRow(r, table, lang);
   return {
     kind: 'dmsg', variant: tableSize === 0 ? 'fixed' : 'variable', stride, xor, num,
-    tableOffset, rows, maxSubs, table,
+    tableOffset, rows, maxSubs, table, lang, subNames: subNamesFor(table, lang),
   };
 }
 
 /** Same document from the JSON `xi mv database` wrote. */
 export function dmsgTableFromJson(json, table) {
-  const rows = (json.rows || []).map((r) => hydrateDmsgRow({ ...r }, table));
+  const lang = json.lang || 'en';
+  const rows = (json.rows || []).map((r) => hydrateDmsgRow({ ...r }, table, lang));
   const maxSubs = rows.reduce((n, r) => Math.max(n, r.subs?.length ?? 0), 0);
   return {
     kind: 'dmsg', variant: json.variant, stride: json.stride, xor: json.xor, num: json.num,
-    tableOffset: json.tableOffset, rows, maxSubs, table,
+    tableOffset: json.tableOffset, rows, maxSubs, table, lang, subNames: subNamesFor(table, lang),
   };
+}
+
+// ── spell & ability records (ROM/118/114.DAT) ────────────────────────────────
+// xi-tools: xi.menu.xi_menu_table (fields), xi.common.xi_menu_records (rotation),
+// xi.mv.xi_database.menu_rows (the same rows as JSON). Keep them in step.
+
+/** Level columns of a spell record, in order (0xFFFF = can't learn). */
+export const MENU_JOBS = ['NONE', 'WAR', 'MNK', 'WHM', 'BLM', 'RDM', 'THF', 'PLD', 'DRK', 'BST', 'BRD', 'RNG',
+  'SAM', 'NIN', 'DRG', 'SMN', 'BLU', 'COR', 'PUP', 'DNC', 'SCH', 'GEO', 'RUN', 'MON'];
+export const SPELL_KINDS = {
+  1: 'White Magic', 2: 'Black Magic', 3: 'Summoning', 4: 'Ninjutsu', 5: 'Song', 6: 'Blue Magic',
+  7: 'Geomancy', 8: 'Trust',
+};
+export const MENU_ELEMENTS = {
+  0: 'Fire', 1: 'Ice', 2: 'Wind', 3: 'Earth', 4: 'Lightning', 5: 'Water', 6: 'Light', 7: 'Dark', 15: 'None',
+};
+export const MAGIC_SKILLS = {
+  32: 'Divine', 33: 'Healing', 34: 'Enhancing', 35: 'Enfeebling', 36: 'Elemental', 37: 'Dark',
+  38: 'Summoning', 39: 'Ninjutsu', 40: 'Singing', 41: 'String', 42: 'Wind', 43: 'Blue', 44: 'Geomancy',
+  45: 'Handbell',
+};
+export const COMMAND_TYPES = {
+  1: 'Ability', 2: 'Pet ability', 3: 'Weapon skill', 4: 'Job trait', 6: 'Blood Pact: Rage',
+  8: "Corsair's Roll", 9: 'Quick Draw', 10: 'Blood Pact: Ward', 11: 'Samba', 12: 'Waltz', 13: 'Step',
+  14: 'Flourish', 15: 'Stratagem', 16: 'Jig', 17: 'Flourish II', 18: 'Ready', 19: 'Flourish III',
+  20: 'Monstrosity', 21: 'Rune Enchantment', 22: 'Ward', 23: 'Effusion',
+};
+const SPELL_FIELDS = {
+  id: [0x00, 2], kind: [0x02, 2], element: [0x04, 2], targets: [0x06, 2], skill: [0x08, 2], mp: [0x0a, 2],
+  cast: [0x0c, 1], recast: [0x0d, 1], menu_index: [0x3e, 2], icon: [0x40, 2], icon2: [0x42, 2],
+  requirements: [0x44, 1],
+};
+const COMMAND_FIELDS = {
+  id: [0x00, 2], type: [0x02, 1], icon: [0x03, 1], icon2: [0x04, 2], charges: [0x06, 2], targets: [0x0a, 2],
+  tp: [0x0c, 2], level: [0x0f, 1], range: [0x10, 1], radius: [0x11, 1], aoe: [0x12, 1],
+  valid_targets: [0x13, 2], tp_modifier: [0x15, 1],
+};
+const ROTATE_AMOUNTS = [1, 7, 2, 6, 3];
+const popcount = (b) => { let n = 0; for (let v = b & 0xff; v; v >>= 1) n += v & 1; return n; };
+
+/** A 114.DAT record as the client reads it: every byte but +2, +0x0B and +0x0C rotated left. */
+export function decodeMenuRecord(rec) {
+  const r = ROTATE_AMOUNTS[Math.abs(popcount(rec[2]) + popcount(rec[0x0c]) - popcount(rec[0x0b])) % 5];
+  const out = new Uint8Array(rec.length);
+  for (let i = 0; i < rec.length; i++) {
+    const b = rec[i];
+    out[i] = i === 2 || i === 0x0b || i === 0x0c ? b : ((b << r) | (b >> (8 - r))) & 0xff;
+  }
+  return out;
+}
+
+/** The payload of one section of a `menu` container: `{ start, body }`, or null. */
+export function menuSection(bytes, tag) {
+  if (bytes.length < 0x20 || String.fromCharCode(...bytes.subarray(0, 4)) !== 'menu') return null;
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let off = 0x20;
+  while (off + 0x10 <= bytes.length) {
+    const t = String.fromCharCode(...bytes.subarray(off, off + 4));
+    const len = (dv.getUint32(off + 4, true) >>> 7) * 16;
+    if (t === 'end\0' || len < 0x10 || off + len > bytes.length) return null;
+    if (t === tag) return { start: off + 0x10, body: bytes.subarray(off + 0x10, off + len) };
+    off += len;
+  }
+  return null;
+}
+
+function menuFields(kind, rec) {
+  const layout = kind === 'spell' ? SPELL_FIELDS : COMMAND_FIELDS;
+  const dv = new DataView(rec.buffer, rec.byteOffset, rec.byteLength);
+  const out = {};
+  for (const [name, [off, size]] of Object.entries(layout)) {
+    out[name] = size === 1 ? rec[off] : dv.getUint16(off, true);
+  }
+  let levels = null;
+  if (kind === 'spell') {
+    levels = {};
+    MENU_JOBS.forEach((job, i) => {
+      const v = dv.getUint16(0x0e + i * 2, true);
+      if (v !== 0xffff) levels[job] = v;
+    });
+  }
+  return { fields: out, levels };
+}
+
+const quarterSeconds = (v) => (v == null ? null : v / 4);
+
+/** Flat values for the grid and the filter, from a row's `fields` / `levels`. */
+export function hydrateMenuRow(row, kind) {
+  const f = row.fields || {};
+  row.id = row.idx;
+  if (kind === 'spell') {
+    row.kindName = SPELL_KINDS[f.kind] ?? (f.kind ? String(f.kind) : '');
+    row.elementName = MENU_ELEMENTS[f.element] ?? String(f.element);
+    row.skillName = MAGIC_SKILLS[f.skill] ?? (f.skill ? String(f.skill) : '');
+    row.mp = f.mp;
+    row.cast = quarterSeconds(f.cast);
+    row.recast = quarterSeconds(f.recast);
+    row.levelsText = Object.entries(row.levels || {}).map(([j, v]) => `${j}${v}`).join(' ');
+    row.menuIndex = f.menu_index;
+  } else {
+    row.typeName = COMMAND_TYPES[f.type] ?? (f.type ? String(f.type) : '');
+    row.tp = f.tp === 0xffff ? null : f.tp;
+    row.level = f.level;
+    row.range = f.range;
+    row.radius = f.radius;
+    row.aoe = f.aoe;
+    row.charges = f.charges;
+  }
+  row.targetsHex = `0x${(f.targets ?? 0).toString(16).padStart(4, '0')}`;
+  row.icon = f.icon;
+  return row;
+}
+
+const textsOf = (doc, sub = 0) => (doc?.rows || []).reduce((out, r) => {
+  const v = r.subs?.[sub];
+  out[r.idx] = typeof v === 'string' ? v : '';
+  return out;
+}, []);
+
+/**
+ * Decode one section of 114.DAT into rows, names and help from the loaded
+ * d_msg documents (`namesDoc` / `helpDoc`). Records that are all zero are left out.
+ */
+export function parseMenuTable(buffer, table, namesDoc = null, helpDoc = null) {
+  const bytes = new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  const sec = menuSection(bytes, table.tag);
+  if (!sec) return null;
+  const names = textsOf(namesDoc);
+  const helps = textsOf(helpDoc);
+  const rows = [];
+  const n = Math.floor(sec.body.length / table.stride);
+  for (let i = 0; i < n; i++) {
+    const raw = sec.body.subarray(i * table.stride, (i + 1) * table.stride);
+    if (!raw.some((b) => b)) continue;
+    const rec = decodeMenuRecord(raw);
+    const { fields, levels } = menuFields(table.menuKind, rec);
+    const row = {
+      idx: i, offset: sec.start + i * table.stride, length: table.stride,
+      name: names[i] ?? '', help: helps[i] ?? '', fields, hex: hexOf(rec, 0, table.stride),
+    };
+    if (levels) row.levels = levels;
+    rows.push(hydrateMenuRow(row, table.menuKind));
+  }
+  return { kind: 'menu', menuKind: table.menuKind, stride: table.stride, rows, table };
+}
+
+/** Same document from the JSON `xi mv database` wrote. */
+export function menuTableFromJson(json, table) {
+  const rows = (json.rows || []).map((r) => hydrateMenuRow({ ...r, length: json.stride }, table.menuKind));
+  return { kind: 'menu', menuKind: table.menuKind, stride: json.stride, rows, table };
 }

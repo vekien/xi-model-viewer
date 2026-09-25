@@ -95,7 +95,7 @@ export function DatabaseList({ selectedKey, onSelectTable, lang = 'en', counts, 
                         >
                           <div className="row" onClick={() => onSelectTable?.(t)}>
                             <span className="caret icon" />
-                            <span className="kind icon">{t.kind === 'items' ? 'inventory_2' : 'table_rows'}</span>
+                            <span className="kind icon">{t.kind === 'items' ? 'inventory_2' : t.kind === 'menu' ? 'auto_awesome' : 'table_rows'}</span>
                             <span className="db-name">{t.label}</span>
                             {n != null && <span className="mono-small db-count">{n.toLocaleString()}</span>}
                           </div>

@@ -3,8 +3,8 @@ import { Button } from '@headlessui/react';
 import { backend } from '../js/backend.js';
 import { gameCandidates, normRel } from '../js/gamePath.js';
 import {
-  decodeItemIcon, dmsgTableFromJson, hexOf, itemBlockAt, itemTableFromJson, parseDmsgTable,
-  parseItemTable, tablePaths, ITEM_FLAGS, ITEM_LAYOUTS,
+  decodeItemIcon, dmsgTableFromJson, findDbTable, hexOf, itemBlockAt, itemTableFromJson, menuTableFromJson,
+  parseDmsgTable, parseItemTable, parseMenuTable, subNamesFor, tablePaths, ITEM_FLAGS, ITEM_LAYOUTS,
 } from '../js/database.js';
 import { Tooltip } from './Tooltip.jsx';
 import { DatabaseFilter } from './DatabaseFilter.jsx';
@@ -85,9 +85,9 @@ async function loadTable(table, lang, settings) {
   let source;
   const pre = await readPrebuilt(table, lang, settings).catch(() => null);
   if (pre) {
-    doc = table.kind === 'items'
-      ? itemTableFromJson(pre.json, table)
-      : dmsgTableFromJson(pre.json, table);
+    if (table.kind === 'items') doc = itemTableFromJson(pre.json, table);
+    else if (table.kind === 'menu') doc = menuTableFromJson(pre.json, table);
+    else doc = dmsgTableFromJson(pre.json, table);
     source = { kind: 'prebuilt', path: pre.path, generated: pre.json.generated };
   } else {
     const buffers = [];
@@ -104,8 +104,14 @@ async function loadTable(table, lang, settings) {
       }
     }
     if (table.kind === 'items') doc = parseItemTable(buffers, table, lang);
-    else {
-      doc = parseDmsgTable(buffers[0], table);
+    else if (table.kind === 'menu') {
+      // Names and help: the language's d_msg tables, loaded (and cached) like any other.
+      const names = await loadTable(findDbTable(table.names), lang, settings).catch(() => null);
+      const help = await loadTable(findDbTable(table.help), lang, settings).catch(() => null);
+      doc = parseMenuTable(buffers[0], table, names?.doc, help?.doc);
+      if (!doc) throw new Error(`${parts[0].rel} has no ${table.tag} section`);
+    } else {
+      doc = parseDmsgTable(buffers[0], table, lang);
       if (!doc) throw new Error(`${parts[0].rel} is not a d_msg table`);
     }
     source = { kind: 'dat' };
@@ -174,8 +180,37 @@ function columnsFor(doc) {
     cols.push({ key: 'description', label: 'Description', w: 460 });
     return cols;
   }
+  if (doc.kind === 'menu') {
+    const cols = [
+      { key: 'id', label: 'ID', w: 64, num: true },
+      { key: 'name', label: 'Name', w: 200 },
+    ];
+    if (doc.menuKind === 'spell') {
+      cols.push({ key: 'kindName', label: 'Kind', w: 110 });
+      cols.push({ key: 'elementName', label: 'Element', w: 84 });
+      cols.push({ key: 'skillName', label: 'Skill', w: 96 });
+      cols.push({ key: 'mp', label: 'MP', w: 52, num: true });
+      cols.push({ key: 'cast', label: 'Cast s', w: 58, num: true });
+      cols.push({ key: 'recast', label: 'Recast s', w: 66, num: true });
+      cols.push({ key: 'levelsText', label: 'Levels', w: 300 });
+      cols.push({ key: 'targetsHex', label: 'Targets', w: 72, mono: true });
+      cols.push({ key: 'menuIndex', label: 'Menu #', w: 64, num: true });
+    } else {
+      cols.push({ key: 'typeName', label: 'Type', w: 130 });
+      cols.push({ key: 'tp', label: 'TP', w: 56, num: true });
+      cols.push({ key: 'level', label: 'Lvl', w: 44, num: true });
+      cols.push({ key: 'range', label: 'Range', w: 56, num: true });
+      cols.push({ key: 'radius', label: 'Radius', w: 58, num: true });
+      cols.push({ key: 'aoe', label: 'AoE', w: 44, num: true });
+      cols.push({ key: 'charges', label: 'Charges', w: 64, num: true });
+      cols.push({ key: 'targetsHex', label: 'Targets', w: 72, mono: true });
+    }
+    cols.push({ key: 'icon', label: 'Icon', w: 50, num: true });
+    cols.push({ key: 'help', label: 'Help', w: 460 });
+    return cols;
+  }
   const cols = [{ key: 'idx', label: '#', w: 56, num: true }];
-  const names = doc.table?.subs || [];
+  const names = doc.subNames || doc.table?.subs || [];
   for (let i = 0; i < doc.maxSubs; i++) {
     const n = names[i] ?? `sub${i}`;
     const wide = /description|help|text|format/.test(n);
@@ -384,7 +419,7 @@ export function DatabaseViewer({
           />
         )}
         <div className="db-header">
-          <span className="icon db-header-icon">{table.kind === 'items' ? 'inventory_2' : 'table_rows'}</span>
+          <span className="icon db-header-icon">{table.kind === 'items' ? 'inventory_2' : table.kind === 'menu' ? 'auto_awesome' : 'table_rows'}</span>
           <div className="db-title">
             <span className="db-title-group">{table.groupLabel}</span>
             <span className="db-title-sep">›</span>
@@ -595,6 +630,7 @@ function DetailCard({ row, entry, table, lang, settings, fileIdOf, onStatus }) {
   const [fileId, setFileId] = useState(null);
   const [block, setBlock] = useState(null);
   const isItem = entry?.doc?.kind === 'items';
+  const isMenu = entry?.doc?.kind === 'menu';
   const isRecord = isItem && ITEM_LAYOUTS.has(entry.doc.layout);
   const part = entry?.parts?.[row.part ?? 0];
   const rel = part?.rel ?? '';
@@ -648,7 +684,7 @@ function DetailCard({ row, entry, table, lang, settings, fileIdOf, onStatus }) {
     ? hexOf(block, 0, Math.min(0x80, row.stringOffset ?? 0x40) || 0x40)
     : null;
 
-  const subNames = table?.subs || [];
+  const subNames = entry?.doc?.subNames || subNamesFor(table, lang);
 
   return (
     <>
@@ -661,7 +697,7 @@ function DetailCard({ row, entry, table, lang, settings, fileIdOf, onStatus }) {
           </div>
         )}
         <div className="db-detail-title">
-          <div className="db-detail-name">{row.name || (isItem ? `Item ${row.id}` : `Row ${row.idx}`)}</div>
+          <div className="db-detail-name">{row.name || (isItem ? `Item ${row.id}` : isMenu ? `Record ${row.idx}` : `Row ${row.idx}`)}</div>
           <div className="db-detail-sub mono">
             {isItem ? `id ${row.id}` : `#${row.idx}`}
             {' · '}
@@ -747,7 +783,9 @@ function DetailCard({ row, entry, table, lang, settings, fileIdOf, onStatus }) {
           </>
         )}
 
-        {!isItem && (
+        {isMenu && <MenuRecord row={row} kind={entry.doc.menuKind} />}
+
+        {!isItem && !isMenu && (
           <>
             <div className="db-section">Sub-strings</div>
             <div className="db-kv">
@@ -763,6 +801,47 @@ function DetailCard({ row, entry, table, lang, settings, fileIdOf, onStatus }) {
           </>
         )}
       </div>
+    </>
+  );
+}
+
+/** A spell / ability record of 114.DAT: its fields, the jobs that learn it, its help, the bytes. */
+function MenuRecord({ row, kind }) {
+  const f = row.fields || {};
+  const shown = kind === 'spell'
+    ? [['Kind', row.kindName], ['Element', row.elementName], ['Skill', row.skillName ? `${row.skillName} (${f.skill})` : null],
+      ['MP', f.mp], ['Cast', `${row.cast}s (${f.cast})`], ['Recast', `${row.recast}s (${f.recast})`],
+      ['Targets', row.targetsHex], ['Menu index', f.menu_index], ['Icon', `${f.icon} / ${f.icon2}`],
+      ['Requirements', f.requirements]]
+    : [['Type', row.typeName ? `${row.typeName} (${f.type})` : f.type], ['TP', row.tp ?? '—'], ['Level', f.level],
+      ['Range', f.range], ['Radius', f.radius], ['AoE', f.aoe], ['Charges', f.charges],
+      ['Targets', row.targetsHex], ['Valid targets', `0x${(f.valid_targets ?? 0).toString(16).padStart(4, '0')}`],
+      ['TP modifier', f.tp_modifier], ['Icon', `${f.icon} / ${f.icon2}`]];
+  const hex = String(row.hex || '').replace(/\s+/g, '').replace(/(..)(?!$)/g, '$1 ');
+  return (
+    <>
+      <div className="db-section">Fields</div>
+      <div className="db-kv">
+        {shown.map(([label, v]) => (v == null || v === '' ? null : <FieldRow key={label} label={label} value={String(v)} />))}
+      </div>
+      {kind === 'spell' && (
+        <>
+          <div className="db-section">Learned by</div>
+          <div className="db-chips">
+            {Object.entries(row.levels || {}).length
+              ? Object.entries(row.levels).map(([job, lvl]) => <span key={job} className="db-chip">{job} {lvl}</span>)
+              : <span className="side-note">No job learns it.</span>}
+          </div>
+        </>
+      )}
+      {row.help && (
+        <>
+          <div className="db-section">Help</div>
+          <div className="db-kv"><FieldRow label="help" value={row.help} pre /></div>
+        </>
+      )}
+      <div className="db-section">Record bytes (decoded)</div>
+      <div className="db-hex mono">{hex}</div>
     </>
   );
 }
