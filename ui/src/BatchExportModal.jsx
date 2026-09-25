@@ -96,7 +96,7 @@ function jobOutDir(folder, rel, catalog, args) {
 /** Zone flags common enough to tick rather than hunt for in the args picker. */
 const ZONE_CHECKS = [
   { label: 'Contents', flags: ['--no-sky', '--no-vfx', '--no-subareas'] },
-  { label: 'Output', flags: ['--objects', '--sub-areas', '--opaque', '--collision', '--json'] },
+  { label: 'Output', flags: ['--objects', '--sub-areas', '--zero-coords', '--opaque', '--collision', '--json'] },
 ];
 
 /** Each box is its flag's chip in the args box, so ticking one adds or removes it there. */
@@ -942,7 +942,9 @@ export function BatchExportModal({ open, settings, onClose, onStatus, onRunning 
                   ) : perObject ? (
                     <>Each zone gets a folder of its own under its game folder
                       (<span className="mono">…\ROM\1\41\</span>), one file per mesh, so zones
-                      that share mesh names don&apos;t overwrite each other.</>
+                      that share mesh names don&apos;t overwrite each other. With Sub-areas as
+                      files, each sub-area&apos;s objects go in a folder inside it
+                      (<span className="mono">…\ROM\1\41\41_454\</span>).</>
                   ) : (
                     <>Each DAT lands under its own game folder
                       (<span className="mono">…\ROM\27\82.{kind.ext(format === 'fbx')}</span>) so

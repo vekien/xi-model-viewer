@@ -62,9 +62,19 @@ const ALPHA_SCALE = {
     + 'scale (0x80 = opaque), so 2.0 matches the game while keeping real cutouts.',
 };
 
+// Mesh and Full Pose: a rigged model, so its skeleton root stays the origin.
+const ZERO_COORDS_RIGGED = {
+  flag: '--zero-coords', kind: 'flag', quick: 1, group: 'Output',
+  label: 'Zero coords (FBX)',
+  hint: 'The FBX imports at location 0,0,0 with no rotation: the orientation fix is baked into '
+    + 'the armature and mesh instead of a rotated root, for Unreal. The skeleton root stays the '
+    + 'origin. FBX only; the .glb is unchanged.',
+};
+
 const MESH_ARGS = [
   OUTPUT_DIR,
   FBX,
+  ZERO_COORDS_RIGGED,
   {
     flag: '--all-parts', kind: 'flag', group: 'Sections',
     label: 'Merge all parts',
@@ -133,6 +143,7 @@ const MESH_ARGS = [
 const POSE_ARGS = [
   OUTPUT_DIR,
   FBX,
+  ZERO_COORDS_RIGGED,
   {
     flag: '--main', kind: 'value', group: 'Weapons', managed: true,
     label: 'Main-hand weapon', hint: 'Taken from the equipped main-hand slot.',
@@ -228,12 +239,13 @@ const ZONE_ARGS = [
       + 'Sub-areas as files already leaves out the ones it exports.',
   },
   {
-    flag: '--sub-areas', kind: 'flag', group: 'Layout', conflicts: ['--objects'],
+    flag: '--sub-areas', kind: 'flag', group: 'Layout',
     label: 'Sub-areas as files',
     hint: 'Also export each sub-area from its own DAT as <zone>_<id> beside the zone file: Lower '
       + 'Jeuno (41) gives 41 plus 41_454 … 41_466, one per shop interior; Ru’Aun Gardens one per '
       + 'island platform, at full detail. The zone file leaves out the stand-ins they replace, so '
-      + 'the files line up. Geometry only.',
+      + 'the files line up. Geometry only. With Per-object files, each sub-area is a <zone>_<id> '
+      + 'folder of its objects instead.',
   },
   {
     flag: '--with-collision-proxies', kind: 'flag', group: 'Contents',
@@ -248,10 +260,20 @@ const ZONE_ARGS = [
       + 'the cheap copy ends up inside the detailed one.',
   },
   {
-    flag: '--objects', kind: 'flag', group: 'Layout', conflicts: ['--sub-areas'],
+    flag: '--objects', kind: 'flag', group: 'Layout',
     label: 'Per-object files',
     hint: 'Write each mesh as its own .glb straight into the output folder (local space, at the '
-      + 'origin) instead of one combined zone file.',
+      + 'origin) instead of one combined zone file. With Sub-areas as files, each sub-area’s '
+      + 'objects go in a <zone>_<id> folder.',
+  },
+  {
+    flag: '--zero-coords', kind: 'flag', quick: 10, group: 'Layout', conflicts: ['--alpha-split-mesh'],
+    label: 'Zero coords (FBX)',
+    hint: 'Every FBX imports at location 0,0,0 with no rotation, to place by hand or from the JSON: '
+      + 'each placement is baked into the geometry and each file (the zone, every sub-area file, '
+      + 'every per-object file) is moved so the centre of its base is on the origin. Also writes '
+      + '<zone>.zone.json, whose fbx_zero_coords says where each file goes back and, per object, '
+      + 'every placement’s transform. FBX only.',
   },
   {
     flag: '--raw', kind: 'flag', group: 'Layout',
@@ -307,7 +329,7 @@ const ZONE_ARGS = [
       + 'aggressive merging.',
   },
   {
-    flag: '--alpha-split-mesh', kind: 'flag', group: 'Geometry',
+    flag: '--alpha-split-mesh', kind: 'flag', group: 'Geometry', conflicts: ['--zero-coords'],
     label: 'Alpha split mesh (test)',
     hint: 'Write two FBX files: the opaque base and the blended ground overlays split off and '
       + 'lifted, so they stop z-fighting. Its auto-smooth draws shading creases across terrain; for '
