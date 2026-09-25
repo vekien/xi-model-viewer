@@ -294,8 +294,10 @@ const ZONE_ARGS = [
     label: 'Unreal preset',
     hint: 'One flag for Unreal Engine: right-handed, opaque materials, FBX, and raw vertex colours '
       + '(written linear) for the zone material to apply FFXI’s ×2. Also drops hidden duplicate '
-      + 'triangles the game never shows. Use with Omit skybox and Omit VFX, then follow '
-      + 'xi-tools/unreal-engine for the import settings, materials and setup script.',
+      + 'triangles the game never shows, splits trees into leaf (cutout) and trunk (solid) '
+      + 'materials, writes wind weights to UV channel 1, and shares one PNG per texture (xi-tools '
+      + '1.14.0). Use with Omit skybox and Omit VFX, then follow xi-tools/unreal-engine for the '
+      + 'import settings, materials, setup script and foliage wind.',
   },
   {
     flag: '--no-weld', kind: 'flag', group: 'Geometry', conflicts: ['--weld'],

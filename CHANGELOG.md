@@ -8,6 +8,16 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ---
 
+## [1.11.0] — 2026-09-25
+
+[Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.10.0...v1.11.0)
+
+### Export
+- **Unreal preset** (`--unreal`) with xi-tools 1.14.0: trees are split into a leaf (cutout) and a trunk (solid) material, so wind can move the leaves without the trunk; every mesh carries wind weights in UV channel 1; and each texture is written once, with no `_opaque.png` copy. Its tooltip says so. See xi-tools' `unreal-engine/foliage.md`
+
+### Mixer
+- The custom animation bands are xi-tools' numbers: with the bands on the viewer sends nothing and xi-tools applies its own (the job-ability band now starts at 1024, clear of the warp and teleport effects). **Settings › XI Tools › Custom animation bands** keeps the on/off switch and shows each range read-only; the number fields and the cexislots-defaults button are gone, and a number saved by an older version is ignored
+
 ## [1.10.0] — 2026-09-25
 
 [Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.9.0...v1.10.0)
