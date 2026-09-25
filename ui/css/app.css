@@ -7382,12 +7382,10 @@ kbd.mhelp-kbd { display: inline-block; padding: 0 5px; font-size: 11px; line-hei
 /* How long a waiting link holds the mix: the timeline's hold band colour. */
 .mseq-keep-where.hold { color: #b4beff; background: rgba(150, 164, 255, 0.12); border-color: rgba(150, 164, 255, 0.45); }
 .mseq-keep-where.hold.unknown { color: var(--muted); background: transparent; border-color: var(--ring); }
-/* Settings › XI Tools › Custom animation bands: a kind per row, small number fields, the range. */
-.band-row { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
-.band-row > b { flex: 0 0 92px; font-weight: 500; font-size: 12px; padding-bottom: 7px; }
-.band-num { display: flex; flex-direction: column; gap: 2px; font-size: 10.5px; color: var(--muted); }
-.band-num input { width: 88px; }
-.band-row .band-range { font: 500 11px/1 var(--font-mono); color: var(--muted); padding-bottom: 8px; }
+/* Settings › XI Tools › Custom animation bands: a kind per row and its range (xi-tools' numbers). */
+.band-row { display: flex; align-items: baseline; gap: 8px; }
+.band-row > b { flex: 0 0 92px; font-weight: 500; font-size: 12px; }
+.band-row .band-range { font: 500 11px/1 var(--font-mono); color: var(--muted); }
 /* Settings › Local Server: the folder and the database side by side, Weapon skills under both. */
 .settings-server .settings-span { grid-column: 1 / -1; }
 .settings-server .form-row > input[type='text'] { width: 100%; box-sizing: border-box; }

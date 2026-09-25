@@ -120,8 +120,9 @@ export function xiEnvFromSpec(spec) {
   // Points xi at blender.exe for the --fbx conversion pass; without it xi falls
   // back to its own default install path (C:\Program Files\Blender Foundation\…).
   if (spec?.blenderPath) env.BLENDER_PATH = spec.blenderPath;
-  // Custom animation bands (Settings › XI Tools): where Publish may allocate past what a
-  // stock client loads. Sent whenever the settings carry them — as zeros when switched off.
+  // Custom animation bands (Settings › XI Tools): whether Publish may allocate past what a
+  // stock client loads. Only sent when switched off (each band's FIRST as 0); on, xi-tools'
+  // own numbers apply.
   if (spec && 'animBands' in spec) Object.assign(env, animBandsEnv(spec.animBands));
   return Object.keys(env).length ? env : null;
 }

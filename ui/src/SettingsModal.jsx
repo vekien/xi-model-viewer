@@ -6,7 +6,7 @@ import { clampUiScale, sliderToUiScale, uiScaleToSlider } from '../js/uiScale.js
 import { GAME_CHECK, checkGamePath } from '../js/gameCheck.js';
 import { formatProgressDetail } from '../js/toolsBoot.js';
 import { loadNotes, notesFilePath, revealNotesFile } from '../js/notes.js';
-import { ANIM_BANDS_DEFAULT, STOCK_ANIM_RANGE, animBandRange } from '../js/mixer.js';
+import { STOCK_ANIM_RANGE, animBandRange, normalizeAnimBands } from '../js/mixer.js';
 import {
   LOCAL_SERVER_DEFAULT, WS_WHY, connectionLine, localServerChanges, localServerEnv, localServerErrorText,
   readLocalServer, sameServerDir, serverCheck, serverFolderLine, wsCodeText, wsInstallReveal, wsInstallSummary,
@@ -453,17 +453,9 @@ export function SettingsModal({
     if (picked) setDraft({ ...draft, blenderPath: picked });
   };
 
-  // Custom animation bands: kept as typed while editing (digits only); Save normalises
-  // them (App.jsx), so a field cleared mid-edit does not snap back under the cursor.
-  const bandsDraft = { ...ANIM_BANDS_DEFAULT, ...(draft.animBands || {}) };
+  // Custom animation bands: only the switch; the numbers are xi-tools' (mixer.js ANIM_BANDS).
+  const bandsDraft = normalizeAnimBands(draft.animBands);
   const setBand = (patch) => setDraft({ ...draft, animBands: { ...bandsDraft, ...patch } });
-  const bandNum = (key, label) => (
-    <label className="band-num">
-      <span>{label}</span>
-      <input type="text" inputMode="numeric" spellCheck={false} disabled={!bandsDraft.on}
-        value={bandsDraft[key] ?? ''} onChange={(e) => setBand({ [key]: e.target.value.replace(/[^0-9]/g, '') })} />
-    </label>
-  );
   const bandRange = (kind) => {
     const r = animBandRange(kind, bandsDraft);
     return r ? `${r[0]}–${r[1]}` : '—';
@@ -1273,37 +1265,24 @@ export function SettingsModal({
                   </div>
                   <div className="band-row">
                     <b>Weapon skill</b>
-                    {bandNum('wsFirst', 'first number')}
-                    {bandNum('wsSlots', 'slots')}
-                    {bandNum('wsBase', 'file id base')}
                     <span className="band-range">{bandRange('ws')}</span>
                   </div>
                   <div className="band-row">
                     <b>Job ability</b>
-                    {bandNum('jaFirst', 'first number')}
-                    {bandNum('jaBase', 'file id base')}
                     <span className="band-range">{bandRange('ja')}</span>
                   </div>
                   <div className="band-row">
                     <b>Spell</b>
-                    {bandNum('spellFirst', 'first number')}
-                    {bandNum('spellBase', 'file id base')}
                     <span className="band-range">{bandRange('spell')}</span>
                   </div>
                   <div className="form-row">
-                    <div className="form-inline">
-                      <Button onClick={() => setBand({ ...ANIM_BANDS_DEFAULT, on: bandsDraft.on })}>
-                        <span className="icon">restart_alt</span>
-                        cexislots defaults
-                      </Button>
-                    </div>
                     <div className="form-hint">
-                      These must match the plugin the client runs (cexislots
-                      <span className="mono"> sites.h</span>: WS_CUSTOM_FIRST / WS_SLOTS / WS_BASE,
-                      FX_JA_*, FX_SPELL_*). They are passed to xi-tools
-                      as <span className="mono">FX_*_BAND_*</span> on every run and override its
-                      <span className="mono"> .env</span>. Publish with <i>Use Pivot Folder</i> so the
-                      overlay&rsquo;s ROM10 tables register the ids.
+                      These ranges are xi-tools&rsquo; own, set to match cexislots
+                      (<span className="mono">FX_*_BAND_*</span> in <span className="mono">xi_config.py</span>),
+                      so they move when the plugin does. Job abilities 500–1023 are never handed
+                      out: the client keeps its warp and teleport effects there. Publish
+                      with <i>Use Pivot Folder</i> so the ids are registered in CatsEyeXI&rsquo;s DATs
+                      folder.
                     </div>
                   </div>
                 </div>

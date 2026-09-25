@@ -1699,60 +1699,41 @@ export async function encodePng(width, height, rgba) {
 // A stock client reaches only a few free animation numbers per kind: weapon skill
 // 264–271, job ability 339–499, spell 1012–1611. A client-side plugin (cexislots) patches
 // the number → file-id arithmetic so numbers at or above a threshold resolve into a
-// reserved region, and xi-tools allocates there once the stock numbers are used up
-// (FX_*_BAND_*, xi_config.py). On unless switched off — the client is assumed to run the
-// plugin — and the defaults are cexislots' own (cexidats src/cexislots/sites.h); they
-// must match the plugin the client runs.
-export const ANIM_BANDS_DEFAULT = Object.freeze({
-  on: true,
-  wsFirst: 272, wsSlots: 256, wsBase: 431344,
-  jaFirst: 500, jaBase: 427248,
-  spellFirst: 1612, spellBase: 423152,
-});
-const BAND_KEYS = ['wsFirst', 'wsSlots', 'wsBase', 'jaFirst', 'jaBase', 'spellFirst', 'spellBase'];
-const ANIMATION_MAX = 4095;   // the action packet carries the animation number in 12 bits
+// reserved region, and xi-tools allocates there once the stock numbers are used up.
+// The numbers are xi-tools' own (FX_*_BAND_*, xi_config.py, cexislots' values) and the
+// viewer never sends them, so when the plugin moves a threshold xi-tools moves with it
+// (a stored 500 once kept job abilities below cexislots' 1024). The one setting here is
+// whether the client runs the plugin: on unless switched off.
+/** The bands as xi-tools has them, only to show the ranges; keep in step with xi_config.py. */
+export const ANIM_BANDS = Object.freeze({ ws: [272, 527], ja: [1024, 4095], spell: [1612, 4095] });
 /** What a stock client can load, per kind — the numbers Publish tries first. */
 export const STOCK_ANIM_RANGE = Object.freeze({ ws: [264, 271], ja: [339, 499], spell: [1012, 1611] });
 
 export const ANIM_BANDS_KEY = 'customAnimBands';   // localStorage
 
-/** The settings' band block with every number whole and positive (a blank falls back to the default). */
+/** The settings' band block: just the switch. Numbers saved by older versions are dropped. */
 export function normalizeAnimBands(raw) {
-  const out = { ...ANIM_BANDS_DEFAULT, on: raw?.on !== false };
-  for (const k of BAND_KEYS) {
-    const v = Math.round(Number(raw?.[k]));
-    if (Number.isFinite(v) && v > 0) out[k] = v;
-  }
-  return out;
+  return { on: raw?.on !== false };
 }
 
 export function loadAnimBands() {
-  try { return normalizeAnimBands(JSON.parse(localStorage.getItem(ANIM_BANDS_KEY) || 'null')); } catch { return { ...ANIM_BANDS_DEFAULT }; }
+  try { return normalizeAnimBands(JSON.parse(localStorage.getItem(ANIM_BANDS_KEY) || 'null')); } catch { return { on: true }; }
 }
 
 /**
- * FX_*_BAND_* for xi. All seven, always — zeros when the switch is off — so the viewer's
- * setting, not a line left in xi-tools' .env, decides whether Publish may hand out
- * numbers that only a patched client can load (a real env var wins over .env).
+ * FX_*_BAND_* for xi: nothing while the switch is on, so xi-tools' own values apply; each
+ * band's FIRST as 0 when it is off, so Publish never hands out a number only a patched
+ * client can load (a real env var is the only way in: xi-tools never reads these from .env).
  */
 export function animBandsEnv(bands) {
-  const b = normalizeAnimBands(bands);
-  const v = (n) => String(b.on ? n : 0);
-  return {
-    FX_WS_BAND_FIRST: v(b.wsFirst), FX_WS_BAND_SLOTS: v(b.wsSlots), FX_WS_BAND_BASE: v(b.wsBase),
-    FX_JA_BAND_FIRST: v(b.jaFirst), FX_JA_BAND_BASE: v(b.jaBase),
-    FX_SPELL_BAND_FIRST: v(b.spellFirst), FX_SPELL_BAND_BASE: v(b.spellBase),
-  };
+  if (normalizeAnimBands(bands).on) return {};
+  return { FX_WS_BAND_FIRST: '0', FX_JA_BAND_FIRST: '0', FX_SPELL_BAND_FIRST: '0' };
 }
 
 /** `[first, last]` of the plugin band for a kind, or null when the bands are off. */
 export function animBandRange(kind, bands) {
-  const b = normalizeAnimBands(bands);
-  if (!b.on) return null;
-  if (kind === 'ws') return [b.wsFirst, Math.min(ANIMATION_MAX, b.wsFirst + b.wsSlots - 1)];
-  if (kind === 'ja') return [b.jaFirst, ANIMATION_MAX];
-  if (kind === 'spell') return [b.spellFirst, ANIMATION_MAX];
-  return null;
+  const r = normalizeAnimBands(bands).on ? ANIM_BANDS[kind] : null;
+  return r ? [...r] : null;
 }
 
 // ── Catalog ─────────────────────────────────────────────────────────────────────
