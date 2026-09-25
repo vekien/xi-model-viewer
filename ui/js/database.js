@@ -245,11 +245,12 @@ export const ITEM_TYPES = {
   29: 'Meeble Burrows', 30: 'Instinct', 31: 'Chocobo Food', 33: 'Monipulator',
 };
 
+/** Item flag bits — the server's ITEM_FLAG enum (LandSandBoat src/map/items/item.h); same bits in the DAT. */
 export const ITEM_FLAGS = [
-  [0x0001, 'Wall Hanging'], [0x0002, 'Flag 0x02'], [0x0004, 'Mystery Box'], [0x0008, 'MC'],
-  [0x0010, 'Inscribable'], [0x0020, 'No Auction'], [0x0040, 'Scroll'], [0x0080, 'Linkshell'],
-  [0x0100, 'Can Use'], [0x0200, 'Can Trade NPC'], [0x0400, 'Can Equip'], [0x0800, 'No Sale'],
-  [0x1000, 'No Delivery'], [0x2000, 'Ex'], [0x4000, 'No Trade PC'], [0x8000, 'Rare'],
+  [0x0001, 'Wall Hanging'], [0x0002, 'Flag 0x02'], [0x0004, 'Mystery Box'], [0x0008, 'Mog Garden'],
+  [0x0010, 'Mail to Account'], [0x0020, 'Inscribable'], [0x0040, 'No Auction'], [0x0080, 'Scroll'],
+  [0x0100, 'Linkshell'], [0x0200, 'Can Use'], [0x0400, 'Can Trade NPC'], [0x0800, 'Can Equip'],
+  [0x1000, 'No Sale'], [0x2000, 'No Delivery'], [0x4000, 'Ex'], [0x8000, 'Rare'],
 ];
 
 /** Element icons the client draws for 0xEF 0x1F..0x26 in item text. */

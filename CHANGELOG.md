@@ -16,6 +16,9 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 - Zone export: **Per-object files** and **Sub-areas as files** can be ticked together (needs xi-tools 1.13.0). The zone's objects go in the export folder and each sub-area's in a `<zone>_<id>` folder beside them, e.g. Lower Jeuno's `41_454\` … `41_466\`. Batch Export too
 - **Zero coords (FBX)** (`--zero-coords`, needs xi-tools 1.13.0) for Zone, Mesh and Full Pose: every FBX imports at 0,0,0 with no rotation, for placing in Unreal by hand or from the zone JSON. A zone export also writes `<zone>.zone.json`, which says where each file goes back and, per object, every placement's transform. A quick option in each dialog and in Batch Export
 
+### Items
+- Item flags follow the server's bit layout (LandSandBoat `ITEM_FLAG`): 0x08 is Mog Garden and 0x10 Mail to Account, and Inscribable through Ex each sit one bit higher than before
+
 ## [1.9.0] — 2026-09-24
 
 [Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.8.0...v1.9.0)
