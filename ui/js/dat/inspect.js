@@ -12,6 +12,8 @@
 // sites). Bits 26+ are flags: is_shadow, is_extracted, ver_num, is_virtual.
 
 import { inspectAsHex, inspectUserDat } from './userdat.js';
+import { itemTableForPath } from './known.js';
+import { itemDatRecords, itemFormat, sniffItemDat } from '../database.js';
 import { describeGenerator } from '../particle/fields.js';
 
 /** Section type-code -> name (xi-tools SECTION_TYPE_NAMES / xim SectionType). */
@@ -2676,6 +2678,7 @@ export function inspectDmsg(buffer) {
       offset: base,
       text: primary,
       texts, // all sub-strings (name, plural, desc, …)
+      subs: dmsgBlockSubs(block), // every sub-string in order, text or number
       byteLength: primary.length,
     });
   }
@@ -2693,6 +2696,56 @@ export function inspectDmsg(buffer) {
     entries,
     warnings,
   };
+}
+
+/**
+ * Item tables: fixed-size records (0xC00 legacy / 0x1400 retail), each byte
+ * rotated, not sections. Named by the Database registry's path, or sniffed from
+ * the record terminators. Rows as the d_msg view lists them, plus each record's id.
+ */
+export function inspectItemDat(bytes, path = '') {
+  const stride = sniffItemDat(bytes);
+  if (!stride) return null;
+  const table = itemTableForPath(path);
+  const entries = itemDatRecords(bytes, stride).map((r) => ({ ...r, text: r.texts[0] ?? '' }));
+  return {
+    kind: 'items',
+    label: table ? `Item table — ${table.label}` : 'Item table',
+    fileSize: bytes.byteLength,
+    stride,
+    format: itemFormat(stride),
+    named: entries.filter((e) => e.texts.length).length,
+    entries,
+    warnings: [],
+  };
+}
+
+/**
+ * Every sub-string of one de-XOR'd d_msg block in order: `{ num: false, value: text }` or
+ * `{ num: true, value }`. The entry table says which (flag 0 text, 1 a u32 number).
+ */
+function dmsgBlockSubs(block) {
+  const dv = new DataView(block.buffer, block.byteOffset, block.byteLength);
+  if (block.length < 4) return [];
+  const n = dv.getUint32(0, true);
+  if (n <= 0 || n > 64) return [];
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const eo = 4 + i * 8;
+    if (eo + 8 > block.length) break;
+    const off = dv.getUint32(eo, true);
+    const flag = dv.getUint32(eo + 4, true);
+    if (off + 4 > block.length) break;
+    if (flag === 1) {
+      out.push({ num: true, value: dv.getUint32(off, true) });
+      continue;
+    }
+    const sp = off + 4 + 0x18;
+    let end = sp;
+    while (end < block.length && block[end] !== 0) end++;
+    out.push({ num: false, value: end > sp ? decodeCp932(block.subarray(sp, end)) : '' });
+  }
+  return out;
 }
 
 /** Extract cp932 text sub-strings from one de-XOR'd d_msg block. */
@@ -2849,6 +2902,9 @@ export function inspectDat(buffer, path = '') {
 
   const dmsg = inspectDmsg(buffer);
   if (dmsg) return dmsg;
+
+  const items = inspectItemDat(bytes, path);
+  if (items) return items;
 
   // Character-creation formats (before the section walker confuses them).
   const creation = inspectCreationDat(buffer);

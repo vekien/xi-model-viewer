@@ -162,7 +162,7 @@ export function DataViewer({
     );
   }
 
-  if (doc.kind === 'dmsg') {
+  if (doc.kind === 'dmsg' || doc.kind === 'items') {
     return (
       <DmsgView
         doc={doc}
@@ -1084,7 +1084,8 @@ function XistringView({ doc, sources, zoneChrome, onSelectSource, onRevealPath }
           />
         ) : (
           <>
-            <SearchWrap query={query} setQuery={setQuery} placeholder="Filter by index or text…" />
+            <SearchWrap query={query} setQuery={setQuery}
+              placeholder={isItems ? 'Filter by row, id or text…' : 'Filter by index or text…'} />
             <div className="data-tree">
               {shown.map((e) => (
                 <Tooltip
@@ -1158,89 +1159,96 @@ function XistringView({ doc, sources, zoneChrome, onSelectSource, onRevealPath }
  */
 function DmsgView({ doc, sources, zoneChrome, onSelectSource, onRevealPath }) {
   const [query, setQuery] = useState('');
+  // An item table lists its records, not its thousands of empty slots.
+  const isItems = doc.kind === 'items';
+  const rows = useMemo(() => (isItems ? doc.entries.filter((e) => e.texts.length) : doc.entries), [doc, isItems]);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return doc.entries;
-    return doc.entries.filter((e) => {
-      if (String(e.index) === q) return true;
+    if (!q) return rows;
+    return rows.filter((e) => {
+      if (String(e.index) === q || (e.id != null && String(e.id) === q)) return true;
       if (e.text?.toLowerCase().includes(q)) return true;
       if (e.texts?.some((t) => t.toLowerCase().includes(q))) return true;
       return `0x${e.offset.toString(16)}`.includes(q);
     });
-  }, [doc, query]);
+  }, [rows, query]);
   const shown = filtered.length > FT_MAX_ROWS ? filtered.slice(0, FT_MAX_ROWS) : filtered;
   const nonempty = useMemo(
     () => doc.entries.filter((e) => e.text || e.texts?.some(Boolean)).length,
     [doc],
   );
+  // One column per sub-string: text, or a number (a d_msg row's `subs`; an item's texts).
+  const cellsOf = (e) => e.subs ?? (e.texts ?? [e.text]).map((value) => ({ num: false, value }));
+  const subCols = useMemo(() => {
+    const n = Math.min(16, Math.max(1, ...shown.map((e) => cellsOf(e).length)));
+    return Array.from({ length: n }, (_, k) => k);
+  }, [shown]);
 
   return (
     <div className="data-viewer">
       <div className="panel data-main">
         <div className="data-card-title">
-          <span className="icon">menu_book</span>d_msg
+          <span className="icon">{isItems ? 'inventory_2' : 'menu_book'}</span>{isItems ? 'Items' : 'd_msg'}
           <span className="data-card-note mono">
-            {filtered.length === doc.entries.length
-              ? `${doc.entries.length.toLocaleString()} entries`
-              : `${filtered.length.toLocaleString()} of ${doc.entries.length.toLocaleString()}`}
-            {nonempty < doc.entries.length
+            {isItems
+              ? `${filtered.length === rows.length ? '' : `${filtered.length.toLocaleString()} of `}${rows.length.toLocaleString()} items · ${doc.entries.length.toLocaleString()} slots`
+              : filtered.length === doc.entries.length
+                ? `${doc.entries.length.toLocaleString()} entries`
+                : `${filtered.length.toLocaleString()} of ${doc.entries.length.toLocaleString()}`}
+            {!isItems && nonempty < doc.entries.length
               ? ` · ${nonempty.toLocaleString()} with text`
               : ''}
           </span>
         </div>
         {zoneChrome}
-        {!doc.entries.length ? (
+        {!rows.length ? (
           <ZoneEmptyState
-            icon="menu_book"
+            icon={isItems ? 'inventory_2' : 'menu_book'}
             title="No entries"
-            sub="This d_msg table has no blocks."
+            sub={isItems ? 'Every slot of this item table is empty.' : 'This d_msg table has no blocks.'}
           />
         ) : (
           <>
-            <SearchWrap query={query} setQuery={setQuery} placeholder="Filter by index or text…" />
-            <div className="data-tree">
-              {shown.map((e) => {
-                const lines = (e.texts?.length ? e.texts : [e.text]).filter((t) => t != null && t !== '');
-                return (
-                  <Tooltip
-                    key={e.index}
-                    content={`#${e.index} · 0x${e.offset.toString(16).toUpperCase()}`}
-                  >
-                    <div className="data-dlg-entry">
-                      <div className="data-dlg-head">
-                        <span className="data-ft-id mono">{e.index}</span>
-                        <span className="data-dlg-speaker mono">
-                          0x{e.offset.toString(16).toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="data-dlg-text">
-                        {lines.length === 0
-                          ? <span className="data-dlg-empty">(empty)</span>
-                          : lines.map((t, ti) => (
-                            <div key={ti} className={ti > 0 ? 'data-dmsg-sub' : undefined}>
-                              {ti > 0 && lines.length > 1 ? (
-                                <span className="data-dmsg-sub-label mono">[{ti}] </span>
-                              ) : null}
-                              {String(t).split('\n').map((line, li) => (
-                                <span key={li}>
-                                  {li > 0 && <br />}
-                                  {line}
-                                </span>
-                              ))}
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  </Tooltip>
-                );
-              })}
+            <SearchWrap query={query} setQuery={setQuery}
+              placeholder={isItems ? 'Filter by row, id or text…' : 'Filter by index or text…'} />
+            <div className="zdef-table-wrap">
+              <table className="zdef-table dmsg-table">
+                <thead>
+                  <tr>
+                    <th className="mono">Row</th>
+                    <th className="mono">{isItems ? 'Id' : 'Offset'}</th>
+                    {subCols.map((k) => <th key={k} className="mono">{k}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {shown.map((e) => {
+                    const cells = cellsOf(e);
+                    return (
+                      <tr key={e.index}>
+                        <td className="mono">{e.index}</td>
+                        <td className="mono zdef-vec">
+                          {isItems ? e.id : `0x${e.offset.toString(16).toUpperCase()}`}
+                        </td>
+                        {subCols.map((k) => {
+                          const c = cells[k];
+                          return (
+                            <td key={k} className={c?.num ? 'mono zdef-vec' : 'dmsg-text'}>
+                              {c == null ? '' : String(c.value)}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                  {filtered.length === 0 && (
+                    <tr><td colSpan={subCols.length + 2} className="zdef-empty">No entries match “{query}”.</td></tr>
+                  )}
+                </tbody>
+              </table>
               {filtered.length > FT_MAX_ROWS && (
                 <div className="data-ft-more">
                   Showing the first {FT_MAX_ROWS.toLocaleString()} of {filtered.length.toLocaleString()} — narrow the filter to see the rest.
                 </div>
-              )}
-              {filtered.length === 0 && (
-                <div className="data-ft-more">No entries match “{query}”.</div>
               )}
             </div>
           </>
@@ -1252,7 +1260,7 @@ function DmsgView({ doc, sources, zoneChrome, onSelectSource, onRevealPath }) {
           activeSource={doc.fullPath || ''}
           onSelectSource={onSelectSource}
           onRevealPath={onRevealPath}
-          extraRows={(
+          extraRows={isItems ? null : (
             <>
               <Row label="Entries" value={doc.entries.length.toLocaleString()} />
               <Row label="Stride" value={`${doc.stride} B`} />
@@ -2155,6 +2163,13 @@ function FileCard({
           <Row label="Magic" value="d_msg" mono />
           <Row label="Entries" value={doc.entries.length.toLocaleString()} />
           <Row label="Stride" value={`${doc.stride} B`} />
+        </>
+      ) : doc.kind === 'items' ? (
+        <>
+          <Row label="Kind" value={doc.label} />
+          <Row label="Items" value={doc.named.toLocaleString()} />
+          <Row label="Slots" value={doc.entries.length.toLocaleString()} />
+          <Row label="Record" value={`${doc.format} · 0x${doc.stride.toString(16).toUpperCase()} B`} mono />
         </>
       ) : null}
       {extraRows}

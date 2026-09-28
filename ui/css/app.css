@@ -1070,6 +1070,9 @@ button.pc-tbtn.on:hover { background: rgba(255, 255, 255, 0.06); }
 .tree-type.t-music,
 .tree-type.t-sfx    { color: #8fa8e0; background: rgba(143, 168, 224, 0.13); }
 .tree-type.t-save   { color: #d0906a; background: rgba(208, 144, 106, 0.13); }
+/* Search rows: which root a file is in (base install, HD pack, pivot folder). */
+.tree-type.t-src-hd    { color: #6fb6d8; background: rgba(111, 182, 216, 0.13); }
+.tree-type.t-src-pivot { color: #e0a86a; background: rgba(224, 168, 106, 0.13); }
 .node.selected > .row .tree-type {
   color: rgba(0, 0, 0, 0.62);
   background: rgba(0, 0, 0, 0.13);
@@ -5954,6 +5957,8 @@ button.uimenu-btn.has-note:not(.on) {
   vertical-align: middle;
 }
 .zdef-table tbody tr:hover td { background: rgba(255, 255, 255, 0.04); }
+/* d_msg / item rows as a table: text cells wrap (help text runs long). */
+.dmsg-table td.dmsg-text { white-space: pre-wrap; min-width: 120px; max-width: 520px; }
 .zdef-mesh { color: #9aebf4; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
 .zdef-vec { color: var(--gray-400); font-size: 10px; }
 .zdef-hidden td { opacity: 0.4; }

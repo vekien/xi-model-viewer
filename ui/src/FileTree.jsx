@@ -39,6 +39,29 @@ function sameFile(a, b) {
   return tail(na) === tail(nb);
 }
 
+/**
+ * The listable files under an overlay root (HD, pivot): ROM*\n\file.DAT and the
+ * root's own tables, keyed upper-case -> the path as it is on disk. One listDir per
+ * folder, once per root, so a search can say which roots hold a file.
+ */
+async function indexRoot(root) {
+  const out = new Map();
+  const walk = async (dir, rel, depth) => {
+    let entries;
+    try { entries = await backend.listDir(dir); } catch { return; }
+    await Promise.all(entries.map(async (e) => {
+      const r = rel ? `${rel}\\${e.name}` : e.name;
+      if (e.isDir) {
+        if (depth < 2 && (depth > 0 || /^rom\d*$/i.test(e.name))) await walk(`${dir}\\${e.name}`, r, depth + 1);
+      } else if (LISTABLE.test(e.name)) {
+        out.set(r.toUpperCase(), r);
+      }
+    }));
+  };
+  await walk(root, '', 0);
+  return out;
+}
+
 /** Prefer ROM\… relative key so pins survive game-path moves. */
 function filePinKey(path, rootPath) {
   const n = normPath(path);
@@ -120,6 +143,7 @@ export function FileTree({
       return roots.filter((r) => r?.path).map((r) => ({
         path: r.path,
         label: r.label || r.path.split(/[\\/]/).filter(Boolean).pop() || r.path,
+        tag: r.tag || null,
       }));
     }
     if (rootPath) {
@@ -172,17 +196,48 @@ export function FileTree({
   // states and must not both render as "Building file index…".
   const indexFailed = Array.isArray(pathIndex) && pathIndex.length === 0;
 
+  // The other roots (HD, pivot) indexed once each, so a search lists every copy of a
+  // file with where it lives, and finds the files only an overlay has.
+  const [overlayIndex, setOverlayIndex] = useState([]);
+  const overlayKey = treeRoots.slice(1).map((r) => r.path).join('|');
+  useEffect(() => {
+    let live = true;
+    setOverlayIndex([]);
+    Promise.all(treeRoots.slice(1).map(async (r) => ({ ...r, files: await indexRoot(r.path) })))
+      .then((idx) => { if (live) setOverlayIndex(idx); })
+      .catch(() => {});
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overlayKey]);
+
   const searchHits = useMemo(() => {
     if (!tokens.length || !pathIndex?.length || !primaryRoot) return null;
+    const baseTag = treeRoots[0]?.tag;
     const hits = [];
+    const seen = new Set();
+    const add = (rel, inBase) => {
+      const key = rel.toUpperCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      if (inBase) hits.push({ rel, abs: `${primaryRoot}\\${rel}`, tag: baseTag, key: `base|${key}` });
+      for (const o of overlayIndex) {
+        const own = o.files.get(key);
+        if (own) hits.push({ rel: own, abs: `${o.path}\\${own}`, tag: o.tag, key: `${o.path}|${key}` });
+      }
+    };
     for (const rel of pathIndex) {
-      const norm = String(rel).replace(/\//g, '\\');
-      if (!matchesTokens(norm, tokens)) continue;
-      hits.push(norm);
       if (hits.length >= MAX_SEARCH) break;
+      const norm = String(rel).replace(/\//g, '\\');
+      if (matchesTokens(norm, tokens)) add(norm, true);
+    }
+    for (const o of overlayIndex) {
+      for (const rel of o.files.values()) {
+        if (hits.length >= MAX_SEARCH) break;
+        if (matchesTokens(rel, tokens)) add(rel, false);
+      }
     }
     return hits;
-  }, [tokens, pathIndex, primaryRoot]);
+  }, [tokens, pathIndex, primaryRoot, treeRoots, overlayIndex]);
 
   // Pinned rows: keep stored order; resolve to abs under primary root.
   const pinnedRows = useMemo(() => {
@@ -231,19 +286,22 @@ export function FileTree({
             {searchHits.length === 0 && (
               <div className="side-note">No files match “{query.trim()}”.</div>
             )}
-            {searchHits.map((rel) => {
-              const abs = `${primaryRoot}\\${rel}`;
-              const selected = sameFile(selectedPath, abs) || sameFile(selectedPath, rel);
+            {searchHits.map(({ rel, abs, tag, key: rowKey }) => {
+              // With several roots one ROM path is several files: match the exact one.
+              const selected = multi
+                ? normPath(selectedPath) === normPath(abs)
+                : sameFile(selectedPath, abs) || sameFile(selectedPath, rel);
               const key = filePinKey(rel, primaryRoot);
               const isPinned = pinSet.has(key);
               return (
                 <div
-                  key={rel}
+                  key={rowKey}
                   className={`node zone-row${selected ? ' selected' : ''}${isPinned ? ' zone-is-pinned' : ''}`}
                 >
                   <FileRow
                     pathLabel={rel}
                     absPath={abs}
+                    source={multi ? tag : null}
                     settings={settings}
                     typeOf={typeOf}
                     onClick={() => selectFromTree(abs)}
@@ -358,7 +416,7 @@ function TypeBadge({ typeOf, path }) {
   return <span className={`tree-type t-${label.toLowerCase()}`}>{label}</span>;
 }
 
-function FileRow({ pathLabel, absPath, settings, onClick, pin, name, typeOf }) {
+function FileRow({ pathLabel, absPath, settings, onClick, pin, name, typeOf, source = null }) {
   return (
     <Tooltip
       content={fileTipContent(pathLabel, absPath, settings)}
@@ -373,6 +431,7 @@ function FileRow({ pathLabel, absPath, settings, onClick, pin, name, typeOf }) {
           {name != null ? name : pathLabel}
         </span>
         <TypeBadge typeOf={typeOf} path={absPath || pathLabel} />
+        {source && <span className={`tree-type t-src-${source.toLowerCase()}`}>{source}</span>}
         {pin}
       </div>
     </Tooltip>

@@ -6039,7 +6039,9 @@ export default function App({ launch = null }) {
                   ? `${finalDoc.entries.length.toLocaleString()} XISTRING entries`
                   : finalDoc.kind === 'dmsg'
                     ? `${finalDoc.entries.length.toLocaleString()} d_msg entries`
-                    : finalDoc.label;
+                    : finalDoc.kind === 'items'
+                      ? `${finalDoc.named.toLocaleString()} items · ${finalDoc.entries.length.toLocaleString()} slots`
+                      : finalDoc.label;
       if (!opts.overlay) {
         setStatusText(opts.notice ? `${rel} — ${opts.notice}` : baseStatus);
       }
@@ -12151,9 +12153,9 @@ export default function App({ launch = null }) {
         <FileTree
           rootPath={settings?.gamePath ?? ''}
           roots={[
-            settings?.gamePath && { path: settings.gamePath, label: 'FINAL FANTASY XI' },
-            settings?.hdPath && { path: settings.hdPath, label: 'HD' },
-            settings?.pivotPath && { path: settings.pivotPath, label: 'PIVOT' },
+            settings?.gamePath && { path: settings.gamePath, label: 'FINAL FANTASY XI', tag: 'Base' },
+            settings?.hdPath && { path: settings.hdPath, label: 'HD', tag: 'HD' },
+            settings?.pivotPath && { path: settings.pivotPath, label: 'PIVOT', tag: 'Pivot' },
           ].filter(Boolean)}
           selectedPath={selectedDat}
           revealTarget={revealTarget}

@@ -548,6 +548,27 @@ function readStrings(dv, block, sb) {
   return subs;
 }
 
+/**
+ * Every record of an item DAT, whatever its layout: row, byte offset, the id
+ * the record carries and its text sub-strings (name first). An unused slot
+ * (no name, or '.') has no texts. For the DAT browser's Data Struct view.
+ */
+export function itemDatRecords(bytes, stride = detectItemStride(bytes)) {
+  const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  if (!stride) return [];
+  const block = new Uint8Array(stride);
+  const dv = new DataView(block.buffer);
+  const out = [];
+  for (let i = 0, n = Math.floor(u8.length / stride); i < n; i++) {
+    decodeItemBlock(u8.subarray(i * stride, (i + 1) * stride), block);
+    const sb = findStringBlock(dv);
+    const texts = sb ? readStrings(dv, block, sb).filter((s) => typeof s === 'string') : [];
+    const unused = !texts.length || !texts[0].trim() || /^\.+$/.test(texts[0].trim());
+    out.push({ index: i, offset: i * stride, id: dv.getUint32(0, true), texts: unused ? [] : texts });
+  }
+  return out;
+}
+
 const u16 = (dv, o) => dv.getUint16(o, true);
 const u32 = (dv, o) => dv.getUint32(o, true);
 const i32 = (dv, o) => dv.getInt32(o, true);
