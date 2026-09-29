@@ -8,7 +8,22 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ---
 
-## [1.11.0] — 2026-09-25
+## [1.12.0] — 2026-09-29
+
+[Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.11.0...v1.12.0)
+
+### Textures
+- DXT3 zone textures had their alpha rows swapped in pairs inside every 4×4 block, so water and effect textures whose picture lives in the alpha (West Sarutabaruta's `ike2`) were streaked with fine horizontal lines, in the texture window, Save PNG and on the zone itself. They now decode as the game draws them
+- Exported PNGs had the same streaks: xi-tools 1.15.0 fixes them for every export (zone, mesh, gear, pose, effects). Re-export to pick it up
+- The texture window's zoom buttons keep the texture centred; each click used to push it further towards the top-left. Wheel zoom keeps the point under the cursor
+
+### Database
+- **Spells & Abilities** in Assets › Database: the spell and ability records of `ROM/118/114.DAT`, the numbers the client plays by. Spell Data has kind, element, skill, MP, cast and recast, the jobs that learn it and at what level, targets; Ability Data has type, TP, level, range, radius, AoE, charges, targets. Names and help come from each language's text tables, and Settings › DAT Database › Update bakes them with xi-tools
+- The help tables' one sub-string is labelled help, not name, and the Japanese key item and status name columns show only what those tables hold
+
+### DAT browser
+- Search lists a file from every root it is in (base install, HD, pivot), each with a Base / HD / Pivot tag
+- d_msg and item tables show as tables with number columns, and item DATs have their own view
 
 [Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.10.0...v1.11.0)
 

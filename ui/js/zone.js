@@ -786,7 +786,10 @@ function decodeDxt1(r, width, height) {
 function decodeDxt3(r, width, height) {
   const out = new Uint8Array(width * height * 4);
   for (let y1 = 0; y1 < height; y1 += 4) for (let x1 = 0; x1 < width; x1 += 4) {
-    const aHi = r.u32(), aLo = r.u32(); // alpha = (aHi<<32)|aLo; counts 0-7 in aLo, 8-15 in aHi
+    // Standard DXT3 alpha: 64-bit little-endian, texel i (row-major in the block) is
+    // nibble i — rows 0-1 in the first dword, 2-3 in the second. Reading it as
+    // (first<<32)|second swapped rows 0<->1 and 2<->3: horizontal streaks.
+    const aLo = r.u32(), aHi = r.u32();
     const c0 = r.u16(), c1 = r.u16();
     const R = [0, 0, 0, 0], G = [0, 0, 0, 0], B = [0, 0, 0, 0];
     [R[0], G[0], B[0]] = dxt565(c0); [R[1], G[1], B[1]] = dxt565(c1);
@@ -795,9 +798,9 @@ function decodeDxt3(r, width, height) {
     let count = 15;
     for (let y = y1; y < y1 + 4; y++) for (let x = x1 + 3; x >= x1; x--) {
       const idx = (idxWord >>> (2 * count)) & 0x3;
-      const word = count < 8 ? aLo : aHi;
-      const nib = (word >>> (4 * (count % 8))) & 0xF;
       count--;
+      const i = (y - y1) * 4 + (x - x1);
+      const nib = ((i < 8 ? aLo : aHi) >>> (4 * (i & 7))) & 0xF;
       const d = 4 * y * width + 4 * x;
       out[d] = R[idx]; out[d + 1] = G[idx]; out[d + 2] = B[idx]; out[d + 3] = (nib * 255 / 15) | 0;
     }

@@ -8,6 +8,7 @@ import { ColorSwatch } from './ColorPicker.jsx';
 const VIEW_MAX = 640;
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 8;
+const VIEW_FIT = { zoom: 1, x: 0, y: 0 };
 const BG_KEY = 'texViewerBg'; // '' = checker, else #rrggbb
 
 function readTexBg() {
@@ -53,8 +54,10 @@ export function TextureModal({ tex, onClose, onFocus, zIndex = 210, initialPos =
       ? { x: initialPos.x, y: initialPos.y }
       : null
   ));
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
+  // One state so a zoom can move the pan in the same pure updater. x/y offset the
+  // canvas from the viewport's centre, where the flexbox puts it.
+  const [view, setView] = useState(VIEW_FIT);
+  const { zoom } = view;
   const [bg, setBg] = useState(readTexBg); // '' = checkerboard
 
   const fitScale = useMemo(() => {
@@ -63,8 +66,7 @@ export function TextureModal({ tex, onClose, onFocus, zIndex = 210, initialPos =
   }, [tex?.width, tex?.height]);
 
   useEffect(() => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
+    setView(VIEW_FIT);
   }, [tex?.name, tex?.width, tex?.height]);
 
   useEffect(() => {
@@ -103,7 +105,7 @@ export function TextureModal({ tex, onClose, onFocus, zIndex = 210, initialPos =
   const startPan = (e) => {
     if (e.button !== 0) return;
     onFocus?.();
-    panDrag.current = { x: e.clientX, y: e.clientY, ox: pan.x, oy: pan.y };
+    panDrag.current = { x: e.clientX, y: e.clientY, ox: view.x, oy: view.y };
     e.currentTarget.setPointerCapture(e.pointerId);
     e.preventDefault();
   };
@@ -111,7 +113,8 @@ export function TextureModal({ tex, onClose, onFocus, zIndex = 210, initialPos =
     if (!panDrag.current) return;
     const dx = e.clientX - panDrag.current.x;
     const dy = e.clientY - panDrag.current.y;
-    setPan({ x: panDrag.current.ox + dx, y: panDrag.current.oy + dy });
+    const { ox, oy } = panDrag.current;
+    setView((v) => ({ ...v, x: ox + dx, y: oy + dy }));
   };
   const endPan = () => { panDrag.current = null; };
 
@@ -119,18 +122,14 @@ export function TextureModal({ tex, onClose, onFocus, zIndex = 210, initialPos =
   const dispW = Math.max(1, Math.round(tex.width * scale));
   const dispH = Math.max(1, Math.round(tex.height * scale));
 
-  const zoomBy = (factor, cx = VIEW_MAX / 2, cy = VIEW_MAX / 2) => {
-    setZoom((z) => {
-      const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, +(z * factor).toFixed(3)));
-      // Keep the point under the cursor stable when zooming via wheel.
-      if (next !== z) {
-        const k = next / z;
-        setPan((p) => ({
-          x: cx - (cx - p.x) * k,
-          y: cy - (cy - p.y) * k,
-        }));
-      }
-      return next;
+  // (ax, ay): the point that stays put, relative to the viewport's centre — the
+  // cursor for the wheel, the centre itself for the buttons.
+  const zoomBy = (factor, ax = 0, ay = 0) => {
+    setView((v) => {
+      const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, +(v.zoom * factor).toFixed(3)));
+      if (next === v.zoom) return v;
+      const k = next / v.zoom;
+      return { zoom: next, x: ax - (ax - v.x) * k, y: ay - (ay - v.y) * k };
     });
   };
 
@@ -138,15 +137,12 @@ export function TextureModal({ tex, onClose, onFocus, zIndex = 210, initialPos =
     e.preventDefault();
     e.stopPropagation();
     const rect = viewRef.current?.getBoundingClientRect();
-    const cx = rect ? e.clientX - rect.left : VIEW_MAX / 2;
-    const cy = rect ? e.clientY - rect.top : VIEW_MAX / 2;
-    zoomBy(e.deltaY < 0 ? 1.15 : 1 / 1.15, cx, cy);
+    const ax = rect ? e.clientX - rect.left - rect.width / 2 : 0;
+    const ay = rect ? e.clientY - rect.top - rect.height / 2 : 0;
+    zoomBy(e.deltaY < 0 ? 1.15 : 1 / 1.15, ax, ay);
   };
 
-  const resetView = () => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-  };
+  const resetView = () => setView(VIEW_FIT);
 
   const setBgPersist = (hex) => {
     setBg(hex);
@@ -232,7 +228,7 @@ export function TextureModal({ tex, onClose, onFocus, zIndex = 210, initialPos =
             style={{
               width: dispW,
               height: dispH,
-              transform: `translate(${pan.x}px, ${pan.y}px)`,
+              transform: `translate(${view.x}px, ${view.y}px)`,
             }}
           />
         </div>
