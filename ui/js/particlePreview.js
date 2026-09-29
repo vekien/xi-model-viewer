@@ -7,6 +7,7 @@ import { Vec3 } from './particle/math.js';
 import { SEC } from './dat/tree.js';
 import { AttachType } from './particle/types.js';
 import { GeneratorBasePositionUpdater } from './particle/ops/generator.js';
+import { renderPaused } from './backgroundPause.js';
 
 const DEFAULT_LIGHT = {
   ambient: [0.55, 0.55, 0.6],
@@ -428,6 +429,7 @@ export class ParticlePreviewHost {
       this._raf = requestAnimationFrame(tick);
       const dt = Math.min(0.05, Math.max(0, (now - this._last) / 1000));
       this._last = now;
+      if (renderPaused(now)) return;
       this._frame(dt);
     };
     this._raf = requestAnimationFrame(tick);

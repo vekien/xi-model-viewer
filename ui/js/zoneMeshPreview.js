@@ -4,6 +4,7 @@
 import { OrbitCamera, mat4Multiply } from './camera.js';
 import { parseBgHex } from './particlePreview.js';
 import { resolveTexture } from './zone.js';
+import { renderPaused } from './backgroundPause.js';
 
 const DEFAULT_BG = [0.06, 0.08, 0.11];
 const NEUTRAL = new Uint8Array([0x80, 0x80, 0x80, 0x80]);
@@ -299,7 +300,7 @@ export class ZoneMeshPreviewHost {
     const tick = () => {
       if (this._disposed) return;
       this._raf = requestAnimationFrame(tick);
-      this._frame();
+      if (!renderPaused()) this._frame();
     };
     this._raf = requestAnimationFrame(tick);
   }

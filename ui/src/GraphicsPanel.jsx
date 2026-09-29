@@ -33,6 +33,7 @@ export function GraphicsPanel({
   shadowsOn = false,
   renderHeight = 0, onRenderHeight,
   fpsCap = 0, onFpsCap,
+  pauseUnfocused = true, onPauseUnfocused,
   fov = 45, onFov,
   renderDistance = RENDER_DIST_DEFAULT, onRenderDistance,
   effectDistanceScale = FX_DIST_DEFAULT, onEffectDistanceScale,
@@ -134,6 +135,22 @@ export function GraphicsPanel({
             items={FPS_CAPS}
             onChange={(id) => onFpsCap?.(Number(id) || 0)}
           />
+        </div>
+      </div>
+
+      <div className="gfx-line">
+        <span className="gfx-lab">Pause When Unfocused</span>
+        <div className="gfx-ctrl gfx-ctrl-end">
+          <Tooltip content="Stop drawing while another window has focus, so the viewer leaves the GPU idle in the background. Pointing at the viewer wakes it; clicking in resumes it.">
+            <label className="switch cseq-switch">
+              <input
+                type="checkbox"
+                checked={!!pauseUnfocused}
+                onChange={(e) => onPauseUnfocused?.(e.target.checked)}
+              />
+              <span className="track" />
+            </label>
+          </Tooltip>
         </div>
       </div>
 

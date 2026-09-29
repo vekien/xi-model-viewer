@@ -98,6 +98,7 @@ export function MenuBar({
   shadowsOn = false, shadowDistance = 90, onShadowDistance,
   renderHeight = 0, onRenderHeight, bufferSize = null,
   fpsCap = 0, onFpsCap, onGraphicsOpenChange,
+  pauseUnfocused = true, onPauseUnfocused,
   masterVolume = 1, onMasterVolume,
   effectVolume = 1, onEffectVolume, musicVolume = 0.8, onMusicVolume, ambientVolume = 0.6, onAmbientVolume,
   renderDistance = 5000, onRenderDistance,
@@ -394,6 +395,8 @@ export function MenuBar({
               onRenderHeight={onRenderHeight}
               fpsCap={fpsCap}
               onFpsCap={onFpsCap}
+              pauseUnfocused={pauseUnfocused}
+              onPauseUnfocused={onPauseUnfocused}
               fov={fov}
               onFov={onFov}
               renderDistance={renderDistance}

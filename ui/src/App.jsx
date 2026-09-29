@@ -7,6 +7,7 @@ import { gameCandidates, isPosixAbs, normRel, pathKey, relFromAbs } from '../js/
 import { baseMotionCompanions, battleSkirtPath, weaponSkillWaistPaths } from '../js/pclists.js';
 import { animDisplayName, groupAnimations, matchAnimRef, mergeModels, parseEntity, resolveScheduleClip } from '../js/dat.js';
 import { Renderer } from '../js/renderer.js';
+import { renderPaused, setPauseWhenUnfocused } from '../js/backgroundPause.js';
 import { isRestingClip } from '../js/pose.js';
 import { collectVis, hiddenSlotsAt, rangedRoutineId, SLOT } from '../js/weaponVis.js';
 import { FileTree } from './FileTree.jsx';
@@ -1508,6 +1509,8 @@ export default function App({ launch = null }) {
   });
   const fpsCapRef = useRef(fpsCap);
   fpsCapRef.current = fpsCap;
+  // Graphics > Pause When Unfocused (on unless switched off).
+  const [pauseUnfocused, setPauseUnfocused] = useState(() => localStorage.getItem('pauseUnfocused') !== '0');
   const [renderHeight, setRenderHeight] = useState(() => {
     const v = parseInt(localStorage.getItem('renderHeight'), 10);
     // Only known presets — a corrupt/huge value OOMs the canvas (seen 33M×33M).
@@ -2266,6 +2269,13 @@ export default function App({ launch = null }) {
     let fpsWindowStart = last;
     const frame = (now) => {
       raf = requestAnimationFrame(frame);
+      // Pause When Unfocused: hold the last frame. The clocks follow so the
+      // first frame back is not one long step and the FPS readout not a dip.
+      if (renderPaused(now) && !screenshotPendingRef.current) {
+        last = lastDraw = fpsWindowStart = now;
+        fpsFrames = 0;
+        return;
+      }
       // FPS cap (0 = uncapped): skip the draw when under the target interval.
       // Still schedule the next rAF so the loop stays alive and input stays live.
       const cap = fpsCapRef.current;
@@ -2456,6 +2466,11 @@ export default function App({ launch = null }) {
     fpsCapRef.current = fpsCap;
     try { localStorage.setItem('fpsCap', String(fpsCap)); } catch { /* quota */ }
   }, [fpsCap]);
+
+  useEffect(() => {
+    setPauseWhenUnfocused(pauseUnfocused);
+    try { localStorage.setItem('pauseUnfocused', pauseUnfocused ? '1' : '0'); } catch { /* quota */ }
+  }, [pauseUnfocused]);
 
   // Poll the drawing-buffer size only while the panel that shows it is open —
   // the window can be resized under it, and 'Window Size' has no fixed answer.
@@ -11301,8 +11316,11 @@ export default function App({ launch = null }) {
     const tick = (now) => {
       const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
       last = now;
-      const { weather: w, minutes } = todStateRef.current;
-      applyWeatherTime(w, (minutes + perSec * dt) % 1440);
+      // The game clock stops with the render loop under Pause When Unfocused.
+      if (!renderPaused(now)) {
+        const { weather: w, minutes } = todStateRef.current;
+        applyWeatherTime(w, (minutes + perSec * dt) % 1440);
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -12068,6 +12086,8 @@ export default function App({ launch = null }) {
         bufferSize={bufferSize}
         fpsCap={fpsCap}
         onFpsCap={setFpsCap}
+        pauseUnfocused={pauseUnfocused}
+        onPauseUnfocused={setPauseUnfocused}
         onGraphicsOpenChange={setGraphicsOpen}
         masterVolume={masterVolume}
         onMasterVolume={setMasterVolume}
