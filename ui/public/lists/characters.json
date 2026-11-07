@@ -8428,7 +8428,7 @@
      {
       "id": "811:288/2",
       "label": "ROM/288/2.DAT",
-      "group": "xi (added – missing DATs)",
+      "group": "xi (added \u2013 missing DATs)",
       "paths": [
        "ROM\\288\\2.DAT"
       ],
@@ -36019,6 +36019,15 @@
      ]
     },
     {
+     "id": "119:316/18",
+     "label": "Dimidiation",
+     "group": "G. Sword",
+     "paths": [
+      "ROM\\316\\18.DAT"
+     ],
+     "motionPaths": []
+    },
+    {
      "id": "91:76/54",
      "label": "Raging Axe",
      "group": "Axe",
@@ -38611,7 +38620,16 @@
      ]
     },
     {
-     "id": "197:76/97",
+     "id": "207:316/17",
+     "label": "Exudation",
+     "group": "Club",
+     "paths": [
+      "ROM\\316\\17.DAT"
+     ],
+     "motionPaths": []
+    },
+    {
+     "id": "198:76/97",
      "label": "Heavy Swing",
      "group": "Staff",
      "paths": [
@@ -38620,7 +38638,7 @@
      "motionPaths": []
     },
     {
-     "id": "198:76/98",
+     "id": "199:76/98",
      "label": "Rock Crusher",
      "group": "Staff",
      "paths": [
@@ -38629,7 +38647,7 @@
      "motionPaths": []
     },
     {
-     "id": "199:76/99",
+     "id": "200:76/99",
      "label": "Earth Crusher",
      "group": "Staff",
      "paths": [
@@ -38638,7 +38656,7 @@
      "motionPaths": []
     },
     {
-     "id": "200:76/100",
+     "id": "201:76/100",
      "label": "Starburst",
      "group": "Staff",
      "paths": [
@@ -38647,7 +38665,7 @@
      "motionPaths": []
     },
     {
-     "id": "201:76/101",
+     "id": "202:76/101",
      "label": "Sunburst",
      "group": "Staff",
      "paths": [
@@ -38656,7 +38674,7 @@
      "motionPaths": []
     },
     {
-     "id": "202:76/102",
+     "id": "203:76/102",
      "label": "Shell Crusher",
      "group": "Staff",
      "paths": [
@@ -38665,7 +38683,7 @@
      "motionPaths": []
     },
     {
-     "id": "203:76/103",
+     "id": "204:76/103",
      "label": "Full Swing",
      "group": "Staff",
      "paths": [
@@ -38674,7 +38692,7 @@
      "motionPaths": []
     },
     {
-     "id": "204:100/36",
+     "id": "205:100/36",
      "label": "Spirit Taker",
      "group": "Staff",
      "paths": [
@@ -38727,7 +38745,7 @@
      ]
     },
     {
-     "id": "205:100/37",
+     "id": "206:100/37",
      "label": "Retribution",
      "group": "Staff",
      "paths": [
@@ -38780,7 +38798,7 @@
      ]
     },
     {
-     "id": "206:139/82",
+     "id": "207:139/82",
      "label": "Gate of Tartarus",
      "group": "Staff",
      "paths": [
@@ -38818,7 +38836,7 @@
      ]
     },
     {
-     "id": "207:207/63",
+     "id": "208:207/63",
      "label": "Vidohunir",
      "group": "Staff",
      "paths": [
@@ -38827,7 +38845,7 @@
      "motionPaths": []
     },
     {
-     "id": "208:207/64",
+     "id": "209:207/64",
      "label": "Garland of Bliss",
      "group": "Staff",
      "paths": [
@@ -38836,7 +38854,7 @@
      "motionPaths": []
     },
     {
-     "id": "209:207/65",
+     "id": "210:207/65",
      "label": "Omniscience",
      "group": "Staff",
      "paths": [
@@ -38845,7 +38863,7 @@
      "motionPaths": []
     },
     {
-     "id": "210:240/2",
+     "id": "211:240/2",
      "label": "Tartarus Torpor",
      "group": "Staff",
      "paths": [
@@ -38854,7 +38872,7 @@
      "motionPaths": []
     },
     {
-     "id": "211:244/62",
+     "id": "212:244/62",
      "label": "Cataclysm",
      "group": "Staff",
      "paths": [
@@ -38863,7 +38881,7 @@
      "motionPaths": []
     },
     {
-     "id": "212:257/77",
+     "id": "213:257/77",
      "label": "Myrkr",
      "group": "Staff",
      "paths": [
@@ -38872,7 +38890,7 @@
      "motionPaths": []
     },
     {
-     "id": "213:270/8",
+     "id": "214:270/8",
      "label": "Shattersoul",
      "group": "Staff",
      "paths": [
@@ -38881,7 +38899,7 @@
      "motionPaths": []
     },
     {
-     "id": "214:139/82",
+     "id": "215:139/82",
      "label": "Oshala",
      "group": "Staff",
      "paths": [
@@ -38919,7 +38937,7 @@
      ]
     },
     {
-     "id": "215:76/109",
+     "id": "216:76/109",
      "label": "Eagle Eye Shot",
      "group": "Archery",
      "paths": [
@@ -38928,7 +38946,7 @@
      "motionPaths": []
     },
     {
-     "id": "216:76/111",
+     "id": "217:76/111",
      "label": "Shadowbind",
      "group": "Archery",
      "paths": [
@@ -38937,7 +38955,7 @@
      "motionPaths": []
     },
     {
-     "id": "217:76/113",
+     "id": "218:76/113",
      "label": "Flaming Arrow",
      "group": "Archery",
      "paths": [
@@ -38946,7 +38964,7 @@
      "motionPaths": []
     },
     {
-     "id": "218:76/114",
+     "id": "219:76/114",
      "label": "Piercing Arrow",
      "group": "Archery",
      "paths": [
@@ -38955,7 +38973,7 @@
      "motionPaths": []
     },
     {
-     "id": "219:76/115",
+     "id": "220:76/115",
      "label": "Dulling Arrow",
      "group": "Archery",
      "paths": [
@@ -38964,7 +38982,7 @@
      "motionPaths": []
     },
     {
-     "id": "220:76/116",
+     "id": "221:76/116",
      "label": "Unknown WS",
      "group": "Archery",
      "paths": [
@@ -38973,7 +38991,7 @@
      "motionPaths": []
     },
     {
-     "id": "221:76/117",
+     "id": "222:76/117",
      "label": "Sidewinder",
      "group": "Archery",
      "paths": [
@@ -38982,7 +39000,7 @@
      "motionPaths": []
     },
     {
-     "id": "222:100/71",
+     "id": "223:100/71",
      "label": "Blast Arrow",
      "group": "Archery",
      "paths": [
@@ -39035,7 +39053,7 @@
      ]
     },
     {
-     "id": "223:100/72",
+     "id": "224:100/72",
      "label": "Arching Arrow",
      "group": "Archery",
      "paths": [
@@ -39088,7 +39106,7 @@
      ]
     },
     {
-     "id": "224:100/73",
+     "id": "225:100/73",
      "label": "Empyreal Arrow",
      "group": "Archery",
      "paths": [
@@ -39141,7 +39159,7 @@
      ]
     },
     {
-     "id": "225:139/85",
+     "id": "226:139/85",
      "label": "Namas Arrow",
      "group": "Archery",
      "paths": [
@@ -39179,7 +39197,7 @@
      ]
     },
     {
-     "id": "226:245/37",
+     "id": "227:245/37",
      "label": "Refulgent Arrow",
      "group": "Archery",
      "paths": [
@@ -39188,7 +39206,7 @@
      "motionPaths": []
     },
     {
-     "id": "227:256/92",
+     "id": "228:256/92",
      "label": "Jishnu's Radiance",
      "group": "Archery",
      "paths": [
@@ -39197,7 +39215,7 @@
      "motionPaths": []
     },
     {
-     "id": "228:269/94",
+     "id": "229:269/94",
      "label": "Apex Arrow",
      "group": "Archery",
      "paths": [
@@ -39206,7 +39224,7 @@
      "motionPaths": []
     },
     {
-     "id": "229:139/85",
+     "id": "230:139/85",
      "label": "Sarv",
      "group": "Archery",
      "paths": [
@@ -39244,7 +39262,7 @@
      ]
     },
     {
-     "id": "230:76/110",
+     "id": "231:76/110",
      "label": "Eagle Eye Shot",
      "group": "Marksmanship",
      "paths": [
@@ -39253,7 +39271,7 @@
      "motionPaths": []
     },
     {
-     "id": "231:76/112",
+     "id": "232:76/112",
      "label": "Shadowbind",
      "group": "Marksmanship",
      "paths": [
@@ -39262,7 +39280,7 @@
      "motionPaths": []
     },
     {
-     "id": "232:76/118",
+     "id": "233:76/118",
      "label": "Hot Shot",
      "group": "Marksmanship",
      "paths": [
@@ -39271,7 +39289,7 @@
      "motionPaths": []
     },
     {
-     "id": "233:76/119",
+     "id": "234:76/119",
      "label": "Split Shot",
      "group": "Marksmanship",
      "paths": [
@@ -39280,7 +39298,7 @@
      "motionPaths": []
     },
     {
-     "id": "234:76/120",
+     "id": "235:76/120",
      "label": "Sniper Shot",
      "group": "Marksmanship",
      "paths": [
@@ -39289,7 +39307,7 @@
      "motionPaths": []
     },
     {
-     "id": "235:76/121",
+     "id": "236:76/121",
      "label": "Unknown WS",
      "group": "Marksmanship",
      "paths": [
@@ -39298,7 +39316,7 @@
      "motionPaths": []
     },
     {
-     "id": "236:76/122",
+     "id": "237:76/122",
      "label": "Slug Shot",
      "group": "Marksmanship",
      "paths": [
@@ -39307,7 +39325,7 @@
      "motionPaths": []
     },
     {
-     "id": "237:100/74",
+     "id": "238:100/74",
      "label": "Blast Shot",
      "group": "Marksmanship",
      "paths": [
@@ -39360,7 +39378,7 @@
      ]
     },
     {
-     "id": "238:100/75",
+     "id": "239:100/75",
      "label": "Heavy Shot",
      "group": "Marksmanship",
      "paths": [
@@ -39413,7 +39431,7 @@
      ]
     },
     {
-     "id": "239:100/76",
+     "id": "240:100/76",
      "label": "Detonator",
      "group": "Marksmanship",
      "paths": [
@@ -39466,7 +39484,7 @@
      ]
     },
     {
-     "id": "240:139/86",
+     "id": "241:139/86",
      "label": "Coronach",
      "group": "Marksmanship",
      "paths": [
@@ -39504,7 +39522,7 @@
      ]
     },
     {
-     "id": "241:207/68",
+     "id": "242:207/68",
      "label": "Trueflight",
      "group": "Marksmanship",
      "paths": [
@@ -39513,7 +39531,7 @@
      "motionPaths": []
     },
     {
-     "id": "242:207/69",
+     "id": "243:207/69",
      "label": "Leaden Salute",
      "group": "Marksmanship",
      "paths": [
@@ -39522,7 +39540,7 @@
      "motionPaths": []
     },
     {
-     "id": "243:242/74",
+     "id": "244:242/74",
      "label": "Numbing Shot",
      "group": "Marksmanship",
      "paths": [
@@ -39531,7 +39549,7 @@
      "motionPaths": []
     },
     {
-     "id": "244:256/93",
+     "id": "245:256/93",
      "label": "Wildfire",
      "group": "Marksmanship",
      "paths": [
@@ -39540,7 +39558,7 @@
      "motionPaths": []
     },
     {
-     "id": "245:270/114",
+     "id": "246:270/114",
      "label": "Last Stand",
      "group": "Marksmanship",
      "paths": [
@@ -39549,7 +39567,7 @@
      "motionPaths": []
     },
     {
-     "id": "246:139/86",
+     "id": "247:139/86",
      "label": "Terminus",
      "group": "Marksmanship",
      "paths": [
@@ -39587,7 +39605,7 @@
      ]
     },
     {
-     "id": "247:143/9",
+     "id": "248:143/9",
      "label": "Mannequin",
      "group": "Mannequin",
      "paths": [
@@ -39599,7 +39617,7 @@
      ]
     },
     {
-     "id": "248:153/91-92",
+     "id": "249:153/91-92",
      "label": "Mannequin",
      "group": "Mannequin",
      "paths": [
@@ -39614,7 +39632,7 @@
      ]
     },
     {
-     "id": "249:68/81-82",
+     "id": "250:68/81-82",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39624,7 +39642,7 @@
      "motionPaths": []
     },
     {
-     "id": "250:70/50-54;73-84",
+     "id": "251:70/50-54;73-84",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39637,7 +39655,7 @@
      "motionPaths": []
     },
     {
-     "id": "251:71/99",
+     "id": "252:71/99",
      "label": "def_",
      "group": "Others",
      "paths": [
@@ -39649,7 +39667,7 @@
      ]
     },
     {
-     "id": "252:72/67-74;76",
+     "id": "253:72/67-74;76",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39682,7 +39700,7 @@
      ]
     },
     {
-     "id": "253:76/29",
+     "id": "254:76/29",
      "label": "dumm",
      "group": "Others",
      "paths": [
@@ -39691,7 +39709,7 @@
      "motionPaths": []
     },
     {
-     "id": "254:118/117",
+     "id": "255:118/117",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39700,7 +39718,7 @@
      "motionPaths": []
     },
     {
-     "id": "255:147/8-11;56-60",
+     "id": "256:147/8-11;56-60",
      "label": "dhm_",
      "group": "Others",
      "paths": [
@@ -39721,7 +39739,7 @@
      ]
     },
     {
-     "id": "256:164/83-85",
+     "id": "257:164/83-85",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39732,7 +39750,7 @@
      "motionPaths": []
     },
     {
-     "id": "257:165/12-15",
+     "id": "258:165/12-15",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39744,7 +39762,7 @@
      "motionPaths": []
     },
     {
-     "id": "258:168/103-105",
+     "id": "259:168/103-105",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39755,7 +39773,7 @@
      "motionPaths": []
     },
     {
-     "id": "259:170/63;66-67",
+     "id": "260:170/63;66-67",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39764,7 +39782,7 @@
      "motionPaths": []
     },
     {
-     "id": "260:171/15-16",
+     "id": "261:171/15-16",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39774,7 +39792,7 @@
      "motionPaths": []
     },
     {
-     "id": "261:173/59-60",
+     "id": "262:173/59-60",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39784,7 +39802,7 @@
      "motionPaths": []
     },
     {
-     "id": "262:175/69-71",
+     "id": "263:175/69-71",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39795,7 +39813,7 @@
      "motionPaths": []
     },
     {
-     "id": "263:180/71-73;97-100",
+     "id": "264:180/71-73;97-100",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39806,7 +39824,7 @@
      "motionPaths": []
     },
     {
-     "id": "264:181/120-123",
+     "id": "265:181/120-123",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39818,7 +39836,7 @@
      "motionPaths": []
     },
     {
-     "id": "265:182/61-64",
+     "id": "266:182/61-64",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39830,7 +39848,7 @@
      "motionPaths": []
     },
     {
-     "id": "266:189/1-3;43",
+     "id": "267:189/1-3;43",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39841,7 +39859,7 @@
      "motionPaths": []
     },
     {
-     "id": "267:201/99-102",
+     "id": "268:201/99-102",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39853,7 +39871,7 @@
      "motionPaths": []
     },
     {
-     "id": "268:203/45-49;55-59",
+     "id": "269:203/45-49;55-59",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39866,7 +39884,7 @@
      "motionPaths": []
     },
     {
-     "id": "269:212/70-79",
+     "id": "270:212/70-79",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39884,7 +39902,7 @@
      "motionPaths": []
     },
     {
-     "id": "270:215/19-22",
+     "id": "271:215/19-22",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39896,7 +39914,7 @@
      "motionPaths": []
     },
     {
-     "id": "271:218/57-58",
+     "id": "272:218/57-58",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39906,7 +39924,7 @@
      "motionPaths": []
     },
     {
-     "id": "272:222/13",
+     "id": "273:222/13",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39915,7 +39933,7 @@
      "motionPaths": []
     },
     {
-     "id": "273:3/4/44;59-63",
+     "id": "274:3/4/44;59-63",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39924,7 +39942,7 @@
      "motionPaths": []
     },
     {
-     "id": "274:3/8/65;98-102",
+     "id": "275:3/8/65;98-102",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39933,7 +39951,7 @@
      "motionPaths": []
     },
     {
-     "id": "275:3/9/76-78",
+     "id": "276:3/9/76-78",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39944,7 +39962,7 @@
      "motionPaths": []
     },
     {
-     "id": "276:6/0/32-33;50",
+     "id": "277:6/0/32-33;50",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -39954,7 +39972,7 @@
      "motionPaths": []
     },
     {
-     "id": "277:152/41",
+     "id": "278:152/41",
      "label": "Amatsu: Tsukikage",
      "group": "NPC WS",
      "paths": [
@@ -39963,7 +39981,7 @@
      "motionPaths": []
     },
     {
-     "id": "278:197/77",
+     "id": "279:197/77",
      "label": "Iainuki",
      "group": "NPC WS",
      "paths": [
@@ -39972,7 +39990,7 @@
      "motionPaths": []
     },
     {
-     "id": "279:199/75",
+     "id": "280:199/75",
      "label": "Iainuki",
      "group": "NPC WS",
      "paths": [
@@ -39981,7 +39999,7 @@
      "motionPaths": []
     },
     {
-     "id": "280:199/82",
+     "id": "281:199/82",
      "label": "Glory Slash",
      "group": "NPC WS",
      "paths": [
@@ -39990,7 +40008,7 @@
      "motionPaths": []
     },
     {
-     "id": "281:204/17",
+     "id": "282:204/17",
      "label": "Warden Of Terror",
      "group": "NPC WS",
      "paths": [
@@ -39999,7 +40017,7 @@
      "motionPaths": []
     },
     {
-     "id": "282:239/54",
+     "id": "283:239/54",
      "label": "Altair Bullet",
      "group": "NPC WS",
      "paths": [
@@ -40008,7 +40026,7 @@
      "motionPaths": []
     },
     {
-     "id": "283:191/54",
+     "id": "284:191/54",
      "label": "Drain Samba",
      "group": "Dancer",
      "paths": [
@@ -40017,7 +40035,7 @@
      "motionPaths": []
     },
     {
-     "id": "284:191/55",
+     "id": "285:191/55",
      "label": "Drain Samba II",
      "group": "Dancer",
      "paths": [
@@ -40026,7 +40044,7 @@
      "motionPaths": []
     },
     {
-     "id": "285:191/56",
+     "id": "286:191/56",
      "label": "Drain Samba III",
      "group": "Dancer",
      "paths": [
@@ -40035,7 +40053,7 @@
      "motionPaths": []
     },
     {
-     "id": "286:191/57",
+     "id": "287:191/57",
      "label": "Aspir Samba",
      "group": "Dancer",
      "paths": [
@@ -40044,7 +40062,7 @@
      "motionPaths": []
     },
     {
-     "id": "287:191/58",
+     "id": "288:191/58",
      "label": "Aspir Samba II",
      "group": "Dancer",
      "paths": [
@@ -40053,7 +40071,7 @@
      "motionPaths": []
     },
     {
-     "id": "288:191/59",
+     "id": "289:191/59",
      "label": "Haste Samba",
      "group": "Dancer",
      "paths": [
@@ -40062,7 +40080,7 @@
      "motionPaths": []
     },
     {
-     "id": "289:191/60",
+     "id": "290:191/60",
      "label": "Curing Waltz",
      "group": "Dancer",
      "paths": [
@@ -40071,7 +40089,7 @@
      "motionPaths": []
     },
     {
-     "id": "290:191/61",
+     "id": "291:191/61",
      "label": "Curing Waltz II",
      "group": "Dancer",
      "paths": [
@@ -40080,7 +40098,7 @@
      "motionPaths": []
     },
     {
-     "id": "291:191/62",
+     "id": "292:191/62",
      "label": "Curing Waltz III",
      "group": "Dancer",
      "paths": [
@@ -40089,7 +40107,7 @@
      "motionPaths": []
     },
     {
-     "id": "292:191/63",
+     "id": "293:191/63",
      "label": "Curing Waltz IV",
      "group": "Dancer",
      "paths": [
@@ -40098,7 +40116,7 @@
      "motionPaths": []
     },
     {
-     "id": "293:261/122",
+     "id": "294:261/122",
      "label": "Curing Waltz V",
      "group": "Dancer",
      "paths": [
@@ -40107,7 +40125,7 @@
      "motionPaths": []
     },
     {
-     "id": "294:191/64",
+     "id": "295:191/64",
      "label": "Healing Waltz",
      "group": "Dancer",
      "paths": [
@@ -40116,7 +40134,7 @@
      "motionPaths": []
     },
     {
-     "id": "295:191/65",
+     "id": "296:191/65",
      "label": "Divine Waltz",
      "group": "Dancer",
      "paths": [
@@ -40125,7 +40143,7 @@
      "motionPaths": []
     },
     {
-     "id": "296:246/115",
+     "id": "297:246/115",
      "label": "Divine Waltz II",
      "group": "Dancer",
      "paths": [
@@ -40134,7 +40152,7 @@
      "motionPaths": []
     },
     {
-     "id": "297:191/66",
+     "id": "298:191/66",
      "label": "Spectral Jig",
      "group": "Dancer",
      "paths": [
@@ -40143,7 +40161,7 @@
      "motionPaths": []
     },
     {
-     "id": "298:191/67",
+     "id": "299:191/67",
      "label": "Chocobo Jig",
      "group": "Dancer",
      "paths": [
@@ -40152,7 +40170,7 @@
      "motionPaths": []
     },
     {
-     "id": "299:191/68-76",
+     "id": "300:191/68-76",
      "label": "Steps",
      "group": "Dancer",
      "paths": [
@@ -40169,7 +40187,7 @@
      "motionPaths": []
     },
     {
-     "id": "300:191/77-85",
+     "id": "301:191/77-85",
      "label": "Flourishes",
      "group": "Dancer",
      "paths": [
@@ -40186,7 +40204,7 @@
      "motionPaths": []
     },
     {
-     "id": "301:268/37",
+     "id": "302:268/37",
      "label": "New samba",
      "group": "Dancer",
      "paths": [
@@ -40195,7 +40213,7 @@
      "motionPaths": []
     },
     {
-     "id": "302:70/8",
+     "id": "303:70/8",
      "label": "HumeM - Stance, Dash, Teleport Up, Falling Hammer Fist",
      "group": "Variations",
      "paths": [
@@ -40204,7 +40222,7 @@
      "motionPaths": []
     },
     {
-     "id": "303:70/9",
+     "id": "304:70/9",
      "label": "HumeM - Hand to the sky",
      "group": "Variations",
      "paths": [
@@ -40213,7 +40231,7 @@
      "motionPaths": []
     },
     {
-     "id": "304:70/20",
+     "id": "305:70/20",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40222,7 +40240,7 @@
      "motionPaths": []
     },
     {
-     "id": "305:70/21",
+     "id": "306:70/21",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40231,7 +40249,7 @@
      "motionPaths": []
     },
     {
-     "id": "306:70/22",
+     "id": "307:70/22",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40240,7 +40258,7 @@
      "motionPaths": []
     },
     {
-     "id": "307:70/23",
+     "id": "308:70/23",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40249,7 +40267,7 @@
      "motionPaths": []
     },
     {
-     "id": "308:70/24",
+     "id": "309:70/24",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40258,7 +40276,7 @@
      "motionPaths": []
     },
     {
-     "id": "309:151/18",
+     "id": "310:151/18",
      "label": "HumeM - SuperMan Punch Animation",
      "group": "Variations",
      "paths": [
@@ -40267,7 +40285,7 @@
      "motionPaths": []
     },
     {
-     "id": "310:171/29",
+     "id": "311:171/29",
      "label": "HumeM - Crouching Animations, Unsheathing Weapon",
      "group": "Variations",
      "paths": [
@@ -40276,7 +40294,7 @@
      "motionPaths": []
     },
     {
-     "id": "311:171/30",
+     "id": "312:171/30",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40285,7 +40303,7 @@
      "motionPaths": []
     },
     {
-     "id": "312:173/61",
+     "id": "313:173/61",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40294,7 +40312,7 @@
      "motionPaths": []
     },
     {
-     "id": "313:180/96",
+     "id": "314:180/96",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40303,7 +40321,7 @@
      "motionPaths": []
     },
     {
-     "id": "314:184/33",
+     "id": "315:184/33",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40312,7 +40330,7 @@
      "motionPaths": []
     },
     {
-     "id": "315:184/34",
+     "id": "316:184/34",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40321,7 +40339,7 @@
      "motionPaths": []
     },
     {
-     "id": "316:184/35",
+     "id": "317:184/35",
      "label": "HumeM - Singing Animation with hands behind back",
      "group": "Variations",
      "paths": [
@@ -40330,7 +40348,7 @@
      "motionPaths": []
     },
     {
-     "id": "317:184/38",
+     "id": "318:184/38",
      "label": "Dramatized Catching Animation",
      "group": "Variations",
      "paths": [
@@ -40339,7 +40357,7 @@
      "motionPaths": []
     },
     {
-     "id": "318:184/55",
+     "id": "319:184/55",
      "label": "HumeM - Knocked Out!",
      "group": "Variations",
      "paths": [
@@ -40348,7 +40366,7 @@
      "motionPaths": []
     },
     {
-     "id": "319:184/57",
+     "id": "320:184/57",
      "label": "HumeM - Various Battle Animations",
      "group": "Variations",
      "paths": [
@@ -40357,7 +40375,7 @@
      "motionPaths": []
     },
     {
-     "id": "320:184/59",
+     "id": "321:184/59",
      "label": "HumeM - Various Animations - Sitting Down",
      "group": "Variations",
      "paths": [
@@ -40366,7 +40384,7 @@
      "motionPaths": []
     },
     {
-     "id": "321:187/27",
+     "id": "322:187/27",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40375,7 +40393,7 @@
      "motionPaths": []
     },
     {
-     "id": "322:187/28",
+     "id": "323:187/28",
      "label": "HumeM - Various Animations - Knockback",
      "group": "Variations",
      "paths": [
@@ -40384,7 +40402,7 @@
      "motionPaths": []
     },
     {
-     "id": "323:187/29",
+     "id": "324:187/29",
      "label": "HumeM - Various Animation",
      "group": "Variations",
      "paths": [
@@ -40393,7 +40411,7 @@
      "motionPaths": []
     },
     {
-     "id": "324:187/30",
+     "id": "325:187/30",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40402,7 +40420,7 @@
      "motionPaths": []
     },
     {
-     "id": "325:188/81",
+     "id": "326:188/81",
      "label": "HumeM - Various Jig Animations",
      "group": "Variations",
      "paths": [
@@ -40411,7 +40429,7 @@
      "motionPaths": []
     },
     {
-     "id": "326:188/82",
+     "id": "327:188/82",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40420,7 +40438,7 @@
      "motionPaths": []
     },
     {
-     "id": "327:188/83",
+     "id": "328:188/83",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40429,7 +40447,7 @@
      "motionPaths": []
     },
     {
-     "id": "328:189/44",
+     "id": "329:189/44",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40438,7 +40456,7 @@
      "motionPaths": []
     },
     {
-     "id": "329:189/45",
+     "id": "330:189/45",
      "label": "HumeM - Various Animations -Epic Pose",
      "group": "Variations",
      "paths": [
@@ -40447,7 +40465,7 @@
      "motionPaths": []
     },
     {
-     "id": "330:189/46",
+     "id": "331:189/46",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40456,7 +40474,7 @@
      "motionPaths": []
     },
     {
-     "id": "331:189/47",
+     "id": "332:189/47",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40465,7 +40483,7 @@
      "motionPaths": []
     },
     {
-     "id": "332:189/50",
+     "id": "333:189/50",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40474,7 +40492,7 @@
      "motionPaths": []
     },
     {
-     "id": "333:189/51",
+     "id": "334:189/51",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40483,7 +40501,7 @@
      "motionPaths": []
     },
     {
-     "id": "334:189/52",
+     "id": "335:189/52",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40492,7 +40510,7 @@
      "motionPaths": []
     },
     {
-     "id": "335:189/60",
+     "id": "336:189/60",
      "label": "HumeM - Various Animation",
      "group": "Variations",
      "paths": [
@@ -40501,7 +40519,7 @@
      "motionPaths": []
     },
     {
-     "id": "336:197/45",
+     "id": "337:197/45",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40510,7 +40528,7 @@
      "motionPaths": []
     },
     {
-     "id": "337:197/46",
+     "id": "338:197/46",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40519,7 +40537,7 @@
      "motionPaths": []
     },
     {
-     "id": "338:197/47",
+     "id": "339:197/47",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40528,7 +40546,7 @@
      "motionPaths": []
     },
     {
-     "id": "339:215/23",
+     "id": "340:215/23",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40537,7 +40555,7 @@
      "motionPaths": []
     },
     {
-     "id": "340:215/25",
+     "id": "341:215/25",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40546,7 +40564,7 @@
      "motionPaths": []
     },
     {
-     "id": "341:215/27",
+     "id": "342:215/27",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40555,7 +40573,7 @@
      "motionPaths": []
     },
     {
-     "id": "342:215/28",
+     "id": "343:215/28",
      "label": "HumeM - Chocobo Riding Animations",
      "group": "Variations",
      "paths": [
@@ -40564,7 +40582,7 @@
      "motionPaths": []
     },
     {
-     "id": "343:216/114",
+     "id": "344:216/114",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40573,7 +40591,7 @@
      "motionPaths": []
     },
     {
-     "id": "344:216/115",
+     "id": "345:216/115",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40582,7 +40600,7 @@
      "motionPaths": []
     },
     {
-     "id": "345:216/116",
+     "id": "346:216/116",
      "label": "HumeM - Various Chocobo Riding Animations",
      "group": "Variations",
      "paths": [
@@ -40591,7 +40609,7 @@
      "motionPaths": []
     },
     {
-     "id": "346:216/117",
+     "id": "347:216/117",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40600,7 +40618,7 @@
      "motionPaths": []
     },
     {
-     "id": "347:216/118",
+     "id": "348:216/118",
      "label": "HumeM - Summersault and Various Animations",
      "group": "Variations",
      "paths": [
@@ -40609,7 +40627,7 @@
      "motionPaths": []
     },
     {
-     "id": "348:216/119",
+     "id": "349:216/119",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40618,7 +40636,7 @@
      "motionPaths": []
     },
     {
-     "id": "349:216/120",
+     "id": "350:216/120",
      "label": "HumeM - Dancer CS Various Animations",
      "group": "Variations",
      "paths": [
@@ -40627,7 +40645,7 @@
      "motionPaths": []
     },
     {
-     "id": "350:216/121",
+     "id": "351:216/121",
      "label": "HumeM - Dancer CS Various Animations",
      "group": "Variations",
      "paths": [
@@ -40636,7 +40654,7 @@
      "motionPaths": []
     },
     {
-     "id": "351:216/122",
+     "id": "352:216/122",
      "label": "HumeM - Mayakov Various Animations",
      "group": "Variations",
      "paths": [
@@ -40645,7 +40663,7 @@
      "motionPaths": []
     },
     {
-     "id": "352:218/60",
+     "id": "353:218/60",
      "label": "HumeM - Crawling Animations",
      "group": "Variations",
      "paths": [
@@ -40654,7 +40672,7 @@
      "motionPaths": []
     },
     {
-     "id": "353:221/19",
+     "id": "354:221/19",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40663,7 +40681,7 @@
      "motionPaths": []
     },
     {
-     "id": "354:221/20",
+     "id": "355:221/20",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40672,7 +40690,7 @@
      "motionPaths": []
     },
     {
-     "id": "355:221/21",
+     "id": "356:221/21",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40681,7 +40699,7 @@
      "motionPaths": []
     },
     {
-     "id": "356:230/106",
+     "id": "357:230/106",
      "label": "HumeM - CatWalk Various Animations",
      "group": "Variations",
      "paths": [
@@ -40690,7 +40708,7 @@
      "motionPaths": []
     },
     {
-     "id": "357:230/107",
+     "id": "358:230/107",
      "label": "HumeM - Totally You - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40699,7 +40717,7 @@
      "motionPaths": []
     },
     {
-     "id": "358:230/108",
+     "id": "359:230/108",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40708,7 +40726,7 @@
      "motionPaths": []
     },
     {
-     "id": "359:230/109",
+     "id": "360:230/109",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40717,7 +40735,7 @@
      "motionPaths": []
     },
     {
-     "id": "360:230/110",
+     "id": "361:230/110",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40726,7 +40744,7 @@
      "motionPaths": []
     },
     {
-     "id": "361:230/111",
+     "id": "362:230/111",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40735,7 +40753,7 @@
      "motionPaths": []
     },
     {
-     "id": "362:230/112",
+     "id": "363:230/112",
      "label": "HumeM - Crying Animations",
      "group": "Variations",
      "paths": [
@@ -40744,7 +40762,7 @@
      "motionPaths": []
     },
     {
-     "id": "363:293/101",
+     "id": "364:293/101",
      "label": "HumeM - Various Slowed Animations",
      "group": "Variations",
      "paths": [
@@ -40753,7 +40771,7 @@
      "motionPaths": []
     },
     {
-     "id": "364:293/102",
+     "id": "365:293/102",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40762,7 +40780,7 @@
      "motionPaths": []
     },
     {
-     "id": "365:293/103",
+     "id": "366:293/103",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40771,7 +40789,7 @@
      "motionPaths": []
     },
     {
-     "id": "366:293/104",
+     "id": "367:293/104",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40780,7 +40798,7 @@
      "motionPaths": []
     },
     {
-     "id": "367:293/107",
+     "id": "368:293/107",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40789,7 +40807,7 @@
      "motionPaths": []
     },
     {
-     "id": "368:293/108",
+     "id": "369:293/108",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40798,7 +40816,7 @@
      "motionPaths": []
     },
     {
-     "id": "369:332/86",
+     "id": "370:332/86",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40807,7 +40825,7 @@
      "motionPaths": []
     },
     {
-     "id": "370:332/87",
+     "id": "371:332/87",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40816,7 +40834,7 @@
      "motionPaths": []
     },
     {
-     "id": "371:332/88",
+     "id": "372:332/88",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40825,7 +40843,7 @@
      "motionPaths": []
     },
     {
-     "id": "372:332/89",
+     "id": "373:332/89",
      "label": "HumeM - Why Gawd? Various Animations",
      "group": "Variations",
      "paths": [
@@ -40834,7 +40852,7 @@
      "motionPaths": []
     },
     {
-     "id": "373:332/90",
+     "id": "374:332/90",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40843,7 +40861,7 @@
      "motionPaths": []
     },
     {
-     "id": "374:332/91",
+     "id": "375:332/91",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40852,7 +40870,7 @@
      "motionPaths": []
     },
     {
-     "id": "375:332/92",
+     "id": "376:332/92",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40861,7 +40879,7 @@
      "motionPaths": []
     },
     {
-     "id": "376:332/93",
+     "id": "377:332/93",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40870,7 +40888,7 @@
      "motionPaths": []
     },
     {
-     "id": "377:332/94",
+     "id": "378:332/94",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40879,7 +40897,7 @@
      "motionPaths": []
     },
     {
-     "id": "378:332/95",
+     "id": "379:332/95",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40888,7 +40906,7 @@
      "motionPaths": []
     },
     {
-     "id": "379:338/89",
+     "id": "380:338/89",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40897,7 +40915,7 @@
      "motionPaths": []
     },
     {
-     "id": "380:338/95",
+     "id": "381:338/95",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40906,7 +40924,7 @@
      "motionPaths": []
     },
     {
-     "id": "381:339/41",
+     "id": "382:339/41",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40915,7 +40933,7 @@
      "motionPaths": []
     },
     {
-     "id": "382:339/42",
+     "id": "383:339/42",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40924,7 +40942,7 @@
      "motionPaths": []
     },
     {
-     "id": "383:339/43",
+     "id": "384:339/43",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40933,7 +40951,7 @@
      "motionPaths": []
     },
     {
-     "id": "384:339/44",
+     "id": "385:339/44",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40942,7 +40960,7 @@
      "motionPaths": []
     },
     {
-     "id": "385:339/45",
+     "id": "386:339/45",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40951,7 +40969,7 @@
      "motionPaths": []
     },
     {
-     "id": "386:339/46",
+     "id": "387:339/46",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40960,7 +40978,7 @@
      "motionPaths": []
     },
     {
-     "id": "387:2/20/24",
+     "id": "388:2/20/24",
      "label": "HumeM - Samurai Animation",
      "group": "Variations",
      "paths": [
@@ -40969,7 +40987,7 @@
      "motionPaths": []
     },
     {
-     "id": "388:2/20/26",
+     "id": "389:2/20/26",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40978,7 +40996,7 @@
      "motionPaths": []
     },
     {
-     "id": "389:3/4/120",
+     "id": "390:3/4/120",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40987,7 +41005,7 @@
      "motionPaths": []
     },
     {
-     "id": "390:3/9/79",
+     "id": "391:3/9/79",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -40996,7 +41014,7 @@
      "motionPaths": []
     },
     {
-     "id": "391:3/9/80",
+     "id": "392:3/9/80",
      "label": "HumeM - Various Animations",
      "group": "Variations",
      "paths": [
@@ -41005,7 +41023,7 @@
      "motionPaths": []
     },
     {
-     "id": "401:199/75",
+     "id": "402:199/75",
      "label": "WS 256",
      "group": "WS (Unreleased)",
      "paths": [
@@ -41014,7 +41032,7 @@
      "motionPaths": []
     },
     {
-     "id": "402:199/82",
+     "id": "403:199/82",
      "label": "WS 257",
      "group": "WS (Unreleased)",
      "paths": [
@@ -41023,7 +41041,7 @@
      "motionPaths": []
     },
     {
-     "id": "403:200/124",
+     "id": "404:200/124",
      "label": "WS 258",
      "group": "WS (Unreleased)",
      "paths": [
@@ -41032,7 +41050,7 @@
      "motionPaths": []
     },
     {
-     "id": "404:204/17",
+     "id": "405:204/17",
      "label": "WS 259",
      "group": "WS (Unreleased)",
      "paths": [
@@ -41041,7 +41059,7 @@
      "motionPaths": []
     },
     {
-     "id": "405:238/73",
+     "id": "406:238/73",
      "label": "WS 260",
      "group": "WS (Unreleased)",
      "paths": [
@@ -41050,7 +41068,7 @@
      "motionPaths": []
     },
     {
-     "id": "406:238/94",
+     "id": "407:238/94",
      "label": "WS 261",
      "group": "WS (Unreleased)",
      "paths": [
@@ -41059,7 +41077,7 @@
      "motionPaths": []
     },
     {
-     "id": "407:239/54",
+     "id": "408:239/54",
      "label": "WS 262",
      "group": "WS (Unreleased)",
      "paths": [
@@ -41068,7 +41086,7 @@
      "motionPaths": []
     },
     {
-     "id": "408:335/69",
+     "id": "409:335/69",
      "label": "WS 263",
      "group": "WS (Unreleased)",
      "paths": [
@@ -76480,6 +76498,15 @@
      "motionPaths": []
     },
     {
+     "id": "119:316/24",
+     "label": "Dimidiation",
+     "group": "G. Sword",
+     "paths": [
+      "ROM\\316\\24.DAT"
+     ],
+     "motionPaths": []
+    },
+    {
      "id": "88:78/60",
      "label": "Raging Axe",
      "group": "Axe",
@@ -77434,7 +77461,16 @@
      "motionPaths": []
     },
     {
-     "id": "194:78/103",
+     "id": "203:316/17",
+     "label": "Exudation",
+     "group": "Club",
+     "paths": [
+      "ROM\\316\\23.DAT"
+     ],
+     "motionPaths": []
+    },
+    {
+     "id": "195:78/103",
      "label": "Heavy Swing",
      "group": "Staff",
      "paths": [
@@ -77443,7 +77479,7 @@
      "motionPaths": []
     },
     {
-     "id": "195:78/104",
+     "id": "196:78/104",
      "label": "Rock Crusher",
      "group": "Staff",
      "paths": [
@@ -77452,7 +77488,7 @@
      "motionPaths": []
     },
     {
-     "id": "196:78/105",
+     "id": "197:78/105",
      "label": "Earth Crusher",
      "group": "Staff",
      "paths": [
@@ -77461,7 +77497,7 @@
      "motionPaths": []
     },
     {
-     "id": "197:78/106",
+     "id": "198:78/106",
      "label": "Starburst",
      "group": "Staff",
      "paths": [
@@ -77470,7 +77506,7 @@
      "motionPaths": []
     },
     {
-     "id": "198:78/107",
+     "id": "199:78/107",
      "label": "Sunburst",
      "group": "Staff",
      "paths": [
@@ -77479,7 +77515,7 @@
      "motionPaths": []
     },
     {
-     "id": "199:78/108",
+     "id": "200:78/108",
      "label": "Shell Crusher",
      "group": "Staff",
      "paths": [
@@ -77488,7 +77524,7 @@
      "motionPaths": []
     },
     {
-     "id": "200:78/109",
+     "id": "201:78/109",
      "label": "Full Swing",
      "group": "Staff",
      "paths": [
@@ -77497,7 +77533,7 @@
      "motionPaths": []
     },
     {
-     "id": "201:101/65",
+     "id": "202:101/65",
      "label": "Spirit Taker",
      "group": "Staff",
      "paths": [
@@ -77506,7 +77542,7 @@
      "motionPaths": []
     },
     {
-     "id": "202:101/66",
+     "id": "203:101/66",
      "label": "Retribution",
      "group": "Staff",
      "paths": [
@@ -77515,7 +77551,7 @@
      "motionPaths": []
     },
     {
-     "id": "203:139/124",
+     "id": "204:139/124",
      "label": "Gate of Tartarus",
      "group": "Staff",
      "paths": [
@@ -77524,7 +77560,7 @@
      "motionPaths": []
     },
     {
-     "id": "204:207/108",
+     "id": "205:207/108",
      "label": "Vidohunir",
      "group": "Staff",
      "paths": [
@@ -77533,7 +77569,7 @@
      "motionPaths": []
     },
     {
-     "id": "205:207/109",
+     "id": "206:207/109",
      "label": "Garland of Bliss",
      "group": "Staff",
      "paths": [
@@ -77542,7 +77578,7 @@
      "motionPaths": []
     },
     {
-     "id": "206:207/110",
+     "id": "207:207/110",
      "label": "Omniscience",
      "group": "Staff",
      "paths": [
@@ -77551,7 +77587,7 @@
      "motionPaths": []
     },
     {
-     "id": "207:240/8",
+     "id": "208:240/8",
      "label": "Tartarus Torpor",
      "group": "Staff",
      "paths": [
@@ -77560,7 +77596,7 @@
      "motionPaths": []
     },
     {
-     "id": "208:244/77",
+     "id": "209:244/77",
      "label": "Cataclysm",
      "group": "Staff",
      "paths": [
@@ -77569,7 +77605,7 @@
      "motionPaths": []
     },
     {
-     "id": "209:257/89",
+     "id": "210:257/89",
      "label": "Myrkr",
      "group": "Staff",
      "paths": [
@@ -77578,7 +77614,7 @@
      "motionPaths": []
     },
     {
-     "id": "210:270/14",
+     "id": "211:270/14",
      "label": "Shattersoul",
      "group": "Staff",
      "paths": [
@@ -77587,7 +77623,7 @@
      "motionPaths": []
     },
     {
-     "id": "211:139/124",
+     "id": "212:139/124",
      "label": "Oshala",
      "group": "Staff",
      "paths": [
@@ -77596,7 +77632,7 @@
      "motionPaths": []
     },
     {
-     "id": "212:78/115",
+     "id": "213:78/115",
      "label": "Eagle Eye Shot",
      "group": "Archery",
      "paths": [
@@ -77605,7 +77641,7 @@
      "motionPaths": []
     },
     {
-     "id": "213:78/117",
+     "id": "214:78/117",
      "label": "Shadowbind",
      "group": "Archery",
      "paths": [
@@ -77614,7 +77650,7 @@
      "motionPaths": []
     },
     {
-     "id": "214:76/113",
+     "id": "215:76/113",
      "label": "Flaming Arrow",
      "group": "Archery",
      "paths": [
@@ -77623,7 +77659,7 @@
      "motionPaths": []
     },
     {
-     "id": "215:76/114",
+     "id": "216:76/114",
      "label": "Piercing Arrow",
      "group": "Archery",
      "paths": [
@@ -77632,7 +77668,7 @@
      "motionPaths": []
     },
     {
-     "id": "216:76/115",
+     "id": "217:76/115",
      "label": "Dulling Arrow",
      "group": "Archery",
      "paths": [
@@ -77641,7 +77677,7 @@
      "motionPaths": []
     },
     {
-     "id": "217:76/116",
+     "id": "218:76/116",
      "label": "Unknown WS",
      "group": "Archery",
      "paths": [
@@ -77650,7 +77686,7 @@
      "motionPaths": []
     },
     {
-     "id": "218:76/117",
+     "id": "219:76/117",
      "label": "Sidewinder",
      "group": "Archery",
      "paths": [
@@ -77659,7 +77695,7 @@
      "motionPaths": []
     },
     {
-     "id": "219:101/100",
+     "id": "220:101/100",
      "label": "Blast Arrow",
      "group": "Archery",
      "paths": [
@@ -77668,7 +77704,7 @@
      "motionPaths": []
     },
     {
-     "id": "220:101/101",
+     "id": "221:101/101",
      "label": "Arching Arrow",
      "group": "Archery",
      "paths": [
@@ -77677,7 +77713,7 @@
      "motionPaths": []
     },
     {
-     "id": "221:101/102",
+     "id": "222:101/102",
      "label": "Empyreal Arrow",
      "group": "Archery",
      "paths": [
@@ -77686,7 +77722,7 @@
      "motionPaths": []
     },
     {
-     "id": "222:139/127",
+     "id": "223:139/127",
      "label": "Namas Arrow",
      "group": "Archery",
      "paths": [
@@ -77695,7 +77731,7 @@
      "motionPaths": []
     },
     {
-     "id": "223:245/37",
+     "id": "224:245/37",
      "label": "Refulgent Arrow",
      "group": "Archery",
      "paths": [
@@ -77704,7 +77740,7 @@
      "motionPaths": []
     },
     {
-     "id": "224:256/107",
+     "id": "225:256/107",
      "label": "Jishnu's Radiance",
      "group": "Archery",
      "paths": [
@@ -77713,7 +77749,7 @@
      "motionPaths": []
     },
     {
-     "id": "225:269/100",
+     "id": "226:269/100",
      "label": "Apex Arrow",
      "group": "Archery",
      "paths": [
@@ -77722,7 +77758,7 @@
      "motionPaths": []
     },
     {
-     "id": "226:139/127",
+     "id": "227:139/127",
      "label": "Sarv",
      "group": "Archery",
      "paths": [
@@ -77731,7 +77767,7 @@
      "motionPaths": []
     },
     {
-     "id": "227:78/116",
+     "id": "228:78/116",
      "label": "Eagle Eye Shot",
      "group": "Marksmanship",
      "paths": [
@@ -77740,7 +77776,7 @@
      "motionPaths": []
     },
     {
-     "id": "228:78/118",
+     "id": "229:78/118",
      "label": "Shadowbind",
      "group": "Marksmanship",
      "paths": [
@@ -77749,7 +77785,7 @@
      "motionPaths": []
     },
     {
-     "id": "229:76/118",
+     "id": "230:76/118",
      "label": "Hot Shot",
      "group": "Marksmanship",
      "paths": [
@@ -77758,7 +77794,7 @@
      "motionPaths": []
     },
     {
-     "id": "230:76/119",
+     "id": "231:76/119",
      "label": "Split Shot",
      "group": "Marksmanship",
      "paths": [
@@ -77767,7 +77803,7 @@
      "motionPaths": []
     },
     {
-     "id": "231:76/120",
+     "id": "232:76/120",
      "label": "Sniper Shot",
      "group": "Marksmanship",
      "paths": [
@@ -77776,7 +77812,7 @@
      "motionPaths": []
     },
     {
-     "id": "232:76/121",
+     "id": "233:76/121",
      "label": "Unknown WS",
      "group": "Marksmanship",
      "paths": [
@@ -77785,7 +77821,7 @@
      "motionPaths": []
     },
     {
-     "id": "233:76/122",
+     "id": "234:76/122",
      "label": "Slug Shot",
      "group": "Marksmanship",
      "paths": [
@@ -77794,7 +77830,7 @@
      "motionPaths": []
     },
     {
-     "id": "234:101/103",
+     "id": "235:101/103",
      "label": "Blast Shot",
      "group": "Marksmanship",
      "paths": [
@@ -77803,7 +77839,7 @@
      "motionPaths": []
     },
     {
-     "id": "235:101/104",
+     "id": "236:101/104",
      "label": "Heavy Shot",
      "group": "Marksmanship",
      "paths": [
@@ -77812,7 +77848,7 @@
      "motionPaths": []
     },
     {
-     "id": "236:101/105",
+     "id": "237:101/105",
      "label": "Detonator",
      "group": "Marksmanship",
      "paths": [
@@ -77821,7 +77857,7 @@
      "motionPaths": []
     },
     {
-     "id": "237:140/0",
+     "id": "238:140/0",
      "label": "Coronach",
      "group": "Marksmanship",
      "paths": [
@@ -77830,7 +77866,7 @@
      "motionPaths": []
     },
     {
-     "id": "238:207/113",
+     "id": "239:207/113",
      "label": "Trueflight",
      "group": "Marksmanship",
      "paths": [
@@ -77839,7 +77875,7 @@
      "motionPaths": []
     },
     {
-     "id": "239:207/114",
+     "id": "240:207/114",
      "label": "Leaden Salute",
      "group": "Marksmanship",
      "paths": [
@@ -77848,7 +77884,7 @@
      "motionPaths": []
     },
     {
-     "id": "240:242/98",
+     "id": "241:242/98",
      "label": "Numbing Shot",
      "group": "Marksmanship",
      "paths": [
@@ -77857,7 +77893,7 @@
      "motionPaths": []
     },
     {
-     "id": "241:256/108",
+     "id": "242:256/108",
      "label": "Wildfire",
      "group": "Marksmanship",
      "paths": [
@@ -77866,7 +77902,7 @@
      "motionPaths": []
     },
     {
-     "id": "242:270/120",
+     "id": "243:270/120",
      "label": "Last Stand",
      "group": "Marksmanship",
      "paths": [
@@ -77875,7 +77911,7 @@
      "motionPaths": []
     },
     {
-     "id": "243:140/0",
+     "id": "244:140/0",
      "label": "Terminus",
      "group": "Marksmanship",
      "paths": [
@@ -77884,7 +77920,7 @@
      "motionPaths": []
     },
     {
-     "id": "244:143/14",
+     "id": "245:143/14",
      "label": "Mannequin",
      "group": "Mannequin",
      "paths": [
@@ -77896,7 +77932,7 @@
      ]
     },
     {
-     "id": "245:153/102-103",
+     "id": "246:153/102-103",
      "label": "Mannequin",
      "group": "Mannequin",
      "paths": [
@@ -77911,7 +77947,7 @@
      ]
     },
     {
-     "id": "246:70/93-98",
+     "id": "247:70/93-98",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -77925,7 +77961,7 @@
      "motionPaths": []
     },
     {
-     "id": "247:71/100",
+     "id": "248:71/100",
      "label": "def_",
      "group": "Others",
      "paths": [
@@ -77937,7 +77973,7 @@
      ]
     },
     {
-     "id": "248:72/77-81;86",
+     "id": "249:72/77-81;86",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -77959,7 +77995,7 @@
      ]
     },
     {
-     "id": "249:78/35",
+     "id": "250:78/35",
      "label": "dumm",
      "group": "Others",
      "paths": [
@@ -77968,7 +78004,7 @@
      "motionPaths": []
     },
     {
-     "id": "250:169/54-56",
+     "id": "251:169/54-56",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -77979,7 +78015,7 @@
      "motionPaths": []
     },
     {
-     "id": "251:170/68-70;74",
+     "id": "252:170/68-70;74",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -77990,7 +78026,7 @@
      "motionPaths": []
     },
     {
-     "id": "252:171/21-22;25-26;33-34",
+     "id": "253:171/21-22;25-26;33-34",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -78000,7 +78036,7 @@
      "motionPaths": []
     },
     {
-     "id": "253:173/51-53",
+     "id": "254:173/51-53",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -78011,7 +78047,7 @@
      "motionPaths": []
     },
     {
-     "id": "254:175/72-74",
+     "id": "255:175/72-74",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -78022,7 +78058,7 @@
      "motionPaths": []
     },
     {
-     "id": "255:180/81-85",
+     "id": "256:180/81-85",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -78035,7 +78071,7 @@
      "motionPaths": []
     },
     {
-     "id": "256:181/32-36",
+     "id": "257:181/32-36",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -78048,7 +78084,7 @@
      "motionPaths": []
     },
     {
-     "id": "257:182/41-45;53-55",
+     "id": "258:182/41-45;53-55",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -78061,7 +78097,7 @@
      "motionPaths": []
     },
     {
-     "id": "258:191/3",
+     "id": "259:191/3",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -78070,7 +78106,7 @@
      "motionPaths": []
     },
     {
-     "id": "259:201/8-10;73",
+     "id": "260:201/8-10;73",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -78081,7 +78117,7 @@
      "motionPaths": []
     },
     {
-     "id": "260:209/115-119",
+     "id": "261:209/115-119",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -78094,7 +78130,7 @@
      "motionPaths": []
     },
     {
-     "id": "261:212/80-82",
+     "id": "262:212/80-82",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -78105,7 +78141,7 @@
      "motionPaths": []
     },
     {
-     "id": "262:221/29-31",
+     "id": "263:221/29-31",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -78116,7 +78152,7 @@
      "motionPaths": []
     },
     {
-     "id": "263:3/4/79-82",
+     "id": "264:3/4/79-82",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -78128,7 +78164,7 @@
      "motionPaths": []
     },
     {
-     "id": "264:6/0/31;35-36;42-44",
+     "id": "265:6/0/31;35-36;42-44",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -78137,7 +78173,7 @@
      "motionPaths": []
     },
     {
-     "id": "265:204/21",
+     "id": "266:204/21",
      "label": "Unknown WS",
      "group": "NPC WS",
      "paths": [
@@ -78146,7 +78182,7 @@
      "motionPaths": []
     },
     {
-     "id": "266:1/218/24",
+     "id": "267:1/218/24",
      "label": "Prebackhand of Red Smash",
      "group": "NPC WS",
      "paths": [
@@ -78155,7 +78191,7 @@
      "motionPaths": []
     },
     {
-     "id": "267:1/308/98",
+     "id": "268:1/308/98",
      "label": "Backhand of Crystal Smash",
      "group": "NPC WS",
      "paths": [
@@ -78164,7 +78200,7 @@
      "motionPaths": []
     },
     {
-     "id": "268:192/2",
+     "id": "269:192/2",
      "label": "Drain Samba",
      "group": "Dancer",
      "paths": [
@@ -78173,7 +78209,7 @@
      "motionPaths": []
     },
     {
-     "id": "269:192/3",
+     "id": "270:192/3",
      "label": "Drain Samba II",
      "group": "Dancer",
      "paths": [
@@ -78182,7 +78218,7 @@
      "motionPaths": []
     },
     {
-     "id": "270:192/4",
+     "id": "271:192/4",
      "label": "Drain Samba III",
      "group": "Dancer",
      "paths": [
@@ -78191,7 +78227,7 @@
      "motionPaths": []
     },
     {
-     "id": "271:192/5",
+     "id": "272:192/5",
      "label": "Aspir Samba",
      "group": "Dancer",
      "paths": [
@@ -78200,7 +78236,7 @@
      "motionPaths": []
     },
     {
-     "id": "272:192/6",
+     "id": "273:192/6",
      "label": "Aspir Samba II",
      "group": "Dancer",
      "paths": [
@@ -78209,7 +78245,7 @@
      "motionPaths": []
     },
     {
-     "id": "273:192/7",
+     "id": "274:192/7",
      "label": "Haste Samba",
      "group": "Dancer",
      "paths": [
@@ -78218,7 +78254,7 @@
      "motionPaths": []
     },
     {
-     "id": "274:192/8",
+     "id": "275:192/8",
      "label": "Curing Waltz",
      "group": "Dancer",
      "paths": [
@@ -78227,7 +78263,7 @@
      "motionPaths": []
     },
     {
-     "id": "275:192/9",
+     "id": "276:192/9",
      "label": "Curing Waltz II",
      "group": "Dancer",
      "paths": [
@@ -78236,7 +78272,7 @@
      "motionPaths": []
     },
     {
-     "id": "276:192/10",
+     "id": "277:192/10",
      "label": "Curing Waltz III",
      "group": "Dancer",
      "paths": [
@@ -78245,7 +78281,7 @@
      "motionPaths": []
     },
     {
-     "id": "277:192/11",
+     "id": "278:192/11",
      "label": "Curing Waltz IV",
      "group": "Dancer",
      "paths": [
@@ -78254,7 +78290,7 @@
      "motionPaths": []
     },
     {
-     "id": "278:261/123",
+     "id": "279:261/123",
      "label": "Curing Waltz V",
      "group": "Dancer",
      "paths": [
@@ -78263,7 +78299,7 @@
      "motionPaths": []
     },
     {
-     "id": "279:192/12",
+     "id": "280:192/12",
      "label": "Healing Waltz",
      "group": "Dancer",
      "paths": [
@@ -78272,7 +78308,7 @@
      "motionPaths": []
     },
     {
-     "id": "280:192/13",
+     "id": "281:192/13",
      "label": "Divine Waltz",
      "group": "Dancer",
      "paths": [
@@ -78281,7 +78317,7 @@
      "motionPaths": []
     },
     {
-     "id": "281:246/116",
+     "id": "282:246/116",
      "label": "Divine Waltz II",
      "group": "Dancer",
      "paths": [
@@ -78290,7 +78326,7 @@
      "motionPaths": []
     },
     {
-     "id": "282:192/14",
+     "id": "283:192/14",
      "label": "Spectral Jig",
      "group": "Dancer",
      "paths": [
@@ -78299,7 +78335,7 @@
      "motionPaths": []
     },
     {
-     "id": "283:192/15",
+     "id": "284:192/15",
      "label": "Chocobo Jig",
      "group": "Dancer",
      "paths": [
@@ -78308,7 +78344,7 @@
      "motionPaths": []
     },
     {
-     "id": "284:192/16-24",
+     "id": "285:192/16-24",
      "label": "Steps",
      "group": "Dancer",
      "paths": [
@@ -78325,7 +78361,7 @@
      "motionPaths": []
     },
     {
-     "id": "285:192/25-33",
+     "id": "286:192/25-33",
      "label": "Flourishes",
      "group": "Dancer",
      "paths": [
@@ -78342,7 +78378,7 @@
      "motionPaths": []
     },
     {
-     "id": "286:268/38",
+     "id": "287:268/38",
      "label": "New samba?",
      "group": "Dancer",
      "paths": [
@@ -78351,7 +78387,7 @@
      "motionPaths": []
     },
     {
-     "id": "287:173/48",
+     "id": "288:173/48",
      "label": "HumeF Variations",
      "group": "Variations",
      "paths": [
@@ -78360,7 +78396,7 @@
      "motionPaths": []
     },
     {
-     "id": "288:173/49",
+     "id": "289:173/49",
      "label": "HumeF Variations",
      "group": "Variations",
      "paths": [
@@ -78369,7 +78405,7 @@
      "motionPaths": []
     },
     {
-     "id": "289:173/50",
+     "id": "290:173/50",
      "label": "HumeF Variations",
      "group": "Variations",
      "paths": [
@@ -78378,7 +78414,7 @@
      "motionPaths": []
     },
     {
-     "id": "290:173/65",
+     "id": "291:173/65",
      "label": "HumeF Variations",
      "group": "Variations",
      "paths": [
@@ -78387,7 +78423,7 @@
      "motionPaths": []
     },
     {
-     "id": "299:199/78",
+     "id": "300:199/78",
      "label": "WS 256",
      "group": "WS (Unreleased)",
      "paths": [
@@ -78396,7 +78432,7 @@
      "motionPaths": []
     },
     {
-     "id": "300:204/20",
+     "id": "301:204/20",
      "label": "WS 257",
      "group": "WS (Unreleased)",
      "paths": [
@@ -78405,7 +78441,7 @@
      "motionPaths": []
     },
     {
-     "id": "301:204/21",
+     "id": "302:204/21",
      "label": "WS 258",
      "group": "WS (Unreleased)",
      "paths": [
@@ -78414,7 +78450,7 @@
      "motionPaths": []
     },
     {
-     "id": "302:226/17",
+     "id": "303:226/17",
      "label": "WS 259",
      "group": "WS (Unreleased)",
      "paths": [
@@ -78423,7 +78459,7 @@
      "motionPaths": []
     },
     {
-     "id": "303:245/38",
+     "id": "304:245/38",
      "label": "WS 260",
      "group": "WS (Unreleased)",
      "paths": [
@@ -78432,7 +78468,7 @@
      "motionPaths": []
     },
     {
-     "id": "304:257/72",
+     "id": "305:257/72",
      "label": "WS 261",
      "group": "WS (Unreleased)",
      "paths": [
@@ -78441,7 +78477,7 @@
      "motionPaths": []
     },
     {
-     "id": "305:296/21",
+     "id": "306:296/21",
      "label": "WS 262",
      "group": "WS (Unreleased)",
      "paths": [
@@ -78450,7 +78486,7 @@
      "motionPaths": []
     },
     {
-     "id": "306:296/22",
+     "id": "307:296/22",
      "label": "WS 263",
      "group": "WS (Unreleased)",
      "paths": [
@@ -78459,7 +78495,7 @@
      "motionPaths": []
     },
     {
-     "id": "307:296/31",
+     "id": "308:296/31",
      "label": "WS 264",
      "group": "WS (Unreleased)",
      "paths": [
@@ -78468,7 +78504,7 @@
      "motionPaths": []
     },
     {
-     "id": "308:296/40",
+     "id": "309:296/40",
      "label": "WS 265",
      "group": "WS (Unreleased)",
      "paths": [
@@ -78477,7 +78513,7 @@
      "motionPaths": []
     },
     {
-     "id": "309:326/65",
+     "id": "310:326/65",
      "label": "WS 266",
      "group": "WS (Unreleased)",
      "paths": [
@@ -78486,7 +78522,7 @@
      "motionPaths": []
     },
     {
-     "id": "310:326/66",
+     "id": "311:326/66",
      "label": "WS 267",
      "group": "WS (Unreleased)",
      "paths": [
@@ -78495,7 +78531,7 @@
      "motionPaths": []
     },
     {
-     "id": "311:326/81",
+     "id": "312:326/81",
      "label": "WS 268",
      "group": "WS (Unreleased)",
      "paths": [
@@ -114242,6 +114278,15 @@
      ]
     },
     {
+     "id": "119:316/30",
+     "label": "Dimidiation",
+     "group": "G. Sword",
+     "paths": [
+      "ROM\\316\\30.DAT"
+     ],
+     "motionPaths": []
+    },
+    {
      "id": "91:80/56",
      "label": "Raging Axe",
      "group": "Axe",
@@ -115826,7 +115871,16 @@
      ]
     },
     {
-     "id": "197:80/99",
+     "id": "207:316/17",
+     "label": "Exudation",
+     "group": "Club",
+     "paths": [
+      "ROM\\316\\29.DAT"
+     ],
+     "motionPaths": []
+    },
+    {
+     "id": "198:80/99",
      "label": "Heavy Swing",
      "group": "Staff",
      "paths": [
@@ -115835,7 +115889,7 @@
      "motionPaths": []
     },
     {
-     "id": "198:80/100",
+     "id": "199:80/100",
      "label": "Rock Crusher",
      "group": "Staff",
      "paths": [
@@ -115844,7 +115898,7 @@
      "motionPaths": []
     },
     {
-     "id": "199:80/101",
+     "id": "200:80/101",
      "label": "Earth Crusher",
      "group": "Staff",
      "paths": [
@@ -115853,7 +115907,7 @@
      "motionPaths": []
     },
     {
-     "id": "200:80/102",
+     "id": "201:80/102",
      "label": "Starburst",
      "group": "Staff",
      "paths": [
@@ -115862,7 +115916,7 @@
      "motionPaths": []
     },
     {
-     "id": "201:80/103",
+     "id": "202:80/103",
      "label": "Sunburst",
      "group": "Staff",
      "paths": [
@@ -115871,7 +115925,7 @@
      "motionPaths": []
     },
     {
-     "id": "202:80/104",
+     "id": "203:80/104",
      "label": "Shell Crusher",
      "group": "Staff",
      "paths": [
@@ -115880,7 +115934,7 @@
      "motionPaths": []
     },
     {
-     "id": "203:80/105",
+     "id": "204:80/105",
      "label": "Full Swing",
      "group": "Staff",
      "paths": [
@@ -115889,7 +115943,7 @@
      "motionPaths": []
     },
     {
-     "id": "204:102/94",
+     "id": "205:102/94",
      "label": "Spirit Taker",
      "group": "Staff",
      "paths": [
@@ -115898,7 +115952,7 @@
      "motionPaths": []
     },
     {
-     "id": "205:102/95",
+     "id": "206:102/95",
      "label": "Retribution",
      "group": "Staff",
      "paths": [
@@ -115907,7 +115961,7 @@
      "motionPaths": []
     },
     {
-     "id": "206:140/38",
+     "id": "207:140/38",
      "label": "Gate of Tartarus",
      "group": "Staff",
      "paths": [
@@ -115961,7 +116015,7 @@
      ]
     },
     {
-     "id": "207:208/25",
+     "id": "208:208/25",
      "label": "Vidohunir",
      "group": "Staff",
      "paths": [
@@ -115970,7 +116024,7 @@
      "motionPaths": []
     },
     {
-     "id": "208:208/26",
+     "id": "209:208/26",
      "label": "Garland of Bliss",
      "group": "Staff",
      "paths": [
@@ -115979,7 +116033,7 @@
      "motionPaths": []
     },
     {
-     "id": "209:208/27",
+     "id": "210:208/27",
      "label": "Omniscience",
      "group": "Staff",
      "paths": [
@@ -115988,7 +116042,7 @@
      "motionPaths": []
     },
     {
-     "id": "210:240/17",
+     "id": "211:240/17",
      "label": "Tartarus Torpor",
      "group": "Staff",
      "paths": [
@@ -115997,7 +116051,7 @@
      "motionPaths": []
     },
     {
-     "id": "211:244/92",
+     "id": "212:244/92",
      "label": "Cataclysm",
      "group": "Staff",
      "paths": [
@@ -116006,7 +116060,7 @@
      "motionPaths": []
     },
     {
-     "id": "212:257/101",
+     "id": "213:257/101",
      "label": "Myrkr",
      "group": "Staff",
      "paths": [
@@ -116015,7 +116069,7 @@
      "motionPaths": []
     },
     {
-     "id": "213:270/20",
+     "id": "214:270/20",
      "label": "Shattersoul",
      "group": "Staff",
      "paths": [
@@ -116024,7 +116078,7 @@
      "motionPaths": []
     },
     {
-     "id": "214:140/38",
+     "id": "215:140/38",
      "label": "Oshala",
      "group": "Staff",
      "paths": [
@@ -116078,7 +116132,7 @@
      ]
     },
     {
-     "id": "215:80/111",
+     "id": "216:80/111",
      "label": "Eagle Eye Shot",
      "group": "Archery",
      "paths": [
@@ -116087,7 +116141,7 @@
      "motionPaths": []
     },
     {
-     "id": "216:80/113",
+     "id": "217:80/113",
      "label": "Shadowbind",
      "group": "Archery",
      "paths": [
@@ -116096,7 +116150,7 @@
      "motionPaths": []
     },
     {
-     "id": "217:76/113",
+     "id": "218:76/113",
      "label": "Flaming Arrow",
      "group": "Archery",
      "paths": [
@@ -116105,7 +116159,7 @@
      "motionPaths": []
     },
     {
-     "id": "218:76/114",
+     "id": "219:76/114",
      "label": "Piercing Arrow",
      "group": "Archery",
      "paths": [
@@ -116114,7 +116168,7 @@
      "motionPaths": []
     },
     {
-     "id": "219:76/115",
+     "id": "220:76/115",
      "label": "Dulling Arrow",
      "group": "Archery",
      "paths": [
@@ -116123,7 +116177,7 @@
      "motionPaths": []
     },
     {
-     "id": "220:76/116",
+     "id": "221:76/116",
      "label": "Unknown WS",
      "group": "Archery",
      "paths": [
@@ -116132,7 +116186,7 @@
      "motionPaths": []
     },
     {
-     "id": "221:76/117",
+     "id": "222:76/117",
      "label": "Sidewinder",
      "group": "Archery",
      "paths": [
@@ -116141,7 +116195,7 @@
      "motionPaths": []
     },
     {
-     "id": "222:103/1",
+     "id": "223:103/1",
      "label": "Blast Arrow",
      "group": "Archery",
      "paths": [
@@ -116150,7 +116204,7 @@
      "motionPaths": []
     },
     {
-     "id": "223:103/2",
+     "id": "224:103/2",
      "label": "Arching Arrow",
      "group": "Archery",
      "paths": [
@@ -116159,7 +116213,7 @@
      "motionPaths": []
     },
     {
-     "id": "224:103/3",
+     "id": "225:103/3",
      "label": "Empyreal Arrow",
      "group": "Archery",
      "paths": [
@@ -116168,7 +116222,7 @@
      "motionPaths": []
     },
     {
-     "id": "225:140/41",
+     "id": "226:140/41",
      "label": "Namas Arrow",
      "group": "Archery",
      "paths": [
@@ -116222,7 +116276,7 @@
      ]
     },
     {
-     "id": "226:245/37",
+     "id": "227:245/37",
      "label": "Refulgent Arrow",
      "group": "Archery",
      "paths": [
@@ -116231,7 +116285,7 @@
      "motionPaths": []
     },
     {
-     "id": "227:256/122",
+     "id": "228:256/122",
      "label": "Jishnu's Radiance",
      "group": "Archery",
      "paths": [
@@ -116240,7 +116294,7 @@
      "motionPaths": []
     },
     {
-     "id": "228:269/106",
+     "id": "229:269/106",
      "label": "Apex Arrow",
      "group": "Archery",
      "paths": [
@@ -116249,7 +116303,7 @@
      "motionPaths": []
     },
     {
-     "id": "229:140/41",
+     "id": "230:140/41",
      "label": "Sarv",
      "group": "Archery",
      "paths": [
@@ -116303,7 +116357,7 @@
      ]
     },
     {
-     "id": "230:80/112",
+     "id": "231:80/112",
      "label": "Eagle Eye Shot",
      "group": "Marksmanship",
      "paths": [
@@ -116312,7 +116366,7 @@
      "motionPaths": []
     },
     {
-     "id": "231:80/114",
+     "id": "232:80/114",
      "label": "Shadowbind",
      "group": "Marksmanship",
      "paths": [
@@ -116321,7 +116375,7 @@
      "motionPaths": []
     },
     {
-     "id": "232:76/118",
+     "id": "233:76/118",
      "label": "Hot Shot",
      "group": "Marksmanship",
      "paths": [
@@ -116330,7 +116384,7 @@
      "motionPaths": []
     },
     {
-     "id": "233:76/119",
+     "id": "234:76/119",
      "label": "Split Shot",
      "group": "Marksmanship",
      "paths": [
@@ -116339,7 +116393,7 @@
      "motionPaths": []
     },
     {
-     "id": "234:76/120",
+     "id": "235:76/120",
      "label": "Sniper Shot",
      "group": "Marksmanship",
      "paths": [
@@ -116348,7 +116402,7 @@
      "motionPaths": []
     },
     {
-     "id": "235:76/121",
+     "id": "236:76/121",
      "label": "Unknown WS",
      "group": "Marksmanship",
      "paths": [
@@ -116357,7 +116411,7 @@
      "motionPaths": []
     },
     {
-     "id": "236:76/122",
+     "id": "237:76/122",
      "label": "Slug Shot",
      "group": "Marksmanship",
      "paths": [
@@ -116366,7 +116420,7 @@
      "motionPaths": []
     },
     {
-     "id": "237:103/4",
+     "id": "238:103/4",
      "label": "Blast Shot",
      "group": "Marksmanship",
      "paths": [
@@ -116375,7 +116429,7 @@
      "motionPaths": []
     },
     {
-     "id": "238:103/5",
+     "id": "239:103/5",
      "label": "Heavy Shot",
      "group": "Marksmanship",
      "paths": [
@@ -116384,7 +116438,7 @@
      "motionPaths": []
     },
     {
-     "id": "239:103/6",
+     "id": "240:103/6",
      "label": "Detonator",
      "group": "Marksmanship",
      "paths": [
@@ -116393,7 +116447,7 @@
      "motionPaths": []
     },
     {
-     "id": "240:140/42",
+     "id": "241:140/42",
      "label": "Coronach",
      "group": "Marksmanship",
      "paths": [
@@ -116447,7 +116501,7 @@
      ]
     },
     {
-     "id": "241:208/30",
+     "id": "242:208/30",
      "label": "Trueflight",
      "group": "Marksmanship",
      "paths": [
@@ -116456,7 +116510,7 @@
      "motionPaths": []
     },
     {
-     "id": "242:208/31",
+     "id": "243:208/31",
      "label": "Leaden Salute",
      "group": "Marksmanship",
      "paths": [
@@ -116465,7 +116519,7 @@
      "motionPaths": []
     },
     {
-     "id": "243:242/122",
+     "id": "244:242/122",
      "label": "Numbing Shot",
      "group": "Marksmanship",
      "paths": [
@@ -116474,7 +116528,7 @@
      "motionPaths": []
     },
     {
-     "id": "244:256/123",
+     "id": "245:256/123",
      "label": "Wildfire",
      "group": "Marksmanship",
      "paths": [
@@ -116483,7 +116537,7 @@
      "motionPaths": []
     },
     {
-     "id": "245:270/126",
+     "id": "246:270/126",
      "label": "Last Stand",
      "group": "Marksmanship",
      "paths": [
@@ -116492,7 +116546,7 @@
      "motionPaths": []
     },
     {
-     "id": "246:140/42",
+     "id": "247:140/42",
      "label": "Terminus",
      "group": "Marksmanship",
      "paths": [
@@ -116546,7 +116600,7 @@
      ]
     },
     {
-     "id": "247:143/19",
+     "id": "248:143/19",
      "label": "Mannequin",
      "group": "Mannequin",
      "paths": [
@@ -116558,7 +116612,7 @@
      ]
     },
     {
-     "id": "248:153/113-114",
+     "id": "249:153/113-114",
      "label": "Mannequin",
      "group": "Mannequin",
      "paths": [
@@ -116573,7 +116627,7 @@
      ]
     },
     {
-     "id": "249:69/63-66;68-70",
+     "id": "250:69/63-66;68-70",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -116585,7 +116639,7 @@
      "motionPaths": []
     },
     {
-     "id": "250:70/113-126",
+     "id": "251:70/113-126",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -116607,7 +116661,7 @@
      "motionPaths": []
     },
     {
-     "id": "251:71/101",
+     "id": "252:71/101",
      "label": "def_",
      "group": "Others",
      "paths": [
@@ -116619,7 +116673,7 @@
      ]
     },
     {
-     "id": "252:72/87-94;96",
+     "id": "253:72/87-94;96",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -116652,7 +116706,7 @@
      ]
     },
     {
-     "id": "253:73/5",
+     "id": "254:73/5",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -116664,7 +116718,7 @@
      ]
     },
     {
-     "id": "254:80/31",
+     "id": "255:80/31",
      "label": "dumm",
      "group": "Others",
      "paths": [
@@ -116673,7 +116727,7 @@
      "motionPaths": []
     },
     {
-     "id": "255:80/115",
+     "id": "256:80/115",
      "label": "dk_j",
      "group": "Others",
      "paths": [
@@ -116685,7 +116739,7 @@
      ]
     },
     {
-     "id": "256:100/13-15",
+     "id": "257:100/13-15",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -116696,7 +116750,7 @@
      "motionPaths": []
     },
     {
-     "id": "257:128/2-6;11",
+     "id": "258:128/2-6;11",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -116709,7 +116763,7 @@
      "motionPaths": []
     },
     {
-     "id": "258:140/43-50",
+     "id": "259:140/43-50",
      "label": "dk_",
      "group": "Others",
      "paths": [
@@ -116770,7 +116824,7 @@
      ]
     },
     {
-     "id": "259:151/93-97",
+     "id": "260:151/93-97",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -116783,7 +116837,7 @@
      "motionPaths": []
     },
     {
-     "id": "260:164/98-99",
+     "id": "261:164/98-99",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -116793,7 +116847,7 @@
      "motionPaths": []
     },
     {
-     "id": "261:165/90",
+     "id": "262:165/90",
      "label": "lu_s",
      "group": "Others",
      "paths": [
@@ -116807,7 +116861,7 @@
      ]
     },
     {
-     "id": "262:166/107-108",
+     "id": "263:166/107-108",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -116817,7 +116871,7 @@
      "motionPaths": []
     },
     {
-     "id": "263:168/106-108",
+     "id": "264:168/106-108",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -116828,7 +116882,7 @@
      "motionPaths": []
     },
     {
-     "id": "264:169/91",
+     "id": "265:169/91",
      "label": "ob_d",
      "group": "Others",
      "paths": [
@@ -116837,7 +116891,7 @@
      "motionPaths": []
     },
     {
-     "id": "265:170/65;71",
+     "id": "266:170/65;71",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -116846,7 +116900,7 @@
      "motionPaths": []
     },
     {
-     "id": "266:175/59-61",
+     "id": "267:175/59-61",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -116857,7 +116911,7 @@
      "motionPaths": []
     },
     {
-     "id": "267:188/87-88",
+     "id": "268:188/87-88",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -116867,7 +116921,7 @@
      "motionPaths": []
     },
     {
-     "id": "268:203/66-69",
+     "id": "269:203/66-69",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -116879,7 +116933,7 @@
      "motionPaths": []
     },
     {
-     "id": "269:204/51-60",
+     "id": "270:204/51-60",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -116897,7 +116951,7 @@
      "motionPaths": []
     },
     {
-     "id": "270:212/7-16;91-94",
+     "id": "271:212/7-16;91-94",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -116915,7 +116969,7 @@
      "motionPaths": []
     },
     {
-     "id": "271:222/26",
+     "id": "272:222/26",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -116924,7 +116978,7 @@
      "motionPaths": []
     },
     {
-     "id": "272:3/4/49-53",
+     "id": "273:3/4/49-53",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -116937,7 +116991,7 @@
      "motionPaths": []
     },
     {
-     "id": "273:3/7/32",
+     "id": "274:3/7/32",
      "label": "m_ha",
      "group": "Others",
      "paths": [
@@ -116946,7 +117000,7 @@
      "motionPaths": []
     },
     {
-     "id": "274:3/9/54-56",
+     "id": "275:3/9/54-56",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -116957,7 +117011,7 @@
      "motionPaths": []
     },
     {
-     "id": "275:4/10/34",
+     "id": "276:4/10/34",
      "label": "cors",
      "group": "Others",
      "paths": [
@@ -116966,7 +117020,7 @@
      "motionPaths": []
     },
     {
-     "id": "276:6/0/39-40;58",
+     "id": "277:6/0/39-40;58",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -116976,7 +117030,7 @@
      "motionPaths": []
     },
     {
-     "id": "277:199/85",
+     "id": "278:199/85",
      "label": "Uriel Blade",
      "group": "NPC WS",
      "paths": [
@@ -116985,7 +117039,7 @@
      "motionPaths": []
     },
     {
-     "id": "278:199/37",
+     "id": "279:199/37",
      "label": "Volant Angon",
      "group": "NPC WS",
      "paths": [
@@ -116994,7 +117048,7 @@
      "motionPaths": []
     },
     {
-     "id": "279:202/27",
+     "id": "280:202/27",
      "label": "Spine Chiller",
      "group": "NPC WS",
      "paths": [
@@ -117003,7 +117057,7 @@
      "motionPaths": []
     },
     {
-     "id": "280:204/26",
+     "id": "281:204/26",
      "label": "Spine Chiller",
      "group": "NPC WS",
      "paths": [
@@ -117012,7 +117066,7 @@
      "motionPaths": []
     },
     {
-     "id": "281:204/27",
+     "id": "282:204/27",
      "label": "Cruel Riposte",
      "group": "NPC WS",
      "paths": [
@@ -117021,7 +117075,7 @@
      "motionPaths": []
     },
     {
-     "id": "282:239/90",
+     "id": "283:239/90",
      "label": "Savage Swordhand",
      "group": "NPC WS",
      "paths": [
@@ -117030,7 +117084,7 @@
      "motionPaths": []
     },
     {
-     "id": "283:246/74",
+     "id": "284:246/74",
      "label": "Great Divide",
      "group": "NPC WS",
      "paths": [
@@ -117039,7 +117093,7 @@
      "motionPaths": []
     },
     {
-     "id": "284:192/78",
+     "id": "285:192/78",
      "label": "Drain Samba",
      "group": "Dancer",
      "paths": [
@@ -117048,7 +117102,7 @@
      "motionPaths": []
     },
     {
-     "id": "285:192/79",
+     "id": "286:192/79",
      "label": "Drain Samba II",
      "group": "Dancer",
      "paths": [
@@ -117057,7 +117111,7 @@
      "motionPaths": []
     },
     {
-     "id": "286:192/80",
+     "id": "287:192/80",
      "label": "Drain Samba III",
      "group": "Dancer",
      "paths": [
@@ -117066,7 +117120,7 @@
      "motionPaths": []
     },
     {
-     "id": "287:192/81",
+     "id": "288:192/81",
      "label": "Aspir Samba",
      "group": "Dancer",
      "paths": [
@@ -117075,7 +117129,7 @@
      "motionPaths": []
     },
     {
-     "id": "288:192/82",
+     "id": "289:192/82",
      "label": "Aspir Samba II",
      "group": "Dancer",
      "paths": [
@@ -117084,7 +117138,7 @@
      "motionPaths": []
     },
     {
-     "id": "289:192/83",
+     "id": "290:192/83",
      "label": "Haste Samba",
      "group": "Dancer",
      "paths": [
@@ -117093,7 +117147,7 @@
      "motionPaths": []
     },
     {
-     "id": "290:192/84",
+     "id": "291:192/84",
      "label": "Curing Waltz",
      "group": "Dancer",
      "paths": [
@@ -117102,7 +117156,7 @@
      "motionPaths": []
     },
     {
-     "id": "291:192/85",
+     "id": "292:192/85",
      "label": "Curing Waltz II",
      "group": "Dancer",
      "paths": [
@@ -117111,7 +117165,7 @@
      "motionPaths": []
     },
     {
-     "id": "292:192/86",
+     "id": "293:192/86",
      "label": "Curing Waltz III",
      "group": "Dancer",
      "paths": [
@@ -117120,7 +117174,7 @@
      "motionPaths": []
     },
     {
-     "id": "293:192/87",
+     "id": "294:192/87",
      "label": "Curing Waltz IV",
      "group": "Dancer",
      "paths": [
@@ -117129,7 +117183,7 @@
      "motionPaths": []
     },
     {
-     "id": "294:261/124",
+     "id": "295:261/124",
      "label": "Curing Waltz V",
      "group": "Dancer",
      "paths": [
@@ -117138,7 +117192,7 @@
      "motionPaths": []
     },
     {
-     "id": "295:192/88",
+     "id": "296:192/88",
      "label": "Healing Waltz",
      "group": "Dancer",
      "paths": [
@@ -117147,7 +117201,7 @@
      "motionPaths": []
     },
     {
-     "id": "296:192/89",
+     "id": "297:192/89",
      "label": "Divine Waltz",
      "group": "Dancer",
      "paths": [
@@ -117156,7 +117210,7 @@
      "motionPaths": []
     },
     {
-     "id": "297:246/117",
+     "id": "298:246/117",
      "label": "Divine Waltz II",
      "group": "Dancer",
      "paths": [
@@ -117165,7 +117219,7 @@
      "motionPaths": []
     },
     {
-     "id": "298:192/90",
+     "id": "299:192/90",
      "label": "Spectral Jig",
      "group": "Dancer",
      "paths": [
@@ -117174,7 +117228,7 @@
      "motionPaths": []
     },
     {
-     "id": "299:192/91",
+     "id": "300:192/91",
      "label": "Chocobo Jig",
      "group": "Dancer",
      "paths": [
@@ -117183,7 +117237,7 @@
      "motionPaths": []
     },
     {
-     "id": "300:192/92-100",
+     "id": "301:192/92-100",
      "label": "Steps",
      "group": "Dancer",
      "paths": [
@@ -117200,7 +117254,7 @@
      "motionPaths": []
     },
     {
-     "id": "301:192/101-109",
+     "id": "302:192/101-109",
      "label": "Flourishes",
      "group": "Dancer",
      "paths": [
@@ -117217,7 +117271,7 @@
      "motionPaths": []
     },
     {
-     "id": "302:268/39",
+     "id": "303:268/39",
      "label": "New Samba",
      "group": "Dancer",
      "paths": [
@@ -117226,7 +117280,7 @@
      "motionPaths": []
     },
     {
-     "id": "303:296/117-121",
+     "id": "304:296/117-121",
      "label": "Wards?",
      "group": "Variations",
      "paths": [
@@ -117239,7 +117293,7 @@
      "motionPaths": []
     },
     {
-     "id": "304:296/122-127;297/0-2",
+     "id": "305:296/122-127;297/0-2",
      "label": "Runefencer animation type 1",
      "group": "Variations",
      "paths": [
@@ -117256,7 +117310,7 @@
      "motionPaths": []
     },
     {
-     "id": "305:297/3-11",
+     "id": "306:297/3-11",
      "label": "Runefencer animation type 2",
      "group": "Variations",
      "paths": [
@@ -117273,7 +117327,7 @@
      "motionPaths": []
     },
     {
-     "id": "306:297/12-20",
+     "id": "307:297/12-20",
      "label": "Runefencer animation type 3",
      "group": "Variations",
      "paths": [
@@ -117290,7 +117344,7 @@
      "motionPaths": []
     },
     {
-     "id": "307:1/219/47",
+     "id": "308:1/219/47",
      "label": "ElvaanM Random Animations",
      "group": "Variations",
      "paths": [
@@ -117299,7 +117353,7 @@
      "motionPaths": []
     },
     {
-     "id": "308:1/297/21",
+     "id": "309:1/297/21",
      "label": "ElvaanM Clothing Moving Animations",
      "group": "Variations",
      "paths": [
@@ -117308,7 +117362,7 @@
      "motionPaths": []
     },
     {
-     "id": "318:199/37",
+     "id": "319:199/37",
      "label": "WS 256",
      "group": "WS (Unreleased)",
      "paths": [
@@ -117317,7 +117371,7 @@
      "motionPaths": []
     },
     {
-     "id": "319:199/85",
+     "id": "320:199/85",
      "label": "WS 257",
      "group": "WS (Unreleased)",
      "paths": [
@@ -117326,7 +117380,7 @@
      "motionPaths": []
     },
     {
-     "id": "320:204/26",
+     "id": "321:204/26",
      "label": "WS 258",
      "group": "WS (Unreleased)",
      "paths": [
@@ -117335,7 +117389,7 @@
      "motionPaths": []
     },
     {
-     "id": "321:204/27",
+     "id": "322:204/27",
      "label": "WS 259",
      "group": "WS (Unreleased)",
      "paths": [
@@ -117344,7 +117398,7 @@
      "motionPaths": []
     },
     {
-     "id": "322:217/15",
+     "id": "323:217/15",
      "label": "WS 260",
      "group": "WS (Unreleased)",
      "paths": [
@@ -117353,7 +117407,7 @@
      "motionPaths": []
     },
     {
-     "id": "323:239/90",
+     "id": "324:239/90",
      "label": "WS 261",
      "group": "WS (Unreleased)",
      "paths": [
@@ -117362,7 +117416,7 @@
      "motionPaths": []
     },
     {
-     "id": "324:246/74",
+     "id": "325:246/74",
      "label": "WS 262",
      "group": "WS (Unreleased)",
      "paths": [
@@ -117371,7 +117425,7 @@
      "motionPaths": []
     },
     {
-     "id": "325:256/24",
+     "id": "326:256/24",
      "label": "WS 263",
      "group": "WS (Unreleased)",
      "paths": [
@@ -117380,7 +117434,7 @@
      "motionPaths": []
     },
     {
-     "id": "326:357/33",
+     "id": "327:357/33",
      "label": "WS 264",
      "group": "WS (Unreleased)",
      "paths": [
@@ -152684,6 +152738,15 @@
      "motionPaths": []
     },
     {
+     "id": "119:316/36",
+     "label": "Dimidiation",
+     "group": "G. Sword",
+     "paths": [
+      "ROM\\316\\36.DAT"
+     ],
+     "motionPaths": []
+    },
+    {
      "id": "91:82/55",
      "label": "Raging Axe",
      "group": "Axe",
@@ -153638,7 +153701,16 @@
      "motionPaths": []
     },
     {
-     "id": "197:82/98",
+     "id": "205:316/17",
+     "label": "Exudation",
+     "group": "Club",
+     "paths": [
+      "ROM\\316\\35.DAT"
+     ],
+     "motionPaths": []
+    },
+    {
+     "id": "198:82/98",
      "label": "Heavy Swing",
      "group": "Staff",
      "paths": [
@@ -153647,7 +153719,7 @@
      "motionPaths": []
     },
     {
-     "id": "198:82/99",
+     "id": "199:82/99",
      "label": "Rock Crusher",
      "group": "Staff",
      "paths": [
@@ -153656,7 +153728,7 @@
      "motionPaths": []
     },
     {
-     "id": "199:82/100",
+     "id": "200:82/100",
      "label": "Earth Crusher",
      "group": "Staff",
      "paths": [
@@ -153665,7 +153737,7 @@
      "motionPaths": []
     },
     {
-     "id": "200:82/101",
+     "id": "201:82/101",
      "label": "Starburst",
      "group": "Staff",
      "paths": [
@@ -153674,7 +153746,7 @@
      "motionPaths": []
     },
     {
-     "id": "201:82/102",
+     "id": "202:82/102",
      "label": "Sunburst",
      "group": "Staff",
      "paths": [
@@ -153683,7 +153755,7 @@
      "motionPaths": []
     },
     {
-     "id": "202:82/103",
+     "id": "203:82/103",
      "label": "Shell Crusher",
      "group": "Staff",
      "paths": [
@@ -153692,7 +153764,7 @@
      "motionPaths": []
     },
     {
-     "id": "203:82/104",
+     "id": "204:82/104",
      "label": "Full Swing",
      "group": "Staff",
      "paths": [
@@ -153701,7 +153773,7 @@
      "motionPaths": []
     },
     {
-     "id": "204:103/123",
+     "id": "205:103/123",
      "label": "Spirit Taker",
      "group": "Staff",
      "paths": [
@@ -153710,7 +153782,7 @@
      "motionPaths": []
     },
     {
-     "id": "205:103/124",
+     "id": "206:103/124",
      "label": "Retribution",
      "group": "Staff",
      "paths": [
@@ -153719,7 +153791,7 @@
      "motionPaths": []
     },
     {
-     "id": "206:140/104",
+     "id": "207:140/104",
      "label": "Gate of Tartarus",
      "group": "Staff",
      "paths": [
@@ -153728,7 +153800,7 @@
      "motionPaths": []
     },
     {
-     "id": "207:208/70",
+     "id": "208:208/70",
      "label": "Vidohunir",
      "group": "Staff",
      "paths": [
@@ -153737,7 +153809,7 @@
      "motionPaths": []
     },
     {
-     "id": "208:208/71",
+     "id": "209:208/71",
      "label": "Garland of Bliss",
      "group": "Staff",
      "paths": [
@@ -153746,7 +153818,7 @@
      "motionPaths": []
     },
     {
-     "id": "209:208/72",
+     "id": "210:208/72",
      "label": "Omniscience",
      "group": "Staff",
      "paths": [
@@ -153755,7 +153827,7 @@
      "motionPaths": []
     },
     {
-     "id": "210:240/22",
+     "id": "211:240/22",
      "label": "Tartarus Torpor",
      "group": "Staff",
      "paths": [
@@ -153764,7 +153836,7 @@
      "motionPaths": []
     },
     {
-     "id": "211:244/107",
+     "id": "212:244/107",
      "label": "Cataclysm",
      "group": "Staff",
      "paths": [
@@ -153773,7 +153845,7 @@
      "motionPaths": []
     },
     {
-     "id": "212:257/113",
+     "id": "213:257/113",
      "label": "Myrkr",
      "group": "Staff",
      "paths": [
@@ -153782,7 +153854,7 @@
      "motionPaths": []
     },
     {
-     "id": "213:270/26",
+     "id": "214:270/26",
      "label": "Shattersoul",
      "group": "Staff",
      "paths": [
@@ -153791,7 +153863,7 @@
      "motionPaths": []
     },
     {
-     "id": "214:82/110",
+     "id": "215:82/110",
      "label": "Eagle Eye Shot",
      "group": "Archery",
      "paths": [
@@ -153800,7 +153872,7 @@
      "motionPaths": []
     },
     {
-     "id": "215:82/112",
+     "id": "216:82/112",
      "label": "Shadowbind",
      "group": "Archery",
      "paths": [
@@ -153809,7 +153881,7 @@
      "motionPaths": []
     },
     {
-     "id": "216:76/113",
+     "id": "217:76/113",
      "label": "Flaming Arrow",
      "group": "Archery",
      "paths": [
@@ -153818,7 +153890,7 @@
      "motionPaths": []
     },
     {
-     "id": "217:76/114",
+     "id": "218:76/114",
      "label": "Piercing Arrow",
      "group": "Archery",
      "paths": [
@@ -153827,7 +153899,7 @@
      "motionPaths": []
     },
     {
-     "id": "218:76/115",
+     "id": "219:76/115",
      "label": "Dulling Arrow",
      "group": "Archery",
      "paths": [
@@ -153836,7 +153908,7 @@
      "motionPaths": []
     },
     {
-     "id": "219:76/116",
+     "id": "220:76/116",
      "label": "Unknown WS",
      "group": "Archery",
      "paths": [
@@ -153845,7 +153917,7 @@
      "motionPaths": []
     },
     {
-     "id": "220:76/117",
+     "id": "221:76/117",
      "label": "Sidewinder",
      "group": "Archery",
      "paths": [
@@ -153854,7 +153926,7 @@
      "motionPaths": []
     },
     {
-     "id": "221:104/30",
+     "id": "222:104/30",
      "label": "Blast Arrow",
      "group": "Archery",
      "paths": [
@@ -153863,7 +153935,7 @@
      "motionPaths": []
     },
     {
-     "id": "222:104/31",
+     "id": "223:104/31",
      "label": "Arching Arrow",
      "group": "Archery",
      "paths": [
@@ -153872,7 +153944,7 @@
      "motionPaths": []
     },
     {
-     "id": "223:104/32",
+     "id": "224:104/32",
      "label": "Empyreal Arrow",
      "group": "Archery",
      "paths": [
@@ -153881,7 +153953,7 @@
      "motionPaths": []
     },
     {
-     "id": "224:140/107",
+     "id": "225:140/107",
      "label": "Namas Arrow",
      "group": "Archery",
      "paths": [
@@ -153890,7 +153962,7 @@
      "motionPaths": []
     },
     {
-     "id": "225:245/37",
+     "id": "226:245/37",
      "label": "Refulgent Arrow",
      "group": "Archery",
      "paths": [
@@ -153899,7 +153971,7 @@
      "motionPaths": []
     },
     {
-     "id": "226:257/9",
+     "id": "227:257/9",
      "label": "Jishnu's Radiance",
      "group": "Archery",
      "paths": [
@@ -153908,7 +153980,7 @@
      "motionPaths": []
     },
     {
-     "id": "227:269/112",
+     "id": "228:269/112",
      "label": "Apex Arrow",
      "group": "Archery",
      "paths": [
@@ -153917,7 +153989,7 @@
      "motionPaths": []
     },
     {
-     "id": "228:140/107",
+     "id": "229:140/107",
      "label": "Sarv",
      "group": "Archery",
      "paths": [
@@ -153926,7 +153998,7 @@
      "motionPaths": []
     },
     {
-     "id": "229:82/111",
+     "id": "230:82/111",
      "label": "Eagle Eye Shot",
      "group": "Marksmanship",
      "paths": [
@@ -153935,7 +154007,7 @@
      "motionPaths": []
     },
     {
-     "id": "230:82/113",
+     "id": "231:82/113",
      "label": "Shadowbind",
      "group": "Marksmanship",
      "paths": [
@@ -153944,7 +154016,7 @@
      "motionPaths": []
     },
     {
-     "id": "231:76/118",
+     "id": "232:76/118",
      "label": "Hot Shot",
      "group": "Marksmanship",
      "paths": [
@@ -153953,7 +154025,7 @@
      "motionPaths": []
     },
     {
-     "id": "232:76/119",
+     "id": "233:76/119",
      "label": "Split Shot",
      "group": "Marksmanship",
      "paths": [
@@ -153962,7 +154034,7 @@
      "motionPaths": []
     },
     {
-     "id": "233:76/120",
+     "id": "234:76/120",
      "label": "Sniper Shot",
      "group": "Marksmanship",
      "paths": [
@@ -153971,7 +154043,7 @@
      "motionPaths": []
     },
     {
-     "id": "234:76/121",
+     "id": "235:76/121",
      "label": "Unknown WS",
      "group": "Marksmanship",
      "paths": [
@@ -153980,7 +154052,7 @@
      "motionPaths": []
     },
     {
-     "id": "235:76/122",
+     "id": "236:76/122",
      "label": "Slug Shot",
      "group": "Marksmanship",
      "paths": [
@@ -153989,7 +154061,7 @@
      "motionPaths": []
     },
     {
-     "id": "236:104/33",
+     "id": "237:104/33",
      "label": "Blast Shot",
      "group": "Marksmanship",
      "paths": [
@@ -153998,7 +154070,7 @@
      "motionPaths": []
     },
     {
-     "id": "237:104/34",
+     "id": "238:104/34",
      "label": "Heavy Shot",
      "group": "Marksmanship",
      "paths": [
@@ -154007,7 +154079,7 @@
      "motionPaths": []
     },
     {
-     "id": "238:104/35",
+     "id": "239:104/35",
      "label": "Detonator",
      "group": "Marksmanship",
      "paths": [
@@ -154016,7 +154088,7 @@
      "motionPaths": []
     },
     {
-     "id": "239:140/108",
+     "id": "240:140/108",
      "label": "Coronach",
      "group": "Marksmanship",
      "paths": [
@@ -154025,7 +154097,7 @@
      "motionPaths": []
     },
     {
-     "id": "240:208/75",
+     "id": "241:208/75",
      "label": "Trueflight",
      "group": "Marksmanship",
      "paths": [
@@ -154034,7 +154106,7 @@
      "motionPaths": []
     },
     {
-     "id": "241:208/76",
+     "id": "242:208/76",
      "label": "Leaden Salute",
      "group": "Marksmanship",
      "paths": [
@@ -154043,7 +154115,7 @@
      "motionPaths": []
     },
     {
-     "id": "242:243/18",
+     "id": "243:243/18",
      "label": "Numbing Shot",
      "group": "Marksmanship",
      "paths": [
@@ -154052,7 +154124,7 @@
      "motionPaths": []
     },
     {
-     "id": "243:257/10",
+     "id": "244:257/10",
      "label": "Wildfire",
      "group": "Marksmanship",
      "paths": [
@@ -154061,7 +154133,7 @@
      "motionPaths": []
     },
     {
-     "id": "244:271/4",
+     "id": "245:271/4",
      "label": "Last Stand",
      "group": "Marksmanship",
      "paths": [
@@ -154070,7 +154142,7 @@
      "motionPaths": []
     },
     {
-     "id": "245:140/108",
+     "id": "246:140/108",
      "label": "Terminus",
      "group": "Marksmanship",
      "paths": [
@@ -154079,7 +154151,7 @@
      "motionPaths": []
     },
     {
-     "id": "246:143/24",
+     "id": "247:143/24",
      "label": "Mannequin",
      "group": "Mannequin",
      "paths": [
@@ -154091,7 +154163,7 @@
      ]
     },
     {
-     "id": "247:153/124-125",
+     "id": "248:153/124-125",
      "label": "Mannequin",
      "group": "Mannequin",
      "paths": [
@@ -154101,7 +154173,7 @@
      "motionPaths": []
     },
     {
-     "id": "248:69/88-90",
+     "id": "249:69/88-90",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -154112,7 +154184,7 @@
      "motionPaths": []
     },
     {
-     "id": "249:71/5-10",
+     "id": "250:71/5-10",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -154126,7 +154198,7 @@
      "motionPaths": []
     },
     {
-     "id": "250:71/102",
+     "id": "251:71/102",
      "label": "def_",
      "group": "Others",
      "paths": [
@@ -154138,7 +154210,7 @@
      ]
     },
     {
-     "id": "251:72/97-100;106",
+     "id": "252:72/97-100;106",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -154159,7 +154231,7 @@
      ]
     },
     {
-     "id": "252:82/30",
+     "id": "253:82/30",
      "label": "dumm",
      "group": "Others",
      "paths": [
@@ -154168,7 +154240,7 @@
      "motionPaths": []
     },
     {
-     "id": "253:128/9",
+     "id": "254:128/9",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -154177,7 +154249,7 @@
      "motionPaths": []
     },
     {
-     "id": "254:151/108-111",
+     "id": "255:151/108-111",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -154189,7 +154261,7 @@
      "motionPaths": []
     },
     {
-     "id": "255:156/76",
+     "id": "256:156/76",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -154198,7 +154270,7 @@
      "motionPaths": []
     },
     {
-     "id": "256:189/73",
+     "id": "257:189/73",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -154207,7 +154279,7 @@
      "motionPaths": []
     },
     {
-     "id": "257:196/41-42",
+     "id": "258:196/41-42",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -154217,7 +154289,7 @@
      "motionPaths": []
     },
     {
-     "id": "258:202/6-7",
+     "id": "259:202/6-7",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -154227,7 +154299,7 @@
      "motionPaths": []
     },
     {
-     "id": "259:213/13-22",
+     "id": "260:213/13-22",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -154245,7 +154317,7 @@
      "motionPaths": []
     },
     {
-     "id": "260:3/4/54-58",
+     "id": "261:3/4/54-58",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -154258,7 +154330,7 @@
      "motionPaths": []
     },
     {
-     "id": "261:3/8/93-97",
+     "id": "262:3/8/93-97",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -154271,7 +154343,7 @@
      "motionPaths": []
     },
     {
-     "id": "262:202/39",
+     "id": "263:202/39",
      "label": "Prominence",
      "group": "NPC WS",
      "paths": [
@@ -154280,7 +154352,7 @@
      "motionPaths": []
     },
     {
-     "id": "263:204/32",
+     "id": "264:204/32",
      "label": "Arrow of Apathy",
      "group": "NPC WS",
      "paths": [
@@ -154289,7 +154361,7 @@
      "motionPaths": []
     },
     {
-     "id": "264:204/33",
+     "id": "265:204/33",
      "label": "Unknown WS",
      "group": "NPC WS",
      "paths": [
@@ -154298,7 +154370,7 @@
      "motionPaths": []
     },
     {
-     "id": "265:193/26",
+     "id": "266:193/26",
      "label": "Drain Samba",
      "group": "Dancer",
      "paths": [
@@ -154307,7 +154379,7 @@
      "motionPaths": []
     },
     {
-     "id": "266:193/27",
+     "id": "267:193/27",
      "label": "Drain Samba II",
      "group": "Dancer",
      "paths": [
@@ -154316,7 +154388,7 @@
      "motionPaths": []
     },
     {
-     "id": "267:193/28",
+     "id": "268:193/28",
      "label": "Drain Samba III",
      "group": "Dancer",
      "paths": [
@@ -154325,7 +154397,7 @@
      "motionPaths": []
     },
     {
-     "id": "268:193/29",
+     "id": "269:193/29",
      "label": "Aspir Samba",
      "group": "Dancer",
      "paths": [
@@ -154334,7 +154406,7 @@
      "motionPaths": []
     },
     {
-     "id": "269:193/30",
+     "id": "270:193/30",
      "label": "Aspir Samba II",
      "group": "Dancer",
      "paths": [
@@ -154343,7 +154415,7 @@
      "motionPaths": []
     },
     {
-     "id": "270:193/31",
+     "id": "271:193/31",
      "label": "Haste Samba",
      "group": "Dancer",
      "paths": [
@@ -154352,7 +154424,7 @@
      "motionPaths": []
     },
     {
-     "id": "271:193/32",
+     "id": "272:193/32",
      "label": "Curing Waltz",
      "group": "Dancer",
      "paths": [
@@ -154361,7 +154433,7 @@
      "motionPaths": []
     },
     {
-     "id": "272:193/33",
+     "id": "273:193/33",
      "label": "Curing Waltz II",
      "group": "Dancer",
      "paths": [
@@ -154370,7 +154442,7 @@
      "motionPaths": []
     },
     {
-     "id": "273:193/34",
+     "id": "274:193/34",
      "label": "Curing Waltz III",
      "group": "Dancer",
      "paths": [
@@ -154379,7 +154451,7 @@
      "motionPaths": []
     },
     {
-     "id": "274:193/35",
+     "id": "275:193/35",
      "label": "Curing Waltz IV",
      "group": "Dancer",
      "paths": [
@@ -154388,7 +154460,7 @@
      "motionPaths": []
     },
     {
-     "id": "275:261/125",
+     "id": "276:261/125",
      "label": "Curing Waltz V",
      "group": "Dancer",
      "paths": [
@@ -154397,7 +154469,7 @@
      "motionPaths": []
     },
     {
-     "id": "276:193/36",
+     "id": "277:193/36",
      "label": "Healing Waltz",
      "group": "Dancer",
      "paths": [
@@ -154406,7 +154478,7 @@
      "motionPaths": []
     },
     {
-     "id": "277:193/37",
+     "id": "278:193/37",
      "label": "Divine Waltz",
      "group": "Dancer",
      "paths": [
@@ -154415,7 +154487,7 @@
      "motionPaths": []
     },
     {
-     "id": "278:246/118",
+     "id": "279:246/118",
      "label": "Divine Waltz II",
      "group": "Dancer",
      "paths": [
@@ -154424,7 +154496,7 @@
      "motionPaths": []
     },
     {
-     "id": "279:193/38",
+     "id": "280:193/38",
      "label": "Spectral Jig",
      "group": "Dancer",
      "paths": [
@@ -154433,7 +154505,7 @@
      "motionPaths": []
     },
     {
-     "id": "280:193/39",
+     "id": "281:193/39",
      "label": "Chocobo Jig",
      "group": "Dancer",
      "paths": [
@@ -154442,7 +154514,7 @@
      "motionPaths": []
     },
     {
-     "id": "281:139/40-48",
+     "id": "282:139/40-48",
      "label": "Steps",
      "group": "Dancer",
      "paths": [
@@ -154459,7 +154531,7 @@
      "motionPaths": []
     },
     {
-     "id": "282:139/49-57",
+     "id": "283:139/49-57",
      "label": "Flourishes",
      "group": "Dancer",
      "paths": [
@@ -154476,7 +154548,7 @@
      "motionPaths": []
     },
     {
-     "id": "283:268/40",
+     "id": "284:268/40",
      "label": "New samba",
      "group": "Dancer",
      "paths": [
@@ -154485,7 +154557,7 @@
      "motionPaths": []
     },
     {
-     "id": "284:297/85-89",
+     "id": "285:297/85-89",
      "label": "Wards?",
      "group": "Variations",
      "paths": [
@@ -154498,7 +154570,7 @@
      "motionPaths": []
     },
     {
-     "id": "285:297/90-98",
+     "id": "286:297/90-98",
      "label": "Runefencer animation type 1",
      "group": "Variations",
      "paths": [
@@ -154515,7 +154587,7 @@
      "motionPaths": []
     },
     {
-     "id": "286:297/99-109",
+     "id": "287:297/99-109",
      "label": "Runefencer animation type 2",
      "group": "Variations",
      "paths": [
@@ -154534,7 +154606,7 @@
      "motionPaths": []
     },
     {
-     "id": "287:297/110-116",
+     "id": "288:297/110-116",
      "label": "Runefencer animation type 3",
      "group": "Variations",
      "paths": [
@@ -154549,7 +154621,7 @@
      "motionPaths": []
     },
     {
-     "id": "295:202/39",
+     "id": "296:202/39",
      "label": "WS 256",
      "group": "WS (Unreleased)",
      "paths": [
@@ -154558,7 +154630,7 @@
      "motionPaths": []
     },
     {
-     "id": "296:204/32",
+     "id": "297:204/32",
      "label": "WS 257",
      "group": "WS (Unreleased)",
      "paths": [
@@ -154567,7 +154639,7 @@
      "motionPaths": []
     },
     {
-     "id": "297:204/33",
+     "id": "298:204/33",
      "label": "WS 258",
      "group": "WS (Unreleased)",
      "paths": [
@@ -191923,6 +191995,15 @@
      ]
     },
     {
+     "id": "119:316/42",
+     "label": "Dimidiation",
+     "group": "G. Sword",
+     "paths": [
+      "ROM\\316\\42.DAT"
+     ],
+     "motionPaths": []
+    },
+    {
      "id": "95:84/51",
      "label": "Raging Axe",
      "group": "Axe",
@@ -194515,7 +194596,16 @@
      ]
     },
     {
-     "id": "201:84/94",
+     "id": "208:316/17",
+     "label": "Exudation",
+     "group": "Club",
+     "paths": [
+      "ROM\\316\\41.DAT"
+     ],
+     "motionPaths": []
+    },
+    {
+     "id": "202:84/94",
      "label": "Heavy Swing",
      "group": "Staff",
      "paths": [
@@ -194524,7 +194614,7 @@
      "motionPaths": []
     },
     {
-     "id": "202:84/95",
+     "id": "203:84/95",
      "label": "Rock Crusher",
      "group": "Staff",
      "paths": [
@@ -194533,7 +194623,7 @@
      "motionPaths": []
     },
     {
-     "id": "203:84/96",
+     "id": "204:84/96",
      "label": "Earth Crusher",
      "group": "Staff",
      "paths": [
@@ -194542,7 +194632,7 @@
      "motionPaths": []
     },
     {
-     "id": "204:84/97",
+     "id": "205:84/97",
      "label": "Starburst",
      "group": "Staff",
      "paths": [
@@ -194551,7 +194641,7 @@
      "motionPaths": []
     },
     {
-     "id": "205:84/98",
+     "id": "206:84/98",
      "label": "Sunburst",
      "group": "Staff",
      "paths": [
@@ -194560,7 +194650,7 @@
      "motionPaths": []
     },
     {
-     "id": "206:84/99",
+     "id": "207:84/99",
      "label": "Shell Crusher",
      "group": "Staff",
      "paths": [
@@ -194569,7 +194659,7 @@
      "motionPaths": []
     },
     {
-     "id": "207:84/100",
+     "id": "208:84/100",
      "label": "Full Swing",
      "group": "Staff",
      "paths": [
@@ -194578,7 +194668,7 @@
      "motionPaths": []
     },
     {
-     "id": "208:105/24",
+     "id": "209:105/24",
      "label": "Spirit Taker",
      "group": "Staff",
      "paths": [
@@ -194631,7 +194721,7 @@
      ]
     },
     {
-     "id": "209:105/25",
+     "id": "210:105/25",
      "label": "Retribution",
      "group": "Staff",
      "paths": [
@@ -194684,7 +194774,7 @@
      ]
     },
     {
-     "id": "210:141/18",
+     "id": "211:141/18",
      "label": "Gate of Tartarus",
      "group": "Staff",
      "paths": [
@@ -194722,7 +194812,7 @@
      ]
     },
     {
-     "id": "211:208/115",
+     "id": "212:208/115",
      "label": "Vidohunir",
      "group": "Staff",
      "paths": [
@@ -194731,7 +194821,7 @@
      "motionPaths": []
     },
     {
-     "id": "212:208/116",
+     "id": "213:208/116",
      "label": "Garland of Bliss",
      "group": "Staff",
      "paths": [
@@ -194740,7 +194830,7 @@
      "motionPaths": []
     },
     {
-     "id": "213:208/117",
+     "id": "214:208/117",
      "label": "Omniscience",
      "group": "Staff",
      "paths": [
@@ -194749,7 +194839,7 @@
      "motionPaths": []
     },
     {
-     "id": "214:240/63",
+     "id": "215:240/63",
      "label": "Tartarus Torpor",
      "group": "Staff",
      "paths": [
@@ -194758,7 +194848,7 @@
      "motionPaths": []
     },
     {
-     "id": "215:244/122",
+     "id": "216:244/122",
      "label": "Cataclysm",
      "group": "Staff",
      "paths": [
@@ -194767,7 +194857,7 @@
      "motionPaths": []
     },
     {
-     "id": "216:257/125",
+     "id": "217:257/125",
      "label": "Myrkr",
      "group": "Staff",
      "paths": [
@@ -194776,7 +194866,7 @@
      "motionPaths": []
     },
     {
-     "id": "217:270/32",
+     "id": "218:270/32",
      "label": "Shattersoul",
      "group": "Staff",
      "paths": [
@@ -194785,7 +194875,7 @@
      "motionPaths": []
     },
     {
-     "id": "218:141/18",
+     "id": "219:141/18",
      "label": "Oshala",
      "group": "Staff",
      "paths": [
@@ -194823,7 +194913,7 @@
      ]
     },
     {
-     "id": "219:84/106",
+     "id": "220:84/106",
      "label": "Eagle Eye Shot",
      "group": "Archery",
      "paths": [
@@ -194832,7 +194922,7 @@
      "motionPaths": []
     },
     {
-     "id": "220:84/108",
+     "id": "221:84/108",
      "label": "Shadowbind",
      "group": "Archery",
      "paths": [
@@ -194841,7 +194931,7 @@
      "motionPaths": []
     },
     {
-     "id": "221:76/113",
+     "id": "222:76/113",
      "label": "Flaming Arrow",
      "group": "Archery",
      "paths": [
@@ -194850,7 +194940,7 @@
      "motionPaths": []
     },
     {
-     "id": "222:76/114",
+     "id": "223:76/114",
      "label": "Piercing Arrow",
      "group": "Archery",
      "paths": [
@@ -194859,7 +194949,7 @@
      "motionPaths": []
     },
     {
-     "id": "223:76/115",
+     "id": "224:76/115",
      "label": "Dulling Arrow",
      "group": "Archery",
      "paths": [
@@ -194868,7 +194958,7 @@
      "motionPaths": []
     },
     {
-     "id": "224:76/116",
+     "id": "225:76/116",
      "label": "Unknown WS",
      "group": "Archery",
      "paths": [
@@ -194877,7 +194967,7 @@
      "motionPaths": []
     },
     {
-     "id": "225:76/117",
+     "id": "226:76/117",
      "label": "Sidewinder",
      "group": "Archery",
      "paths": [
@@ -194886,7 +194976,7 @@
      "motionPaths": []
     },
     {
-     "id": "226:105/59",
+     "id": "227:105/59",
      "label": "Blast Arrow",
      "group": "Archery",
      "paths": [
@@ -194939,7 +195029,7 @@
      ]
     },
     {
-     "id": "227:105/60",
+     "id": "228:105/60",
      "label": "Arching Arrow",
      "group": "Archery",
      "paths": [
@@ -194992,7 +195082,7 @@
      ]
     },
     {
-     "id": "228:105/61",
+     "id": "229:105/61",
      "label": "Empyreal Arrow",
      "group": "Archery",
      "paths": [
@@ -195045,7 +195135,7 @@
      ]
     },
     {
-     "id": "229:141/21",
+     "id": "230:141/21",
      "label": "Namas Arrow",
      "group": "Archery",
      "paths": [
@@ -195083,7 +195173,7 @@
      ]
     },
     {
-     "id": "230:245/37",
+     "id": "231:245/37",
      "label": "Refulgent Arrow",
      "group": "Archery",
      "paths": [
@@ -195092,7 +195182,7 @@
      "motionPaths": []
     },
     {
-     "id": "231:257/24",
+     "id": "232:257/24",
      "label": "Jishnu's Radiance",
      "group": "Archery",
      "paths": [
@@ -195101,7 +195191,7 @@
      "motionPaths": []
     },
     {
-     "id": "232:269/118",
+     "id": "233:269/118",
      "label": "Apex Arrow",
      "group": "Archery",
      "paths": [
@@ -195110,7 +195200,7 @@
      "motionPaths": []
     },
     {
-     "id": "233:141/21",
+     "id": "234:141/21",
      "label": "Sarv",
      "group": "Archery",
      "paths": [
@@ -195148,7 +195238,7 @@
      ]
     },
     {
-     "id": "234:84/107",
+     "id": "235:84/107",
      "label": "Eagle Eye Shot",
      "group": "Marksmanship",
      "paths": [
@@ -195157,7 +195247,7 @@
      "motionPaths": []
     },
     {
-     "id": "235:84/109",
+     "id": "236:84/109",
      "label": "Shadowbind",
      "group": "Marksmanship",
      "paths": [
@@ -195166,7 +195256,7 @@
      "motionPaths": []
     },
     {
-     "id": "236:76/118",
+     "id": "237:76/118",
      "label": "Hot Shot",
      "group": "Marksmanship",
      "paths": [
@@ -195175,7 +195265,7 @@
      "motionPaths": []
     },
     {
-     "id": "237:76/119",
+     "id": "238:76/119",
      "label": "Split Shot",
      "group": "Marksmanship",
      "paths": [
@@ -195184,7 +195274,7 @@
      "motionPaths": []
     },
     {
-     "id": "238:76/120",
+     "id": "239:76/120",
      "label": "Sniper Shot",
      "group": "Marksmanship",
      "paths": [
@@ -195193,7 +195283,7 @@
      "motionPaths": []
     },
     {
-     "id": "239:76/121",
+     "id": "240:76/121",
      "label": "Unknown WS",
      "group": "Marksmanship",
      "paths": [
@@ -195202,7 +195292,7 @@
      "motionPaths": []
     },
     {
-     "id": "240:76/122",
+     "id": "241:76/122",
      "label": "Slug Shot",
      "group": "Marksmanship",
      "paths": [
@@ -195211,7 +195301,7 @@
      "motionPaths": []
     },
     {
-     "id": "241:105/62",
+     "id": "242:105/62",
      "label": "Blast Shot",
      "group": "Marksmanship",
      "paths": [
@@ -195264,7 +195354,7 @@
      ]
     },
     {
-     "id": "242:105/63",
+     "id": "243:105/63",
      "label": "Heavy Shot",
      "group": "Marksmanship",
      "paths": [
@@ -195317,7 +195407,7 @@
      ]
     },
     {
-     "id": "243:105/64",
+     "id": "244:105/64",
      "label": "Detonator",
      "group": "Marksmanship",
      "paths": [
@@ -195370,7 +195460,7 @@
      ]
     },
     {
-     "id": "244:141/22",
+     "id": "245:141/22",
      "label": "Coronach",
      "group": "Marksmanship",
      "paths": [
@@ -195408,7 +195498,7 @@
      ]
     },
     {
-     "id": "245:208/120",
+     "id": "246:208/120",
      "label": "Trueflight",
      "group": "Marksmanship",
      "paths": [
@@ -195417,7 +195507,7 @@
      "motionPaths": []
     },
     {
-     "id": "246:208/121",
+     "id": "247:208/121",
      "label": "Leaden Salute",
      "group": "Marksmanship",
      "paths": [
@@ -195426,7 +195516,7 @@
      "motionPaths": []
     },
     {
-     "id": "247:243/42",
+     "id": "248:243/42",
      "label": "Numbing Shot",
      "group": "Marksmanship",
      "paths": [
@@ -195435,7 +195525,7 @@
      "motionPaths": []
     },
     {
-     "id": "248:257/25",
+     "id": "249:257/25",
      "label": "Wildfire",
      "group": "Marksmanship",
      "paths": [
@@ -195444,7 +195534,7 @@
      "motionPaths": []
     },
     {
-     "id": "249:271/10",
+     "id": "250:271/10",
      "label": "Last Stand",
      "group": "Marksmanship",
      "paths": [
@@ -195453,7 +195543,7 @@
      "motionPaths": []
     },
     {
-     "id": "250:141/22",
+     "id": "251:141/22",
      "label": "Terminus",
      "group": "Marksmanship",
      "paths": [
@@ -195491,7 +195581,7 @@
      ]
     },
     {
-     "id": "251:143/30",
+     "id": "252:143/30",
      "label": "Mannequin (Male)",
      "group": "Mannequin",
      "paths": [
@@ -195503,7 +195593,7 @@
      ]
     },
     {
-     "id": "252:143/34",
+     "id": "253:143/34",
      "label": "Mannequin (Female)",
      "group": "Mannequin",
      "paths": [
@@ -195515,7 +195605,7 @@
      ]
     },
     {
-     "id": "253:154/7-8",
+     "id": "254:154/7-8",
      "label": "Mannequin (Male)",
      "group": "Mannequin",
      "paths": [
@@ -195530,7 +195620,7 @@
      ]
     },
     {
-     "id": "254:154/13-14",
+     "id": "255:154/13-14",
      "label": "Mannequin (Female)",
      "group": "Mannequin",
      "paths": [
@@ -195545,7 +195635,7 @@
      ]
     },
     {
-     "id": "255:69/113-117",
+     "id": "256:69/113-117",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -195558,7 +195648,7 @@
      "motionPaths": []
     },
     {
-     "id": "256:71/25-30;32-42",
+     "id": "257:71/25-30;32-42",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -195572,7 +195662,7 @@
      "motionPaths": []
     },
     {
-     "id": "257:71/103-104",
+     "id": "258:71/103-104",
      "label": "def_",
      "group": "Others",
      "paths": [
@@ -195587,7 +195677,7 @@
      ]
     },
     {
-     "id": "258:72/107-114;116",
+     "id": "259:72/107-114;116",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -195620,7 +195710,7 @@
      ]
     },
     {
-     "id": "259:84/26",
+     "id": "260:84/26",
      "label": "dumm",
      "group": "Others",
      "paths": [
@@ -195629,7 +195719,7 @@
      "motionPaths": []
     },
     {
-     "id": "260:100/16",
+     "id": "261:100/16",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -195638,7 +195728,7 @@
      "motionPaths": []
     },
     {
-     "id": "261:122/34-37;45;47-49",
+     "id": "262:122/34-37;45;47-49",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -195650,7 +195740,7 @@
      "motionPaths": []
     },
     {
-     "id": "262:147/20-23;71-75",
+     "id": "263:147/20-23;71-75",
      "label": "dtr_",
      "group": "Others",
      "paths": [
@@ -195671,7 +195761,7 @@
      ]
     },
     {
-     "id": "263:150/15",
+     "id": "264:150/15",
      "label": "t_ku",
      "group": "Others",
      "paths": [
@@ -195680,7 +195770,7 @@
      "motionPaths": []
     },
     {
-     "id": "264:150/16",
+     "id": "265:150/16",
      "label": "t_ch",
      "group": "Others",
      "paths": [
@@ -195689,7 +195779,7 @@
      "motionPaths": []
     },
     {
-     "id": "265:151/91;98-99",
+     "id": "266:151/91;98-99",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -195698,7 +195788,7 @@
      "motionPaths": []
     },
     {
-     "id": "266:168/94",
+     "id": "267:168/94",
      "label": "btl_",
      "group": "Others",
      "paths": [
@@ -195707,7 +195797,7 @@
      "motionPaths": []
     },
     {
-     "id": "267:189/10;83",
+     "id": "268:189/10;83",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -195716,7 +195806,7 @@
      "motionPaths": []
     },
     {
-     "id": "268:2/20/59",
+     "id": "269:2/20/59",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -195725,7 +195815,7 @@
      "motionPaths": []
     },
     {
-     "id": "269:3/4/64-68;74-78",
+     "id": "270:3/4/64-68;74-78",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -195738,7 +195828,7 @@
      "motionPaths": []
     },
     {
-     "id": "270:4/10/22",
+     "id": "271:4/10/22",
      "label": "aht_",
      "group": "Others",
      "paths": [
@@ -195747,7 +195837,7 @@
      "motionPaths": []
     },
     {
-     "id": "271:6/0/51",
+     "id": "272:6/0/51",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -195756,7 +195846,7 @@
      "motionPaths": []
     },
     {
-     "id": "272:8/0/2-3;5;9-10;12-14;16-22;47-57",
+     "id": "273:8/0/2-3;5;9-10;12-14;16-22;47-57",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -195766,7 +195856,7 @@
      "motionPaths": []
     },
     {
-     "id": "273:199/88",
+     "id": "274:199/88",
      "label": "Tartarus Torpor",
      "group": "NPC WS",
      "paths": [
@@ -195775,7 +195865,7 @@
      "motionPaths": []
     },
     {
-     "id": "274:199/89",
+     "id": "275:199/89",
      "label": "Death Knell",
      "group": "NPC WS",
      "paths": [
@@ -195784,7 +195874,7 @@
      "motionPaths": []
     },
     {
-     "id": "275:226/19",
+     "id": "276:226/19",
      "label": "Divine Malison",
      "group": "NPC WS",
      "paths": [
@@ -195793,7 +195883,7 @@
      "motionPaths": []
     },
     {
-     "id": "276:226/20",
+     "id": "277:226/20",
      "label": "Salvation Scythe",
      "group": "NPC WS",
      "paths": [
@@ -195802,7 +195892,7 @@
      "motionPaths": []
     },
     {
-     "id": "277:247/23",
+     "id": "278:247/23",
      "label": "Quietus Sphere",
      "group": "NPC WS",
      "paths": [
@@ -195811,7 +195901,7 @@
      "motionPaths": []
     },
     {
-     "id": "278:193/102",
+     "id": "279:193/102",
      "label": "Drain Samba",
      "group": "Dancer",
      "paths": [
@@ -195820,7 +195910,7 @@
      "motionPaths": []
     },
     {
-     "id": "279:193/103",
+     "id": "280:193/103",
      "label": "Drain Samba II",
      "group": "Dancer",
      "paths": [
@@ -195829,7 +195919,7 @@
      "motionPaths": []
     },
     {
-     "id": "280:193/104",
+     "id": "281:193/104",
      "label": "Drain Samba III",
      "group": "Dancer",
      "paths": [
@@ -195838,7 +195928,7 @@
      "motionPaths": []
     },
     {
-     "id": "281:193/105",
+     "id": "282:193/105",
      "label": "Aspir Samba",
      "group": "Dancer",
      "paths": [
@@ -195847,7 +195937,7 @@
      "motionPaths": []
     },
     {
-     "id": "282:193/106",
+     "id": "283:193/106",
      "label": "Aspir Samba II",
      "group": "Dancer",
      "paths": [
@@ -195856,7 +195946,7 @@
      "motionPaths": []
     },
     {
-     "id": "283:193/107",
+     "id": "284:193/107",
      "label": "Haste Samba",
      "group": "Dancer",
      "paths": [
@@ -195865,7 +195955,7 @@
      "motionPaths": []
     },
     {
-     "id": "284:193/108",
+     "id": "285:193/108",
      "label": "Curing Waltz",
      "group": "Dancer",
      "paths": [
@@ -195874,7 +195964,7 @@
      "motionPaths": []
     },
     {
-     "id": "285:193/109",
+     "id": "286:193/109",
      "label": "Curing Waltz II",
      "group": "Dancer",
      "paths": [
@@ -195883,7 +195973,7 @@
      "motionPaths": []
     },
     {
-     "id": "286:193/110",
+     "id": "287:193/110",
      "label": "Curing Waltz III",
      "group": "Dancer",
      "paths": [
@@ -195892,7 +195982,7 @@
      "motionPaths": []
     },
     {
-     "id": "287:193/111",
+     "id": "288:193/111",
      "label": "Curing Waltz IV",
      "group": "Dancer",
      "paths": [
@@ -195901,7 +195991,7 @@
      "motionPaths": []
     },
     {
-     "id": "288:261/126",
+     "id": "289:261/126",
      "label": "Curing Waltz V",
      "group": "Dancer",
      "paths": [
@@ -195910,7 +196000,7 @@
      "motionPaths": []
     },
     {
-     "id": "289:193/112",
+     "id": "290:193/112",
      "label": "Healing Waltz",
      "group": "Dancer",
      "paths": [
@@ -195919,7 +196009,7 @@
      "motionPaths": []
     },
     {
-     "id": "290:193/113",
+     "id": "291:193/113",
      "label": "Divine Waltz",
      "group": "Dancer",
      "paths": [
@@ -195928,7 +196018,7 @@
      "motionPaths": []
     },
     {
-     "id": "291:246/119",
+     "id": "292:246/119",
      "label": "Divine Waltz II",
      "group": "Dancer",
      "paths": [
@@ -195937,7 +196027,7 @@
      "motionPaths": []
     },
     {
-     "id": "292:193/114",
+     "id": "293:193/114",
      "label": "Spectral Jig",
      "group": "Dancer",
      "paths": [
@@ -195946,7 +196036,7 @@
      "motionPaths": []
     },
     {
-     "id": "293:193/115",
+     "id": "294:193/115",
      "label": "Chocobo Jig",
      "group": "Dancer",
      "paths": [
@@ -195955,7 +196045,7 @@
      "motionPaths": []
     },
     {
-     "id": "294:193/116-124",
+     "id": "295:193/116-124",
      "label": "Steps",
      "group": "Dancer",
      "paths": [
@@ -195972,7 +196062,7 @@
      "motionPaths": []
     },
     {
-     "id": "295:193/125-127;194/0-5",
+     "id": "296:193/125-127;194/0-5",
      "label": "Flourishes",
      "group": "Dancer",
      "paths": [
@@ -195989,7 +196079,7 @@
      "motionPaths": []
     },
     {
-     "id": "296:268/41",
+     "id": "297:268/41",
      "label": "New samba?",
      "group": "Dancer",
      "paths": [
@@ -195998,7 +196088,7 @@
      "motionPaths": []
     },
     {
-     "id": "303:199/88",
+     "id": "304:199/88",
      "label": "WS 256",
      "group": "WS (Unreleased)",
      "paths": [
@@ -196007,7 +196097,7 @@
      "motionPaths": []
     },
     {
-     "id": "304:199/89",
+     "id": "305:199/89",
      "label": "WS 257",
      "group": "WS (Unreleased)",
      "paths": [
@@ -196016,7 +196106,7 @@
      "motionPaths": []
     },
     {
-     "id": "305:226/19",
+     "id": "306:226/19",
      "label": "WS 258",
      "group": "WS (Unreleased)",
      "paths": [
@@ -196025,7 +196115,7 @@
      "motionPaths": []
     },
     {
-     "id": "306:226/20",
+     "id": "307:226/20",
      "label": "WS 259",
      "group": "WS (Unreleased)",
      "paths": [
@@ -196034,7 +196124,7 @@
      "motionPaths": []
     },
     {
-     "id": "307:247/23",
+     "id": "308:247/23",
      "label": "WS 260",
      "group": "WS (Unreleased)",
      "paths": [
@@ -196043,7 +196133,7 @@
      "motionPaths": []
     },
     {
-     "id": "308:298/53",
+     "id": "309:298/53",
      "label": "WS 262",
      "group": "WS (Unreleased)",
      "paths": [
@@ -196052,7 +196142,7 @@
      "motionPaths": []
     },
     {
-     "id": "309:298/56",
+     "id": "310:298/56",
      "label": "WS 263",
      "group": "WS (Unreleased)",
      "paths": [
@@ -196061,7 +196151,7 @@
      "motionPaths": []
     },
     {
-     "id": "310:298/58",
+     "id": "311:298/58",
      "label": "WS 264",
      "group": "WS (Unreleased)",
      "paths": [
@@ -196070,7 +196160,7 @@
      "motionPaths": []
     },
     {
-     "id": "311:357/34",
+     "id": "312:357/34",
      "label": "WS 265",
      "group": "WS (Unreleased)",
      "paths": [
@@ -231614,6 +231704,15 @@
      ]
     },
     {
+     "id": "119:316/48",
+     "label": "Dimidiation",
+     "group": "G. Sword",
+     "paths": [
+      "ROM\\316\\48.DAT"
+     ],
+     "motionPaths": []
+    },
+    {
      "id": "88:86/50",
      "label": "Avalanche Axe",
      "group": "Axe",
@@ -232954,7 +233053,16 @@
      "motionPaths": []
     },
     {
-     "id": "195:316/47",
+     "id": "205:316/17",
+     "label": "Exudation",
+     "group": "Club",
+     "paths": [
+      "ROM\\316\\47.DAT"
+     ],
+     "motionPaths": []
+    },
+    {
+     "id": "196:316/47",
      "label": "Club something",
      "group": "Club",
      "paths": [
@@ -232963,7 +233071,7 @@
      "motionPaths": []
     },
     {
-     "id": "196:245/9",
+     "id": "197:245/9",
      "label": "Cataclysm",
      "group": "Staff",
      "paths": [
@@ -232972,7 +233080,7 @@
      "motionPaths": []
     },
     {
-     "id": "197:86/92",
+     "id": "198:86/92",
      "label": "Earth Crusher",
      "group": "Staff",
      "paths": [
@@ -232981,7 +233089,7 @@
      "motionPaths": []
     },
     {
-     "id": "198:86/96",
+     "id": "199:86/96",
      "label": "Full Swing",
      "group": "Staff",
      "paths": [
@@ -232990,7 +233098,7 @@
      "motionPaths": []
     },
     {
-     "id": "199:209/33",
+     "id": "200:209/33",
      "label": "Garland of Bliss",
      "group": "Staff",
      "paths": [
@@ -232999,7 +233107,7 @@
      "motionPaths": []
     },
     {
-     "id": "200:141/60",
+     "id": "201:141/60",
      "label": "Gate of Tartarus",
      "group": "Staff",
      "paths": [
@@ -233037,7 +233145,7 @@
      ]
     },
     {
-     "id": "201:86/90",
+     "id": "202:86/90",
      "label": "Heavy Swing",
      "group": "Staff",
      "paths": [
@@ -233046,7 +233154,7 @@
      "motionPaths": []
     },
     {
-     "id": "202:258/9",
+     "id": "203:258/9",
      "label": "Myrkr",
      "group": "Staff",
      "paths": [
@@ -233055,7 +233163,7 @@
      "motionPaths": []
     },
     {
-     "id": "203:209/34",
+     "id": "204:209/34",
      "label": "Omniscience",
      "group": "Staff",
      "paths": [
@@ -233064,7 +233172,7 @@
      "motionPaths": []
     },
     {
-     "id": "204:106/54",
+     "id": "205:106/54",
      "label": "Retribution",
      "group": "Staff",
      "paths": [
@@ -233073,7 +233181,7 @@
      "motionPaths": []
     },
     {
-     "id": "205:86/91",
+     "id": "206:86/91",
      "label": "Rock Crusher",
      "group": "Staff",
      "paths": [
@@ -233082,7 +233190,7 @@
      "motionPaths": []
     },
     {
-     "id": "206:270/38",
+     "id": "207:270/38",
      "label": "Shattersoul",
      "group": "Staff",
      "paths": [
@@ -233091,7 +233199,7 @@
      "motionPaths": []
     },
     {
-     "id": "207:86/95",
+     "id": "208:86/95",
      "label": "Shell Crusher",
      "group": "Staff",
      "paths": [
@@ -233100,7 +233208,7 @@
      "motionPaths": []
     },
     {
-     "id": "208:106/53",
+     "id": "209:106/53",
      "label": "Spirit Taker",
      "group": "Staff",
      "paths": [
@@ -233109,7 +233217,7 @@
      "motionPaths": []
     },
     {
-     "id": "209:86/93",
+     "id": "210:86/93",
      "label": "Starburst",
      "group": "Staff",
      "paths": [
@@ -233118,7 +233226,7 @@
      "motionPaths": []
     },
     {
-     "id": "210:86/94",
+     "id": "211:86/94",
      "label": "Sunburst",
      "group": "Staff",
      "paths": [
@@ -233127,7 +233235,7 @@
      "motionPaths": []
     },
     {
-     "id": "211:240/37",
+     "id": "212:240/37",
      "label": "Tartarus Torpor",
      "group": "Staff",
      "paths": [
@@ -233136,7 +233244,7 @@
      "motionPaths": []
     },
     {
-     "id": "212:209/32",
+     "id": "213:209/32",
      "label": "Vidohunir",
      "group": "Staff",
      "paths": [
@@ -233145,7 +233253,7 @@
      "motionPaths": []
     },
     {
-     "id": "213:141/60",
+     "id": "214:141/60",
      "label": "Oshala",
      "group": "Staff",
      "paths": [
@@ -233183,7 +233291,7 @@
      ]
     },
     {
-     "id": "214:269/124",
+     "id": "215:269/124",
      "label": "Apex Arrow",
      "group": "Archery",
      "paths": [
@@ -233192,7 +233300,7 @@
      "motionPaths": []
     },
     {
-     "id": "215:106/89",
+     "id": "216:106/89",
      "label": "Arching Arrow",
      "group": "Archery",
      "paths": [
@@ -233201,7 +233309,7 @@
      "motionPaths": []
     },
     {
-     "id": "216:106/88",
+     "id": "217:106/88",
      "label": "Blast Arrow",
      "group": "Archery",
      "paths": [
@@ -233210,7 +233318,7 @@
      "motionPaths": []
     },
     {
-     "id": "217:76/115",
+     "id": "218:76/115",
      "label": "Dulling Arrow",
      "group": "Archery",
      "paths": [
@@ -233219,7 +233327,7 @@
      "motionPaths": []
     },
     {
-     "id": "218:86/102",
+     "id": "219:86/102",
      "label": "Eagle Eye Shot",
      "group": "Archery",
      "paths": [
@@ -233228,7 +233336,7 @@
      "motionPaths": []
     },
     {
-     "id": "219:106/90",
+     "id": "220:106/90",
      "label": "Empyreal Arrow",
      "group": "Archery",
      "paths": [
@@ -233237,7 +233345,7 @@
      "motionPaths": []
     },
     {
-     "id": "220:76/113",
+     "id": "221:76/113",
      "label": "Flaming Arrow",
      "group": "Archery",
      "paths": [
@@ -233246,7 +233354,7 @@
      "motionPaths": []
     },
     {
-     "id": "221:257/39",
+     "id": "222:257/39",
      "label": "Jishnu's Radiance",
      "group": "Archery",
      "paths": [
@@ -233255,7 +233363,7 @@
      "motionPaths": []
     },
     {
-     "id": "222:141/63",
+     "id": "223:141/63",
      "label": "Namas Arrow",
      "group": "Archery",
      "paths": [
@@ -233293,7 +233401,7 @@
      ]
     },
     {
-     "id": "223:76/114",
+     "id": "224:76/114",
      "label": "Piercing Arrow",
      "group": "Archery",
      "paths": [
@@ -233302,7 +233410,7 @@
      "motionPaths": []
     },
     {
-     "id": "224:245/37",
+     "id": "225:245/37",
      "label": "Refulgent Arrow",
      "group": "Archery",
      "paths": [
@@ -233311,7 +233419,7 @@
      "motionPaths": []
     },
     {
-     "id": "225:86/104",
+     "id": "226:86/104",
      "label": "Shadowbind",
      "group": "Archery",
      "paths": [
@@ -233320,7 +233428,7 @@
      "motionPaths": []
     },
     {
-     "id": "226:76/117",
+     "id": "227:76/117",
      "label": "Sidewinder",
      "group": "Archery",
      "paths": [
@@ -233329,7 +233437,7 @@
      "motionPaths": []
     },
     {
-     "id": "227:76/116",
+     "id": "228:76/116",
      "label": "Unknown WS",
      "group": "Archery",
      "paths": [
@@ -233338,7 +233446,7 @@
      "motionPaths": []
     },
     {
-     "id": "228:141/63",
+     "id": "229:141/63",
      "label": "Sarv",
      "group": "Archery",
      "paths": [
@@ -233376,7 +233484,7 @@
      ]
     },
     {
-     "id": "229:106/91",
+     "id": "230:106/91",
      "label": "Blast Shot",
      "group": "Marksmanship",
      "paths": [
@@ -233385,7 +233493,7 @@
      "motionPaths": []
     },
     {
-     "id": "230:141/64",
+     "id": "231:141/64",
      "label": "Coronach",
      "group": "Marksmanship",
      "paths": [
@@ -233423,7 +233531,7 @@
      ]
     },
     {
-     "id": "231:106/93",
+     "id": "232:106/93",
      "label": "Detonator",
      "group": "Marksmanship",
      "paths": [
@@ -233432,7 +233540,7 @@
      "motionPaths": []
     },
     {
-     "id": "232:86/103",
+     "id": "233:86/103",
      "label": "Eagle Eye Shot",
      "group": "Marksmanship",
      "paths": [
@@ -233441,7 +233549,7 @@
      "motionPaths": []
     },
     {
-     "id": "233:106/92",
+     "id": "234:106/92",
      "label": "Heavy Shot",
      "group": "Marksmanship",
      "paths": [
@@ -233450,7 +233558,7 @@
      "motionPaths": []
     },
     {
-     "id": "234:76/118",
+     "id": "235:76/118",
      "label": "Hot Shot",
      "group": "Marksmanship",
      "paths": [
@@ -233459,7 +233567,7 @@
      "motionPaths": []
     },
     {
-     "id": "235:271/16",
+     "id": "236:271/16",
      "label": "Last Stand",
      "group": "Marksmanship",
      "paths": [
@@ -233468,7 +233576,7 @@
      "motionPaths": []
     },
     {
-     "id": "236:209/38",
+     "id": "237:209/38",
      "label": "Leaden Salute",
      "group": "Marksmanship",
      "paths": [
@@ -233477,7 +233585,7 @@
      "motionPaths": []
     },
     {
-     "id": "237:243/66",
+     "id": "238:243/66",
      "label": "Numbing Shot",
      "group": "Marksmanship",
      "paths": [
@@ -233486,7 +233594,7 @@
      "motionPaths": []
     },
     {
-     "id": "238:86/105",
+     "id": "239:86/105",
      "label": "Shadowbind",
      "group": "Marksmanship",
      "paths": [
@@ -233495,7 +233603,7 @@
      "motionPaths": []
     },
     {
-     "id": "239:76/122",
+     "id": "240:76/122",
      "label": "Slug Shot",
      "group": "Marksmanship",
      "paths": [
@@ -233504,7 +233612,7 @@
      "motionPaths": []
     },
     {
-     "id": "240:76/120",
+     "id": "241:76/120",
      "label": "Sniper Shot",
      "group": "Marksmanship",
      "paths": [
@@ -233513,7 +233621,7 @@
      "motionPaths": []
     },
     {
-     "id": "241:76/119",
+     "id": "242:76/119",
      "label": "Split Shot",
      "group": "Marksmanship",
      "paths": [
@@ -233522,7 +233630,7 @@
      "motionPaths": []
     },
     {
-     "id": "242:209/37",
+     "id": "243:209/37",
      "label": "Trueflight",
      "group": "Marksmanship",
      "paths": [
@@ -233531,7 +233639,7 @@
      "motionPaths": []
     },
     {
-     "id": "243:76/121",
+     "id": "244:76/121",
      "label": "Unknown WS",
      "group": "Marksmanship",
      "paths": [
@@ -233540,7 +233648,7 @@
      "motionPaths": []
     },
     {
-     "id": "244:257/40",
+     "id": "245:257/40",
      "label": "Wildfire",
      "group": "Marksmanship",
      "paths": [
@@ -233549,7 +233657,7 @@
      "motionPaths": []
     },
     {
-     "id": "245:141/64",
+     "id": "246:141/64",
      "label": "Terminus",
      "group": "Marksmanship",
      "paths": [
@@ -233587,7 +233695,7 @@
      ]
     },
     {
-     "id": "246:143/39",
+     "id": "247:143/39",
      "label": "Mannequin",
      "group": "Mannequin",
      "paths": [
@@ -233599,7 +233707,7 @@
      ]
     },
     {
-     "id": "247:154/24-25",
+     "id": "248:154/24-25",
      "label": "Mannequin",
      "group": "Mannequin",
      "paths": [
@@ -233614,7 +233722,7 @@
      ]
     },
     {
-     "id": "248:7/0/61",
+     "id": "249:7/0/61",
      "label": "btl_",
      "group": "Others",
      "paths": [
@@ -233623,7 +233731,7 @@
      "motionPaths": []
     },
     {
-     "id": "249:71/105",
+     "id": "250:71/105",
      "label": "def_",
      "group": "Others",
      "paths": [
@@ -233635,7 +233743,7 @@
      ]
     },
     {
-     "id": "250:147/32-35;86-90",
+     "id": "251:147/32-35;86-90",
      "label": "dmt_",
      "group": "Others",
      "paths": [
@@ -233656,7 +233764,7 @@
      ]
     },
     {
-     "id": "251:86/22",
+     "id": "252:86/22",
      "label": "dumm",
      "group": "Others",
      "paths": [
@@ -233665,7 +233773,7 @@
      "motionPaths": []
     },
     {
-     "id": "252:2/0/91",
+     "id": "253:2/0/91",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233674,7 +233782,7 @@
      "motionPaths": []
     },
     {
-     "id": "253:2/20/36",
+     "id": "254:2/20/36",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233683,7 +233791,7 @@
      "motionPaths": []
     },
     {
-     "id": "254:3/8/68",
+     "id": "255:3/8/68",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233692,7 +233800,7 @@
      "motionPaths": []
     },
     {
-     "id": "255:3/9/113-118",
+     "id": "256:3/9/113-118",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233706,7 +233814,7 @@
      "motionPaths": []
     },
     {
-     "id": "256:5/9/1;19",
+     "id": "257:5/9/1;19",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233715,7 +233823,7 @@
      "motionPaths": []
     },
     {
-     "id": "257:6/0/69",
+     "id": "258:6/0/69",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233724,7 +233832,7 @@
      "motionPaths": []
     },
     {
-     "id": "258:69/123-124",
+     "id": "259:69/123-124",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233734,7 +233842,7 @@
      "motionPaths": []
     },
     {
-     "id": "259:71/45-62;85-94",
+     "id": "260:71/45-62;85-94",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233760,7 +233868,7 @@
      "motionPaths": []
     },
     {
-     "id": "260:72/75;85;95;105;115;117-126",
+     "id": "261:72/75;85;95;105;115;117-126",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233772,7 +233880,7 @@
      ]
     },
     {
-     "id": "261:73/7",
+     "id": "262:73/7",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233784,7 +233892,7 @@
      ]
     },
     {
-     "id": "262:100/17",
+     "id": "263:100/17",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233793,7 +233901,7 @@
      "motionPaths": []
     },
     {
-     "id": "263:155/104-106",
+     "id": "264:155/104-106",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233804,7 +233912,7 @@
      "motionPaths": []
     },
     {
-     "id": "264:163/86-89",
+     "id": "265:163/86-89",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233816,7 +233924,7 @@
      "motionPaths": []
     },
     {
-     "id": "265:166/109",
+     "id": "266:166/109",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233825,7 +233933,7 @@
      "motionPaths": []
     },
     {
-     "id": "266:168/109-112",
+     "id": "267:168/109-112",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233837,7 +233945,7 @@
      "motionPaths": []
     },
     {
-     "id": "267:170/73",
+     "id": "268:170/73",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233846,7 +233954,7 @@
      "motionPaths": []
     },
     {
-     "id": "268:175/62-64;75-78",
+     "id": "269:175/62-64;75-78",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233857,7 +233965,7 @@
      "motionPaths": []
     },
     {
-     "id": "269:185/11-14",
+     "id": "270:185/11-14",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233869,7 +233977,7 @@
      "motionPaths": []
     },
     {
-     "id": "270:186/52-55;73",
+     "id": "271:186/52-55;73",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233881,7 +233989,7 @@
      "motionPaths": []
     },
     {
-     "id": "271:187/35-39",
+     "id": "272:187/35-39",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233894,7 +234002,7 @@
      "motionPaths": []
     },
     {
-     "id": "272:188/27-28;43;90-91;107-108",
+     "id": "273:188/27-28;43;90-91;107-108",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233904,7 +234012,7 @@
      "motionPaths": []
     },
     {
-     "id": "273:196/33",
+     "id": "274:196/33",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233913,7 +234021,7 @@
      "motionPaths": []
     },
     {
-     "id": "274:202/30-31",
+     "id": "275:202/30-31",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233923,7 +234031,7 @@
      "motionPaths": []
     },
     {
-     "id": "275:212/95-104",
+     "id": "276:212/95-104",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233941,7 +234049,7 @@
      "motionPaths": []
     },
     {
-     "id": "276:215/48-51",
+     "id": "277:215/48-51",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233953,7 +234061,7 @@
      "motionPaths": []
     },
     {
-     "id": "277:221/65-74;89-94",
+     "id": "278:221/65-74;89-94",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -233971,7 +234079,7 @@
      "motionPaths": []
     },
     {
-     "id": "278:199/109",
+     "id": "279:199/109",
      "label": "Bloody Quarrel",
      "group": "NPC WS",
      "paths": [
@@ -233980,7 +234088,7 @@
      "motionPaths": []
     },
     {
-     "id": "279:7/0/63",
+     "id": "280:7/0/63",
      "label": "Dancing Edge",
      "group": "NPC WS",
      "paths": [
@@ -233989,7 +234097,7 @@
      "motionPaths": []
     },
     {
-     "id": "280:7/0/64",
+     "id": "281:7/0/64",
      "label": "King Cobra Clamp",
      "group": "NPC WS",
      "paths": [
@@ -233998,7 +234106,7 @@
      "motionPaths": []
     },
     {
-     "id": "281:204/39",
+     "id": "282:204/39",
      "label": "Leonine Legflail",
      "group": "NPC WS",
      "paths": [
@@ -234007,7 +234115,7 @@
      "motionPaths": []
     },
     {
-     "id": "282:204/40",
+     "id": "283:204/40",
      "label": "Soulfetter Arrow",
      "group": "NPC WS",
      "paths": [
@@ -234016,7 +234124,7 @@
      "motionPaths": []
     },
     {
-     "id": "283:204/38",
+     "id": "284:204/38",
      "label": "Unknown WS",
      "group": "NPC WS",
      "paths": [
@@ -234025,7 +234133,7 @@
      "motionPaths": []
     },
     {
-     "id": "284:217/16",
+     "id": "285:217/16",
      "label": "Unknown WS",
      "group": "NPC WS",
      "paths": [
@@ -234034,7 +234142,7 @@
      "motionPaths": []
     },
     {
-     "id": "285:7/0/62",
+     "id": "286:7/0/62",
      "label": "Wasp Sting",
      "group": "NPC WS",
      "paths": [
@@ -234043,7 +234151,7 @@
      "motionPaths": []
     },
     {
-     "id": "286:194/53",
+     "id": "287:194/53",
      "label": "Aspir Samba",
      "group": "Dancer",
      "paths": [
@@ -234052,7 +234160,7 @@
      "motionPaths": []
     },
     {
-     "id": "287:194/54",
+     "id": "288:194/54",
      "label": "Aspir Samba II",
      "group": "Dancer",
      "paths": [
@@ -234061,7 +234169,7 @@
      "motionPaths": []
     },
     {
-     "id": "288:194/63",
+     "id": "289:194/63",
      "label": "Chocobo Jig",
      "group": "Dancer",
      "paths": [
@@ -234070,7 +234178,7 @@
      "motionPaths": []
     },
     {
-     "id": "289:194/56",
+     "id": "290:194/56",
      "label": "Curing Waltz",
      "group": "Dancer",
      "paths": [
@@ -234079,7 +234187,7 @@
      "motionPaths": []
     },
     {
-     "id": "290:194/57",
+     "id": "291:194/57",
      "label": "Curing Waltz II",
      "group": "Dancer",
      "paths": [
@@ -234088,7 +234196,7 @@
      "motionPaths": []
     },
     {
-     "id": "291:194/58",
+     "id": "292:194/58",
      "label": "Curing Waltz III",
      "group": "Dancer",
      "paths": [
@@ -234097,7 +234205,7 @@
      "motionPaths": []
     },
     {
-     "id": "292:194/59",
+     "id": "293:194/59",
      "label": "Curing Waltz IV",
      "group": "Dancer",
      "paths": [
@@ -234106,7 +234214,7 @@
      "motionPaths": []
     },
     {
-     "id": "293:261/127",
+     "id": "294:261/127",
      "label": "Curing Waltz V",
      "group": "Dancer",
      "paths": [
@@ -234115,7 +234223,7 @@
      "motionPaths": []
     },
     {
-     "id": "294:194/61",
+     "id": "295:194/61",
      "label": "Divine Waltz",
      "group": "Dancer",
      "paths": [
@@ -234124,7 +234232,7 @@
      "motionPaths": []
     },
     {
-     "id": "295:246/120",
+     "id": "296:246/120",
      "label": "Divine Waltz II",
      "group": "Dancer",
      "paths": [
@@ -234133,7 +234241,7 @@
      "motionPaths": []
     },
     {
-     "id": "296:194/50",
+     "id": "297:194/50",
      "label": "Drain Samba",
      "group": "Dancer",
      "paths": [
@@ -234142,7 +234250,7 @@
      "motionPaths": []
     },
     {
-     "id": "297:194/51",
+     "id": "298:194/51",
      "label": "Drain Samba II",
      "group": "Dancer",
      "paths": [
@@ -234151,7 +234259,7 @@
      "motionPaths": []
     },
     {
-     "id": "298:194/52",
+     "id": "299:194/52",
      "label": "Drain Samba III",
      "group": "Dancer",
      "paths": [
@@ -234160,7 +234268,7 @@
      "motionPaths": []
     },
     {
-     "id": "299:194/73-81",
+     "id": "300:194/73-81",
      "label": "Flourishes",
      "group": "Dancer",
      "paths": [
@@ -234177,7 +234285,7 @@
      "motionPaths": []
     },
     {
-     "id": "300:194/55",
+     "id": "301:194/55",
      "label": "Haste Samba",
      "group": "Dancer",
      "paths": [
@@ -234186,7 +234294,7 @@
      "motionPaths": []
     },
     {
-     "id": "301:194/60",
+     "id": "302:194/60",
      "label": "Healing Waltz",
      "group": "Dancer",
      "paths": [
@@ -234195,7 +234303,7 @@
      "motionPaths": []
     },
     {
-     "id": "302:268/42",
+     "id": "303:268/42",
      "label": "New samba?",
      "group": "Dancer",
      "paths": [
@@ -234204,7 +234312,7 @@
      "motionPaths": []
     },
     {
-     "id": "303:194/62",
+     "id": "304:194/62",
      "label": "Spectral Jig",
      "group": "Dancer",
      "paths": [
@@ -234213,7 +234321,7 @@
      "motionPaths": []
     },
     {
-     "id": "304:194/64-72",
+     "id": "305:194/64-72",
      "label": "Steps",
      "group": "Dancer",
      "paths": [
@@ -234230,7 +234338,7 @@
      "motionPaths": []
     },
     {
-     "id": "314:199/109",
+     "id": "315:199/109",
      "label": "WS 256",
      "group": "WS (Unreleased)",
      "paths": [
@@ -234239,7 +234347,7 @@
      "motionPaths": []
     },
     {
-     "id": "315:204/38",
+     "id": "316:204/38",
      "label": "WS 257",
      "group": "WS (Unreleased)",
      "paths": [
@@ -234248,7 +234356,7 @@
      "motionPaths": []
     },
     {
-     "id": "316:204/39",
+     "id": "317:204/39",
      "label": "WS 258",
      "group": "WS (Unreleased)",
      "paths": [
@@ -234257,7 +234365,7 @@
      "motionPaths": []
     },
     {
-     "id": "317:204/40",
+     "id": "318:204/40",
      "label": "WS 259",
      "group": "WS (Unreleased)",
      "paths": [
@@ -234266,7 +234374,7 @@
      "motionPaths": []
     },
     {
-     "id": "318:217/16",
+     "id": "319:217/16",
      "label": "WS 260",
      "group": "WS (Unreleased)",
      "paths": [
@@ -234275,7 +234383,7 @@
      "motionPaths": []
     },
     {
-     "id": "319:357/35",
+     "id": "320:357/35",
      "label": "WS 261",
      "group": "WS (Unreleased)",
      "paths": [
@@ -269611,6 +269719,15 @@
      "motionPaths": []
     },
     {
+     "id": "119:316/54",
+     "label": "Dimidiation",
+     "group": "G. Sword",
+     "paths": [
+      "ROM\\316\\54.DAT"
+     ],
+     "motionPaths": []
+    },
+    {
      "id": "91:88/43",
      "label": "Raging Axe",
      "group": "Axe",
@@ -270565,7 +270682,16 @@
      "motionPaths": []
     },
     {
-     "id": "197:88/86",
+     "id": "207:316/17",
+     "label": "Exudation",
+     "group": "Club",
+     "paths": [
+      "ROM\\316\\53.DAT"
+     ],
+     "motionPaths": []
+    },
+    {
+     "id": "198:88/86",
      "label": "Heavy Swing",
      "group": "Staff",
      "paths": [
@@ -270574,7 +270700,7 @@
      "motionPaths": []
     },
     {
-     "id": "198:88/87",
+     "id": "199:88/87",
      "label": "Rock Crusher",
      "group": "Staff",
      "paths": [
@@ -270583,7 +270709,7 @@
      "motionPaths": []
     },
     {
-     "id": "199:88/88",
+     "id": "200:88/88",
      "label": "Earth Crusher",
      "group": "Staff",
      "paths": [
@@ -270592,7 +270718,7 @@
      "motionPaths": []
     },
     {
-     "id": "200:88/89",
+     "id": "201:88/89",
      "label": "Starburst",
      "group": "Staff",
      "paths": [
@@ -270601,7 +270727,7 @@
      "motionPaths": []
     },
     {
-     "id": "201:88/90",
+     "id": "202:88/90",
      "label": "Sunburst",
      "group": "Staff",
      "paths": [
@@ -270610,7 +270736,7 @@
      "motionPaths": []
     },
     {
-     "id": "202:88/91",
+     "id": "203:88/91",
      "label": "Shell Crusher",
      "group": "Staff",
      "paths": [
@@ -270619,7 +270745,7 @@
      "motionPaths": []
     },
     {
-     "id": "203:88/92",
+     "id": "204:88/92",
      "label": "Full Swing",
      "group": "Staff",
      "paths": [
@@ -270628,7 +270754,7 @@
      "motionPaths": []
     },
     {
-     "id": "204:107/82",
+     "id": "205:107/82",
      "label": "Spirit Taker",
      "group": "Staff",
      "paths": [
@@ -270637,7 +270763,7 @@
      "motionPaths": []
     },
     {
-     "id": "205:107/83",
+     "id": "206:107/83",
      "label": "Retribution",
      "group": "Staff",
      "paths": [
@@ -270646,7 +270772,7 @@
      "motionPaths": []
     },
     {
-     "id": "206:141/102",
+     "id": "207:141/102",
      "label": "Gate of Tartarus",
      "group": "Staff",
      "paths": [
@@ -270655,7 +270781,7 @@
      "motionPaths": []
     },
     {
-     "id": "207:209/77",
+     "id": "208:209/77",
      "label": "Vidohunir",
      "group": "Staff",
      "paths": [
@@ -270664,7 +270790,7 @@
      "motionPaths": []
     },
     {
-     "id": "208:209/78",
+     "id": "209:209/78",
      "label": "Garland of Bliss",
      "group": "Staff",
      "paths": [
@@ -270673,7 +270799,7 @@
      "motionPaths": []
     },
     {
-     "id": "209:209/79",
+     "id": "210:209/79",
      "label": "Omniscience",
      "group": "Staff",
      "paths": [
@@ -270682,7 +270808,7 @@
      "motionPaths": []
     },
     {
-     "id": "210:240/46",
+     "id": "211:240/46",
      "label": "Tartarus Torpor",
      "group": "Staff",
      "paths": [
@@ -270691,7 +270817,7 @@
      "motionPaths": []
     },
     {
-     "id": "211:245/24",
+     "id": "212:245/24",
      "label": "Cataclysm",
      "group": "Staff",
      "paths": [
@@ -270700,7 +270826,7 @@
      "motionPaths": []
     },
     {
-     "id": "212:258/21",
+     "id": "213:258/21",
      "label": "Myrkr",
      "group": "Staff",
      "paths": [
@@ -270709,7 +270835,7 @@
      "motionPaths": []
     },
     {
-     "id": "213:270/44",
+     "id": "214:270/44",
      "label": "Shattersoul",
      "group": "Staff",
      "paths": [
@@ -270718,7 +270844,7 @@
      "motionPaths": []
     },
     {
-     "id": "214:141/102",
+     "id": "215:141/102",
      "label": "Oshala",
      "group": "Staff",
      "paths": [
@@ -270727,7 +270853,7 @@
      "motionPaths": []
     },
     {
-     "id": "215:88/98",
+     "id": "216:88/98",
      "label": "Eagle Eye Shot",
      "group": "Archery",
      "paths": [
@@ -270736,7 +270862,7 @@
      "motionPaths": []
     },
     {
-     "id": "216:88/100",
+     "id": "217:88/100",
      "label": "Shadowbind",
      "group": "Archery",
      "paths": [
@@ -270745,7 +270871,7 @@
      "motionPaths": []
     },
     {
-     "id": "217:76/113",
+     "id": "218:76/113",
      "label": "Flaming Arrow",
      "group": "Archery",
      "paths": [
@@ -270754,7 +270880,7 @@
      "motionPaths": []
     },
     {
-     "id": "218:76/114",
+     "id": "219:76/114",
      "label": "Piercing Arrow",
      "group": "Archery",
      "paths": [
@@ -270763,7 +270889,7 @@
      "motionPaths": []
     },
     {
-     "id": "219:76/115",
+     "id": "220:76/115",
      "label": "Dulling Arrow",
      "group": "Archery",
      "paths": [
@@ -270772,7 +270898,7 @@
      "motionPaths": []
     },
     {
-     "id": "220:76/116",
+     "id": "221:76/116",
      "label": "Unknown WS",
      "group": "Archery",
      "paths": [
@@ -270781,7 +270907,7 @@
      "motionPaths": []
     },
     {
-     "id": "221:76/117",
+     "id": "222:76/117",
      "label": "Sidewinder",
      "group": "Archery",
      "paths": [
@@ -270790,7 +270916,7 @@
      "motionPaths": []
     },
     {
-     "id": "222:107/117",
+     "id": "223:107/117",
      "label": "Blast Arrow",
      "group": "Archery",
      "paths": [
@@ -270799,7 +270925,7 @@
      "motionPaths": []
     },
     {
-     "id": "223:107/118",
+     "id": "224:107/118",
      "label": "Arching Arrow",
      "group": "Archery",
      "paths": [
@@ -270808,7 +270934,7 @@
      "motionPaths": []
     },
     {
-     "id": "224:107/119",
+     "id": "225:107/119",
      "label": "Empyreal Arrow",
      "group": "Archery",
      "paths": [
@@ -270817,7 +270943,7 @@
      "motionPaths": []
     },
     {
-     "id": "225:141/105",
+     "id": "226:141/105",
      "label": "Namas Arrow",
      "group": "Archery",
      "paths": [
@@ -270826,7 +270952,7 @@
      "motionPaths": []
     },
     {
-     "id": "226:245/37",
+     "id": "227:245/37",
      "label": "Refulgent Arrow",
      "group": "Archery",
      "paths": [
@@ -270835,7 +270961,7 @@
      "motionPaths": []
     },
     {
-     "id": "227:257/54",
+     "id": "228:257/54",
      "label": "Jishnu's Radiance",
      "group": "Archery",
      "paths": [
@@ -270844,7 +270970,7 @@
      "motionPaths": []
     },
     {
-     "id": "228:270/2",
+     "id": "229:270/2",
      "label": "Apex Arrow",
      "group": "Archery",
      "paths": [
@@ -270853,7 +270979,7 @@
      "motionPaths": []
     },
     {
-     "id": "229:141/105",
+     "id": "230:141/105",
      "label": "Sarv",
      "group": "Archery",
      "paths": [
@@ -270862,7 +270988,7 @@
      "motionPaths": []
     },
     {
-     "id": "230:88/99",
+     "id": "231:88/99",
      "label": "Eagle Eye Shot",
      "group": "Marksmanship",
      "paths": [
@@ -270871,7 +270997,7 @@
      "motionPaths": []
     },
     {
-     "id": "231:88/101",
+     "id": "232:88/101",
      "label": "Shadowbind",
      "group": "Marksmanship",
      "paths": [
@@ -270880,7 +271006,7 @@
      "motionPaths": []
     },
     {
-     "id": "232:76/118",
+     "id": "233:76/118",
      "label": "Hot Shot",
      "group": "Marksmanship",
      "paths": [
@@ -270889,7 +271015,7 @@
      "motionPaths": []
     },
     {
-     "id": "233:76/119",
+     "id": "234:76/119",
      "label": "Split Shot",
      "group": "Marksmanship",
      "paths": [
@@ -270898,7 +271024,7 @@
      "motionPaths": []
     },
     {
-     "id": "234:76/120",
+     "id": "235:76/120",
      "label": "Sniper Shot",
      "group": "Marksmanship",
      "paths": [
@@ -270907,7 +271033,7 @@
      "motionPaths": []
     },
     {
-     "id": "235:76/121",
+     "id": "236:76/121",
      "label": "Unknown WS",
      "group": "Marksmanship",
      "paths": [
@@ -270916,7 +271042,7 @@
      "motionPaths": []
     },
     {
-     "id": "236:76/122",
+     "id": "237:76/122",
      "label": "Slug Shot",
      "group": "Marksmanship",
      "paths": [
@@ -270925,7 +271051,7 @@
      "motionPaths": []
     },
     {
-     "id": "237:107/120",
+     "id": "238:107/120",
      "label": "Blast Shot",
      "group": "Marksmanship",
      "paths": [
@@ -270934,7 +271060,7 @@
      "motionPaths": []
     },
     {
-     "id": "238:107/121",
+     "id": "239:107/121",
      "label": "Heavy Shot",
      "group": "Marksmanship",
      "paths": [
@@ -270943,7 +271069,7 @@
      "motionPaths": []
     },
     {
-     "id": "239:107/122",
+     "id": "240:107/122",
      "label": "Detonator",
      "group": "Marksmanship",
      "paths": [
@@ -270952,7 +271078,7 @@
      "motionPaths": []
     },
     {
-     "id": "240:141/106",
+     "id": "241:141/106",
      "label": "Coronach",
      "group": "Marksmanship",
      "paths": [
@@ -270961,7 +271087,7 @@
      "motionPaths": []
     },
     {
-     "id": "241:209/82",
+     "id": "242:209/82",
      "label": "Trueflight",
      "group": "Marksmanship",
      "paths": [
@@ -270970,7 +271096,7 @@
      "motionPaths": []
     },
     {
-     "id": "242:209/83",
+     "id": "243:209/83",
      "label": "Leaden Salute",
      "group": "Marksmanship",
      "paths": [
@@ -270979,7 +271105,7 @@
      "motionPaths": []
     },
     {
-     "id": "243:243/90",
+     "id": "244:243/90",
      "label": "Numbing Shot",
      "group": "Marksmanship",
      "paths": [
@@ -270988,7 +271114,7 @@
      "motionPaths": []
     },
     {
-     "id": "244:257/55",
+     "id": "245:257/55",
      "label": "Wildfire",
      "group": "Marksmanship",
      "paths": [
@@ -270997,7 +271123,7 @@
      "motionPaths": []
     },
     {
-     "id": "245:271/22",
+     "id": "246:271/22",
      "label": "Last Stand",
      "group": "Marksmanship",
      "paths": [
@@ -271006,7 +271132,7 @@
      "motionPaths": []
     },
     {
-     "id": "246:141/106",
+     "id": "247:141/106",
      "label": "Terminus",
      "group": "Marksmanship",
      "paths": [
@@ -271015,7 +271141,7 @@
      "motionPaths": []
     },
     {
-     "id": "247:143/44",
+     "id": "248:143/44",
      "label": "Mannequin",
      "group": "Mannequin",
      "paths": [
@@ -271027,7 +271153,7 @@
      ]
     },
     {
-     "id": "248:154/35-36",
+     "id": "249:154/35-36",
      "label": "Mannequin",
      "group": "Mannequin",
      "paths": [
@@ -271042,7 +271168,7 @@
      ]
     },
     {
-     "id": "249:70/60;62-63",
+     "id": "250:70/60;62-63",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -271051,7 +271177,7 @@
      "motionPaths": []
     },
     {
-     "id": "250:71/65-66;72",
+     "id": "251:71/65-66;72",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -271061,7 +271187,7 @@
      "motionPaths": []
     },
     {
-     "id": "251:71/106",
+     "id": "252:71/106",
      "label": "def_",
      "group": "Others",
      "paths": [
@@ -271073,14 +271199,14 @@
      ]
     },
     {
-     "id": "252:72/127-73/4",
+     "id": "253:72/127-73/4",
      "label": "mot_",
      "group": "Others",
      "paths": [],
      "motionPaths": []
     },
     {
-     "id": "253:73/8",
+     "id": "254:73/8",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -271092,7 +271218,7 @@
      ]
     },
     {
-     "id": "254:88/18",
+     "id": "255:88/18",
      "label": "dumm",
      "group": "Others",
      "paths": [
@@ -271101,7 +271227,7 @@
      "motionPaths": []
     },
     {
-     "id": "255:147/44-47;101-105",
+     "id": "256:147/44-47;101-105",
      "label": "dgl_",
      "group": "Others",
      "paths": [
@@ -271122,7 +271248,7 @@
      ]
     },
     {
-     "id": "256:151/113-114",
+     "id": "257:151/113-114",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -271132,7 +271258,7 @@
      "motionPaths": []
     },
     {
-     "id": "257:165/100",
+     "id": "258:165/100",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -271141,7 +271267,7 @@
      "motionPaths": []
     },
     {
-     "id": "258:170/72;79",
+     "id": "259:170/72;79",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -271150,7 +271276,7 @@
      "motionPaths": []
     },
     {
-     "id": "259:175/65-67",
+     "id": "260:175/65-67",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -271161,7 +271287,7 @@
      "motionPaths": []
     },
     {
-     "id": "260:189/103",
+     "id": "261:189/103",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -271170,7 +271296,7 @@
      "motionPaths": []
     },
     {
-     "id": "261:212/61-69",
+     "id": "262:212/61-69",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -271187,7 +271313,7 @@
      "motionPaths": []
     },
     {
-     "id": "262:215/58-59",
+     "id": "263:215/58-59",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -271197,7 +271323,7 @@
      "motionPaths": []
     },
     {
-     "id": "263:2/0/81-88",
+     "id": "264:2/0/81-88",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -271213,7 +271339,7 @@
      "motionPaths": []
     },
     {
-     "id": "264:2/20/0",
+     "id": "265:2/20/0",
      "label": "mot_",
      "group": "Others",
      "paths": [
@@ -271222,14 +271348,14 @@
      "motionPaths": []
     },
     {
-     "id": "265:3/4/124-5/0",
+     "id": "266:3/4/124-5/0",
      "label": "mot_",
      "group": "Others",
      "paths": [],
      "motionPaths": []
     },
     {
-     "id": "266:3/7/27",
+     "id": "267:3/7/27",
      "label": "gal_",
      "group": "Others",
      "paths": [
@@ -271238,7 +271364,7 @@
      "motionPaths": []
     },
     {
-     "id": "267:199/79",
+     "id": "268:199/79",
      "label": "Bloody Tomahawk",
      "group": "NPC WS",
      "paths": [
@@ -271247,7 +271373,7 @@
      "motionPaths": []
     },
     {
-     "id": "268:199/94",
+     "id": "269:199/94",
      "label": "Napalm Tomahawk",
      "group": "NPC WS",
      "paths": [
@@ -271256,7 +271382,7 @@
      "motionPaths": []
     },
     {
-     "id": "269:204/48",
+     "id": "270:204/48",
      "label": "Unknown WS",
      "group": "NPC WS",
      "paths": [
@@ -271265,7 +271391,7 @@
      "motionPaths": []
     },
     {
-     "id": "270:216/90",
+     "id": "271:216/90",
      "label": "Unknown WS",
      "group": "NPC WS",
      "paths": [
@@ -271274,7 +271400,7 @@
      "motionPaths": []
     },
     {
-     "id": "271:316/53",
+     "id": "272:316/53",
      "label": "Galka Throwing",
      "group": "NPC WS",
      "paths": [
@@ -271283,7 +271409,7 @@
      "motionPaths": []
     },
     {
-     "id": "272:316/54",
+     "id": "273:316/54",
      "label": "Galka 2-Handed WSD? Dimidiation?",
      "group": "NPC WS",
      "paths": [
@@ -271292,7 +271418,7 @@
      "motionPaths": []
     },
     {
-     "id": "273:195/4",
+     "id": "274:195/4",
      "label": "Drain Samba",
      "group": "Dancer",
      "paths": [
@@ -271301,7 +271427,7 @@
      "motionPaths": []
     },
     {
-     "id": "274:195/5",
+     "id": "275:195/5",
      "label": "Drain Samba II",
      "group": "Dancer",
      "paths": [
@@ -271310,7 +271436,7 @@
      "motionPaths": []
     },
     {
-     "id": "275:195/6",
+     "id": "276:195/6",
      "label": "Drain Samba III",
      "group": "Dancer",
      "paths": [
@@ -271319,7 +271445,7 @@
      "motionPaths": []
     },
     {
-     "id": "276:195/7",
+     "id": "277:195/7",
      "label": "Aspir Samba",
      "group": "Dancer",
      "paths": [
@@ -271328,7 +271454,7 @@
      "motionPaths": []
     },
     {
-     "id": "277:195/8",
+     "id": "278:195/8",
      "label": "Aspir Samba II",
      "group": "Dancer",
      "paths": [
@@ -271337,7 +271463,7 @@
      "motionPaths": []
     },
     {
-     "id": "278:195/9",
+     "id": "279:195/9",
      "label": "Haste Samba",
      "group": "Dancer",
      "paths": [
@@ -271346,7 +271472,7 @@
      "motionPaths": []
     },
     {
-     "id": "279:195/10",
+     "id": "280:195/10",
      "label": "Curing Waltz",
      "group": "Dancer",
      "paths": [
@@ -271355,7 +271481,7 @@
      "motionPaths": []
     },
     {
-     "id": "280:195/11",
+     "id": "281:195/11",
      "label": "Curing Waltz II",
      "group": "Dancer",
      "paths": [
@@ -271364,7 +271490,7 @@
      "motionPaths": []
     },
     {
-     "id": "281:195/12",
+     "id": "282:195/12",
      "label": "Curing Waltz III",
      "group": "Dancer",
      "paths": [
@@ -271373,7 +271499,7 @@
      "motionPaths": []
     },
     {
-     "id": "282:195/13",
+     "id": "283:195/13",
      "label": "Curing Waltz IV",
      "group": "Dancer",
      "paths": [
@@ -271382,7 +271508,7 @@
      "motionPaths": []
     },
     {
-     "id": "283:262/0",
+     "id": "284:262/0",
      "label": "Curing Waltz V",
      "group": "Dancer",
      "paths": [
@@ -271391,7 +271517,7 @@
      "motionPaths": []
     },
     {
-     "id": "284:195/14",
+     "id": "285:195/14",
      "label": "Healing Waltz",
      "group": "Dancer",
      "paths": [
@@ -271400,7 +271526,7 @@
      "motionPaths": []
     },
     {
-     "id": "285:195/15",
+     "id": "286:195/15",
      "label": "Divine Waltz",
      "group": "Dancer",
      "paths": [
@@ -271409,7 +271535,7 @@
      "motionPaths": []
     },
     {
-     "id": "286:246/121",
+     "id": "287:246/121",
      "label": "Divine Waltz II",
      "group": "Dancer",
      "paths": [
@@ -271418,7 +271544,7 @@
      "motionPaths": []
     },
     {
-     "id": "287:195/16",
+     "id": "288:195/16",
      "label": "Spectral Jig",
      "group": "Dancer",
      "paths": [
@@ -271427,7 +271553,7 @@
      "motionPaths": []
     },
     {
-     "id": "288:195/17",
+     "id": "289:195/17",
      "label": "Chocobo Jig",
      "group": "Dancer",
      "paths": [
@@ -271436,7 +271562,7 @@
      "motionPaths": []
     },
     {
-     "id": "289:195/18-26",
+     "id": "290:195/18-26",
      "label": "Steps",
      "group": "Dancer",
      "paths": [
@@ -271453,7 +271579,7 @@
      "motionPaths": []
     },
     {
-     "id": "290:195/27-35",
+     "id": "291:195/27-35",
      "label": "Flourishes",
      "group": "Dancer",
      "paths": [
@@ -271470,7 +271596,7 @@
      "motionPaths": []
     },
     {
-     "id": "291:268/43",
+     "id": "292:268/43",
      "label": "New samba",
      "group": "Dancer",
      "paths": [
@@ -271479,7 +271605,7 @@
      "motionPaths": []
     },
     {
-     "id": "292:72/127",
+     "id": "293:72/127",
      "label": "Galka - Various Animations",
      "group": "Variations",
      "paths": [
@@ -271488,7 +271614,7 @@
      "motionPaths": []
     },
     {
-     "id": "293:73/0",
+     "id": "294:73/0",
      "label": "Galka - Various Animations",
      "group": "Variations",
      "paths": [
@@ -271497,7 +271623,7 @@
      "motionPaths": []
     },
     {
-     "id": "294:73/1",
+     "id": "295:73/1",
      "label": "Galka - Various Animations",
      "group": "Variations",
      "paths": [
@@ -271506,7 +271632,7 @@
      "motionPaths": []
     },
     {
-     "id": "295:73/2",
+     "id": "296:73/2",
      "label": "Galka - Various Animations",
      "group": "Variations",
      "paths": [
@@ -271515,7 +271641,7 @@
      "motionPaths": []
     },
     {
-     "id": "296:73/3",
+     "id": "297:73/3",
      "label": "Galka - Various Animations",
      "group": "Variations",
      "paths": [
@@ -271524,7 +271650,7 @@
      "motionPaths": []
     },
     {
-     "id": "297:73/4",
+     "id": "298:73/4",
      "label": "Galka - Various Animations",
      "group": "Variations",
      "paths": [
@@ -271533,7 +271659,7 @@
      "motionPaths": []
     },
     {
-     "id": "298:293/50",
+     "id": "299:293/50",
      "label": "Attacks",
      "group": "Variations",
      "paths": [
@@ -271542,7 +271668,7 @@
      "motionPaths": []
     },
     {
-     "id": "299:299/126-127;300/0-2",
+     "id": "300:299/126-127;300/0-2",
      "label": "Wards and Various Animations",
      "group": "Variations",
      "paths": [
@@ -271555,7 +271681,7 @@
      "motionPaths": []
     },
     {
-     "id": "300:300/3-11",
+     "id": "301:300/3-11",
      "label": "Runefencer animation and Various Animations",
      "group": "Variations",
      "paths": [
@@ -271572,7 +271698,7 @@
      "motionPaths": []
     },
     {
-     "id": "301:300/12-20",
+     "id": "302:300/12-20",
      "label": "Runefencer animation and Various Animations",
      "group": "Variations",
      "paths": [
@@ -271589,7 +271715,7 @@
      "motionPaths": []
     },
     {
-     "id": "302:300/21-29",
+     "id": "303:300/21-29",
      "label": "Runefencer animation and Various Animations",
      "group": "Variations",
      "paths": [
@@ -271606,7 +271732,7 @@
      "motionPaths": []
     },
     {
-     "id": "303:308/113",
+     "id": "304:308/113",
      "label": "Crystal Smash Backhand",
      "group": "Variations",
      "paths": [
@@ -271615,7 +271741,7 @@
      "motionPaths": []
     },
     {
-     "id": "304:3/4/124",
+     "id": "305:3/4/124",
      "label": "Galka - Various Animations",
      "group": "Variations",
      "paths": [
@@ -271624,7 +271750,7 @@
      "motionPaths": []
     },
     {
-     "id": "305:3/4/125",
+     "id": "306:3/4/125",
      "label": "Galka - Various Animations",
      "group": "Variations",
      "paths": [
@@ -271633,7 +271759,7 @@
      "motionPaths": []
     },
     {
-     "id": "306:3/4/126",
+     "id": "307:3/4/126",
      "label": "Galka - Various Animations",
      "group": "Variations",
      "paths": [
@@ -271642,7 +271768,7 @@
      "motionPaths": []
     },
     {
-     "id": "307:3/4/127",
+     "id": "308:3/4/127",
      "label": "Galka - Various Animations",
      "group": "Variations",
      "paths": [
@@ -271651,7 +271777,7 @@
      "motionPaths": []
     },
     {
-     "id": "308:3/5/0",
+     "id": "309:3/5/0",
      "label": "Galka - Various Animations",
      "group": "Variations",
      "paths": [
@@ -271660,7 +271786,7 @@
      "motionPaths": []
     },
     {
-     "id": "318:199/79",
+     "id": "319:199/79",
      "label": "WS 256",
      "group": "WS (Unreleased)",
      "paths": [
@@ -271669,7 +271795,7 @@
      "motionPaths": []
     },
     {
-     "id": "319:199/94",
+     "id": "320:199/94",
      "label": "WS 257",
      "group": "WS (Unreleased)",
      "paths": [
@@ -271678,7 +271804,7 @@
      "motionPaths": []
     },
     {
-     "id": "320:204/47",
+     "id": "321:204/47",
      "label": "WS 258",
      "group": "WS (Unreleased)",
      "paths": [
@@ -271687,7 +271813,7 @@
      "motionPaths": []
     },
     {
-     "id": "321:204/48",
+     "id": "322:204/48",
      "label": "WS 259",
      "group": "WS (Unreleased)",
      "paths": [
@@ -271696,7 +271822,7 @@
      "motionPaths": []
     },
     {
-     "id": "322:216/90",
+     "id": "323:216/90",
      "label": "WS 260",
      "group": "WS (Unreleased)",
      "paths": [
@@ -271705,7 +271831,7 @@
      "motionPaths": []
     },
     {
-     "id": "323:255/9",
+     "id": "324:255/9",
      "label": "WS 261",
      "group": "WS (Unreleased)",
      "paths": [
@@ -271714,7 +271840,7 @@
      "motionPaths": []
     },
     {
-     "id": "324:357/36",
+     "id": "325:357/36",
      "label": "WS 262",
      "group": "WS (Unreleased)",
      "paths": [
@@ -272690,7 +272816,7 @@
    ],
    "groups": [
     "Unidentified",
-    "xi (added – missing DATs)"
+    "xi (added \u2013 missing DATs)"
    ],
    "includeUngrouped": true
   }
