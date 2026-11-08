@@ -1285,6 +1285,9 @@ export class Renderer {
     this.actorFollowsEffect = false;
     // Spell TargetActor attach at skinned AABB centre when a character is on stage.
     this.attachFxToActor = true;
+    // Manual offset for effect attachment point (display space). Lets the user
+    // place weaponskill effects where an enemy would be, rather than on the caster.
+    this.effectOffset = new Vec3(0, 0, 0);
 
     this.rotArray = new Float32Array(MAX_JOINTS * 4);
     this.transArray = new Float32Array(MAX_JOINTS * 4);
@@ -2579,7 +2582,13 @@ export class Renderer {
     const q = this.pose.rot?.[j];
     const local = [off[0] * sc[0], off[1] * sc[1], off[2] * sc[2]];
     const rot = q ? qRotate(q, local) : local;
-    return new Vec3(-(tr[0] + rot[0]), tr[1] + rot[1], -(tr[2] + rot[2]));
+    let pos = new Vec3(-(tr[0] + rot[0]), tr[1] + rot[1], -(tr[2] + rot[2]));
+    // Target-side attachments (weaponskill effects on the enemy) get the manual
+    // offset so the user can place them where an enemy would stand.
+    if (attach === AttachType.TargetActor || attach === AttachType.TargetActorSourceFacing || attach === AttachType.TargetToSourceBasis) {
+      pos = pos.add(this.effectOffset);
+    }
+    return pos;
   }
 
   /**

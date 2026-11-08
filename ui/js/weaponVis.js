@@ -43,6 +43,26 @@
 
 export const SLOT = { main: 0, sub: 1, range: 2 };
 
+// Range type → hand reference index for weapon grip attachment.
+// Marksmanship (guns) is held in the right/main hand; archery and throwing
+// are held in the left/sub hand. Joint references: 127 = right hand,
+// 126 = left hand (per-race, from skeleton.references).
+const RANGE_HAND_REF = {
+  0x03: 127, // Marksmanship → main hand
+};
+
+/**
+ * The joint reference index a ranged weapon's mount should attach to.
+ * Marksmanship weapons go in the right (main) hand; everything else
+ * (archery, throwing, instruments) goes in the left (sub) hand.
+ */
+export function rangedHandRef(rangeType) {
+  if (typeof rangeType === 'number' && RANGE_HAND_REF[rangeType] != null) {
+    return RANGE_HAND_REF[rangeType];
+  }
+  return 126; // default: left/sub hand
+}
+
 /** Scheduler tags that change weapon visibility (or link the routine that does). */
 export const VIS_OPS = new Set([0x75, 0x76, 0x77, 0x78, 0x89, 0xa3]);
 

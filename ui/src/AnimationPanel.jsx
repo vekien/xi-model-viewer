@@ -115,6 +115,7 @@ export function AnimationPanel({ pc, anim, onClose, title = 'Animation' }) {
           loop = true, onLoop,
           charAnim = false, onCharAnim, charAnimEnabled = true,
           attachFx = true, onAttachFx, attachFxEnabled = true,
+          effectOffset = [0, 0, 0], onEffectOffset,
           fxMode = 'mesh', onFxMode, onReset,
           fxRoutines, fxRoutine = '', onFxRoutine,
           animPacks, animPack = '', onAnimPack,
@@ -353,6 +354,39 @@ export function AnimationPanel({ pc, anim, onClose, title = 'Animation' }) {
           </Checkbox>
           <Label className="pc-charanim-label">Attach FX to Character</Label>
         </Field>
+      )}
+      {onEffectOffset && (
+        <Row label="FX Offset">
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }} className={attachFxEnabled ? '' : 'is-disabled'}>
+            <span className="mono" style={{ fontSize: 11 }}>X</span>
+            <input
+              type="number"
+              step="0.5"
+              value={effectOffset[0]}
+              onChange={(e) => onEffectOffset([+e.target.value, effectOffset[1], effectOffset[2]])}
+              disabled={!attachFxEnabled}
+              style={{ width: 60 }}
+            />
+            <span className="mono" style={{ fontSize: 11 }}>Y</span>
+            <input
+              type="number"
+              step="0.5"
+              value={effectOffset[1]}
+              onChange={(e) => onEffectOffset([effectOffset[0], +e.target.value, effectOffset[2]])}
+              disabled={!attachFxEnabled}
+              style={{ width: 60 }}
+            />
+            <span className="mono" style={{ fontSize: 11 }}>Z</span>
+            <input
+              type="number"
+              step="0.5"
+              value={effectOffset[2]}
+              onChange={(e) => onEffectOffset([effectOffset[0], effectOffset[1], +e.target.value])}
+              disabled={!attachFxEnabled}
+              style={{ width: 60 }}
+            />
+          </div>
+        </Row>
       )}
       {onCharAnim && (
         <Field

@@ -5,9 +5,9 @@ import { loadList, loadListOrNull, updateListsOnBoot } from '../js/lists.js';
 import { clampUiScale } from '../js/uiScale.js';
 import { gameCandidates, isPosixAbs, normRel, pathKey, relFromAbs } from '../js/gamePath.js';
 import { baseMotionCompanions, battleSkirtPath, weaponSkillWaistPaths } from '../js/pclists.js';
+import { rangedHandRef as computeRangedHandRef } from '../js/weaponVis.js';
 import { animDisplayName, groupAnimations, matchAnimRef, mergeModels, parseEntity, resolveScheduleClip } from '../js/dat.js';
 import { Renderer } from '../js/renderer.js';
-import { renderPaused, setPauseWhenUnfocused } from '../js/backgroundPause.js';
 import { isRestingClip } from '../js/pose.js';
 import { collectVis, hiddenSlotsAt, rangedRoutineId, SLOT } from '../js/weaponVis.js';
 import { FileTree } from './FileTree.jsx';
@@ -1509,8 +1509,6 @@ export default function App({ launch = null }) {
   });
   const fpsCapRef = useRef(fpsCap);
   fpsCapRef.current = fpsCap;
-  // Graphics > Pause When Unfocused (on unless switched off).
-  const [pauseUnfocused, setPauseUnfocused] = useState(() => localStorage.getItem('pauseUnfocused') !== '0');
   const [renderHeight, setRenderHeight] = useState(() => {
     const v = parseInt(localStorage.getItem('renderHeight'), 10);
     // Only known presets — a corrupt/huge value OOMs the canvas (seen 33M×33M).
@@ -1715,6 +1713,16 @@ export default function App({ launch = null }) {
     () => localStorage.getItem('attachFxToChar') !== '0',
   );
   const attachFxRef = useRef(attachFx);
+  // Manual offset for TargetActor effect attachment point (display space).
+  // Lets the user place weaponskill effects where an enemy would stand.
+  const [effectOffset, setEffectOffsetState] = useState(() => {
+    try {
+      const s = localStorage.getItem('effectOffset');
+      if (s) return JSON.parse(s);
+    } catch { /* ignore */ }
+    return [0, 0, 0];
+  });
+  const effectOffsetRef = useRef(effectOffset);
   /**
    * PC view: what a weapon skill / ability shows. 'mesh' is the old behaviour
    * (character animation only), 'both' also runs the action DAT's own effect
@@ -2257,6 +2265,9 @@ export default function App({ launch = null }) {
     // Same for View > Toggle Ortho (seeded off the framing fitCamera lands on).
     renderer.camera.setOrtho(orthoRef.current);
     renderer.attachFxToActor = attachFxRef.current;
+    renderer.effectOffset.x = effectOffsetRef.current[0];
+    renderer.effectOffset.y = effectOffsetRef.current[1];
+    renderer.effectOffset.z = effectOffsetRef.current[2];
     // Seed the toolbar readout so it never shows 0 before the first frame.
     setFlySpeed(Math.round(renderer.camera.flySpeed));
 
@@ -2269,13 +2280,6 @@ export default function App({ launch = null }) {
     let fpsWindowStart = last;
     const frame = (now) => {
       raf = requestAnimationFrame(frame);
-      // Pause When Unfocused: hold the last frame. The clocks follow so the
-      // first frame back is not one long step and the FPS readout not a dip.
-      if (renderPaused(now) && !screenshotPendingRef.current) {
-        last = lastDraw = fpsWindowStart = now;
-        fpsFrames = 0;
-        return;
-      }
       // FPS cap (0 = uncapped): skip the draw when under the target interval.
       // Still schedule the next rAF so the loop stays alive and input stays live.
       const cap = fpsCapRef.current;
@@ -2466,11 +2470,6 @@ export default function App({ launch = null }) {
     fpsCapRef.current = fpsCap;
     try { localStorage.setItem('fpsCap', String(fpsCap)); } catch { /* quota */ }
   }, [fpsCap]);
-
-  useEffect(() => {
-    setPauseWhenUnfocused(pauseUnfocused);
-    try { localStorage.setItem('pauseUnfocused', pauseUnfocused ? '1' : '0'); } catch { /* quota */ }
-  }, [pauseUnfocused]);
 
   // Poll the drawing-buffer size only while the panel that shows it is open —
   // the window can be resized under it, and 'Window Size' has no fixed answer.
@@ -2751,7 +2750,9 @@ export default function App({ launch = null }) {
               }
             }
           }
-          const hand = refs[rangedHandRef ?? 126];
+          // Marksmanship weapons attach to the main hand; archery/throwing to sub.
+          const handRefIdx = computeRangedHandRef(bow?.info?.rangeType);
+          const hand = refs[handRefIdx];
           if (mount > 0 && hand && hand.index !== mount) overrides.set(mount, hand.index);
         }
         if (overrides.size) model.jointOverrides = overrides;
@@ -3764,6 +3765,17 @@ export default function App({ launch = null }) {
     setAttachFxState(!!on);
     try { localStorage.setItem('attachFxToChar', on ? '1' : '0'); } catch { /* quota */ }
     if (rendererRef.current) rendererRef.current.attachFxToActor = !!on;
+  }, []);
+
+  const setEffectOffset = useCallback((offset) => {
+    effectOffsetRef.current = offset;
+    setEffectOffsetState(offset);
+    try { localStorage.setItem('effectOffset', JSON.stringify(offset)); } catch { /* quota */ }
+    if (rendererRef.current) {
+      rendererRef.current.effectOffset.x = offset[0];
+      rendererRef.current.effectOffset.y = offset[1];
+      rendererRef.current.effectOffset.z = offset[2];
+    }
   }, []);
 
   /** Loop toggle: applies to the armed routine immediately, and sticks. */
@@ -5621,6 +5633,12 @@ export default function App({ launch = null }) {
     // Same volume the Effects view sets: an action's routine plays through the
     // effect audio path, so it needs the same control (and one shared value,
     // not a second one that quietly disagrees).
+    // TargetActor FX attachment and offset — weaponskill effects on the enemy.
+    attachFx,
+    onAttachFx: setAttachFx,
+    attachFxEnabled: true,
+    effectOffset,
+    onEffectOffset: setEffectOffset,
   };
 
   // Character Creation playback. Pose auto-splits removed — they were quiet
@@ -5665,6 +5683,8 @@ export default function App({ launch = null }) {
     attachFx,
     onAttachFx: setAttachFx,
     attachFxEnabled: !!modelInfo?.effect?.onActor,
+    effectOffset,
+    onEffectOffset: setEffectOffset,
     speed: effectSpeed,
     onSpeed: setEffectSpeed,
     onSeek: restartEffect,
@@ -9097,7 +9117,9 @@ export default function App({ launch = null }) {
             }
           }
         }
-        const hand = refs[entry.rangedHandRef ?? 126];
+        // Marksmanship weapons attach to the main hand; archery/throwing to sub.
+        const handRefIdx = computeRangedHandRef(bow?.info?.rangeType);
+        const hand = refs[handRefIdx];
         // mount 0 is the skeleton root, not a back mount — see the composer.
         if (mount > 0 && hand && hand.index !== mount) overrides.set(mount, hand.index);
       }
@@ -11316,11 +11338,8 @@ export default function App({ launch = null }) {
     const tick = (now) => {
       const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
       last = now;
-      // The game clock stops with the render loop under Pause When Unfocused.
-      if (!renderPaused(now)) {
-        const { weather: w, minutes } = todStateRef.current;
-        applyWeatherTime(w, (minutes + perSec * dt) % 1440);
-      }
+      const { weather: w, minutes } = todStateRef.current;
+      applyWeatherTime(w, (minutes + perSec * dt) % 1440);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -12086,8 +12105,6 @@ export default function App({ launch = null }) {
         bufferSize={bufferSize}
         fpsCap={fpsCap}
         onFpsCap={setFpsCap}
-        pauseUnfocused={pauseUnfocused}
-        onPauseUnfocused={setPauseUnfocused}
         onGraphicsOpenChange={setGraphicsOpen}
         masterVolume={masterVolume}
         onMasterVolume={setMasterVolume}
