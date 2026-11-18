@@ -8,6 +8,16 @@ Releases and Windows builds: https://github.com/vekien/xi-model-viewer/releases
 
 ---
 
+## [1.13.0] — 2026-11-18
+
+[Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.12.0...v1.13.0)
+
+### Database
+- **Mob Skill Names** in Assets › Database › Names & Text: the monster ability (TP move) names the game shows when a mob readies or uses a skill, from `ROM/27/80.DAT` (English) and `ROM/27/79.DAT` (Japanese). The ID column is the server's `mob_skill_id`; `#257` or `id:257` finds one, and unused ids show as `.`. Rename or add them with xi-tools 1.17.0 (`mobSkills` in the database action)
+
+### Graphics
+- **Pause When Unfocused** (Graphics settings, on by default): the viewer holds its last frame while another window has focus, instead of redrawing at full speed behind it or on a second monitor. Moving the mouse over it, scrolling or resizing wakes it for a moment
+
 ## [1.12.0] — 2026-09-29
 
 [Full changelog](https://github.com/vekien/xi-model-viewer/compare/v1.11.0...v1.12.0)
