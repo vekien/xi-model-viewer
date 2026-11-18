@@ -78,7 +78,7 @@ viewport.
 
 ### Database
 
-- The client's record DATs as searchable, sortable tables: items (decoded stats, jobs, slots, icons), quests, missions, key items, titles, spells, abilities and the other d_msg string tables.
+- The client's record DATs as searchable, sortable tables: items (decoded stats, jobs, slots, icons), quests, missions, key items, titles, spells, abilities, monster ability (mob skill) names and the other string tables.
 - English or Japanese.
 - Advanced filters — a rule builder, or an SQL-ish query string such as `str > 20 and int > 20`.
 - CSV / JSON export.

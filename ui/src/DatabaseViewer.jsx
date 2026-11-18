@@ -4,7 +4,7 @@ import { backend } from '../js/backend.js';
 import { gameCandidates, normRel } from '../js/gamePath.js';
 import {
   decodeItemIcon, dmsgTableFromJson, findDbTable, hexOf, itemBlockAt, itemTableFromJson, menuTableFromJson,
-  parseDmsgTable, parseItemTable, parseMenuTable, subNamesFor, tablePaths, ITEM_FLAGS, ITEM_LAYOUTS,
+  namesTableFromJson, parseDmsgTable, parseItemTable, parseMenuTable, parseNamesTable, subNamesFor, tablePaths, ITEM_FLAGS, ITEM_LAYOUTS,
 } from '../js/database.js';
 import { Tooltip } from './Tooltip.jsx';
 import { DatabaseFilter } from './DatabaseFilter.jsx';
@@ -87,6 +87,7 @@ async function loadTable(table, lang, settings) {
   if (pre) {
     if (table.kind === 'items') doc = itemTableFromJson(pre.json, table);
     else if (table.kind === 'menu') doc = menuTableFromJson(pre.json, table);
+    else if (table.kind === 'names') doc = namesTableFromJson(pre.json, table);
     else doc = dmsgTableFromJson(pre.json, table);
     source = { kind: 'prebuilt', path: pre.path, generated: pre.json.generated };
   } else {
@@ -110,6 +111,9 @@ async function loadTable(table, lang, settings) {
       const help = await loadTable(findDbTable(table.help), lang, settings).catch(() => null);
       doc = parseMenuTable(buffers[0], table, names?.doc, help?.doc);
       if (!doc) throw new Error(`${parts[0].rel} has no ${table.tag} section`);
+    } else if (table.kind === 'names') {
+      doc = parseNamesTable(buffers[0], table);
+      if (!doc) throw new Error(`${parts[0].rel} is not an event-message name list`);
     } else {
       doc = parseDmsgTable(buffers[0], table, lang);
       if (!doc) throw new Error(`${parts[0].rel} is not a d_msg table`);
@@ -208,6 +212,12 @@ function columnsFor(doc) {
     cols.push({ key: 'icon', label: 'Icon', w: 50, num: true });
     cols.push({ key: 'help', label: 'Help', w: 460 });
     return cols;
+  }
+  if (doc.kind === 'names') {
+    return [
+      { key: 'id', label: 'ID', w: 64, num: true },
+      { key: 'name', label: 'Name', w: 320 },
+    ];
   }
   const cols = [{ key: 'idx', label: '#', w: 56, num: true }];
   const names = doc.subNames || doc.table?.subs || [];
@@ -321,7 +331,9 @@ export function DatabaseViewer({
       const idm = q.match(/^(?:id:|#)(\d+)$/);
       if (idm) {
         const id = +idm[1];
-        out = out.filter((r) => r.id === id || r.idx === id);
+        // A name list's rows are addressed by id (mob_skill_id = row + 256): its row
+        // index would match a second, unrelated name.
+        out = out.filter((r) => r.id === id || (doc.kind !== 'names' && r.idx === id));
       } else {
         const terms = q.split(/\s+/).filter(Boolean);
         out = out.filter((r) => {
@@ -631,6 +643,7 @@ function DetailCard({ row, entry, table, lang, settings, fileIdOf, onStatus }) {
   const [block, setBlock] = useState(null);
   const isItem = entry?.doc?.kind === 'items';
   const isMenu = entry?.doc?.kind === 'menu';
+  const isNames = entry?.doc?.kind === 'names';
   const isRecord = isItem && ITEM_LAYOUTS.has(entry.doc.layout);
   const part = entry?.parts?.[row.part ?? 0];
   const rel = part?.rel ?? '';
@@ -699,7 +712,7 @@ function DetailCard({ row, entry, table, lang, settings, fileIdOf, onStatus }) {
         <div className="db-detail-title">
           <div className="db-detail-name">{row.name || (isItem ? `Item ${row.id}` : isMenu ? `Record ${row.idx}` : `Row ${row.idx}`)}</div>
           <div className="db-detail-sub mono">
-            {isItem ? `id ${row.id}` : `#${row.idx}`}
+            {isItem || isNames ? `id ${row.id}` : `#${row.idx}`}
             {' · '}
             {rel}
             {fileId != null ? ` · file ${fileId}` : ''}
@@ -785,7 +798,17 @@ function DetailCard({ row, entry, table, lang, settings, fileIdOf, onStatus }) {
 
         {isMenu && <MenuRecord row={row} kind={entry.doc.menuKind} />}
 
-        {!isItem && !isMenu && (
+        {isNames && (
+          <>
+            <div className="db-section">Name</div>
+            <div className="db-kv">
+              <FieldRow label="id" value={String(row.id)} />
+              <FieldRow label="name" value={row.name ?? ''} pre />
+            </div>
+          </>
+        )}
+
+        {!isItem && !isMenu && !isNames && (
           <>
             <div className="db-section">Sub-strings</div>
             <div className="db-kv">
