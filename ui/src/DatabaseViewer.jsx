@@ -331,7 +331,9 @@ export function DatabaseViewer({
       const idm = q.match(/^(?:id:|#)(\d+)$/);
       if (idm) {
         const id = +idm[1];
-        out = out.filter((r) => r.id === id || r.idx === id);
+        // A name list's rows are addressed by id (mob_skill_id = row + 256): its row
+        // index would match a second, unrelated name.
+        out = out.filter((r) => r.id === id || (doc.kind !== 'names' && r.idx === id));
       } else {
         const terms = q.split(/\s+/).filter(Boolean);
         out = out.filter((r) => {
