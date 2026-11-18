@@ -33,6 +33,13 @@
  *    range …). One file for every client language; names and help come from
  *    the language's d_msg tables.
  *
+ *  - Name lists in the event-message ("dialog") container — the monster
+ *    ability names of ROM/27/80.DAT (EN) / ROM/27/79.DAT (JP). Bytes 0-2 are
+ *    the length (file size − 4), byte 3 = 0x10 means every byte from offset 4
+ *    on is XOR 0x80; then a u32 offset table (each value + 4 is a file
+ *    offset, the first one also where the table ends) and NUL-terminated
+ *    cp932 strings. Row i is id i + `firstId`.
+ *
  * `xi mv database` (xi-tools, src/xi/mv/xi_database.py) writes the same rows
  * out as JSON so the viewer can skip the 20 MB DAT reads; keep the two in
  * step when a layout changes. Nothing here touches the DOM.
@@ -188,6 +195,12 @@ export const DMSG_GROUPS = [
       dm('mounts', 'Mounts', 'ROM/351/84.DAT', 'ROM/351/82.DAT', ['name', 'keyItem']),
       dm('mountHelp', 'Mount Help', 'ROM/351/85.DAT', 'ROM/351/83.DAT', HELP_SUBS),
       dm('monsterFamilies', 'Monster Families', 'ROM/188/38.DAT', 'ROM/188/37.DAT', ['name', 'plural']),
+      // Not a d_msg file: an event-message container (kind 'names'). Row i names
+      // the server's mob_skill_id i + 256 (3,353 of CatsEyeXI's 3,593 mob_skills from id 256 match).
+      {
+        key: 'mobSkills', label: 'Mob Skill Names', kind: 'names', firstId: 256,
+        parts: [{ en: 'ROM/27/80.DAT', jp: 'ROM/27/79.DAT' }],
+      },
       dm('slots', 'Equipment Slots', 'ROM/175/33.DAT', 'ROM/175/32.DAT', ['name']),
       dm('augments', 'Augment Attributes', 'ROM/220/58.DAT', 'ROM/220/57.DAT', ['format']),
       dm('merits', 'Merit Points', 'ROM/169/75.DAT', 'ROM/169/74.DAT', ['text']),
@@ -220,7 +233,7 @@ export const MENU_TABLES = [
   },
 ];
 
-/** Tree shown in the explorer: Items, Spells & Abilities, then the d_msg groups. `hidden` tables stay out of it. */
+/** Tree shown in the explorer: Items, Spells & Abilities, then the d_msg groups (and the name lists among them). `hidden` tables stay out of it. */
 export const DB_TREE = [
   {
     key: 'items', label: 'Items', icon: 'inventory_2',
@@ -230,7 +243,7 @@ export const DB_TREE = [
     key: 'magic', label: 'Spells & Abilities', icon: 'auto_awesome',
     tables: MENU_TABLES.map((t) => ({ ...t, kind: 'menu' })),
   },
-  ...DMSG_GROUPS.map((g) => ({ ...g, tables: g.tables.map((t) => ({ ...t, kind: 'dmsg' })) })),
+  ...DMSG_GROUPS.map((g) => ({ ...g, tables: g.tables.map((t) => ({ ...t, kind: t.kind ?? 'dmsg' })) })),
 ];
 
 export function findDbTable(key) {
@@ -1036,6 +1049,45 @@ export function dmsgTableFromJson(json, table) {
     kind: 'dmsg', variant: json.variant, stride: json.stride, xor: json.xor, num: json.num,
     tableOffset: json.tableOffset, rows, maxSubs, table, lang, subNames: subNamesFor(table, lang),
   };
+}
+
+// ── name lists (event-message container) ────────────────────────────────────
+// xi-tools: xi.dialog.xi_dialog.raw_entry_blobs (the container),
+// xi.mv.xi_database (the same rows as JSON). Keep them in step.
+
+/**
+ * Parse an event-message name list into `{ idx, id, offset, length, name }`
+ * rows, every row listed (placeholders `.` included). `offset` is the file
+ * offset of the row's bytes, `length` the bytes before its NUL. Returns null
+ * when the buffer is not that container.
+ */
+export function parseNamesTable(buffer, table) {
+  const src = new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer);
+  if (src.length < 8) return null;
+  if ((src[0] | (src[1] << 8) | (src[2] << 16)) + 4 !== src.length) return null;
+  const xor = src[3] === 0x10 ? 0x80 : 0;
+  const bytes = src.slice();
+  if (xor) for (let i = 4; i < bytes.length; i++) bytes[i] ^= xor;
+  const dv = new DataView(bytes.buffer);
+  const start = dv.getUint32(4, true) + 4;
+  if (start < 8 || start > bytes.length) return null;
+  const num = Math.floor((start - 4) / 4);
+  const firstId = table?.firstId ?? 0;
+  const rows = [];
+  for (let i = 0; i < num; i++) {
+    const s = dv.getUint32(4 + i * 4, true) + 4;
+    const e = i + 1 < num ? dv.getUint32(8 + i * 4, true) + 4 : bytes.length;
+    const text = s <= e && e <= bytes.length ? cstrBytes(bytes.subarray(0, e), s) : null;
+    rows.push({ idx: i, id: i + firstId, offset: s, length: text?.length ?? 0, name: decodeItemText(text) });
+  }
+  return { kind: 'names', firstId, num, xor, rows, table };
+}
+
+/** Same document from the JSON `xi mv database` wrote. */
+export function namesTableFromJson(json, table) {
+  const firstId = json.firstId ?? table?.firstId ?? 0;
+  const rows = (json.rows || []).map((r) => ({ ...r, id: r.id ?? r.idx + firstId }));
+  return { kind: 'names', firstId, num: json.num ?? rows.length, rows, table };
 }
 
 // ── spell & ability records (ROM/118/114.DAT) ────────────────────────────────

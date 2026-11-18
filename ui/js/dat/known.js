@@ -19,17 +19,16 @@ const ITEM_LAYOUT_LABELS = {
 /**
  * DATs outside the database registry with a known role. XISTRING pools are the
  * client's menu/system strings (xi-tools docs/dats/ROM_97_menu_strings.md); the
- * ROM/27 pair are the monster ability name tables (JP / EN); the ROM/327 and
- * ROM/384 files are the emote command table and the two small lookup tables
- * registered at file ids 96–98 (ROM/384/118 arrived with the 10 September
- * 2026 update).
+ * ROM/327 and ROM/384 files are the emote command table and the two small
+ * lookup tables registered at file ids 96–98 (ROM/384/118 arrived with the
+ * 10 September 2026 update). The ROM/27 monster ability name tables come from the
+ * registry (Mob Skill Names).
  */
 export const EXTRA_KNOWN_DATS = [
   ['ROM/97/8.DAT', 'Strings'], ['ROM/97/18.DAT', 'Strings'], ['ROM/97/19.DAT', 'Strings'],
   ['ROM/97/20.DAT', 'Strings'], ['ROM/97/21.DAT', 'Strings'], ['ROM/97/22.DAT', 'Strings'],
   ['ROM/97/23.DAT', 'Strings'], ['ROM/97/36.DAT', 'Strings'], ['ROM/97/39.DAT', 'Strings'],
   ['ROM/97/41.DAT', 'Strings'], ['ROM/97/48.DAT', 'Strings'],
-  ['ROM/27/79.DAT', 'Strings'], ['ROM/27/80.DAT', 'Strings'],
   ['ROM/327/122.DAT', 'Data'], ['ROM/384/118.DAT', 'Data'], ['ROM/384/119.DAT', 'Data'],
 ];
 
